@@ -30,7 +30,7 @@ TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+asyncpg://smartmail:smartmail@localhost:5432/smartmail_test"
 )
 TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15")
-TABLES = "sessions, accounts, person_branches, persons, branches"
+TABLES = "device_person_memory, sessions, accounts, person_branches, persons, branches"
 
 
 async def _services_up() -> str | None:

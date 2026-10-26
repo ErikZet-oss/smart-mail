@@ -7,6 +7,8 @@ into `details`.
 from __future__ import annotations
 
 import uuid
+from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -34,6 +36,24 @@ class AuditLog(IdMixin, Base):
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
 
 
+@dataclass(frozen=True)
+class Actor:
+    account_id: uuid.UUID
+    person_id: uuid.UUID | None
+
+
+# set by the auth dependency for the current request; entries written during it inherit account + person
+_actor: ContextVar[Actor | None] = ContextVar("audit_actor", default=None)
+
+
+def set_actor(account_id: uuid.UUID, person_id: uuid.UUID | None) -> None:
+    _actor.set(Actor(account_id, person_id))
+
+
+def clear_actor() -> None:
+    _actor.set(None)
+
+
 def audit(
     db: AsyncSession,
     action: str,
@@ -45,6 +65,10 @@ def audit(
     ip: str | None = None,
     details: dict[str, Any] | None = None,
 ) -> AuditLog:
+    actor = _actor.get()
+    if actor is not None and account_id in (None, actor.account_id):
+        account_id = actor.account_id
+        person_id = person_id or actor.person_id
     details = details or {}
     leaked = FORBIDDEN_DETAIL_KEYS & {k.lower() for k in details}
     if leaked:

@@ -84,7 +84,21 @@ class PersonOut(BaseModel):
     first_name: str
     last_name: str
     full_name: str
+    function: str | None
+    is_manager: bool
     role: str
+
+
+def person_out(person: Person) -> PersonOut:
+    return PersonOut(
+        id=str(person.id),
+        first_name=person.first_name,
+        last_name=person.last_name,
+        full_name=person.full_name,
+        function=person.function,
+        is_manager=person.is_manager,
+        role=str(person.role),
+    )
 
 
 class MeOut(BaseModel):
@@ -134,15 +148,7 @@ async def me_for(db: DB, ctx: AuthContext) -> MeOut:
         email=ctx.account.email,
         kind=str(ctx.account.kind),
         branch=branch.name if branch else None,
-        person=PersonOut(
-            id=str(person.id),
-            first_name=person.first_name,
-            last_name=person.last_name,
-            full_name=person.full_name,
-            role=str(person.role),
-        )
-        if person
-        else None,
+        person=person_out(person) if person else None,
         needs_person=person is None,
         read_only=ctx.read_only,
     )
@@ -177,7 +183,8 @@ async def login(
         raise fail(401, "invalid_credentials")
     lock = await limiter.check(email, ip)
     if lock.locked:
-        audit(db, "auth.login_rate_limited", ip=ip, details={"email": email})
+        known = (await db.execute(select(Account.id).where(Account.email == email))).scalar_one_or_none()
+        audit(db, "auth.login_rate_limited", account_id=known, ip=ip, details={"email": email})
         await db.commit()
         raise fail(429, "rate_limited", retry_after=lock.retry_after_s)
 
