@@ -27,7 +27,8 @@
    current person preselected. Measured in the browser; the server session timeout (12 h) is unchanged.
 
 ## Consequences
-- Avatar colours follow the person's position in the branch list (Figma: Peter green, Jana blue, Marek orange); a
-  photo replaces them when Settings 11 gets person photos.
+- Avatar colours come from a stable hash (FNV-1a) of the person id into five token colours, so a person keeps the
+  colour on every screen and when the list changes; the Figma colours of the sample people are examples only. A photo
+  replaces the colour when Settings 11 gets person photos.
 - The PersonChip popover holds only the people in 1b; Môj profil, Klasické zobrazenie and Klávesové skratky are added
   with their screens (1c/1g/1h). Until the G1 rail exists (1c) the chip sits in a 72 px strip on the temporary page.

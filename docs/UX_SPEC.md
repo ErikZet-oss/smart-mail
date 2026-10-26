@@ -256,8 +256,8 @@ above the fields: "Nesprávny e-mail alebo heslo." / "Mailový server je nedostu
 
 ### W1b Kto ste? (person picker, PRODUCT_SPEC §2.0)
 Full-screen soft background, centered card 640 px: blue logo 120 px, title **"Kto ste?"**, subtitle "Pobočka Senica ·
-senica@smartsro.sk". Grid of `PersonTile`s (3 per row desktop, 2 mobile; 120 × 132): avatar 56 (photo or initials
-on brand color), name (`heading`), function (`caption`, muted). The last person on this device has a primary ring and
+senica@smartsro.sk". Grid of `PersonTile`s (3 per row desktop, 2 mobile; 132 × 140, Figma — D24): avatar 56 (photo or
+initials on a colour derived from the person id), name (`heading`), function (`caption`, muted). The last person on this device has a primary ring and
 a button under the grid **"Pokračovať ako Jana"** (Enter). One click on any tile = done (fade into the inbox, < 300 ms).
 Link at the bottom: "Prihlásiť sa iným e-mailom". No other text, no settings on this screen.
 

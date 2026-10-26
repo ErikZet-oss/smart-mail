@@ -14,7 +14,6 @@ import { choosePerson, fetchPicker, initials, PICKER_KEY } from './personsApi';
 
 type TileProps = {
   person: Person;
-  tone: number;
   selected: boolean;
   mobile: boolean;
   disabled: boolean;
@@ -22,7 +21,7 @@ type TileProps = {
 };
 
 /** Figma `PersonTile` (W1b 132 × 140; M0 half width, two initials, no flag). */
-function PersonTile({ person, tone, selected, mobile, disabled, onChoose }: TileProps) {
+function PersonTile({ person, selected, mobile, disabled, onChoose }: TileProps) {
   const { t } = useTranslation();
   return (
     <li className={mobile ? 'min-w-0' : undefined}>
@@ -39,7 +38,7 @@ function PersonTile({ person, tone, selected, mobile, disabled, onChoose }: Tile
             : 'border border-border-default bg-bg-canvas hover:bg-bg-subtle'
         }`}
       >
-        <Avatar initials={initials(person, mobile ? 2 : 1)} tone={tone} size={56} />
+        <Avatar initials={initials(person, mobile ? 2 : 1)} seed={person.id} size={56} />
         <span className="flex w-full flex-col items-center gap-0.5">
           <span className={`text-text-primary ${mobile ? 'type-body-strong' : 'type-heading w-[116px]'}`}>
             {person.full_name}
@@ -129,11 +128,10 @@ export function ScreenW1b() {
       className={mobile ? 'grid w-full grid-cols-2 gap-3' : 'flex flex-wrap justify-center gap-4'}
       aria-label={t('person.title')}
     >
-      {data.persons.map((person, index) => (
+      {data.persons.map((person) => (
         <PersonTile
           key={person.id}
           person={person}
-          tone={index}
           selected={person.id === preselectedId}
           mobile={mobile}
           disabled={busy}

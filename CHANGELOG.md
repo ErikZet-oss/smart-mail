@@ -14,7 +14,8 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - Every audit entry of a signed-in request carries `account_id` and `person_id` (request-scoped audit actor).
 - Web: W1b Kto ste? (desktop) and M0 (mobile) per Figma, "Pokračovať ako …" with Enter, "Prihlásiť sa iným e-mailom";
   W2b PersonChip with the "Kto pracuje?" popover, `Ctrl+Shift+P` and the 2 s toast "Teraz pracuje: … · podpis
-  zmenený"; idle re-ask by the branch setting; components `Avatar`, `Switch`, `Toast`; shadow tokens in Tailwind.
+  zmenený"; idle re-ask by the branch setting; components `Avatar` (colour = stable hash of the person id), `Switch`,
+  `Toast`; shadow tokens in Tailwind. UX_SPEC W1b tile size 132 × 140 (Figma, D24).
 - Tests: 24 backend tests `test_persons_1b.py` (W1b/W2b/M0/§9 ids), vitest for W1b, M0 and W2b, Playwright Flow 0
   (W1 → W1b → W2) and PersonChip switching on desktop + mobile, screenshots next to the Figma frames.
 

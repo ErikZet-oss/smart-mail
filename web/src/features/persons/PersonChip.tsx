@@ -32,8 +32,7 @@ export function PersonChip() {
 
   const persons = picker.data?.persons ?? [];
   const currentId = picker.data?.current_person_id ?? null;
-  const currentIndex = persons.findIndex((p) => p.id === currentId);
-  const current = currentIndex >= 0 ? persons[currentIndex] : undefined;
+  const current = persons.find((p) => p.id === currentId);
   const canSwitch = persons.length > 1;
 
   const close = useCallback((refocus: boolean) => {
@@ -109,7 +108,7 @@ export function PersonChip() {
             <LoaderCircle size={18} className="animate-spin" aria-hidden="true" />
           </span>
         ) : (
-          <Avatar initials={initials(current, 1)} tone={currentIndex} size={32} />
+          <Avatar initials={initials(current, 1)} seed={current.id} size={32} />
         )}
         {canSwitch ? <ChevronDown size={12} aria-hidden="true" /> : null}
       </span>
@@ -154,7 +153,7 @@ export function PersonChip() {
             {t('person.switch')}
           </p>
           <div className="flex flex-col gap-0.5">
-            {persons.map((person, index) => {
+            {persons.map((person) => {
               const isCurrent = person.id === currentId;
               return (
                 <button
@@ -167,7 +166,7 @@ export function PersonChip() {
                     isCurrent ? 'bg-brand-primary-50' : 'hover:bg-bg-subtle'
                   }`}
                 >
-                  <Avatar initials={initials(person, 1)} tone={index} size={32} />
+                  <Avatar initials={initials(person, 1)} seed={person.id} size={32} />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className={`truncate text-text-primary ${isCurrent ? 'type-label' : 'type-body'}`}>
                       {person.full_name}
