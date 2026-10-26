@@ -1,0 +1,22 @@
+---
+description: Smart Mail project rules — always read CLAUDE.md and the docs it references
+globs:
+alwaysApply: true
+---
+This repository is "Smart Mail", an AI-assisted e-mail client for Smart s.r.o. that replaces Roundcube and integrates
+Money S4 through its API module (GraphQL first, REST for PDFs/persons/activities).
+
+Before any change:
+1. Read `CLAUDE.md` (binding rules, stack, phases with acceptance criteria) and `docs/DECISIONS.md` (customer
+   decisions, highest priority).
+2. Read the spec file relevant to the task: `docs/PRODUCT_SPEC.md`, `docs/UX_SPEC.md`, `docs/AI_ASSISTANT.md`,
+   `docs/SCREENS_SPEC.md`, `docs/SETTINGS_SPEC.md`, `docs/MONEY_API.md`, `docs/ORDERS_SPEC.md`, `docs/DOCUMENTS_SPEC.md`
+   (and `probe_output/report.md` / `orders.md` / `branches.md` for anything touching Money; `templates/print/` +
+   `fixtures/documents/` for print documents).
+   For any UI work also `docs/FIGMA_MAP.md` and the Figma frames through the Figma MCP server (look = Figma, D24).
+3. Follow the quality gates in `CLAUDE.md` §0.1 (tests first for rule ids, Decimal only, schema validation of queries).
+4. Work only on the current phase; stop at the end of the phase and summarize.
+
+Never: send real e-mail, call the PRODUCTION Money agenda, guess Money enums/GUIDs, add features not in the specs,
+put UI text anywhere except `web/src/i18n/sk.json` (Slovak), render or modify issued invoices (only the original
+Money PDF), put real customer data into fixtures.

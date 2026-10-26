@@ -1,0 +1,92 @@
+{
+  "_comment": "FICTIONAL sample data (customer, numbers, person). Own company header = Settings 11 company profile.",
+  "company": {
+    "name": "SMART spol. s r.o.",
+    "street": "Coburgova 76",
+    "zip": "91702",
+    "city": "Trnava",
+    "ico": "34124128",
+    "dic": "2020393606",
+    "icdph": "SK2020393606",
+    "phone": "033 55 11 855",
+    "fax": "033 55 11 855",
+    "registration": "Spoločnosť je zapísaná v Obchodnom registri vedenom Okresným súdom Trnava, oddiel Sro, vložka 1352/T.",
+    "web": "smartsro.sk"
+  },
+  "partner": {
+    "name": "Kovo Trnava s.r.o.",
+    "street": "Priemyselná 12",
+    "zip": "917 01",
+    "city": "Trnava",
+    "country": "Slovensko",
+    "ico": "12345678",
+    "dic": "2012345678",
+    "icdph": "SK2012345678"
+  },
+  "footer": {
+    "issued_by": "Jana Nováková",
+    "printed_by": "Jana Nováková",
+    "system_line": "Spracované systémom Smart Mail · ceny a zásoby z Money S4"
+  },
+  "doc": {
+    "kind": "offer",
+    "title": "Ponuka vystavená č.",
+    "number": "PV263412",
+    "dates": [
+      {
+        "label": "Dátum vystavenia:",
+        "value": "23.10.2026"
+      },
+      {
+        "label": "Dátum platnosti od:",
+        "value": "23.10.2026"
+      },
+      {
+        "label": "Dátum platnosti do:",
+        "value": "06.11.2026"
+      },
+      {
+        "label": "Dátum vybavenia:",
+        "value": ""
+      }
+    ],
+    "text_before": null,
+    "text_after": null,
+    "signatures": false,
+    "currency_note": "Rozpis DPH uvedený v mene €",
+    "items": [
+      {
+        "name": "skr. M10 x30 A2 DIN 933",
+        "catalog": "309903010030",
+        "qty": "5000",
+        "unit": "ks",
+        "unit_price": "0.0840",
+        "vat_rate": "23"
+      },
+      {
+        "name": "mat. M10 A2 DIN 934",
+        "catalog": "311493410000",
+        "qty": "5000",
+        "unit": "ks",
+        "unit_price": "0.0310",
+        "vat_rate": "23"
+      },
+      {
+        "name": "podl. M10 A2 DIN 125A",
+        "catalog": "311712510000",
+        "qty": "5000",
+        "unit": "ks",
+        "unit_price": "0.0120",
+        "vat_rate": "23"
+      },
+      {
+        "name": "skr. M10 x40 A2 DIN 933",
+        "catalog": "309903010040",
+        "qty": "1000",
+        "unit": "ks",
+        "unit_price": "0.0950",
+        "vat_rate": "23"
+      }
+    ]
+  }
+}

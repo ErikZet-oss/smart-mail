@@ -1,0 +1,104 @@
+{
+  "_comment": "FICTIONAL sample data. Number = Money CisloDokladu of the created Objednávka prijatá (read-back).",
+  "company": {
+    "name": "SMART spol. s r.o.",
+    "street": "Coburgova 76",
+    "zip": "91702",
+    "city": "Trnava",
+    "ico": "34124128",
+    "dic": "2020393606",
+    "icdph": "SK2020393606",
+    "phone": "033 55 11 855",
+    "fax": "033 55 11 855",
+    "registration": "Spoločnosť je zapísaná v Obchodnom registri vedenom Okresným súdom Trnava, oddiel Sro, vložka 1352/T.",
+    "web": "smartsro.sk"
+  },
+  "partner": {
+    "name": "Stavmont a.s.",
+    "street": "Stavebná 8",
+    "zip": "821 04",
+    "city": "Bratislava",
+    "country": "Slovensko",
+    "ico": "87654321",
+    "dic": "2087654321",
+    "icdph": "SK2087654321"
+  },
+  "footer": {
+    "issued_by": "Peter Hudák",
+    "printed_by": "Peter Hudák",
+    "system_line": "Spracované systémom Smart Mail · ceny z Money S4"
+  },
+  "doc": {
+    "kind": "order_confirmation",
+    "title": "Potvrdenie objednávky č.",
+    "number": "OP263101",
+    "dates": [
+      {
+        "label": "Dátum vystavenia:",
+        "value": "23.10.2026"
+      },
+      {
+        "label": "Vaša objednávka:",
+        "value": "PO-45821"
+      },
+      {
+        "label": "Požadovaný termín:",
+        "value": "12.11.2026"
+      },
+      {
+        "label": "Dodanie:",
+        "value": "do 12.11.2026"
+      }
+    ],
+    "text_before": "Ďakujeme za Vašu objednávku PO-45821. Potvrdzujeme nasledujúce položky a ceny:",
+    "text_after": "Dodacia adresa: Bytový dom Nivy, Mlynské nivy 12, Bratislava.",
+    "signatures": false,
+    "currency_note": "Rozpis DPH uvedený v mene €",
+    "items": [
+      {
+        "name": "skr. M10 x30 A2 DIN 933",
+        "catalog": "309903010030",
+        "qty": "2000",
+        "unit": "ks",
+        "unit_price": "0.0790",
+        "vat_rate": "23"
+      },
+      {
+        "name": "mat. M10 A2 ISO 4032",
+        "catalog": "311403210000",
+        "qty": "2000",
+        "unit": "ks",
+        "unit_price": "0.0310",
+        "vat_rate": "23"
+      },
+      {
+        "name": "podl. M10 A2 DIN 125A",
+        "catalog": "311712510000",
+        "qty": "2450",
+        "unit": "ks",
+        "unit_price": "0.0120",
+        "vat_rate": "23"
+      },
+      {
+        "name": "kotva klin. M10 x90 Zn",
+        "catalog": "313109010090",
+        "qty": "300",
+        "unit": "ks",
+        "unit_price": "0.4100",
+        "vat_rate": "23"
+      },
+      {
+        "name": "skr. M8 x25 12.9 DIN 912",
+        "catalog": "309912008025",
+        "qty": "500",
+        "unit": "ks",
+        "unit_price": "0.0640",
+        "vat_rate": "23"
+      },
+      {
+        "name": "Hmoždinka 8 mm – upresníme telefonicky (nie je súčasťou ceny)",
+        "is_text": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+# Node
+node_modules/
+web/dist/
+web/dev-dist/
+playwright-report/
+test-results/
+# Env & secrets — never commit
+.env
+.env.*
+!.env.example
+probe.env
+*.pem
+*.key
+# Money probe output may contain business data until reviewed
+probe_output/raw/
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+# Local output
+out/

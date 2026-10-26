@@ -1,0 +1,105 @@
+{#- document.html.j2 — Money-style print document (DOCUMENTS_SPEC §4–§5).
+    One template for: Ponuka vystavená (kind=offer), Potvrdenie objednávky (kind=order_confirmation).
+    All numbers arrive pre-formatted as strings by app/documents/print_render.py (Decimal, SK format) — the template
+    never computes or rounds. Every text label is Slovak and identical to the Money report. -#}
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<title>{{ doc.title }} {{ doc.number }}</title>
+<link rel="stylesheet" href="{{ css_href }}">
+</head>
+<body>
+
+<div class="mfooter">
+  <div class="bar">
+    <span>{{ "Vystavil: " ~ footer.issued_by if footer.issued_by else "" }}</span>
+    <span class="mid"><a href="https://{{ company.web }}">{{ company.web }}</a></span>
+    <span class="end">Vytlačil(a):&nbsp; {{ footer.printed_by }}</span>
+  </div>
+  <div class="sys">{{ footer.system_line }}</div>
+  <div class="page"></div>
+</div>
+
+<div class="mhead">
+  <div class="a company-name">{{ company.name }}</div>
+  <div class="a company-street">{{ company.street }}</div>
+  <div class="a company-zip">{{ company.zip }}</div>
+  <div class="a company-city">{{ company.city }}</div>
+  <div class="a company-ids">
+    <div>IČO : {{ company.ico }}</div>
+    <div>DIČ : {{ company.dic }}</div>
+    <div class="icdph">IČ DPH : {{ company.icdph }}</div>
+  </div>
+  <div class="a company-contact">
+    {% if company.phone %}<div>Tel.: {{ company.phone }}</div>{% endif %}
+    {% if company.fax %}<div>Fax: {{ company.fax }}</div>{% endif %}
+  </div>
+  <div class="a company-reg">{{ company.registration }}</div>
+  <div class="a barcode">{{ barcode_svg | safe }}</div>
+
+  <div class="mband">
+    <div class="p1"></div>
+    <img class="logo" src="{{ logo_href }}" alt="">
+    <div class="p2"></div>
+    <div class="title">{{ doc.title }}</div>
+    <div class="numbox"></div>
+    <div class="number">{{ doc.number }}</div>
+  </div>
+
+  <div class="a partner-name">{{ partner.name }}</div>
+  <div class="a dates">
+    {% for d in doc.dates %}<div class="row"><span class="lbl">{{ d.label }}</span>{{ d.value }}</div>{% endfor %}
+  </div>
+  <div class="a partner-addr">
+    <div>{{ partner.street }}</div>
+    <div><span class="zip">{{ partner.zip }}</span>{{ partner.city }}</div>
+    <div>{{ partner.country }}</div>
+  </div>
+  <div class="a partner-ids">
+    <div>{% if partner.ico %}IČO : {{ partner.ico }}{% endif %}{% if partner.dic %}<span class="dic">DIČ : {{ partner.dic }}</span>{% endif %}</div>
+    {% if partner.icdph %}<div>IČ DPH : {{ partner.icdph }}</div>{% endif %}
+  </div>
+</div>
+
+{% if doc.text_before %}<div class="mtext-before">{{ doc.text_before }}</div>{% endif %}
+
+<table class="mitems">
+  <colgroup><col class="c-name"><col class="c-cat"><col class="c-qty"><col class="c-unit"><col class="c-price">
+            <col class="c-vat"><col class="c-base"><col class="c-gross"></colgroup>
+  <thead><tr>
+    <th>Označenie dodávky</th><th>Katalóg</th><th class="r">Počet</th><th>MJ</th><th class="r">Cena za MJ</th>
+    <th class="r">Sadzba</th><th class="r">Základ</th><th class="r">Celkom s DPH</th>
+  </tr></thead>
+  <tbody>
+  {% for it in doc.lines %}
+    {% if it.is_text %}
+    <tr class="text-line"><td colspan="8">{{ it.name }}</td></tr>
+    {% else %}
+    <tr><td>{{ it.name }}</td><td>{{ it.catalog }}</td><td class="r">{{ it.qty }}</td><td>{{ it.unit }}</td>
+        <td class="r">{{ it.unit_price }}</td><td class="r">{{ it.vat_label }}</td><td class="r">{{ it.base }}</td>
+        <td class="r">{{ it.gross }}</td></tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+
+<div class="mtotals">
+  <div class="vatbox"></div>
+  <table class="vat">
+    <colgroup><col class="v1"><col class="v2"><col class="v3"><col class="v4"></colgroup>
+    <tr class="head"><td>Sadzba DPH</td><td>Základ</td><td>Výška DPH</td><td>Celkom</td></tr>
+    {% for v in doc.vat_rows %}<tr><td>{{ v.label }}</td><td>{{ v.base }}</td><td>{{ v.vat }}</td><td>{{ v.total }}</td></tr>{% endfor %}
+    <tr class="sum"><td>CELKOM</td><td>{{ doc.vat_sum.base }}</td><td>{{ doc.vat_sum.vat }}</td><td>{{ doc.vat_sum.total }}</td></tr>
+  </table>
+  <div class="vatnote">{{ doc.currency_note }}</div>
+  <div class="total-lbl">Celková čiastka</div>
+  <div class="total-box"></div>
+  <div class="total-val">{{ doc.total }}</div>
+</div>
+
+{% if doc.text_after %}<div class="mtext-after">{{ doc.text_after }}</div>{% endif %}
+{% if doc.signatures %}<div class="msign"><div>Prevzal</div><div>Predal</div></div>{% endif %}
+
+</body>
+</html>

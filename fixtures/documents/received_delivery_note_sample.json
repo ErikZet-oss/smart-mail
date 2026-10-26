@@ -1,0 +1,118 @@
+{
+  "_comment": "FICTIONAL received delivery note draft for W6h (DOCUMENTS_SPEC §2, DECISIONS D11–D15). IDs are placeholders resolved by the bridge. Stock movement date/time are null in the draft and set to the approval time (D13); fees are information only and never written (D14); quantities are always positive (D15).",
+  "branch": {
+    "name": "Pobočka Senica",
+    "centre": {
+      "Kod": "20",
+      "Nazev": "Senica"
+    },
+    "warehouse": {
+      "Kod": "20",
+      "Nazev": "Senica"
+    },
+    "series": {
+      "Kod": "DLP SE"
+    },
+    "price_list": {
+      "Kod": "20-bez DPH",
+      "Nazev": "Senica bez DPH"
+    }
+  },
+  "template": {
+    "from_document": "DLP SE 302600398",
+    "DruhPohybu": "obstaranie",
+    "DruhSkladovehoPohybu": "príjem",
+    "TypCeny": "Iba základ",
+    "DruhPolozky": "tovar",
+    "VazbaTypVazby": "Zloženie",
+    "Predkontace": "FP010",
+    "RegistraceDPH": "SK2020393606"
+  },
+  "header": {
+    "CisloDokladu": null,
+    "Nazev": "skr. M10 x30 A2 DIN 933",
+    "Odkaz": "DL-2026-04417",
+    "ParovaciSymbol": "2611452",
+    "DatumVystaveni": "2026-10-20",
+    "DatumUcetnihoPripadu": null,
+    "DatumSkladovehoPohybu": null,
+    "CasSkladovehoPohybu": null,
+    "Mena": "EUR",
+    "Sleva": "0",
+    "reverse_charge": true,
+    "supplier": {
+      "Nazev": "Fixtech CZ s.r.o.",
+      "ICO": "27654321",
+      "DIC": "CZ27654321",
+      "ICDPH": "CZ27654321",
+      "Ulice": "Průmyslová 1520/7",
+      "PSC": "602 00",
+      "Misto": "Brno",
+      "Stat": "Česko",
+      "platce_dph": true
+    },
+    "_movement_rule": "set at approval = now (Europe/Bratislava), DatumUcetnihoPripadu = same date (D13)"
+  },
+  "lines": [
+    {
+      "Poradi": 1,
+      "status": "matched",
+      "method": "supplier-code",
+      "supplier_text": "Šroub ISO 4017 M10x30 A2, 25 bal à 200",
+      "PartnerskyKod": "FX-933-1030-A2",
+      "Nazev": "skr. M10 x30 A2 DIN 933",
+      "Katalog": "309903010030",
+      "CarovyKod": "8588000000017",
+      "Sklad": "20",
+      "Mnozstvi": "5000",
+      "Jednotka": "ks",
+      "SazbaDPH": "23",
+      "JednCena": "0.0612",
+      "supplier_qty": "25",
+      "supplier_unit": "bal",
+      "supplier_price": "12.24"
+    },
+    {
+      "Poradi": 2,
+      "status": "matched",
+      "method": "supplier-code",
+      "supplier_text": "Matice ISO 4032 M10 A2",
+      "PartnerskyKod": "FX-4032-10-A2",
+      "Nazev": "mat. M10 A2 ISO 4032",
+      "Katalog": "311403210000",
+      "CarovyKod": "8588000000024",
+      "Sklad": "20",
+      "Mnozstvi": "2000",
+      "Jednotka": "ks",
+      "SazbaDPH": "23",
+      "JednCena": "0.0205"
+    },
+    {
+      "Poradi": 3,
+      "status": "confirm",
+      "method": "ai",
+      "supplier_text": "Podložka 10,5 nerez",
+      "PartnerskyKod": "FX-125-105-A2",
+      "Nazev": "podl. M10 A2 DIN 125A",
+      "Katalog": "311712510000",
+      "CarovyKod": "8588000000031",
+      "Sklad": "20",
+      "Mnozstvi": "2000",
+      "Jednotka": "ks",
+      "SazbaDPH": "23",
+      "JednCena": "0.0071"
+    }
+  ],
+  "fees": [
+    {
+      "text": "Doprava",
+      "amount": "12.00",
+      "written_to_money": false
+    }
+  ],
+  "supplier_total": {
+    "base": "373.20",
+    "vat": "0.00",
+    "total": "373.20"
+  }
+}
