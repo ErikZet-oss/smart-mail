@@ -18,6 +18,13 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - Tests: TOTP RFC 6238 vectors, CSRF/cookie signing (Hypothesis), every login flow against PostgreSQL + Redis, IMAP
   login against a local stub server, vitest for the screens, Playwright e2e (desktop + mobile) with screenshots; CI
   runs PostgreSQL/Redis services and a Playwright job.
+- Customer decisions D25–D27 (DECISIONS v2.11): accounts auto-created as viewer on the first login from
+  `INTERNAL_DOMAINS`, first admins from `ADMIN_EMAILS`; per-IP limit 30 / 5 min with `LOGIN_IP_ALLOWLIST` for company
+  IPs; mailbox password stored Fernet-encrypted (migration `0003`) and overwritten on change; W16a "Požiadať správcu"
+  mails `ADMIN_CONTACT_EMAIL` (`GET /api/system/info`).
+### Changed
+- M-W1 follows its Figma frame (inline field icons, checkbox above the button, no eye toggle, no footer on phones);
+  login logo 180 px in UX_SPEC/SCREENS_SPEC; 2FA lock-out text added to UX_SPEC §7.
 ### Fixed
 - Non-ASCII CSRF header crashed the comparison (500 instead of 403) — regression test added.
 
