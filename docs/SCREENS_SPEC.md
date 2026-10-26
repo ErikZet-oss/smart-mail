@@ -41,7 +41,7 @@ Global rules for all screens:
 
 | ID | Route | Title (SK) | Roles | Mobile |
 |---|---|---|---|---|
-| W1 | `/login` | Prihlásenie | everyone | M-W1 (same, full width) |
+| W1 | `/login` | Prihlásenie | everyone | M-W1 (own frame, see W1 Mobile) |
 | W1a | `/login/2fa` | Overenie (2FA) | accounts with TOTP | same |
 | W1b | `/who` | Kto ste? | branch logins | M0 |
 | W1c | `/login?reason=password-changed\|expired` | Prihlásenie – heslo sa zmenilo / relácia vypršala | everyone | same |
@@ -139,7 +139,7 @@ objednávka" → W6u.
 ### W1 Prihlásenie — `/login`
 - **Purpose**: sign in with the same e-mail + password as Roundcube.
 - **Layout** (mirror of `design/reference/roundcube/06`): white page, no card; centred column 300 px: blue logo
-  200 px; field E-mail with leading `User` icon box; field Heslo with leading `Lock` icon box (show/hide eye); full-width
+  180 px (Figma, D24); field E-mail with leading `User` icon box; field Heslo with leading `Lock` icon box (show/hide eye); full-width
   primary button "PRIHLÁSIŤ"; checkbox "Zostať prihlásený na tomto zariadení" (default on for desktops recognised as
   shared branch PCs, off otherwise); link "Prihlásiť cez Microsoft / Google" (only if enabled); footer "Smart Mail" +
   version + Pomoc.
@@ -148,7 +148,10 @@ objednávka" → W6u.
 - **States**: submitting (button spinner, fields disabled); wrong credentials "Nesprávny e-mail alebo heslo." (no
   hint which one); mail server down "Mailový server je nedostupný – skúste o chvíľu."; rate-limited "Príliš veľa
   pokusov, skúste o 5 minút."; Caps Lock hint under password.
-- **Mobile**: same column full width, keyboard type e-mail.
+- **Mobile (M-W1, as drawn in Figma — D24)**: top-aligned column, full width with 24 px margins; blue logo 160 px
+  and the subtitle "Prihláste sa e-mailom a heslom k pošte"; 36 px fields with an inline 16 px `User` / `Lock` icon
+  (no icon box, no show/hide eye); checkbox "Zostať prihlásený na tomto zariadení" **above** the full-width 40 px
+  button; errors as a red banner with a left border above the fields; no footer; keyboard type e-mail.
 - **Done when**: login with a Roundcube account works; 5 wrong attempts lock for 5 min; password never logged.
 
 ### W1a Overenie (2FA) — `/login/2fa`

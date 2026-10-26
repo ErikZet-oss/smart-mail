@@ -163,7 +163,7 @@ Names as in lucide-react ≥ 0.400 (older aliases such as `PenSquare`, `AlertTri
   `icon-192.png`, `icon-maskable-512.png` (logo inside the 80 % safe zone), `apple-touch-icon-180.png`, `icon.svg`,
   `favicon.svg`, `favicon-32.png`, `favicon-16.png` (the letter "S" only — the full word is unreadable at 16–32 px).
   `make_icons.py` regenerates all of them from `logo-smart.svg`.
-- Usage: rail top = white logo 52 px wide; W1 login = blue logo 200 px; W1b/M0 = blue logo 120 px; e-mail E3 = blue logo
+- Usage: rail top = white logo 52 px wide; W1 login = blue logo 180 px (M-W1 160 px); W1b/M0 = blue logo 120 px; e-mail E3 = blue logo
   120 px; empty reading pane = light grey logo watermark (like Roundcube's watermark). Clear space ≥ height of the
   letter "A"; minimum width 48 px; never stretch, recolour (other than blue/white), outline or put on a busy
   background. PWA manifest: name "Smart Mail", short name "Smart Mail", theme colour `#0F75BC`, background `#FFFFFF`.
@@ -247,7 +247,7 @@ This section describes the visual design of key screens. The complete inventory 
 state (routes, actions, acceptance) is `SCREENS_SPEC.md`; settings field by field are in `SETTINGS_SPEC.md`.
 
 ### W1 Prihlásenie
-Like the customer's Roundcube login (D19): no card frame, white page, centred column 300 px: blue logo 200 px; field
+Like the customer's Roundcube login (D19): no card frame, white page, centred column 300 px: blue logo 180 px; field
 "E-mail" with a grey leading icon box (`User`), field "Heslo" with a leading icon box (`Lock`) and show/hide eye;
 full-width primary button **"PRIHLÁSIŤ"** (40 px, label uppercase as in Roundcube); under it checkbox "Zostať
 prihlásený na tomto zariadení"; small grey footer "Smart Mail" (where Roundcube shows "Roundcube Webmail"). Link
@@ -533,6 +533,7 @@ Doručená pošta, `G T` Dnes, `G D` Doklady, `?` nápoveda. All shortcuts liste
 | quota | Úložné miesto {pouzite} z {spolu} |
 | login.remember | Zostať prihlásený na tomto zariadení |
 | login.error | Nesprávny e-mail alebo heslo. |
+| login.reason.mfaLocked | Príliš veľa nesprávnych kódov – prihláste sa znova. |
 | person.title | Kto ste? |
 | person.continue | Pokračovať ako {meno} |
 | person.switch | Kto pracuje? |

@@ -20,6 +20,12 @@ export default {
     extend: {
       colors,
       fontFamily: { ui: 'var(--font-ui)', mono: 'var(--font-mono)' },
+      borderRadius: {
+        xs: 'var(--radius-xs)',
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+      },
     },
   },
   plugins: [],

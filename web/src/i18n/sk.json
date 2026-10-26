@@ -1,14 +1,91 @@
 {
   "app": {
     "name": "Smart Mail",
-    "tagline": "Firemný e-mail s AI asistentom a prepojením na Money S4"
+    "footer": "Smart Mail · v{{version}}",
+    "help": "Pomoc"
   },
-  "phase0": {
-    "title": "Kostra aplikácie je pripravená",
-    "body": "Toto je fáza 0: projekt, testy a služby bežia. Pošta ako v Roundcube pribudne vo fáze 1.",
-    "status": "Stav servera",
-    "statusOk": "Server beží",
-    "statusDown": "Server nie je dostupný",
-    "statusChecking": "Overujem…"
+  "login": {
+    "title": "Prihlásenie",
+    "subtitleMobile": "Prihláste sa e-mailom a heslom k pošte",
+    "email": "E-mail",
+    "password": "Heslo",
+    "showPassword": "Zobraziť heslo",
+    "hidePassword": "Skryť heslo",
+    "submit": "PRIHLÁSIŤ",
+    "submitting": "PRIHLASUJEM…",
+    "remember": "Zostať prihlásený na tomto zariadení",
+    "capsLock": "Zapnutý Caps Lock",
+    "errors": {
+      "invalidCredentials": "Nesprávny e-mail alebo heslo.",
+      "serverUnavailable": "Mailový server je nedostupný – skúste o chvíľu.",
+      "rateLimited_one": "Príliš veľa pokusov, skúste o {{count}} minútu.",
+      "rateLimited_few": "Príliš veľa pokusov, skúste o {{count}} minúty.",
+      "rateLimited_many": "Príliš veľa pokusov, skúste o {{count}} minúty.",
+      "rateLimited_other": "Príliš veľa pokusov, skúste o {{count}} minút.",
+      "generic": "Prihlásenie sa nepodarilo – skúste to znova."
+    },
+    "reason": {
+      "passwordChanged": "Heslo k e-mailu sa zmenilo – prihláste sa novým heslom.",
+      "expired": "Boli ste odhlásený po 12 hodinách nečinnosti.",
+      "mfaLocked": "Príliš veľa nesprávnych kódov – prihláste sa znova."
+    }
+  },
+  "mfa": {
+    "title": "Overenie (2FA)",
+    "subtitle": "Zadajte 6-miestny kód z aplikácie na mobile.",
+    "subtitleBackup": "Zadajte jeden zo záložných kódov (napr. abcd-efgh).",
+    "digit": "Číslica {{n}} zo 6",
+    "backupCode": "Záložný kód",
+    "rememberDevice": "Zapamätať zariadenie na 30 dní",
+    "submit": "Overiť",
+    "submitting": "Overujem…",
+    "useBackup": "Použiť záložný kód",
+    "useApp": "Použiť kód z aplikácie",
+    "errors": {
+      "invalidCode_one": "Kód nie je správny. Zostáva {{count}} pokus.",
+      "invalidCode_few": "Kód nie je správny. Zostávajú {{count}} pokusy.",
+      "invalidCode_many": "Kód nie je správny. Zostáva {{count}} pokusu.",
+      "invalidCode_other": "Kód nie je správny. Zostáva {{count}} pokusov."
+    }
+  },
+  "signedIn": {
+    "title": "Ste prihlásený",
+    "as": "Prihlásený ako {{email}}",
+    "person": "Osoba: {{name}}",
+    "noPerson": "Osoba nie je vybraná – len na čítanie.",
+    "logout": "Odhlásiť"
+  },
+  "system": {
+    "back": "Späť",
+    "inbox": "Doručená pošta",
+    "search": "Hľadať",
+    "retry": "Skúsiť znova",
+    "forbidden": {
+      "code": "403",
+      "title": "Nemáte prístup k tejto stránke",
+      "text": "Táto časť je len pre roly s oprávnením (napr. Sklad alebo Správca). Požiadajte správcu o prístup.",
+      "askAdmin": "Požiadať správcu",
+      "mailSubject": "Žiadosť o prístup v Smart Mail: {{path}}"
+    },
+    "notFound": {
+      "code": "404",
+      "title": "Stránku sme nenašli",
+      "text": "Odkaz môže byť starý alebo správa bola presunutá. Skúste hľadanie."
+    },
+    "error": {
+      "code": "500 · ref. {{ref}}",
+      "codeNoRef": "500",
+      "title": "Niečo sa pokazilo – chybu sme zaznamenali",
+      "text": "Skúste to o chvíľu znova. Ak problém pretrvá, pošlite správcovi kód chyby.",
+      "copy": "Kopírovať kód",
+      "copied": "Skopírované"
+    },
+    "maintenance": {
+      "title": "Prebieha plánovaná údržba",
+      "untilToday": "Smart Mail bude opäť dostupný dnes približne o {{time}}.",
+      "untilDate": "Smart Mail bude opäť dostupný {{date}} približne o {{time}}.",
+      "untilUnknown": "Smart Mail bude čoskoro opäť dostupný.",
+      "mailWorks": "Pošta na serveri funguje – v naliehavých prípadoch použite Roundcube."
+    }
   }
 }

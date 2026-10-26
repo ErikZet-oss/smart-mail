@@ -16,6 +16,8 @@ dependencies = [
     "arq>=0.26",
     "structlog>=24.4",
     "httpx>=0.28",
+    "imapclient>=3.0",
+    "cryptography>=43",
 ]
 
 [dependency-groups]
@@ -63,7 +65,7 @@ packages = ["app"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["arq.*"]
+module = ["arq.*", "imapclient.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

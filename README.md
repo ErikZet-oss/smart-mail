@@ -7,7 +7,7 @@ s Money S4 cez API modul – GraphQL podľa schémy vášho servera, REST na PDF
 | Súbor | Na čo slúži | Kto ho číta |
 |---|---|---|
 | `CLAUDE.md` | hlavné zadanie: pravidlá, technológie, štruktúra, fázy s kritériami prevzatia | Claude Code / Cursor |
-| `docs/DECISIONS.md` | **vaše rozhodnutia (v2.10, D1–D24)** – majú prednosť pred všetkým ostatným: len dodací list prijatý (bez faktúr prijatých), objednávky bez riešenia skladu, nikde zaokrúhľovanie na balenie, ponuky číslované v Money, všetky sklady a cenníky zo zoznamov Money, čas príjmu = čas zápisu, poplatky a vratky len v Money, nové logo, vzhľad podľa vášho Roundcube, bez PIN-u, práva AI si nastavuje každé prihlásenie | agent + vy |
+| `docs/DECISIONS.md` | **vaše rozhodnutia (v2.11, D1–D27)** – majú prednosť pred všetkým ostatným: len dodací list prijatý (bez faktúr prijatých), objednávky bez riešenia skladu, nikde zaokrúhľovanie na balenie, ponuky číslované v Money, všetky sklady a cenníky zo zoznamov Money, čas príjmu = čas zápisu, poplatky a vratky len v Money, nové logo, vzhľad podľa vášho Roundcube, bez PIN-u, práva AI si nastavuje každé prihlásenie, kontá vznikajú pri prvom prihlásení, heslo k pošte uložené šifrovane | agent + vy |
 | `docs/PRODUCT_SPEC.md` | všetky funkcie, zhoda s Roundcube, kompletné nastavenia, roly, migrácia | agent + vy |
 | `docs/UX_SPEC.md` | dizajn systém (farby, písmo, komponenty), obrazovky web a mobil, skratky, texty | agent + Figma |
 | `docs/SCREENS_SPEC.md` | mapa aplikácie a popis každej stránky, podstránky a dialógu (web aj mobil): účel, rozloženie, obsah, tlačidlá, stavy | agent + Figma |
@@ -78,12 +78,38 @@ docker compose down               # zastaviť
 
 | Adresa | Čo tam je |
 |---|---|
-| http://localhost:8080 | webová aplikácia (vo fáze 0 stránka „Kostra aplikácie je pripravená“ so stavom servera) |
+| http://localhost:8080 | webová aplikácia (od fázy 1a prihlásenie e-mailom a heslom k pošte) |
 | http://localhost:8000/api/docs | API backendu |
 | http://localhost:8100/healthz | Money most (vo fáze 0 len testovacie dáta, zápisy vypnuté) |
 | http://localhost:8025 | Mailpit – testovacia pošta, nič neodíde von |
 | http://localhost:8333 | úložisko príloh (S3) |
 
+### Prihlásenie (fáza 1a)
+Prihlasuje sa e-mailom a heslom k pošte – heslo overí IMAP server (ten istý ako pre Roundcube). Server nastavte v `.env`:
+`IMAP_LOGIN_HOST` (mail2.nameserver.sk), `IMAP_LOGIN_PORT` (993), `IMAP_LOGIN_SECURITY` (`ssl`/`starttls`).
+
+- **Nové kontá (D25):** kto má adresu v doméne z `INTERNAL_DOMAINS`, tomu sa konto založí pri prvom úspešnom
+  prihlásení – len na čítanie (rola viewer), kým mu správca nepridelí rolu. Adresy v `ADMIN_EMAILS` dostanú pri
+  založení rolu admin. Iné domény sa neprihlásia.
+- **Ochrana prihlásenia (D26):** 5 zlých pokusov na konto za 5 minút, 30 z jednej IP adresy; IP adresy firmy
+  v `LOGIN_IP_ALLOWLIST` majú len limit na konto.
+- **Heslo k pošte (D27)** sa uloží šifrovane kľúčom `APP_ENCRYPTION_KEY` (len v `.env`) pre synchronizáciu pošty;
+  po zmene hesla sa prepíše hneď pri ďalšom prihlásení.
+- **„Požiadať správcu“** na stránke 403 pošle e-mail na `ADMIN_CONTACT_EMAIL`.
+
+Pobočkové schránky a ďalšie osoby zatiaľ založíte príkazom (neskôr v Nastaveniach › Pobočky a osoby):
+
+```bash
+docker compose exec app python -m app.cli add-account jana@smartsro.sk --first-name Jana --last-name Nová --role sales
+docker compose exec app python -m app.cli add-account nitra@smartsro.sk --branch Nitra      # pobočková schránka
+docker compose exec app python -m app.cli add-person Nitra --first-name Peter --last-name Novák
+docker compose exec app python -m app.cli maintenance on --until 2026-11-01T08:00:00+01:00  # obrazovka Údržba
+docker compose exec app python -m app.cli maintenance off
+```
+
 Pre programátora (agenta): `make check` spustí to isté čo CI okrem Dockeru (ruff, mypy, pytest vrátane golden
 testov tlačových dokladov, eslint, prettier, tsc, vitest). Golden testy potrebujú `poppler-utils` a písmo z
 `templates/print/fonts/`. Nastavenia: `.env.example` (skopírovať do `.env`, nikdy necommitovať).
+Testy prihlásenia potrebujú PostgreSQL a Redis (`docker compose up -d db redis`; databáza `smartmail_test`, adresy v
+`TEST_DATABASE_URL` / `TEST_REDIS_URL`) – bez nich sa lokálne preskočia, v CI musia prejsť. `make e2e` spustí
+Playwright (desktop + mobil, API simulované) a uloží snímky obrazoviek do `web/test-results/screens/`.
