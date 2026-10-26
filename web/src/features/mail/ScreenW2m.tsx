@@ -36,7 +36,11 @@ export function ScreenW2m() {
             {t('mail.from')} {msg.from_name || msg.from_email} &lt;{msg.from_email}&gt;
           </p>
           <p className="type-small text-text-secondary">
-            {t('mail.to')} {msg.to.map((a) => a.email).filter(Boolean).join(', ')}
+            {t('mail.to')}{' '}
+            {msg.to
+              .map((a) => a.email)
+              .filter(Boolean)
+              .join(', ')}
           </p>
           <p className="type-small mb-6 text-text-secondary">
             {t('mail.date')} {formatMailDate(msg.received_at || msg.sent_at)}

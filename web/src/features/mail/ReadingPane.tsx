@@ -27,14 +27,7 @@ import { useToast } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { useTheme } from '../prefs/ThemeProvider';
 import { formatMailDate } from './formatMailDate';
-import {
-  attachmentUrl,
-  bulkMessages,
-  fetchMessage,
-  messageKey,
-  patchFlags,
-  snoozeThread,
-} from './mailApi';
+import { attachmentUrl, bulkMessages, fetchMessage, messageKey, patchFlags, snoozeThread } from './mailApi';
 
 type Props = {
   mailbox: string;
@@ -82,10 +75,7 @@ function formatSize(bytes: number): string {
 }
 
 function showRemoteImages(html: string): string {
-  return html.replace(
-    /src=(["'])about:blank#smartmail-remote\1\s+data-remote-src=(["'])([^"']+)\2/gi,
-    'src=$2$3$2',
-  );
+  return html.replace(/src=(["'])about:blank#smartmail-remote\1\s+data-remote-src=(["'])([^"']+)\2/gi, 'src=$2$3$2');
 }
 
 function menuAt(event: MouseEvent<HTMLButtonElement>) {
@@ -362,7 +352,11 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
                 {msg.from_email ? <span className="text-text-secondary"> &lt;{msg.from_email}&gt;</span> : null}
               </p>
               <p className="type-small text-text-secondary">
-                {t('mail.to')} {msg.to.map((a) => a.name || a.email).filter(Boolean).join(', ') || '—'}
+                {t('mail.to')}{' '}
+                {msg.to
+                  .map((a) => a.name || a.email)
+                  .filter(Boolean)
+                  .join(', ') || '—'}
               </p>
               <p className="type-small text-text-secondary">
                 {t('mail.date')} {formatMailDate(msg.received_at || msg.sent_at)}
@@ -431,10 +425,22 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
       )}
 
       {markMenu ? (
-        <Menu label={t('mail.toolbar.mark')} entries={markEntries} at={markMenu} width={220} onClose={() => setMarkMenu(null)} />
+        <Menu
+          label={t('mail.toolbar.mark')}
+          entries={markEntries}
+          at={markMenu}
+          width={220}
+          onClose={() => setMarkMenu(null)}
+        />
       ) : null}
       {moreMenu ? (
-        <Menu label={t('mail.toolbar.more')} entries={moreEntries} at={moreMenu} width={240} onClose={() => setMoreMenu(null)} />
+        <Menu
+          label={t('mail.toolbar.more')}
+          entries={moreEntries}
+          at={moreMenu}
+          width={240}
+          onClose={() => setMoreMenu(null)}
+        />
       ) : null}
       {snoozeMenu ? (
         <Menu

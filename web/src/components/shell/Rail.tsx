@@ -171,7 +171,15 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
 /** Tiny list glyph for Klasické zobrazenie (PersonChip menu) without a new Lucide import cycle. */
 function ListIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      aria-hidden="true"
+    >
       <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
     </svg>
   );

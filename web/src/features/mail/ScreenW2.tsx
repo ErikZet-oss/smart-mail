@@ -322,18 +322,34 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
             <span className="type-small mr-2 text-text-primary">
               {t('mail.bulk.selected', { count: selectedIds.size })}
             </span>
-            <button type="button" className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle" onClick={() => bulk.mutate('mark_seen')}>
+            <button
+              type="button"
+              className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
+              onClick={() => bulk.mutate('mark_seen')}
+            >
               {t('mail.bulk.markRead')}
             </button>
-            <button type="button" className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle" onClick={() => bulk.mutate('done')}>
+            <button
+              type="button"
+              className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
+              onClick={() => bulk.mutate('done')}
+            >
               <CircleCheck size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.toolbar.done')}
             </button>
-            <button type="button" className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle" onClick={() => bulk.mutate('archive')}>
+            <button
+              type="button"
+              className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
+              onClick={() => bulk.mutate('archive')}
+            >
               <Archive size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.toolbar.archive')}
             </button>
-            <button type="button" className="type-caption rounded-sm px-2 py-1 text-danger-600 hover:bg-bg-subtle" onClick={() => bulk.mutate('delete')}>
+            <button
+              type="button"
+              className="type-caption rounded-sm px-2 py-1 text-danger-600 hover:bg-bg-subtle"
+              onClick={() => bulk.mutate('delete')}
+            >
               <Trash2 size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.toolbar.delete')}
             </button>
@@ -384,7 +400,11 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
 
         <div className="flex shrink-0 flex-col gap-2 border-b border-border-default px-2 pb-2">
           <label className="relative block">
-            <Search size={14} className="pointer-events-none absolute left-2.5 top-2.5 text-text-tertiary" aria-hidden="true" />
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-2.5 top-2.5 text-text-tertiary"
+              aria-hidden="true"
+            />
             <input
               type="search"
               value={q}
@@ -456,11 +476,12 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
             <EmptyState icon={<FolderIcon size={20} />} title={t('mail.empty')} text={t('mail.emptyFilter')} />
           ) : (
             rows.map((item) => {
-              const id = item.kind === 'message' ? item.data.id : item.data.latest_message_id ?? item.data.id;
+              const id = item.kind === 'message' ? item.data.id : (item.data.latest_message_id ?? item.data.id);
               const tid = item.kind === 'message' ? item.data.thread_id : item.data.id;
               const selected =
                 activeMessageId === id ||
-                (activeThreadId !== null && (item.kind === 'thread' ? item.data.id === activeThreadId : item.data.thread_id === activeThreadId));
+                (activeThreadId !== null &&
+                  (item.kind === 'thread' ? item.data.id === activeThreadId : item.data.thread_id === activeThreadId));
               return (
                 <MessageRow
                   key={item.kind === 'message' ? item.data.id : item.data.id}

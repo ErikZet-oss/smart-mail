@@ -280,7 +280,6 @@ describe('W2 shell and folder column (1c)', () => {
     expect(screen.getByText(/prosím o zaslanie kópie faktúry/)).toBeInTheDocument();
   });
 
-
   it('W2 an unknown folder opens W16b', async () => {
     mockApi(base());
     const router = renderAt('/mail/default/neexistuje');

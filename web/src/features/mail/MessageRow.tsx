@@ -6,9 +6,7 @@ import { Checkbox } from '../../components/Checkbox';
 import { formatMailDate } from './formatMailDate';
 import type { MessageListItem, ThreadListItem } from './mailApi';
 
-export type RowItem =
-  | { kind: 'message'; data: MessageListItem }
-  | { kind: 'thread'; data: ThreadListItem };
+export type RowItem = { kind: 'message'; data: MessageListItem } | { kind: 'thread'; data: ThreadListItem };
 
 type Props = {
   item: RowItem;
@@ -55,9 +53,7 @@ export function MessageRow({ item, selected, checked, showCheckbox, density, cla
       onKeyDown={onKey}
       className={`relative flex cursor-pointer gap-2.5 border-b border-border-default px-3 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary-500 ${
         density === 'comfortable' ? 'min-h-[84px] py-2.5' : 'h-[52px] py-2'
-      } ${selected ? 'bg-brand-primary-50' : 'bg-bg-canvas hover:bg-bg-subtle'} ${
-        flagged ? 'text-danger-600' : ''
-      }`}
+      } ${selected ? 'bg-brand-primary-50' : 'bg-bg-canvas hover:bg-bg-subtle'} ${flagged ? 'text-danger-600' : ''}`}
     >
       {selected ? <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-brand-primary-400" /> : null}
       {showCheckbox ? (
@@ -77,9 +73,7 @@ export function MessageRow({ item, selected, checked, showCheckbox, density, cla
         <div className="flex items-center gap-2 whitespace-nowrap">
           <span className="type-small min-w-0 flex-1 truncate text-text-secondary">
             {senderLabel(fromName, fromEmail)}
-            {threadCount > 1 ? (
-              <span className="text-text-tertiary"> · {threadCount}</span>
-            ) : null}
+            {threadCount > 1 ? <span className="text-text-tertiary"> · {threadCount}</span> : null}
           </span>
           <span className="type-caption shrink-0 text-brand-primary-600">{date}</span>
         </div>

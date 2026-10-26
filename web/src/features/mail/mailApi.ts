@@ -155,15 +155,7 @@ export type MessageDetail = {
 };
 
 export type BulkAction =
-  | 'mark_seen'
-  | 'mark_unseen'
-  | 'flag'
-  | 'unflag'
-  | 'delete'
-  | 'junk'
-  | 'archive'
-  | 'move'
-  | 'done';
+  'mark_seen' | 'mark_unseen' | 'flag' | 'unflag' | 'delete' | 'junk' | 'archive' | 'move' | 'done';
 
 export const messagesKey = (mailbox: string, folderId: string, page: number, filter: MessageFilter) =>
   ['mail', 'messages', mailbox, folderId, page, filter] as const;
@@ -181,10 +173,7 @@ export const fetchMessages = (
   if (opts.filter && opts.filter !== 'all') params.set('filter', opts.filter);
   if (opts.q) params.set('q', opts.q);
   const qs = params.toString();
-  return api<MessagesList>(
-    'GET',
-    `${base(mailbox)}/folders/${folderId}/messages${qs ? `?${qs}` : ''}`,
-  );
+  return api<MessagesList>('GET', `${base(mailbox)}/folders/${folderId}/messages${qs ? `?${qs}` : ''}`);
 };
 
 export const fetchMessage = (mailbox: string, id: string, markRead = true) =>
