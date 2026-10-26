@@ -43,18 +43,13 @@ services:
       retries: 20
 
   minio:
-    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    image: minio/minio:latest   # dev-only service; pin a RELEASE tag for production
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-smartmail}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-smartmail-dev-secret}
     volumes: [minio-data:/data]
     ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
 
   clamav:
     image: clamav/clamav:stable
@@ -68,7 +63,7 @@ services:
       start_period: 300s
 
   mailpit:
-    image: axllent/mailpit:v1.21
+    image: axllent/mailpit:latest   # dev-only test inbox
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
 
   bridge:
@@ -86,7 +81,7 @@ services:
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
-      minio: { condition: service_healthy }
+      minio: { condition: service_started }
     ports: ["127.0.0.1:8000:8000"]
 
   worker:
