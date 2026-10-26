@@ -7,7 +7,7 @@ s Money S4 cez API modul – GraphQL podľa schémy vášho servera, REST na PDF
 | Súbor | Na čo slúži | Kto ho číta |
 |---|---|---|
 | `CLAUDE.md` | hlavné zadanie: pravidlá, technológie, štruktúra, fázy s kritériami prevzatia | Claude Code / Cursor |
-| `docs/DECISIONS.md` | **vaše rozhodnutia (v2.11, D1–D27)** – majú prednosť pred všetkým ostatným: len dodací list prijatý (bez faktúr prijatých), objednávky bez riešenia skladu, nikde zaokrúhľovanie na balenie, ponuky číslované v Money, všetky sklady a cenníky zo zoznamov Money, čas príjmu = čas zápisu, poplatky a vratky len v Money, nové logo, vzhľad podľa vášho Roundcube, bez PIN-u, práva AI si nastavuje každé prihlásenie, kontá vznikajú pri prvom prihlásení, heslo k pošte uložené šifrovane | agent + vy |
+| `docs/DECISIONS.md` | **vaše rozhodnutia (v2.12, D1–D28)** – majú prednosť pred všetkým ostatným: len dodací list prijatý (bez faktúr prijatých), objednávky bez riešenia skladu, nikde zaokrúhľovanie na balenie, ponuky číslované v Money, všetky sklady a cenníky zo zoznamov Money, čas príjmu = čas zápisu, poplatky a vratky len v Money, nové logo, vzhľad podľa vášho Roundcube, bez PIN-u, práva AI si nastavuje každé prihlásenie, kontá vznikajú pri prvom prihlásení, heslo k pošte uložené šifrovane | agent + vy |
 | `docs/PRODUCT_SPEC.md` | všetky funkcie, zhoda s Roundcube, kompletné nastavenia, roly, migrácia | agent + vy |
 | `docs/UX_SPEC.md` | dizajn systém (farby, písmo, komponenty), obrazovky web a mobil, skratky, texty | agent + Figma |
 | `docs/SCREENS_SPEC.md` | mapa aplikácie a popis každej stránky, podstránky a dialógu (web aj mobil): účel, rozloženie, obsah, tlačidlá, stavy | agent + Figma |

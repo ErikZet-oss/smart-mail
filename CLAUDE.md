@@ -1,7 +1,7 @@
 # PROJECT: Smart Mail — AI-assisted company e-mail client for Smart s.r.o. (replaces Roundcube)
 
 Binding specification files (read the relevant one before each phase; they override assumptions):
-- `docs/DECISIONS.md` — **scope decisions of the customer (v2.11, D1–D27) — highest priority**; if any other file contradicts it,
+- `docs/DECISIONS.md` — **scope decisions of the customer (v2.12, D1–D28) — highest priority**; if any other file contradicts it,
   DECISIONS.md wins and you report the contradiction
 - `docs/PRODUCT_SPEC.md` — features, Roundcube parity, settings tree, roles, migration, non-goals
 - `docs/UX_SPEC.md` — design tokens, components, key screens (web + mobile), shortcuts, microcopy, accessibility
@@ -190,7 +190,7 @@ number/fact check, placeholder block, attachment check, phishing/IBAN-change che
 Shadow mode flag for pilot. `make eval` with labeled CSV; injection test suite.
 
 ## 7. Money S4 (details: docs/MONEY_API.md)
-Only the bridge talks to Money. GraphQL (`POST /graphql`, filters `Field~op~value`, `#` = AND, `|` = OR, `ChangeFrom`
+Only the bridge talks to Money, and only through the official API — never through the Money SQL database (D28). GraphQL (`POST /graphql`, filters `Field~op~value`, `#` = AND, `|` = OR, `ChangeFrom`
 for delta sync, no server-side ordering) for documents, address book, catalog, supplier codes (`ArticleSuppliers`),
 stock (`WarehouseStocks`), customer prices (`ProdejniCeny`), codebooks; REST only for PDF reports, persons, activities
 and proformas. Token `POST /connect/token` (client_credentials, `scope=S5Api`). Main app ↔ bridge: HMAC; writes need a

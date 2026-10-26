@@ -219,6 +219,9 @@ the implementer adds an offer report endpoint (question 11), otherwise `template
 Money number → send after approval. Accepted → `CreateReceivedOrder` (ORDERS_SPEC §4.4).
 **[PROBE when available]** the exact `IssuedOfferInput` fields — never guess them; validate the mutation with
 `tools/validate_graphql.py` against the new schema.
+Reference for the fields and query shapes: `docs/reference/money-s4-issued-offer.md` (its SQL path is not allowed for
+Smart Mail, DECISIONS D28). Before Phase 6 the customer checks Money › Administrácia › Výmena dát › REST API (enabled
+agendas); the list query may be named `IssuedOffers` on this server (plural, like `IssuedSalesDocs`).
 
 ### 5.8 Complaint from e-mail → Reklamácia prijatá
 `CreateReceivedComplaint(ReceivedComplaint:{ Firma_ID, DatumPrijeti, Odkaz:<invoice/DL number>,
