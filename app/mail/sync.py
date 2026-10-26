@@ -501,6 +501,9 @@ async def sync_mailbox(
             log.warning("mail.sync_failed", mailbox_id=str(mailbox.id), error=str(exc))
             return mailbox.sync_state
         await apply_snapshot(db, mailbox, snapshot, now=now or datetime.now(UTC))
+        from app.mail.threads import link_unthreaded
+
+        linked = await link_unthreaded(db, mailbox.id)
         await db.commit()
         log.info(
             "mail.synced",
@@ -508,6 +511,7 @@ async def sync_mailbox(
             scope=scope,
             folders=len(snapshot.folders),
             new=sum(len(d.new) for d in snapshot.folders),
+            threaded=linked,
             ms=int((datetime.now(UTC) - started).total_seconds() * 1000),
         )
         return mailbox.sync_state

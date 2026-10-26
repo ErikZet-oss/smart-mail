@@ -31,8 +31,8 @@ TEST_DATABASE_URL = os.environ.get(
 )
 TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15")
 TABLES = (
-    "messages, folders_meta, mailbox_access, mailboxes, device_person_memory, sessions, accounts, person_branches, "
-    "persons, branches"
+    "attachments, messages, threads, user_settings, folders_meta, mailbox_access, mailboxes, "
+    "device_person_memory, sessions, accounts, person_branches, persons, branches"
 )
 
 

@@ -75,10 +75,42 @@ export function foldersView(
   };
 }
 
+export const DEFAULT_PREFS = {
+  list: {
+    sort: 'date_received',
+    sort_dir: 'desc',
+    mode: 'list',
+    density: 'compact',
+    page_size: 50,
+    show_ai_summary: true,
+    mark_read: 'delay3',
+    after_delete: 'next',
+  },
+  ui: { theme: 'light', classic: false, remote_images: 'known', prefer_html: true },
+};
+
+/** Empty list payload so W2 1d message fetches do not 401 the session when a test only mocks folders. */
+export function emptyMessagesList() {
+  return {
+    mode: 'list' as const,
+    total: 0,
+    page: 1,
+    page_size: 50,
+    messages: [] as unknown[],
+    threads: [] as unknown[],
+    prefs: DEFAULT_PREFS.list,
+  };
+}
+
 export const MAIL_DEFAULTS: Record<string, Reply> = {
   'GET /api/mail/mailboxes': { body: [foldersView().mailbox] },
   'GET /api/mail/mailboxes/default/folders': { body: foldersView() },
+  'GET /api/mail/prefs': { body: DEFAULT_PREFS },
+  'PUT /api/mail/prefs': { body: DEFAULT_PREFS },
 };
+
+const FOLDER_MESSAGES = /^GET \/api\/mail\/mailboxes\/[^/]+\/folders\/[^/]+\/messages$/;
+const MESSAGE_DETAIL = /^GET \/api\/mail\/mailboxes\/[^/]+\/messages\/[^/]+$/;
 
 /** Mock the API: "METHOD /path" → reply (or a function of the JSON body for stateful flows). The W2 folder column
  * answers with `MAIL_DEFAULTS` unless overridden; other unmocked API calls answer 401 (not signed in). */
@@ -92,11 +124,16 @@ export async function mockApi(page: Page, given: Record<string, Reply | ((body: 
       await route.fulfill({ json: { ok: true }, headers: { 'set-cookie': 'sm_csrf=e2e-csrf; Path=/' } });
       return;
     }
-    const given = replies[key];
-    const reply =
-      typeof given === 'function'
-        ? given(request.postDataJSON() as unknown)
-        : (given ?? { status: 401, body: { detail: { code: 'unauthenticated', reason: 'missing' } } });
+    const entry = replies[key];
+    let reply: Reply | undefined = typeof entry === 'function' ? entry(request.postDataJSON() as unknown) : entry;
+    // Phase 1d: list/detail prefs must not 401 a signed-in shell when a test only stubs folders
+    if (!reply && FOLDER_MESSAGES.test(key)) {
+      reply = { body: emptyMessagesList() };
+    } else if (!reply && MESSAGE_DETAIL.test(key)) {
+      reply = { status: 404, body: { detail: { code: 'message_not_found' } } };
+    } else if (!reply) {
+      reply = { status: 401, body: { detail: { code: 'unauthenticated', reason: 'missing' } } };
+    }
     if (reply.never) return; // keeps the request pending (submitting state)
     if (reply.delayMs) await new Promise((r) => setTimeout(r, reply.delayMs));
     await route.fulfill({ status: reply.status ?? 200, json: reply.body });

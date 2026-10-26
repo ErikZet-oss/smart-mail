@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     s3_access_key: SecretStr | None = None
     s3_secret_key: SecretStr | None = None
     clamav_host: str = "localhost"
+    # local driver for raw .eml and attachments until the S3 client is wired (CLAUDE.md §2)
+    storage_path: str = "./data/storage"
 
     # --- mailbox login (PRODUCT_SPEC §2.0): the IMAP server Roundcube uses. Per-mailbox servers come with
     # Settings › Schránky; until then every login is verified against this server.
