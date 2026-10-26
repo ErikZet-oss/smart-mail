@@ -25,7 +25,12 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("mailbox_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("mailboxes.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "mailbox_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("mailboxes.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("thread_key", sa.String(80), nullable=False),
         sa.Column("subject", sa.Text),
         sa.Column("status", sa.String(16), server_default="open", nullable=False),
@@ -41,7 +46,10 @@ def upgrade() -> None:
     op.create_index("ix_threads_mailbox_id", "threads", ["mailbox_id"])
     op.create_index("ix_threads_last_message_at", "threads", ["last_message_at"])
 
-    op.add_column("messages", sa.Column("thread_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("threads.id", ondelete="SET NULL")))
+    op.add_column(
+        "messages",
+        sa.Column("thread_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("threads.id", ondelete="SET NULL")),
+    )
     op.add_column("messages", sa.Column("has_attachments", sa.Boolean(), server_default="false", nullable=False))
     op.add_column("messages", sa.Column("preview", sa.String(240)))
     op.add_column("messages", sa.Column("body_text", sa.Text()))
@@ -56,7 +64,12 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("message_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("messages.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "message_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("messages.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("filename", sa.String(255), nullable=False),
         sa.Column("content_type", sa.String(200), server_default="application/octet-stream", nullable=False),
         sa.Column("size", sa.Integer(), server_default="0", nullable=False),
@@ -73,7 +86,9 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("person_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("persons.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "person_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("persons.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("section", sa.String(64), nullable=False),
         sa.Column("data", postgresql.JSONB(), server_default="{}", nullable=False),
         sa.UniqueConstraint("person_id", "section"),

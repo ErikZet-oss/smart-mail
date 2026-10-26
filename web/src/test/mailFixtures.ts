@@ -110,9 +110,10 @@ export function messageDetail(id = 'm-1'): MessageDetail {
 
 /** Handlers for `mockApi` of the W2 shell + list. */
 export function mailHandlers(view: FoldersView = foldersView()) {
-  const inbox = view.folders.find((f) => f.special_use === 'inbox')!;
+  const inbox = view.folders.find((f) => f.special_use === 'inbox') ?? view.folders[0];
+  if (!inbox) throw new Error('foldersView has no folders');
   const list = messagesList(inbox.id, inbox.total);
-  return {
+  const handlers: Record<string, { body: unknown }> = {
     'GET /api/mail/mailboxes': { body: [view.mailbox] },
     'GET /api/mail/mailboxes/default/folders': { body: view },
     [`GET /api/mail/mailboxes/default/folders/${inbox.id}/messages`]: { body: list },
@@ -121,4 +122,10 @@ export function mailHandlers(view: FoldersView = foldersView()) {
     'GET /api/mail/mailboxes/default/messages/m-1': { body: messageDetail('m-1') },
     'GET /api/mail/mailboxes/default/messages/m-2': { body: messageDetail('m-2') },
   };
+  // empty folders still get a messages endpoint so a stray refetch does not 404
+  for (const f of view.folders) {
+    const key = `GET /api/mail/mailboxes/default/folders/${f.id}/messages`;
+    if (!(key in handlers)) handlers[key] = { body: messagesList(f.id, 0) };
+  }
+  return handlers;
 }
