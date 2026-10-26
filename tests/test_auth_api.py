@@ -71,9 +71,11 @@ async def test_w1_wrong_password_generic_error_and_audit_without_password(
     assert "zle-heslo" not in str(entry.details)
 
 
-async def test_w1_valid_imap_login_without_account_is_rejected(client: Client, mail_server: FakeMailServer) -> None:
-    mail_server.passwords["cudzi@smartsro.sk"] = PASSWORD
-    r = await client.login("cudzi@smartsro.sk", PASSWORD)
+async def test_w1_d25_valid_imap_login_of_external_address_is_rejected(
+    client: Client, mail_server: FakeMailServer
+) -> None:
+    mail_server.passwords["cudzi@example.com"] = PASSWORD
+    r = await client.login("cudzi@example.com", PASSWORD)
     assert r.status_code == 401 and r.json()["detail"]["code"] == "invalid_credentials"
 
 

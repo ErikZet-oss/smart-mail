@@ -21,6 +21,10 @@ x-app-env: &app-env
   IMAP_LOGIN_HOST: ${IMAP_LOGIN_HOST:-localhost}
   IMAP_LOGIN_PORT: ${IMAP_LOGIN_PORT:-993}
   IMAP_LOGIN_SECURITY: ${IMAP_LOGIN_SECURITY:-ssl}
+  INTERNAL_DOMAINS: ${INTERNAL_DOMAINS:-smartsro.sk}
+  ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+  ADMIN_CONTACT_EMAIL: ${ADMIN_CONTACT_EMAIL:-}
+  LOGIN_IP_ALLOWLIST: ${LOGIN_IP_ALLOWLIST:-}
   # uvicorn --proxy-headers: trust X-Forwarded-For from the web container (real client IP for the login rate limit)
   FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
 

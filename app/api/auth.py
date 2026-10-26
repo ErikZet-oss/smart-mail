@@ -23,15 +23,9 @@ from sqlalchemy import select
 from app.auth import totp
 from app.auth.deps import DB, Auth, AuthContext, SettingsDep, client_ip, now_utc
 from app.auth.models import Account, Branch, Person, Session
+from app.auth.provisioning import provision_account, remember_mailbox_password
 from app.auth.ratelimit import LoginRateLimiter
-from app.auth.security import (
-    csrf_token,
-    decrypt,
-    fingerprint_matches,
-    mfa_trust_cookie,
-    mfa_trust_valid,
-    password_fingerprint,
-)
+from app.auth.security import csrf_token, decrypt, mfa_trust_cookie, mfa_trust_valid
 from app.auth.sessions import (
     Invalid,
     RevokeReason,
@@ -192,6 +186,17 @@ async def login(
         raise fail(503, "mail_server_unavailable")
 
     account = (await db.execute(select(Account).where(Account.email == email))).scalar_one_or_none()
+    if result is LoginResult.ok and account is None and settings.is_internal_address(email):
+        account = await provision_account(db, email, settings)
+        person = await db.get(Person, account.person_id)
+        audit(
+            db,
+            "auth.account_created",
+            account_id=account.id,
+            person_id=account.person_id,
+            ip=ip,
+            details={"role": str(person.role) if person else None, "source": "first_login"},
+        )
     if result is LoginResult.invalid_credentials or account is None or not account.active:
         await limiter.fail(email, ip)
         reason = (
@@ -211,11 +216,9 @@ async def login(
 
     await limiter.success(email)
     now = now_utc()
-    if account.password_fingerprint and not fingerprint_matches(body.password, account.password_fingerprint):
+    if remember_mailbox_password(account, body.password, settings, now=now):
         revoked = await revoke_account_sessions(db, account.id, RevokeReason.password_changed, now=now)
         audit(db, "auth.password_changed", account_id=account.id, ip=ip, details={"sessions_revoked": revoked})
-    if not account.password_fingerprint or not fingerprint_matches(body.password, account.password_fingerprint):
-        account.password_fingerprint = password_fingerprint(body.password)
 
     device_id = request.cookies.get(DEVICE_COOKIE) or secrets.token_urlsafe(16)
     _set_cookie(response, settings, DEVICE_COOKIE, device_id, 400 * 86400, http_only=True)

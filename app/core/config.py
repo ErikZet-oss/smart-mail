@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from functools import lru_cache
 from typing import Literal
 
@@ -39,8 +40,14 @@ class Settings(BaseSettings):
     session_idle_hours: int = Field(default=12, ge=1)
     session_remember_days: int = Field(default=30, ge=1, le=30)
     login_max_failures: int = Field(default=5, ge=1)
-    login_ip_max_failures: int = Field(default=20, ge=1)
+    login_ip_max_failures: int = Field(default=30, ge=1)  # DECISIONS D26
     login_lock_minutes: int = Field(default=5, ge=1)
+    # company IPs / networks exempt from the per-IP limit (the per-account limit still applies), DECISIONS D26
+    login_ip_allowlist: str = ""
+    # first admins: their accounts get the admin role when auto-created on first login (DECISIONS D25)
+    admin_emails: str = ""
+    # W16a "Požiadať správcu" opens a mailto to this address
+    admin_contact_email: str | None = None
     mfa_max_failures: int = Field(default=5, ge=1)
     mfa_trust_days: int = Field(default=30, ge=1)
 
@@ -78,10 +85,16 @@ class Settings(BaseSettings):
     def cookie_secure(self) -> bool:
         return self.app_base_url.startswith("https://")
 
-    @field_validator("app_encryption_key", mode="before")
+    @field_validator("app_encryption_key", "admin_contact_email", mode="before")
     @classmethod
     def _empty_is_unset(cls, value: object) -> object:
         return None if value == "" else value
+
+    @field_validator("login_ip_allowlist")
+    @classmethod
+    def _valid_networks(cls, value: str) -> str:
+        _networks(value)
+        return value
 
     @model_validator(mode="after")
     def _prod_requirements(self) -> Settings:
@@ -99,6 +112,27 @@ class Settings(BaseSettings):
     @property
     def internal_domain_list(self) -> list[str]:
         return [d.strip().lower() for d in self.internal_domains.split(",") if d.strip()]
+
+    def is_internal_address(self, email: str) -> bool:
+        _, _, domain = email.strip().lower().rpartition("@")
+        return domain in self.internal_domain_list
+
+    @property
+    def admin_email_list(self) -> set[str]:
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+
+    def ip_exempt_from_limit(self, ip: str | None) -> bool:
+        if not ip:
+            return False
+        try:
+            address = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        return any(address in net for net in _networks(self.login_ip_allowlist))
+
+
+def _networks(value: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    return [ipaddress.ip_network(part.strip(), strict=False) for part in value.split(",") if part.strip()]
 
 
 @lru_cache

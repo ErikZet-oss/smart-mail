@@ -1,14 +1,17 @@
 import { ArrowLeft, Copy, Inbox, Lock, Mail, RefreshCw, Search, TriangleAlert } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Button } from '../../components/Button';
 import { StatusPage } from '../../components/StatusPage';
-import { formatRef } from '../../lib/api';
+import { api, formatRef } from '../../lib/api';
 
 const ICON = 44;
 const BUTTON_ICON = 16;
+
+type SystemInfo = { admin_contact_email: string | null };
 
 /** W16a 403 – the person's role does not allow this page. */
 export function ScreenW16a() {
@@ -17,6 +20,12 @@ export function ScreenW16a() {
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? location.pathname;
   const subject = encodeURIComponent(t('system.forbidden.mailSubject', { path: from }));
+  const info = useQuery({
+    queryKey: ['system', 'info'],
+    queryFn: () => api<SystemInfo>('GET', '/api/system/info', undefined, { global: false }),
+    staleTime: Infinity,
+  });
+  const to = encodeURIComponent(info.data?.admin_contact_email ?? '');
   return (
     <StatusPage
       icon={<Lock size={ICON} strokeWidth={1.5} />}
@@ -29,7 +38,7 @@ export function ScreenW16a() {
             {t('system.back')}
           </Button>
           <a
-            href={`mailto:?subject=${subject}`}
+            href={`mailto:${to}?subject=${subject}`}
             className="type-label inline-flex h-8 items-center gap-2 rounded-sm bg-brand-primary-600 px-3 text-text-on-primary hover:bg-brand-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary-500"
           >
             <Mail size={BUTTON_ICON} aria-hidden="true" />

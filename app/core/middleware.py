@@ -20,7 +20,7 @@ CSRF_COOKIE = "sm_csrf"
 CSRF_HEADER = "x-csrf-token"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 # reachable during maintenance so that W17 can show the expected end and health checks keep working
-MAINTENANCE_OPEN = frozenset({"/api/version", "/api/system/maintenance", "/healthz", "/readyz"})
+MAINTENANCE_OPEN = frozenset({"/api/version", "/api/system/maintenance", "/api/system/info", "/healthz", "/readyz"})
 
 
 def error(status: int, code: str, **extra: object) -> JSONResponse:

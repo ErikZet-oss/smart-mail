@@ -17,6 +17,24 @@ test.describe('W1 Prihlásenie', () => {
     await shot(page, `W1-default-${info.project.name}`);
   });
 
+  test('M-W1 follows its frame: checkbox above the button, no eye toggle, no footer @mobile', async ({
+    page,
+  }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame only');
+    await mockApi(page, { 'POST /api/auth/login': { status: 401, body: { detail: { code: 'invalid_credentials' } } } });
+    await page.goto('/login');
+    const remember = await page.getByText('Zostať prihlásený na tomto zariadení').boundingBox();
+    const button = await page.getByRole('button', { name: 'PRIHLÁSIŤ' }).boundingBox();
+    expect(remember && button && remember.y < button.y).toBe(true);
+    await expect(page.getByRole('button', { name: 'Zobraziť heslo' })).toBeHidden();
+    await expect(page.getByText(/^Smart Mail/)).toBeHidden();
+    await fillLogin(page);
+    await page.getByRole('button', { name: 'PRIHLÁSIŤ' }).click();
+    await expect(page.getByRole('alert')).toHaveText('Nesprávny e-mail alebo heslo.');
+    await page.mouse.click(5, 5);
+    await shot(page, 'W1-invalid-mobile');
+  });
+
   for (const [name, status, detail, text] of [
     ['invalid', 401, { code: 'invalid_credentials' }, 'Nesprávny e-mail alebo heslo.'],
     ['server-down', 503, { code: 'mail_server_unavailable' }, 'Mailový server je nedostupný – skúste o chvíľu.'],
@@ -113,9 +131,13 @@ test.describe('W1a Overenie (2FA)', () => {
 
 test.describe('W16 / W17', () => {
   test('W16a 403', async ({ page }) => {
-    await mockApi(page, {});
+    await mockApi(page, { 'GET /api/system/info': { body: { admin_contact_email: 'it@smartsro.sk' } } });
     await page.goto('/403');
     await expect(page.getByRole('heading', { name: 'Nemáte prístup k tejto stránke' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Požiadať správcu' })).toHaveAttribute(
+      'href',
+      /^mailto:it%40smartsro\.sk\?subject=/,
+    );
     await shot(page, 'W16a');
   });
 

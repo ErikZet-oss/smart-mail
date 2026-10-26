@@ -8,6 +8,7 @@ import { Checkbox } from '../../components/Checkbox';
 import { LoginField } from '../../components/LoginField';
 import { Logo } from '../../components/Logo';
 import { ApiError } from '../../lib/api';
+import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { login, rememberAfterLogin, returnTo, SHARED_DEVICE_KEY } from './authApi';
 
 type Failure =
@@ -112,21 +113,37 @@ export function ScreenW1() {
     }[failure.kind];
   const invalid = failure !== null;
   const locked = failure?.kind === 'rate';
+  // M-W1 (Figma): the checkbox sits above the button on phones; desktop W1 has it below like Roundcube
+  const mobile = useMediaQuery(MOBILE_QUERY);
+  const rememberBox = (
+    <Checkbox
+      className="w-full"
+      label={t('login.remember')}
+      checked={remember}
+      onChange={(e) => setRemember(e.target.checked)}
+      disabled={submitting}
+    />
+  );
 
   return (
     <main className="flex min-h-full flex-col items-center bg-bg-canvas px-6 pb-10 pt-12 sm:justify-center sm:px-4 sm:pt-10">
-      <form onSubmit={submit} noValidate className="flex w-full flex-col items-center gap-3 sm:max-w-[300px]">
+      <form
+        onSubmit={submit}
+        noValidate
+        className="flex w-full flex-col items-center gap-3.5 sm:max-w-[300px] sm:gap-3"
+      >
         <h1 className="sr-only">{t('login.title')}</h1>
-        <Logo width={180} className="w-[160px] sm:w-[180px]" />
-        <p className="type-body text-center text-text-secondary sm:hidden">{t('login.subtitleMobile')}</p>
-        <div aria-hidden="true" className="h-1 sm:h-5" />
+        <div className="flex flex-col items-center gap-5 pb-2.5 sm:pb-8">
+          <Logo width={180} className="w-[160px] sm:w-[180px]" />
+          <p className="type-body text-center text-text-secondary sm:hidden">{t('login.subtitleMobile')}</p>
+        </div>
         {reason && !failure ? <ReasonBanner reason={reason} /> : null}
         {failureText ? (
           <div
             role="alert"
-            className="type-small flex w-full items-start gap-2 rounded-sm bg-danger-50 px-2.5 py-2 text-left text-danger-600"
+            className="type-small flex w-full items-center gap-2.5 border-l-[3px] border-danger-600 bg-danger-50 px-4 py-2.5 text-left text-danger-600 sm:items-start sm:gap-2 sm:rounded-sm sm:border-l-0 sm:px-2.5 sm:py-2"
           >
-            <CircleX size={16} aria-hidden="true" className="mt-px shrink-0" />
+            <CircleX aria-hidden="true" className="size-[18px] shrink-0 sm:mt-px sm:size-4" />
             <span>{failureText}</span>
           </div>
         ) : null}
@@ -170,7 +187,7 @@ export function ScreenW1() {
               disabled={submitting}
               aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
               aria-pressed={showPassword}
-              className="flex w-9 shrink-0 items-center justify-center text-text-tertiary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary-500"
+              className="hidden w-9 shrink-0 items-center sm:flex justify-center text-text-tertiary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary-500"
             >
               {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
             </button>
@@ -182,6 +199,7 @@ export function ScreenW1() {
             {t('login.capsLock')}
           </p>
         ) : null}
+        {mobile ? rememberBox : null}
         <Button
           type="submit"
           size="lg"
@@ -192,25 +210,19 @@ export function ScreenW1() {
         >
           {submitting ? t('login.submitting') : t('login.submit')}
         </Button>
-        <Checkbox
-          className="w-full"
-          label={t('login.remember')}
-          checked={remember}
-          onChange={(e) => setRemember(e.target.checked)}
-          disabled={submitting}
-        />
-        <div aria-hidden="true" className="h-4" />
-        <Footer />
+        {mobile ? null : rememberBox}
+        <div aria-hidden="true" className="hidden h-4 sm:block" />
+        <Footer className="hidden sm:block" />
       </form>
     </main>
   );
 }
 
-export function Footer() {
+export function Footer({ className = '' }: { className?: string }) {
   const { t } = useTranslation();
   const helpUrl = import.meta.env.VITE_HELP_URL as string | undefined;
   return (
-    <p className="type-caption text-text-tertiary">
+    <p className={`type-caption text-text-tertiary ${className}`}>
       {t('app.footer', { version: __APP_VERSION__ })} ·{' '}
       {helpUrl ? (
         <a href={helpUrl} className="underline-offset-2 hover:underline" target="_blank" rel="noreferrer">

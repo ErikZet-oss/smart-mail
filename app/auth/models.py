@@ -104,12 +104,18 @@ class Account(IdMixin, TimestampMixin, Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     # scrypt fingerprint of the last mailbox password that logged in; a different password = changed on the mail server
     password_fingerprint: Mapped[str | None] = mapped_column(Text)
+    # the mailbox password itself, Fernet-encrypted (APP_ENCRYPTION_KEY), for the background mail sync (DECISIONS D27)
+    mailbox_password_enc: Mapped[str | None] = mapped_column(Text)
+    mailbox_password_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     totp_secret_enc: Mapped[str | None] = mapped_column(Text)  # Fernet (APP_ENCRYPTION_KEY)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     totp_last_step: Mapped[int | None] = mapped_column(Integer)
     backup_code_hashes: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
     require_2fa: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    def __repr__(self) -> str:  # never show secrets in tracebacks or logs
+        return f"Account(id={self.id!s}, email={self.email!r}, kind={self.kind!s})"
 
 
 class Session(IdMixin, Base):

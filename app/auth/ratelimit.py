@@ -1,4 +1,5 @@
-"""Login rate limit per account and per IP (CLAUDE.md §11, SCREENS_SPEC W1: 5 wrong attempts lock for 5 minutes).
+"""Login rate limit per account and per IP (CLAUDE.md §11, SCREENS_SPEC W1: 5 wrong attempts lock for 5 minutes;
+DECISIONS D26: 30 per IP, company IPs in LOGIN_IP_ALLOWLIST have no IP limit, only the per-account one).
 
 Every failed attempt — wrong IMAP password, unknown/disabled account, wrong 2FA code — counts and restarts the
 lock window. "Mail server unavailable" does not count. A successful login clears the account counter.
@@ -27,10 +28,11 @@ class LoginRateLimiter:
         self.window_s = settings.login_lock_minutes * 60
         self.max_account = settings.login_max_failures
         self.max_ip = settings.login_ip_max_failures
+        self.settings = settings
 
-    @staticmethod
-    def _keys(email: str, ip: str | None) -> tuple[str, str | None]:
-        return f"{PREFIX}:acct:{email}", (f"{PREFIX}:ip:{ip}" if ip else None)
+    def _keys(self, email: str, ip: str | None) -> tuple[str, str | None]:
+        counted_ip = ip if ip and not self.settings.ip_exempt_from_limit(ip) else None
+        return f"{PREFIX}:acct:{email}", (f"{PREFIX}:ip:{counted_ip}" if counted_ip else None)
 
     async def check(self, email: str, ip: str | None) -> Lock:
         acct_key, ip_key = self._keys(email, ip)
