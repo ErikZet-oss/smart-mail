@@ -93,10 +93,20 @@ jobs:
       - name: Start the stack (ClamAV is skipped in CI — it downloads signatures for minutes)
         run: |
           set -o pipefail
-          docker compose up -d --wait --wait-timeout 300 db redis s3 mailpit bridge app worker web 2>&1 | tee /tmp/up.log
+          docker compose up -d db redis s3 mailpit bridge app worker web 2>&1 | tee /tmp/up.log
+      - name: Wait until app, bridge and web answer
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/readyz >/dev/null && curl -fsS http://localhost:8100/healthz >/dev/null \
+               && curl -fsS http://localhost:8080/ >/dev/null; then echo "ready after $((i*5)) s"; exit 0; fi
+            sleep 5
+          done
+          echo "stack not ready after 300 s" | tee -a /tmp/up.log
+          exit 1
       - name: Smoke test
         run: |
-          set -e
+          set -ex
+          exec > >(tee -a /tmp/up.log) 2>&1
           curl -fsS http://localhost:8000/healthz
           curl -fsS http://localhost:8000/readyz
           curl -fsS http://localhost:8100/healthz
