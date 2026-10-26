@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../app/App';
 import { ROUTER_FUTURE, routeObjects } from '../../app/router';
+import { foldersView, mailHandlers } from '../../test/mailFixtures';
 import { clearCookies, mockApi } from '../../test/mockApi';
 
 const ME = {
@@ -44,6 +45,7 @@ describe('W1 Prihlásenie', () => {
     const api = mockApi({
       'POST /api/auth/login': { body: { next: 'app', me: ME } },
       'GET /api/auth/me': { body: ME },
+      ...mailHandlers(foldersView(ME.email)),
     });
     const router = renderAt('/login', { from: '/mail/default/inbox' });
     await submit();
@@ -51,7 +53,7 @@ describe('W1 Prihlásenie', () => {
     const login = api.calls.find((c) => c.key === 'POST /api/auth/login');
     expect(login?.body).toEqual({ email: 'jana@smartsro.sk', password: 'heslo', remember: false });
     expect(login?.headers['X-CSRF-Token']).toBe('test-csrf');
-    expect(await screen.findByText('Prihlásený ako jana@smartsro.sk')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'jana@smartsro.sk' })).toBeInTheDocument();
   });
 
   it('shows the generic error for wrong credentials', async () => {

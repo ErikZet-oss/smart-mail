@@ -61,14 +61,9 @@
     "switch": "Kto pracuje?",
     "chipLabel": "Pracuje: {{name}}",
     "switched": "Teraz pracuje: {{name}} · podpis zmenený",
-    "close": "Zavrieť"
-  },
-  "signedIn": {
-    "title": "Ste prihlásený",
-    "as": "Prihlásený ako {{email}}",
-    "person": "Osoba: {{name}}",
-    "noPerson": "Osoba nie je vybraná – len na čítanie.",
-    "logout": "Odhlásiť"
+    "close": "Zavrieť",
+    "menu": "Menu osoby",
+    "profile": "Môj profil"
   },
   "system": {
     "back": "Späť",
@@ -101,6 +96,131 @@
       "untilDate": "Smart Mail bude opäť dostupný {{date}} približne o {{time}}.",
       "untilUnknown": "Smart Mail bude čoskoro opäť dostupný.",
       "mailWorks": "Pošta na serveri funguje – v naliehavých prípadoch použite Roundcube."
+    }
+  },
+  "common": {
+    "close": "Zavrieť",
+    "cancel": "Zrušiť",
+    "comingSoon": "Pripravujeme"
+  },
+  "rail": {
+    "label": "Hlavná navigácia",
+    "home": "Smart Mail – Doručená pošta",
+    "compose": "Vytvoriť správu",
+    "mail": "E-mail",
+    "contacts": "Kontakty",
+    "settings": "Nastavenia",
+    "darkMode": "Tmavý režim",
+    "about": "O systéme",
+    "logout": "Odhlásiť",
+    "withUnread": "{{label}}, neprečítané: {{count}}"
+  },
+  "shell": {
+    "offline": "Ste offline – zobrazujeme uložené správy, odoslanie počká.",
+    "dropHere": "Pustite súbor sem – doklad dodávateľa alebo objednávka",
+    "dropFormats": "PDF, JPG/PNG, XLSX, CSV, XML, ISDOC · max 25 MB",
+    "dropLater": "Nahrávanie dokladov zatiaľ nie je dostupné – súbor sme neotvorili."
+  },
+  "folders": {
+    "label": "Priečinky",
+    "withUnread": "{{name}}, neprečítané: {{count}}",
+    "special": {
+      "inbox": "Doručená pošta",
+      "drafts": "Koncepty",
+      "sent": "Odoslané",
+      "junk": "Nevyžiadaná pošta",
+      "trash": "Kôš"
+    },
+    "mailboxMenu": {
+      "label": "Menu schránky",
+      "switch": "Prepnúť schránku",
+      "all": "Všetky schránky",
+      "actions": "Akcie pre priečinky",
+      "compact": "Zhustiť",
+      "manage": "Spravovať priečinky"
+    },
+    "menu": {
+      "label": "Akcie priečinka {{name}}",
+      "markRead": "Označiť všetko ako prečítané",
+      "empty": "Vyprázdniť",
+      "newChild": "Nový podpriečinok",
+      "rename": "Premenovať",
+      "delete": "Vymazať"
+    },
+    "dialog": {
+      "emptyTitle": "Vyprázdniť priečinok {{name}}?",
+      "emptyBody_one": "{{count}} správa bude natrvalo vymazaná. Túto akciu nie je možné vrátiť.",
+      "emptyBody_few": "{{count}} správy budú natrvalo vymazané. Túto akciu nie je možné vrátiť.",
+      "emptyBody_many": "{{count}} správy bude natrvalo vymazaných. Túto akciu nie je možné vrátiť.",
+      "emptyBody_other": "{{count}} správ bude natrvalo vymazaných. Túto akciu nie je možné vrátiť.",
+      "deleteTitle": "Vymazať priečinok {{name}}?",
+      "deleteBody_one": "Priečinok aj {{count}} správa v ňom budú natrvalo vymazané zo servera (aj v Roundcube).",
+      "deleteBody_few": "Priečinok aj {{count}} správy v ňom budú natrvalo vymazané zo servera (aj v Roundcube).",
+      "deleteBody_many": "Priečinok aj {{count}} správy v ňom budú natrvalo vymazané zo servera (aj v Roundcube).",
+      "deleteBody_other": "Priečinok aj {{count}} správ v ňom bude natrvalo vymazaných zo servera (aj v Roundcube).",
+      "createChildTitle": "Nový podpriečinok v {{name}}",
+      "renameTitle": "Premenovať priečinok {{name}}",
+      "nameLabel": "Názov priečinka",
+      "create": "Vytvoriť",
+      "rename": "Premenovať"
+    },
+    "done": {
+      "mark-read": "Priečinok {{name}} je označený ako prečítaný.",
+      "empty": "Priečinok {{name}} je vyprázdnený.",
+      "compact": "Priečinok {{name}} je zhustený.",
+      "create": "Priečinok {{name}} je vytvorený.",
+      "rename": "Priečinok je premenovaný na {{name}}.",
+      "delete": "Priečinok {{name}} je vymazaný."
+    },
+    "errors": {
+      "folder_exists": "Priečinok s týmto názvom už existuje.",
+      "folder_name_length": "Názov je príliš dlhý.",
+      "folder_name_reserved": "Tento názov je vyhradený pre systémový priečinok.",
+      "folder_name_characters": "Názov obsahuje nepovolené znaky.",
+      "mail_server_unavailable": "Mailový server je nedostupný – skúste o chvíľu.",
+      "special_folder": "Systémový priečinok nemožno premenovať ani vymazať.",
+      "person_required": "Na túto akciu najprv vyberte, kto pracuje.",
+      "generic": "Akcia sa nepodarila – skúste to znova."
+    },
+    "quota": {
+      "label": "Využitie schránky",
+      "text": "Využité {{percent}} % ({{used}} MB z {{limit}} MB)"
+    },
+    "money": {
+      "label": "Money",
+      "off": "Money S4: nepripojené"
+    }
+  },
+  "mail": {
+    "toolbar": {
+      "select": "Výber",
+      "threads": "Konverzácie",
+      "options": "Možnosti",
+      "refresh": "Obnoviť"
+    },
+    "loadFailed": "Nepodarilo sa načítať priečinok – skúšame znova.",
+    "empty": "Priečinok je prázdny",
+    "emptyText": "V priečinku {{name}} zatiaľ nie je žiadna pošta.",
+    "allDone": "Všetko vybavené ✓",
+    "allDoneText": "Žiadne nové správy.",
+    "listLater_one": "V priečinku je {{total}} správa. Zoznam správ pripravujeme.",
+    "listLater_few": "V priečinku sú {{total}} správy. Zoznam správ pripravujeme.",
+    "listLater_many": "V priečinku je {{total}} správy. Zoznam správ pripravujeme.",
+    "listLater_other": "V priečinku je {{total}} správ. Zoznam správ pripravujeme.",
+    "count": "Správy: {{total}}",
+    "readingPane": "Náhľad správy",
+    "selectMessage": "Vyberte správu"
+  },
+  "settings": {
+    "title": "Nastavenia",
+    "later": "Úpravy nastavení pripravujeme.",
+    "profile": {
+      "title": "Môj profil",
+      "firstName": "Meno",
+      "lastName": "Priezvisko",
+      "function": "Funkcia",
+      "login": "Prihlásenie",
+      "noPerson": "Osoba nie je vybraná – len na čítanie."
     }
   }
 }

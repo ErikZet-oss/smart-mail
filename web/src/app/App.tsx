@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
 
+import { ToastProvider } from '../components/Toasts';
 import { onGlobalError } from '../lib/api';
 import { createRouter, handleGlobalError } from './router';
 
@@ -23,7 +24,9 @@ export function App({ router: given }: { router?: Router }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} future={{ v7_startTransition: true }} />
+      <ToastProvider>
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
+      </ToastProvider>
     </QueryClientProvider>
   );
 }
