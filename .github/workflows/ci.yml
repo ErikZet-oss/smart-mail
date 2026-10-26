@@ -86,8 +86,12 @@ jobs:
     needs: [backend, bridge, web]
     steps:
       - uses: actions/checkout@v4
-      - name: Build and start the stack (ClamAV is skipped in CI — it downloads signatures for minutes)
-        run: docker compose up -d --build --wait db redis minio mailpit bridge app worker web
+      - name: Build images
+        run: |
+          set -o pipefail
+          docker compose build --progress plain bridge app worker web 2>&1 | tee /tmp/build.log
+      - name: Start the stack (ClamAV is skipped in CI — it downloads signatures for minutes)
+        run: docker compose up -d --wait --wait-timeout 300 db redis minio mailpit bridge app worker web
       - name: Smoke test
         run: |
           set -e
@@ -100,8 +104,16 @@ jobs:
           grep -q vector /tmp/ext.txt && grep -q unaccent /tmp/ext.txt
           sleep 5
           docker compose exec -T redis redis-cli get smartmail:worker:heartbeat | grep -q T
-      - name: Logs on failure
+      - name: Logs on failure (also as annotations, readable from the API)
         if: failure()
-        run: docker compose logs --no-color --tail=200
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --tail=200
+          enc() { python3 -c 'import sys,urllib.parse;d=sys.stdin.read()[-6000:];print(d.replace("%","%25").replace("\r","").replace("\n","%0A"))'; }
+          [ -f /tmp/build.log ] && echo "::error title=build log::$(grep -iE 'error|failed|unable|not found' /tmp/build.log | tail -40 | enc)"
+          echo "::error title=compose ps::$(docker compose ps -a --format '{{.Service}} {{.State}} {{.Health}} {{.ExitCode}}' | enc)"
+          for svc in db redis minio mailpit bridge app worker web; do
+            echo "::error title=logs $svc::$(docker compose logs --no-color --tail=40 $svc 2>&1 | enc)"
+          done
       - if: always()
         run: docker compose down -v

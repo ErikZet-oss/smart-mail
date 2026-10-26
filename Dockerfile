@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_COMPILE_BYTECODE=1 UV_LINK_M
 
 # WeasyPrint runtime (Money-style print PDFs, DOCUMENTS_SPEC §4) + fonts
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 \
+ && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
       fontconfig fonts-liberation curl \
  && rm -rf /var/lib/apt/lists/*
 COPY templates/print/fonts/*.ttf /usr/share/fonts/truetype/liberation-narrow/
