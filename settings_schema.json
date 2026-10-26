@@ -1,0 +1,783 @@
+{
+  "version": "1f",
+  "phase": "1f",
+  "sections": [
+    {
+      "id": "01",
+      "path": "preferences",
+      "title": "Nastavenia",
+      "admin_only": false,
+      "subs": [
+        {
+          "id": "01a",
+          "path": "ui",
+          "title": "Používateľské rozhranie",
+          "fields": [
+            {
+              "id": "language",
+              "label": "Jazyk rozhrania",
+              "control": "select",
+              "default": "sk",
+              "help": "Aplikácia je len v slovenčine.",
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "timezone",
+              "label": "Časové pásmo",
+              "control": "select",
+              "default": "Europe/Bratislava",
+              "help": null,
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "date_format",
+              "label": "Formát dátumu",
+              "control": "select",
+              "default": "d_m_yyyy",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "d_m_yyyy",
+                  "label": "25. 10. 2026"
+                },
+                {
+                  "value": "d.m.yyyy",
+                  "label": "25.10.2026"
+                },
+                {
+                  "value": "yyyy-mm-dd",
+                  "label": "2026-10-25"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "time_format",
+              "label": "Formát času",
+              "control": "segmented",
+              "default": "24h",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "24h",
+                  "label": "24 h"
+                },
+                {
+                  "value": "12h",
+                  "label": "12 h"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "theme",
+              "label": "Vzhľad",
+              "control": "segmented",
+              "default": "system",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "light",
+                  "label": "Svetlý"
+                },
+                {
+                  "value": "dark",
+                  "label": "Tmavý"
+                },
+                {
+                  "value": "system",
+                  "label": "Podľa systému"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "classic",
+              "label": "Klasické zobrazenie",
+              "control": "switch",
+              "default": false,
+              "help": "Skryje AI triedenie, zhrnutia a asistenta – vyzerá ako Roundcube.",
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "home_after_login",
+              "label": "Po prihlásení otvoriť",
+              "control": "select",
+              "default": "inbox",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "inbox",
+                  "label": "Doručená pošta"
+                },
+                {
+                  "value": "today",
+                  "label": "Dnes"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            }
+          ]
+        },
+        {
+          "id": "01b",
+          "path": "mailbox-view",
+          "title": "Zobrazenie schránky",
+          "fields": [
+            {
+              "id": "layout",
+              "label": "Rozloženie",
+              "control": "segmented",
+              "default": "three",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "three",
+                  "label": "Tri stĺpce"
+                },
+                {
+                  "value": "list",
+                  "label": "Zoznam bez náhľadu"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "density",
+              "label": "Hustota zoznamu",
+              "control": "segmented",
+              "default": "compact",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "compact",
+                  "label": "Kompaktná"
+                },
+                {
+                  "value": "comfortable",
+                  "label": "Pohodlná"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "show_ai_summary",
+              "label": "Zobraziť AI zhrnutie v zozname",
+              "control": "switch",
+              "default": true,
+              "help": null,
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "mode",
+              "label": "Režim zoznamu",
+              "control": "segmented",
+              "default": "list",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "list",
+                  "label": "Zoznam"
+                },
+                {
+                  "value": "conversations",
+                  "label": "Konverzácie"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "sort",
+              "label": "Zoraďovanie",
+              "control": "select",
+              "default": "date_received",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "date_received",
+                  "label": "Dátum prijatia"
+                },
+                {
+                  "value": "date_sent",
+                  "label": "Dátum odoslania"
+                },
+                {
+                  "value": "subject",
+                  "label": "Predmet"
+                },
+                {
+                  "value": "from",
+                  "label": "Od/Komu"
+                },
+                {
+                  "value": "size",
+                  "label": "Veľkosť"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "sort_dir",
+              "label": "Systém zoraďovania",
+              "control": "segmented",
+              "default": "desc",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "asc",
+                  "label": "vzostupne"
+                },
+                {
+                  "value": "desc",
+                  "label": "zostupne"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "page_size",
+              "label": "Počet správ na stránku",
+              "control": "select",
+              "default": 50,
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "25",
+                  "label": "25"
+                },
+                {
+                  "value": "50",
+                  "label": "50"
+                },
+                {
+                  "value": "100",
+                  "label": "100"
+                },
+                {
+                  "value": "200",
+                  "label": "200"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "mark_read",
+              "label": "Označiť ako prečítané",
+              "control": "select",
+              "default": "delay3",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "immediate",
+                  "label": "Ihneď"
+                },
+                {
+                  "value": "delay3",
+                  "label": "Po 3 sekundách"
+                },
+                {
+                  "value": "never",
+                  "label": "Nikdy"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "after_delete",
+              "label": "Po vymazaní alebo archivovaní otvoriť",
+              "control": "select",
+              "default": "next",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "next",
+                  "label": "Ďalšiu správu"
+                },
+                {
+                  "value": "previous",
+                  "label": "Predchádzajúcu"
+                },
+                {
+                  "value": "list",
+                  "label": "Zoznam"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            }
+          ]
+        },
+        {
+          "id": "01c",
+          "path": "reading",
+          "title": "Zobrazovanie správ",
+          "fields": [
+            {
+              "id": "remote_images",
+              "label": "Obrázky z internetu",
+              "control": "select",
+              "default": "known",
+              "help": "Blokovanie chráni pred sledovaním.",
+              "scope": "P",
+              "options": [
+                {
+                  "value": "never",
+                  "label": "Nikdy"
+                },
+                {
+                  "value": "known",
+                  "label": "Od známych odosielateľov"
+                },
+                {
+                  "value": "always",
+                  "label": "Vždy"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "prefer_html",
+              "label": "Uprednostniť HTML",
+              "control": "switch",
+              "default": true,
+              "help": null,
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "show_attachments_below",
+              "label": "Zobraziť prílohy pod správou",
+              "control": "switch",
+              "default": true,
+              "help": null,
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            }
+          ]
+        },
+        {
+          "id": "01d",
+          "path": "composing",
+          "title": "Vytváranie správ",
+          "fields": [
+            {
+              "id": "compose_format",
+              "label": "Formát správy",
+              "control": "segmented",
+              "default": "html",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "html",
+                  "label": "HTML"
+                },
+                {
+                  "value": "plain",
+                  "label": "Čistý text"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "autosave",
+              "label": "Automaticky ukladať koncept",
+              "control": "select",
+              "default": "30",
+              "help": null,
+              "scope": "P",
+              "options": [
+                {
+                  "value": "30",
+                  "label": "30 s"
+                },
+                {
+                  "value": "60",
+                  "label": "1 min"
+                },
+                {
+                  "value": "300",
+                  "label": "5 min"
+                },
+                {
+                  "value": "never",
+                  "label": "Nikdy"
+                }
+              ],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "undo_send_seconds",
+              "label": "Oneskorenie odoslania (Späť)",
+              "control": "slider",
+              "default": 10,
+              "help": "Počas tohto času môžete odoslanie zrušiť.",
+              "scope": "P",
+              "options": [],
+              "validation": {
+                "min": 0,
+                "max": 30,
+                "step": 5
+              },
+              "admin_only": false
+            },
+            {
+              "id": "default_mdn",
+              "label": "Potvrdenie o doručení predvolene",
+              "control": "switch",
+              "default": false,
+              "help": null,
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "signature_on_reply",
+              "label": "Pridať podpis pri odpovedi a preposlaní",
+              "control": "switch",
+              "default": true,
+              "help": null,
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "pre_send_check",
+              "label": "Kontrola pred odoslaním",
+              "control": "switch",
+              "default": true,
+              "help": null,
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            }
+          ]
+        },
+        {
+          "id": "01e",
+          "path": "shortcuts",
+          "title": "Klávesové skratky",
+          "fields": [
+            {
+              "id": "shortcuts_enabled",
+              "label": "Klávesové skratky zapnuté",
+              "control": "switch",
+              "default": true,
+              "help": null,
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            },
+            {
+              "id": "shortcuts_list",
+              "label": "Zoznam skratiek",
+              "control": "info",
+              "default": null,
+              "help": "Skratky sú pre všetkých rovnaké. Ťahák príde vo fáze 1h.",
+              "scope": "P",
+              "options": [],
+              "validation": {},
+              "admin_only": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "path": "folders",
+      "title": "Priečinky",
+      "admin_only": false,
+      "subs": [],
+      "fields": [
+        {
+          "id": "hint",
+          "label": "Správa priečinkov",
+          "control": "info",
+          "default": null,
+          "help": "Správa priečinkov je aj v stĺpci G3; tu nastavíte odber a súkromné priečinky.",
+          "scope": "M",
+          "options": [],
+          "validation": {},
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "path": "identity",
+      "title": "Identity a Môj profil",
+      "admin_only": false,
+      "subs": [
+        {
+          "id": "03a",
+          "path": "list",
+          "title": "Identity",
+          "fields": []
+        },
+        {
+          "id": "03b",
+          "path": "profile",
+          "title": "Môj profil",
+          "fields": []
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "path": "responses",
+      "title": "Odpovede",
+      "admin_only": false,
+      "subs": [],
+      "fields": []
+    },
+    {
+      "id": "05",
+      "path": "filters",
+      "title": "Filtre",
+      "admin_only": false,
+      "subs": [],
+      "fields": [
+        {
+          "id": "server_note",
+          "label": "Filtre",
+          "control": "info",
+          "default": null,
+          "help": "Filtre fungujú na serveri – aj keď je aplikácia zatvorená, aj v Roundcube.",
+          "scope": "M",
+          "options": [],
+          "validation": {},
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "id": "06",
+      "path": "vacation",
+      "title": "Mimo kancelárie",
+      "admin_only": false,
+      "subs": [],
+      "fields": [
+        {
+          "id": "enabled",
+          "label": "Automatická odpoveď",
+          "control": "switch",
+          "default": false,
+          "help": null,
+          "scope": "M",
+          "options": [],
+          "validation": {},
+          "admin_only": false
+        },
+        {
+          "id": "subject",
+          "label": "Predmet",
+          "control": "text",
+          "default": "Mimo kancelárie: {predmet}",
+          "help": null,
+          "scope": "M",
+          "options": [],
+          "validation": {},
+          "admin_only": false
+        },
+        {
+          "id": "body_sk",
+          "label": "Text odpovede (SK)",
+          "control": "textarea",
+          "default": null,
+          "help": null,
+          "scope": "M",
+          "options": [],
+          "validation": {},
+          "admin_only": false
+        },
+        {
+          "id": "days",
+          "label": "Odpovedať tomu istému odosielateľovi najviac raz za",
+          "control": "select",
+          "default": 7,
+          "help": null,
+          "scope": "M",
+          "options": [
+            {
+              "value": "1",
+              "label": "1 deň"
+            },
+            {
+              "value": "3",
+              "label": "3 dni"
+            },
+            {
+              "value": "7",
+              "label": "7 dní"
+            }
+          ],
+          "validation": {},
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "id": "09",
+      "path": "security",
+      "title": "Bezpečnosť",
+      "admin_only": false,
+      "subs": [],
+      "fields": [
+        {
+          "id": "login_info",
+          "label": "Prihlásenie",
+          "control": "info",
+          "default": null,
+          "help": "Prihlasujete sa e-mailom a heslom k pošte. Heslo sa mení na mailovom serveri.",
+          "scope": "A",
+          "options": [],
+          "validation": {},
+          "admin_only": false
+        },
+        {
+          "id": "sessions",
+          "label": "Aktívne relácie",
+          "control": "table",
+          "default": null,
+          "help": null,
+          "scope": "A",
+          "options": [],
+          "validation": {},
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "id": "09b",
+      "path": "provider",
+      "title": "Nastavenia e-mail schránky",
+      "admin_only": false,
+      "subs": [],
+      "fields": [
+        {
+          "id": "provider_info",
+          "label": "Informácie o schránke",
+          "control": "info",
+          "default": null,
+          "help": "Tieto nastavenia sú na mailovom serveri (D20).",
+          "scope": "M",
+          "options": [],
+          "validation": {},
+          "admin_only": false
+        },
+        {
+          "id": "vacation_hint",
+          "label": "Automatická odpoveď",
+          "control": "info",
+          "default": null,
+          "help": "Používajte Mimo kancelárie (06) – je to tá istá automatická odpoveď na serveri.",
+          "scope": "P",
+          "options": [],
+          "validation": {},
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "path": "users",
+      "title": "Používatelia a role",
+      "admin_only": true,
+      "subs": [],
+      "fields": []
+    },
+    {
+      "id": "11",
+      "path": "branches",
+      "title": "Pobočky a osoby",
+      "admin_only": true,
+      "subs": [
+        {
+          "id": "11a",
+          "path": "details",
+          "title": "Údaje",
+          "fields": []
+        },
+        {
+          "id": "11b",
+          "path": "people",
+          "title": "Osoby",
+          "fields": []
+        },
+        {
+          "id": "11c",
+          "path": "signature",
+          "title": "Podpis",
+          "fields": []
+        },
+        {
+          "id": "11d",
+          "path": "login",
+          "title": "Prihlasovanie",
+          "fields": []
+        },
+        {
+          "id": "11e",
+          "path": "money",
+          "title": "Money",
+          "fields": []
+        }
+      ]
+    },
+    {
+      "id": "12",
+      "path": "mailboxes",
+      "title": "Schránky",
+      "admin_only": true,
+      "subs": [],
+      "fields": []
+    }
+  ]
+}

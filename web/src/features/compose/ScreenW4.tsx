@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Bold, Italic, List, Paperclip, Reply, Save, Send, Underline as UnderlineIcon, X } from 'lucide-react';
+import { Bold, Italic, List, Paperclip, PenLine, Reply, Save, Send, Underline as UnderlineIcon, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -23,6 +23,7 @@ import {
 } from './composeApi';
 import { PreSendDialog } from './PreSendDialog';
 import { ResponsesPicker } from './ResponsesPicker';
+import { SignatureEditDialog } from './SignatureEditDialog';
 
 function parseAddrs(raw: string): { email: string; name?: string }[] {
   return raw
@@ -63,6 +64,7 @@ export function ScreenW4() {
   const [showCc, setShowCc] = useState(false);
   const [preSendOpen, setPreSendOpen] = useState(false);
   const [responsesOpen, setResponsesOpen] = useState(false);
+  const [signatureOpen, setSignatureOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   const bootstrap = useMutation({
@@ -229,6 +231,15 @@ export function ScreenW4() {
               }}
             />
           </label>
+          <button
+            type="button"
+            className="flex h-14 w-20 flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle"
+            onClick={() => setSignatureOpen(true)}
+            disabled={!localId}
+          >
+            <PenLine size={18} />
+            <span className="type-micro">{t('compose.signature')}</span>
+          </button>
           <button
             type="button"
             className="flex h-14 w-20 flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle"
@@ -419,6 +430,27 @@ export function ScreenW4() {
             editor?.commands.insertContent(html);
             setDirty(true);
             setResponsesOpen(false);
+          }}
+        />
+      ) : null}
+      {signatureOpen && localId ? (
+        <SignatureEditDialog
+          initialHtml={
+            draft?.signature_html_override ??
+            editor?.getHTML().match(/<div data-sm-signature="1">([\s\S]*?)<\/div>/)?.[1] ??
+            ''
+          }
+          busy={save.isPending}
+          onClose={() => setSignatureOpen(false)}
+          onSave={(html) => {
+            void patchDraft(localId, { signature_html_override: html, include_signature: true }).then((d) => {
+              void qc.setQueryData(['compose', localId], d);
+              const without = (editor?.getHTML() ?? '').replace(/<div data-sm-signature="1">[\s\S]*?<\/div>/, '');
+              editor?.commands.setContent(`${without}<div data-sm-signature="1">${html}</div>`);
+              setDirty(true);
+              setSignatureOpen(false);
+              toasts.success(t('compose.signatureSaved'));
+            });
           }}
         />
       ) : null}

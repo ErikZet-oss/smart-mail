@@ -1123,6 +1123,18 @@ wheels = [
 ]
 
 [[package]]
+name = "sievelib"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2e/73/416647b12960620b3d61946c23fd2598eee59f64a9c4d5dfdd65a0b09c61/sievelib-1.6.0.tar.gz", hash = "sha256:55c11ad3f404aac5ff0f4ec9e0ae354e1d803aed72c44524598d25deac86b0b8", size = 46172, upload-time = "2026-10-14T12:50:44.637Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3e/06/9d1ef10ee73ba5041f01bbdbdb07c5bddfbc7b1aec71f5dd264c1549b86a/sievelib-1.6.0-py3-none-any.whl", hash = "sha256:6c6f82843db8128b50585c119b3912b0b09c5dc97b3074b251685c3ee4850287", size = 45210, upload-time = "2026-10-14T12:50:43.24Z" },
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1151,6 +1163,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-multipart" },
     { name = "redis" },
+    { name = "sievelib" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "structlog" },
     { name = "uvicorn", extra = ["standard"] },
@@ -1190,6 +1203,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "python-multipart", specifier = ">=0.0.32" },
     { name = "redis", specifier = ">=5.2" },
+    { name = "sievelib", specifier = ">=1.6.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
     { name = "structlog", specifier = ">=24.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },

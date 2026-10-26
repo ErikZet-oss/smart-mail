@@ -1,5 +1,5 @@
 // Route manifest (CLAUDE.md §10): every route carries the screen ID of SCREENS_SPEC §1, the route-manifest test
-// fails when a route has no ID there or the path differs. W12 holds only Môj profil until the settings of 1f.
+// fails when a route has no ID there or the path differs. W12 = Settings sections (Phase 1f).
 
 export type RouteEntry = { id: string; path: string; signedIn?: boolean };
 

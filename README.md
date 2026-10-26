@@ -114,6 +114,14 @@ docker compose exec app python -m app.cli maintenance on --until 2026-11-01T08:0
 docker compose exec app python -m app.cli maintenance off
 ```
 
+### Nastavenia (fáza 1f)
+Sekcie W12 v poradí Roundcube: Nastavenia (01a–e), Priečinky, Identity / Môj profil, Odpovede, Filtre,
+Mimo kancelárie (ManageSieve), Nastavenia e-mail schránky (09b, D20), Bezpečnosť, a pre správcu Používatelia,
+Pobočky a osoby (podpis D22), Schránky. Odosielanie mimo `APP_ENV=prod` ide len cez Mailpit a len na
+`@smartmail.test` / `MAIL_SEND_TEST_ALLOWLIST` (ADR-008). W4e upraví podpis len pre aktuálnu správu.
+Live schránky (eshop@, info@, pobočky) sa nepoužívajú; `REAL_IMAP_TEST_*` ostáva preskočené, kým zákazník
+nedodá `test@smartsro.sk`.
+
 ### Písanie (fáza 1e)
 Nová správa / Odpovedať / Poslať ďalej otvára W4 (`/compose`). Identita, podpis pobočky s aktívnou osobou,
 Odpovede (W4d), prílohy na S3 (SeaweedFS v compose), koncepty s autosave 30 s, Odoslať s Undo 10 s

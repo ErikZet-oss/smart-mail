@@ -1,4 +1,4 @@
-"""Outbound SMTP via aiosmtplib (Phase 1e). Dev/CI → Mailpit; never logs bodies or credentials."""
+"""Outbound SMTP via aiosmtplib (Phase 1e/1f). Dev/CI → Mailpit; never logs bodies or credentials."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import aiosmtplib
 import structlog
 
 from app.core.config import Settings
+from app.mail.send_guard import SendGuardError, assert_send_allowed
 
 log = structlog.get_logger(__name__)
 
@@ -34,6 +35,11 @@ async def send_message(
     host = host or settings.smtp_host
     port = port if port is not None else settings.smtp_port
     security = security or settings.smtp_security
+    try:
+        assert_send_allowed(settings, message, host=host)
+    except SendGuardError as exc:
+        log.warning("smtp.guard_blocked", code=exc.code)
+        raise SmtpError(exc.code) from exc
     use_tls = security == "ssl"
     start_tls = security == "starttls"
     try:

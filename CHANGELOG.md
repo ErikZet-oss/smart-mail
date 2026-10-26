@@ -2,6 +2,17 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 1f: settings + send guard
+
+- Send guard (ADR-008): outside prod, SMTP only via Mailpit/localhost unless `MAIL_SEND_ALLOW_REAL_SERVER`;
+  recipients limited to `@smartmail.test` + `MAIL_SEND_TEST_ALLOWLIST` (even with the flag).
+- W4e: edit signature for this message only (`<>` source view, D22). W4c/W4f deferred to 1h.
+- Settings W12: sections 01–06, 09, 09b, 10–12 — preferences, folders hint, identities + profile, Odpovede,
+  Filtre + Mimo kancelárie (ManageSieve), security sessions, provider (D20), admin users / branches / mailboxes.
+  Schema: `settings_schema.json` + `web/src/features/settings/schema.ts`. HTML signature editor (D22).
+- Migration `0008` mailbox SMTP/Sieve/provider URL + person profile fields. Test against local `imap-test`;
+  `REAL_IMAP_*` still skipped. ClamAV still deferred to 1h.
+
 ## [Unreleased] — Phase 1e: compose
 
 - Compose W4: reply/forward/new, identities, branch signature with active person, Odpovede picker (W4d), attachments

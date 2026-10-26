@@ -139,13 +139,39 @@ describe('W2b PersonChip', () => {
   });
 
   it('W2b Môj profil opens W12 03b with the active person', async () => {
-    mockApi({ ...MAIL, 'GET /api/auth/me': { body: me(JANA) }, 'GET /api/auth/persons': { body: picker('p-jana') } });
+    mockApi({
+      ...MAIL,
+      'GET /api/auth/me': { body: me(JANA) },
+      'GET /api/auth/persons': { body: picker('p-jana') },
+      'GET /api/settings/nav': {
+        body: {
+          sections: [
+            { id: '03', path: 'identity', title: 'Identity', subs: [{ id: '03b', path: 'profile', title: 'Môj profil' }] },
+          ],
+        },
+      },
+      'GET /api/settings/profile': {
+        body: {
+          id: 'p-jana',
+          first_name: 'Jana',
+          last_name: 'Nováková',
+          function: 'obchod',
+          phone: null,
+          mobile: null,
+          personal_email: null,
+          languages: ['sk'],
+          style_guide: null,
+          role: 'sales',
+          signature_preview_html: '<p>Jana</p>',
+        },
+      },
+    });
     const router = renderInbox();
     fireEvent.click(await screen.findByRole('button', { name: 'Pracuje: Jana Nováková' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Môj profil' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/settings/identity/profile'));
     expect(await screen.findByRole('heading', { name: 'Nastavenia › Môj profil' })).toBeInTheDocument();
-    expect(screen.getByText('Nováková')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Nováková')).toBeInTheDocument();
   });
 
   it('W1b idle re-ask: after the branch idle minutes the picker comes back', async () => {
