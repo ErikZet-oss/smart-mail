@@ -16,6 +16,22 @@ jobs:
   backend:
     name: Backend (app) — lint, types, tests, golden prints, audit
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_DB: smartmail_test, POSTGRES_USER: smartmail, POSTGRES_PASSWORD: smartmail }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U smartmail" --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://smartmail:smartmail@localhost:5432/smartmail_test
+      TEST_REDIS_URL: redis://localhost:6379/15
+      REQUIRE_SERVICES: "1"  # DB/Redis tests must run in CI, never be skipped
     steps:
       - uses: actions/checkout@v4
       - name: System packages for WeasyPrint and golden print tests

@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -77,6 +77,11 @@ class Settings(BaseSettings):
     @property
     def cookie_secure(self) -> bool:
         return self.app_base_url.startswith("https://")
+
+    @field_validator("app_encryption_key", mode="before")
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        return None if value == "" else value
 
     @model_validator(mode="after")
     def _prod_requirements(self) -> Settings:
