@@ -97,6 +97,13 @@ Prihlasuje sa e-mailom a heslom k pošte – heslo overí IMAP server (ten istý
   po zmene hesla sa prepíše hneď pri ďalšom prihlásení.
 - **„Požiadať správcu“** na stránke 403 pošle e-mail na `ADMIN_CONTACT_EMAIL`.
 
+### Kto ste? (fáza 1b)
+Po prihlásení do pobočkovej schránky (napr. senica@smartsro.sk) sa zobrazí výber osoby: jedno kliknutie na meno a
+pracujete – bez PIN-u. Vedúci je prvý, ostatní abecedne; kto naposledy pracoval na tomto počítači, je predvolený
+(stačí Enter). Osobu prepnete kedykoľvek vľavo dole (avatar s menom alebo `Ctrl+Shift+P`) bez odhlásenia. V audite
+je pri každom zázname schránka aj osoba. Neaktívna osoba sa v zozname nezobrazí; ak ju správca deaktivuje počas práce,
+aplikácia znova otvorí výber.
+
 Pobočkové schránky a ďalšie osoby zatiaľ založíte príkazom (neskôr v Nastaveniach › Pobočky a osoby):
 
 ```bash
