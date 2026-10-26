@@ -1,12 +1,13 @@
-import { CircleHelp, Mail, Moon, Power, Settings, SquarePen, Users } from 'lucide-react';
+import { CircleHelp, Mail, Moon, Power, Settings, SquarePen, Sun, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { HOME } from '../../app/routes';
-import { useMediaQuery } from '../../lib/useMediaQuery';
-import { PersonChip, type ChipExtra } from '../../features/persons/PersonChip';
 import { formatCount } from '../../features/mail/mailApi';
+import { PersonChip, type ChipExtra } from '../../features/persons/PersonChip';
+import { useTheme } from '../../features/prefs/ThemeProvider';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 import { Logo } from '../Logo';
 
 export type RailSection = 'mail' | 'settings';
@@ -92,17 +93,35 @@ function RailItem({
 type Props = { section: RailSection; mailbox: string; unread: number; onLogout: () => void };
 
 /** G1 rail (72 px, dark) in the Roundcube order; items of later phases are not shown yet (Dnes, Doklady, Asistent,
- * Notifikácie) or are visibly disabled until their milestone (Vytvoriť správu 1e, Kontakty 1g, Tmavý režim 1d,
- * O systéme 1h). */
+ * Notifikácie) or are visibly disabled until their milestone (Vytvoriť správu 1e, Kontakty 1g, O systéme 1h). */
 export function Rail({ section, mailbox, unread, onLogout }: Props) {
   const { t } = useTranslation();
   const low = useMediaQuery(LOW_RAIL_QUERY);
-  const extras: ChipExtra[] = low
-    ? [
-        { id: 'dark', label: t('rail.darkMode'), icon: <Moon size={16} />, hint: t('common.comingSoon') },
-        { id: 'about', label: t('rail.about'), icon: <CircleHelp size={16} />, hint: t('common.comingSoon') },
-      ]
-    : [];
+  const { theme, toggleTheme, classic, setClassic } = useTheme();
+  const systemDark =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : false;
+  const darkOn = theme === 'dark' || (theme === 'system' && systemDark);
+  const extras: ChipExtra[] = [
+    ...(low
+      ? [
+          {
+            id: 'dark',
+            label: t('rail.darkMode'),
+            icon: darkOn ? <Sun size={16} /> : <Moon size={16} />,
+            onSelect: toggleTheme,
+          },
+          { id: 'about', label: t('rail.about'), icon: <CircleHelp size={16} />, hint: t('common.comingSoon') },
+        ]
+      : []),
+    {
+      id: 'classic',
+      label: t('rail.classic'),
+      icon: <ListIcon />,
+      onSelect: () => setClassic(!classic),
+    },
+  ];
   return (
     <nav
       aria-label={t('rail.label')}
@@ -134,12 +153,26 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
       <PersonChip onLogout={onLogout} extras={extras} />
       {low ? null : (
         <>
-          <RailItem icon={<Moon size={20} />} label={t('rail.darkMode')} tall={false} />
+          <RailItem
+            icon={darkOn ? <Sun size={20} /> : <Moon size={20} />}
+            label={t('rail.darkMode')}
+            tall={false}
+            onClick={toggleTheme}
+          />
           <RailItem icon={<CircleHelp size={20} />} label={t('rail.about')} tall={false} />
         </>
       )}
       <RailItem icon={<Power size={20} />} label={t('rail.logout')} tall={false} tone="logout" onClick={onLogout} />
       <div className="h-1.5 shrink-0" />
     </nav>
+  );
+}
+
+/** Tiny list glyph for Klasické zobrazenie (PersonChip menu) without a new Lucide import cycle. */
+function ListIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
   );
 }

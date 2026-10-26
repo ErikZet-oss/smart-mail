@@ -111,6 +111,7 @@
     "contacts": "Kontakty",
     "settings": "Nastavenia",
     "darkMode": "Tmavý režim",
+    "classic": "Klasické zobrazenie",
     "about": "O systéme",
     "logout": "Odhlásiť",
     "withUnread": "{{label}}, neprečítané: {{count}}"
@@ -196,20 +197,113 @@
       "select": "Výber",
       "threads": "Konverzácie",
       "options": "Možnosti",
-      "refresh": "Obnoviť"
+      "refresh": "Obnoviť",
+      "reply": "Odpovedať",
+      "replyAll": "Odpovedať všetkým",
+      "forward": "Poslať ďalej",
+      "delete": "Vymazať",
+      "junk": "Nevyžiadané",
+      "mark": "Označiť",
+      "more": "Viac",
+      "assign": "Prideliť",
+      "done": "Vybavené",
+      "snooze": "Odložiť",
+      "archive": "Archivovať",
+      "print": "Tlač",
+      "source": "Zdroj"
     },
     "loadFailed": "Nepodarilo sa načítať priečinok – skúšame znova.",
+    "loadMessageFailed": "Správu sa nepodarilo načítať.",
     "empty": "Priečinok je prázdny",
     "emptyText": "V priečinku {{name}} zatiaľ nie je žiadna pošta.",
+    "emptyFilter": "Žiadne správy podľa filtra.",
     "allDone": "Všetko vybavené ✓",
     "allDoneText": "Žiadne nové správy.",
-    "listLater_one": "V priečinku je {{total}} správa. Zoznam správ pripravujeme.",
-    "listLater_few": "V priečinku sú {{total}} správy. Zoznam správ pripravujeme.",
-    "listLater_many": "V priečinku je {{total}} správy. Zoznam správ pripravujeme.",
-    "listLater_other": "V priečinku je {{total}} správ. Zoznam správ pripravujeme.",
     "count": "Správy: {{total}}",
     "readingPane": "Náhľad správy",
-    "selectMessage": "Vyberte správu"
+    "selectMessage": "Vyberte správu",
+    "selectRow": "Vybrať správu",
+    "noSubject": "(bez predmetu)",
+    "searchPlaceholder": "Vyhľadať…",
+    "from": "Od",
+    "to": "Komu",
+    "date": "Dátum",
+    "plainText": "Čistý text",
+    "showHtml": "HTML",
+    "remoteImages": "Vzdialené obrázky sú zablokované.",
+    "showImages": "Zobraziť obrázky",
+    "openFull": "Otvoriť v novom okne",
+    "loading": "Načítavam…",
+    "sourceTitle": "Zdroj správy",
+    "sourceUnavailable": "Zdroj správy nie je dostupný.",
+    "downloadEml": "Stiahnuť .eml",
+    "filter": {
+      "all": "Všetko",
+      "unread": "Neprečítané",
+      "flagged": "Označené",
+      "attachments": "S prílohou"
+    },
+    "select": {
+      "page": "Aktuálna strana",
+      "unread": "Neprečítané",
+      "none": "Nič"
+    },
+    "bulk": {
+      "selected": "Vybraté: {{count}}",
+      "markRead": "Označiť ako prečítané",
+      "clear": "Zrušiť výber",
+      "assignSoon": "Prideliť (pripravujeme)"
+    },
+    "mark": {
+      "seen": "Ako prečítané",
+      "unseen": "Ako neprečítané",
+      "flag": "Príznak",
+      "unflag": "Zrušiť príznak"
+    },
+    "snooze": {
+      "today": "Dnes poobede (15:00)",
+      "tomorrow": "Zajtra ráno (8:00)",
+      "clear": "Zrušiť odloženie"
+    },
+    "toast": {
+      "delete": "Správa je v Koši.",
+      "junk": "Správa je v Nevyžiadanej pošte.",
+      "archive": "Správa je archivovaná.",
+      "done": "Vlákno je vybavené.",
+      "mark_seen": "Označené ako prečítané.",
+      "snooze": "Vlákno je odložené."
+    },
+    "options": {
+      "title": "Nastavenia zoznamu",
+      "sort": "Zoraďovanie",
+      "sortDir": "Systém zoraďovania",
+      "mode": "Režim zoznamu",
+      "modeList": "Zoznam",
+      "modeConversations": "Konverzácie",
+      "density": "Hustota",
+      "density_compact": "Kompaktná",
+      "density_comfortable": "Pohodlná",
+      "aiSummary": "Zobraziť AI zhrnutie",
+      "save": "Uložiť",
+      "asc": "vzostupne",
+      "desc": "zostupne",
+      "sorts": {
+        "date_received": "Dátum prijatia",
+        "date_sent": "Dátum odoslania",
+        "subject": "Predmet",
+        "from": "Odosielateľ",
+        "size": "Veľkosť"
+      }
+    },
+    "pager": {
+      "range": "Správy: {{from}} – {{to}}, z {{total}}",
+      "page": "Strana",
+      "prev": "Predchádzajúca strana",
+      "next": "Ďalšia strana"
+    },
+    "errors": {
+      "generic": "Akcia sa nepodarila – skúste to znova."
+    }
   },
   "settings": {
     "title": "Nastavenia",

@@ -3,6 +3,8 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-do
 import { ScreenW1 } from '../features/auth/ScreenW1';
 import { ScreenW1a } from '../features/auth/ScreenW1a';
 import { ScreenW2 } from '../features/mail/ScreenW2';
+import { ScreenW2m } from '../features/mail/ScreenW2m';
+import { ScreenW2n } from '../features/mail/ScreenW2n';
 import { ScreenW1b } from '../features/persons/ScreenW1b';
 import { ScreenW12 } from '../features/settings/ScreenW12';
 import { ScreenW16a, ScreenW16b, ScreenW16c } from '../features/system/ScreenW16';
@@ -15,6 +17,10 @@ export const routeObjects: RouteObject[] = [
   { id: ROUTES.W1.id, path: ROUTES.W1.path, element: <ScreenW1 /> },
   { id: ROUTES.W1a.id, path: ROUTES.W1a.path, element: <ScreenW1a /> },
   { id: ROUTES.W1b.id, path: ROUTES.W1b.path, element: <ScreenW1b /> },
+  // more specific mail routes first (print / source / thread) so they do not match W2
+  { id: ROUTES.W2m.id, path: ROUTES.W2m.path, element: <ScreenW2m /> },
+  { id: ROUTES.W2n.id, path: ROUTES.W2n.path, element: <ScreenW2n /> },
+  { id: ROUTES.W2c.id, path: ROUTES.W2c.path, element: <ScreenW2 /> },
   { id: ROUTES.W2.id, path: ROUTES.W2.path, element: <ScreenW2 /> },
   { id: ROUTES.W12.id, path: ROUTES.W12.path, element: <ScreenW12 /> },
   { id: ROUTES.W16a.id, path: ROUTES.W16a.path, element: <ScreenW16a /> },

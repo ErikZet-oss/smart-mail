@@ -2,7 +2,18 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
-## [Unreleased] — Phase 1c: shell & folders
+## [Unreleased] — Phase 1d: list & reading
+### Added
+- Threads, lazy message bodies, attachments and `user_settings` (migration `0006`); local file storage via
+  `STORAGE_PATH` (ADR-006). HTML sanitized with `nh3`; remote images rewritten to a placeholder.
+- Message API: list (Zoznam / Konverzácie), detail with body fetch, flags, bulk (incl. Vybavené), snooze, assign,
+  source (.eml), attachment download, prefs (list + UI theme/classic).
+- Web W2 list (`MessageRow`, filters, pagination, Výber / Konverzácie / Možnosti W2o), reading pane W2c (Roundcube
+  toolbar; Reply/Forward disabled until 1e), bulk bar W2e, print W2m, source W2n, dark mode and Klasické zobrazenie.
+- Tests: sanitize, threading, parse, message list/prefs/snooze; vitest for rows + date format. Real-server suite
+  still skipped without `REAL_IMAP_TEST_*`.
+
+## Phase 1c: shell & folders
 ### Added
 - Compose service `imap-test` (Dovecot: IMAP + SPECIAL-USE, IDLE, CONDSTORE, QUOTA, ManageSieve) with fictional
   mailboxes `pilot@` / `plna@` (≥ 90 % quota) / `senica@smartmail.test` and seed tool `make imap-seed` (Roundcube

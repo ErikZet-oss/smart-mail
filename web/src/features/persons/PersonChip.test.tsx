@@ -130,6 +130,8 @@ describe('W2b PersonChip', () => {
     expect(screen.queryByRole('menuitemradio')).toBeNull();
     expect(screen.getByRole('menuitem', { name: 'Môj profil' })).toHaveFocus();
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(screen.getByRole('menuitem', { name: 'Klasické zobrazenie' })).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
     expect(screen.getByRole('menuitem', { name: 'Odhlásiť' })).toHaveFocus();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Odhlásiť' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'));

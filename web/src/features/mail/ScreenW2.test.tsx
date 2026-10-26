@@ -261,7 +261,7 @@ describe('W2 shell and folder column (1c)', () => {
     expect(await screen.findByText('Všetko vybavené ✓')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('link', { name: 'Senica' }));
     expect(await screen.findByText('Priečinok je prázdny')).toBeInTheDocument();
-    expect(screen.getByText('Správy: 0')).toBeInTheDocument();
+    expect(screen.getByText(/Správy:.*0/)).toBeInTheDocument();
   });
 
   it('W2a nothing selected shows the watermark and "Vyberte správu"', async () => {
@@ -269,6 +269,17 @@ describe('W2 shell and folder column (1c)', () => {
     renderAt();
     expect(await screen.findByText('Vyberte správu')).toBeInTheDocument();
   });
+
+  it('W2 list rows show sender and subject; click opens the reading pane', async () => {
+    mockApi(base());
+    renderAt();
+    expect(await screen.findByText('Kópia faktúry 2026123')).toBeInTheDocument();
+    expect(screen.getByText('Ján Novák')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Kópia faktúry 2026123'));
+    expect(await screen.findByRole('heading', { name: 'Kópia faktúry 2026123' })).toBeInTheDocument();
+    expect(screen.getByText(/prosím o zaslanie kópie faktúry/)).toBeInTheDocument();
+  });
+
 
   it('W2 an unknown folder opens W16b', async () => {
     mockApi(base());

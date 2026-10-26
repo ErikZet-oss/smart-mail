@@ -114,6 +114,12 @@ docker compose exec app python -m app.cli maintenance on --until 2026-11-01T08:0
 docker compose exec app python -m app.cli maintenance off
 ```
 
+### Zoznam a čítanie (fáza 1d)
+Stredný stĺpec je zoznam správ (Zoznam / Konverzácie, hustota, filtre, stránkovanie ako Roundcube) a vpravo náhľad
+s panelom akcií (Vymazať, Nevyžiadané, Označiť, Viac → Tlač / Zdroj, Vybavené, Odložiť). Odpovedať / Poslať ďalej
+prídu vo fáze 1e. HTML je sanitizované, vzdialené obrázky sú zablokované (tlačidlo Zobraziť obrázky). Tmavý režim
+a Klasické zobrazenie sú v ľavom raili / menu osoby. Surové `.eml` a prílohy sú lokálne v `STORAGE_PATH` (neskôr S3).
+
 ### Priečinky a synchronizácia (fáza 1c)
 Po prihlásení sa otvorí E-mail (ľavý stĺpec ako v Roundcube): Doručená pošta, Koncepty, Odoslané, Nevyžiadaná pošta,
 Kôš a vlastné priečinky (Dodávatelia, Faktúry, Kurier, Nitra, Senica, Smart, Trenčín – D21). Dole je kvóta (červená
