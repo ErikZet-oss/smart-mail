@@ -1,0 +1,5 @@
+# Fictional TEST mailboxes of the local Dovecot (infra/imap-test). Not real people, not real passwords; the domain
+# smartmail.test cannot exist on the internet (RFC 6761). user:{PLAIN}password::::::extra userdb fields
+pilot@smartmail.test:{PLAIN}pilot-test-heslo::::::userdb_quota_rule=*:storage=50M
+plna@smartmail.test:{PLAIN}plna-test-heslo::::::userdb_quota_rule=*:storage=2M
+senica@smartmail.test:{PLAIN}senica-test-heslo::::::userdb_quota_rule=*:storage=50M

@@ -39,6 +39,7 @@ from app.core.audit import audit
 from app.core.config import Settings
 from app.core.middleware import CSRF_COOKIE, SESSION_COOKIE
 from app.mail.imap import ImapAuthenticator, ImapServer, LoginResult, MailAuthenticator
+from app.mail.mailboxes import ensure_own_mailbox
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -226,6 +227,7 @@ async def login(
     if remember_mailbox_password(account, body.password, settings, now=now):
         revoked = await revoke_account_sessions(db, account.id, RevokeReason.password_changed, now=now)
         audit(db, "auth.password_changed", account_id=account.id, ip=ip, details={"sessions_revoked": revoked})
+    await ensure_own_mailbox(db, account, settings)
 
     device_id = request.cookies.get(DEVICE_COOKIE) or secrets.token_urlsafe(16)
     _set_cookie(response, settings, DEVICE_COOKIE, device_id, 400 * 86400, http_only=True)

@@ -46,7 +46,20 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
-      - run: uv run pytest -q
+      - name: Local TEST IMAP (Dovecot) for Phase 1c integration tests
+        run: |
+          docker compose up -d --build imap-test
+          for i in $(seq 1 30); do
+            docker compose exec -T imap-test bash -c 'echo > /dev/tcp/127.0.0.1/143' && break
+            sleep 2
+          done
+          make imap-seed
+      - name: Unit + IMAP integration tests
+        env:
+          TEST_IMAP_HOST: localhost
+          TEST_IMAP_PORT: "1143"
+          REQUIRE_IMAP: "1"
+        run: uv run pytest -q
       - name: Dependency audit (pip-audit)
         run: |
           uv export --frozen --format requirements-txt > /tmp/requirements.txt

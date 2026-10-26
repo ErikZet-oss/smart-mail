@@ -63,7 +63,7 @@ test.describe('W1 Prihlásenie', () => {
     await shot(page, 'W1-submitting-capslock');
   });
 
-  test('signs in and lands on the signed-in placeholder', async ({ page }) => {
+  test('signs in and lands on Doručená pošta (W2)', async ({ page }) => {
     await mockApi(page, {
       'POST /api/auth/login': { body: { next: 'app', me: ME } },
       'GET /api/auth/me': { body: ME },
@@ -73,7 +73,7 @@ test.describe('W1 Prihlásenie', () => {
     await fillLogin(page);
     await page.getByRole('button', { name: 'PRIHLÁSIŤ' }).click();
     await expect(page).toHaveURL(/\/mail\/default\/inbox$/);
-    await expect(page.getByText('Prihlásený ako jana@smartsro.sk')).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Doručená pošta/ })).toHaveAttribute('aria-current', 'page');
   });
 });
 

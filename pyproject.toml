@@ -74,4 +74,6 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
     "golden: rasterised comparison of print documents with fixtures/documents/*.png",
+    "imap: needs the local test IMAP server (docker compose imap-test, TEST_IMAP_HOST)",
+    "real_mailbox: read-only check against the real mail server with the dedicated TEST mailbox from .env",
 ]

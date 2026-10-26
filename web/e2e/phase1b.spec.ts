@@ -92,7 +92,7 @@ test.describe('Flow 0: W1 → W1b → W2', () => {
     await expect(page).toHaveURL(/\/who$/);
     await page.getByRole('button', { name: /Jana Nováková/ }).click();
     await expect(page).toHaveURL(/\/mail\/default\/inbox$/);
-    await expect(page.getByText('Osoba: Jana Nováková')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Pracuje: Jana Nováková' })).toBeVisible();
     expect(server.state.last).toBe('p-jana');
   });
 

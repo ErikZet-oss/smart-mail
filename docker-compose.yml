@@ -18,15 +18,21 @@ x-app-env: &app-env
   BRIDGE_HMAC_SECRET: ${BRIDGE_HMAC_SECRET:-dev-only-change-me}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-}
-  IMAP_LOGIN_HOST: ${IMAP_LOGIN_HOST:-localhost}
-  IMAP_LOGIN_PORT: ${IMAP_LOGIN_PORT:-993}
-  IMAP_LOGIN_SECURITY: ${IMAP_LOGIN_SECURITY:-ssl}
-  INTERNAL_DOMAINS: ${INTERNAL_DOMAINS:-smartsro.sk}
+  # dev default = the local TEST mail server (imap-test, fictional mailboxes); production .env sets mail2.nameserver.sk
+  IMAP_LOGIN_HOST: ${IMAP_LOGIN_HOST:-imap-test}
+  IMAP_LOGIN_PORT: ${IMAP_LOGIN_PORT:-143}
+  IMAP_LOGIN_SECURITY: ${IMAP_LOGIN_SECURITY:-none}
+  INTERNAL_DOMAINS: ${INTERNAL_DOMAINS:-smartsro.sk,smartmail.test}
   ADMIN_EMAILS: ${ADMIN_EMAILS:-}
   ADMIN_CONTACT_EMAIL: ${ADMIN_CONTACT_EMAIL:-}
   LOGIN_IP_ALLOWLIST: ${LOGIN_IP_ALLOWLIST:-}
   # uvicorn --proxy-headers: trust X-Forwarded-For from the web container (real client IP for the login rate limit)
   FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
+  MAIL_SYNC_ENABLED: ${MAIL_SYNC_ENABLED:-true}
+  MAIL_POLL_SECONDS: ${MAIL_POLL_SECONDS:-120}
+  MAIL_IDLE_RENEW_SECONDS: ${MAIL_IDLE_RENEW_SECONDS:-1500}
+  MAIL_SYNC_BATCH: ${MAIL_SYNC_BATCH:-500}
+  MAIL_SYNC_ALLOW_REAL_SERVER: ${MAIL_SYNC_ALLOW_REAL_SERVER:-false}
 
 services:
   db:
@@ -71,6 +77,18 @@ services:
       retries: 20
       start_period: 300s
 
+  imap-test:
+    # TEST mail server (Dovecot: IMAP + SPECIAL-USE, IDLE, CONDSTORE, QUOTA, ManageSieve) with fictional mailboxes
+    # only (infra/imap-test/users). Seed: `make imap-seed`. Never a replacement for the customer's server.
+    build: ./infra/imap-test
+    volumes: [imap-test-data:/srv/mail]
+    ports: ["127.0.0.1:1143:143", "127.0.0.1:4190:4190"]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/143"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   mailpit:
     image: axllent/mailpit:latest   # dev-only test inbox
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
@@ -91,6 +109,7 @@ services:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
       s3: { condition: service_started }
+      imap-test: { condition: service_healthy }
     ports: ["127.0.0.1:8000:8000"]
 
   worker:
@@ -101,6 +120,7 @@ services:
       disable: true
     depends_on:
       app: { condition: service_healthy }
+      imap-test: { condition: service_healthy }
 
   web:
     build: ./web
@@ -109,6 +129,7 @@ services:
     ports: ["127.0.0.1:8080:8080"]
 
 volumes:
+  imap-test-data:
   db-data:
   s3-data:
   clamav-data:

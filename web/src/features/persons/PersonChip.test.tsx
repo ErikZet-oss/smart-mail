@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../app/App';
 import { ROUTER_FUTURE, routeObjects } from '../../app/router';
+import { foldersView, mailHandlers } from '../../test/mailFixtures';
 import { clearCookies, mockApi } from '../../test/mockApi';
 
 const person = (id: string, first: string, last: string, fn: string, manager = false) => ({
@@ -37,6 +38,8 @@ const me = (p: typeof PETER) => ({
   read_only: false,
 });
 
+const MAIL = mailHandlers(foldersView('senica@smartsro.sk'));
+
 function renderInbox() {
   const router = createMemoryRouter(routeObjects, { future: ROUTER_FUTURE, initialEntries: ['/mail/default/inbox'] });
   render(<App router={router} />);
@@ -53,6 +56,7 @@ describe('W2b PersonChip', () => {
   it('W2b one click in "Kto pracuje?" switches the person and shows the toast', async () => {
     let current = 'p-jana';
     const api = mockApi({
+      ...MAIL,
       'GET /api/auth/me': () => ({ body: me(current === 'p-jana' ? JANA : PETER) }),
       'GET /api/auth/persons': () => ({ body: picker(current) }),
       'POST /api/auth/person': () => {
@@ -73,11 +77,10 @@ describe('W2b PersonChip', () => {
       person_id: 'p-peter',
       remember_device: true,
     });
-    expect(screen.getByText('Osoba: Peter Hudák')).toBeInTheDocument();
   });
 
   it('W2b Ctrl+Shift+P opens the popover and Escape closes it', async () => {
-    mockApi({ 'GET /api/auth/me': { body: me(JANA) }, 'GET /api/auth/persons': { body: picker('p-jana') } });
+    mockApi({ ...MAIL, 'GET /api/auth/me': { body: me(JANA) }, 'GET /api/auth/persons': { body: picker('p-jana') } });
     renderInbox();
     await screen.findByRole('button', { name: 'Pracuje: Jana Nováková' });
     fireEvent.keyDown(window, { key: 'P', ctrlKey: true, shiftKey: true });
@@ -91,6 +94,7 @@ describe('W2b PersonChip', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     let current = 'p-jana';
     mockApi({
+      ...MAIL,
       'GET /api/auth/me': () => ({ body: me(current === 'p-jana' ? JANA : MAREK) }),
       'GET /api/auth/persons': () => ({ body: picker(current) }),
       'POST /api/auth/person': () => {
@@ -112,18 +116,39 @@ describe('W2b PersonChip', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
-  it('W2b with one person the chip only shows who works (nothing to switch)', async () => {
-    mockApi({
+  it('W2b with one person the menu still holds Môj profil and Odhlásiť', async () => {
+    const api = mockApi({
+      ...MAIL,
       'GET /api/auth/me': { body: { ...me(JANA), kind: 'personal', branch: null } },
       'GET /api/auth/persons': { body: picker('p-jana', [JANA]) },
+      'POST /api/auth/logout': { body: { ok: true } },
     });
-    renderInbox();
-    expect(await screen.findByRole('img', { name: 'Pracuje: Jana Nováková' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Pracuje:/ })).toBeNull();
+    const router = renderInbox();
+    fireEvent.click(await screen.findByRole('button', { name: 'Pracuje: Jana Nováková' }));
+    const menu = screen.getByRole('menu', { name: 'Menu osoby' });
+    expect(menu).toBeInTheDocument();
+    expect(screen.queryByRole('menuitemradio')).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Môj profil' })).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(screen.getByRole('menuitem', { name: 'Odhlásiť' })).toHaveFocus();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Odhlásiť' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
+    expect(api.calls.some((c) => c.key === 'POST /api/auth/logout')).toBe(true);
+  });
+
+  it('W2b Môj profil opens W12 03b with the active person', async () => {
+    mockApi({ ...MAIL, 'GET /api/auth/me': { body: me(JANA) }, 'GET /api/auth/persons': { body: picker('p-jana') } });
+    const router = renderInbox();
+    fireEvent.click(await screen.findByRole('button', { name: 'Pracuje: Jana Nováková' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Môj profil' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/identity/profile'));
+    expect(await screen.findByRole('heading', { name: 'Nastavenia › Môj profil' })).toBeInTheDocument();
+    expect(screen.getByText('Nováková')).toBeInTheDocument();
   });
 
   it('W1b idle re-ask: after the branch idle minutes the picker comes back', async () => {
     mockApi({
+      ...MAIL,
       'GET /api/auth/me': { body: me(JANA) },
       'GET /api/auth/persons': { body: picker('p-jana', undefined, 30) },
     });
