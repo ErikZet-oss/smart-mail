@@ -44,8 +44,7 @@ class Branch(IdMixin, TimestampMixin, Base):
     __tablename__ = "branches"
 
     name: Mapped[str] = mapped_column(String(120), unique=True)
-    # FK to mailboxes is added together with the mailboxes table (Settings › Schránky)
-    mailbox_id: Mapped[uuid.UUID | None]
+    mailbox_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("mailboxes.id", ondelete="SET NULL"))
     address: Mapped[str | None] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(32))
     hours: Mapped[str | None] = mapped_column(String(120))

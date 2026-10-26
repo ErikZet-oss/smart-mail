@@ -42,8 +42,15 @@ SENDERS = [
     ("Fakturácia", "fakturacia@fixtech.example", "Fixtech CZ s.r.o."),
 ]
 SUBJECTS = {
-    "INBOX": ["Kópia faktúry {n}", "Cenová ponuka M10×30 A2", "Objednávka PO-{n}", "Reklamácia – podložky M12",
-              "Dodacia lehota – kotvy", "Dopyt: skrutky DIN 933 M8×25", "Otázka k dodávke {n}"],
+    "INBOX": [
+        "Kópia faktúry {n}",
+        "Cenová ponuka M10×30 A2",
+        "Objednávka PO-{n}",
+        "Reklamácia – podložky M12",
+        "Dodacia lehota – kotvy",
+        "Dopyt: skrutky DIN 933 M8×25",
+        "Otázka k dodávke {n}",
+    ],
     "Dodávatelia": ["Nový cenník {n}", "Potvrdenie objednávky {n}", "Dodací list {n}"],
     "Faktúry": ["Faktúra {n}", "Faktúra FV{n}", "Dobropis {n}"],
     "Kurier": ["Zásielka {n} doručená", "Zásielka {n} na ceste", "Zásielka {n} – nedoručená"],
@@ -59,9 +66,19 @@ SUBJECTS = {
 }
 # (folder, number of messages, number unread)
 PILOT_PLAN = [
-    ("INBOX", 42, 12), ("Drafts", 2, 0), ("Sent", 12, 0), ("Junk", 3, 3), ("Trash", 5, 0),
-    ("Archív", 6, 0), ("Dodávatelia", 9, 2), ("Faktúry", 15, 4), ("Kurier", 8, 1), ("Nitra", 5, 2),
-    ("Senica", 6, 3), ("Smart", 4, 0), ("Trenčín", 7, 1),
+    ("INBOX", 42, 12),
+    ("Drafts", 2, 0),
+    ("Sent", 12, 0),
+    ("Junk", 3, 3),
+    ("Trash", 5, 0),
+    ("Archív", 6, 0),
+    ("Dodávatelia", 9, 2),
+    ("Faktúry", 15, 4),
+    ("Kurier", 8, 1),
+    ("Nitra", 5, 2),
+    ("Senica", 6, 3),
+    ("Smart", 4, 0),
+    ("Trenčín", 7, 1),
 ]
 # pilot gets about 30 % of 50 MB through a few larger fictional price lists
 PILOT_FILLER_KB = 15_000
@@ -103,16 +120,20 @@ def message(rng: random.Random, folder: str, index: int, to: str, *, attachment_
 
 
 def wipe(client: IMAPClient) -> None:
-    for _flags, _delim, name in client.list_folders():
+    """Empty every folder and delete all but INBOX and the SPECIAL-USE ones (also folders left over by tests)."""
+    folders = client.list_folders()
+    for flags, _delim, name in folders:
         client.select_folder(name)
         uids = client.search("ALL")
         if uids:
             client.delete_messages(uids)
             client.expunge()
         client.close_folder()
-        if name in OWN_FOLDERS:
-            client.unsubscribe_folder(name)
-            client.delete_folder(name)
+    special = {b"\\Drafts", b"\\Sent", b"\\Junk", b"\\Trash"}
+    own = [name for flags, _d, name in folders if name.upper() != "INBOX" and not special & set(flags)]
+    for name in sorted(own, key=len, reverse=True):  # children before parents
+        client.unsubscribe_folder(name)
+        client.delete_folder(name)
 
 
 def ensure_folders(client: IMAPClient) -> None:
@@ -185,12 +206,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=1143)
     parser.add_argument("--reset", action="store_true", help="delete all messages and own folders first")
+    parser.add_argument("--user", action="append", help="seed only this test user (repeatable)")
     args = parser.parse_args(argv)
     if args.host not in ALLOWED_HOSTS:
         print(f"refusing to seed {args.host}: only the local test server ({', '.join(sorted(ALLOWED_HOSTS))})")
         return 2
     users = read_users()
     for user, seeder in SEEDERS.items():
+        if args.user and user not in args.user:
+            continue
         if not user.endswith(f"@{DOMAIN}"):
             return 2
         client = IMAPClient(args.host, port=args.port, ssl=False, timeout=30)
@@ -203,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{user}: already seeded (use --reset)")
                 continue
             client.close_folder()
-            seeder(client, user, random.Random(f"smartmail-1c-{user}"))
+            seeder(client, user, random.Random(f"smartmail-1c-{user}"))  # noqa: S311 - deterministic fixtures
             used, limit = quota(client)
             print(f"{user}: seeded, quota {used} / {limit} KB ({used * 100 // limit} %)")
         finally:

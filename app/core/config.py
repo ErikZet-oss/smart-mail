@@ -9,6 +9,8 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+TEST_IMAP_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "imap-test"})
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -35,6 +37,14 @@ class Settings(BaseSettings):
     imap_login_port: int = Field(default=993, ge=1, le=65535)
     imap_login_security: Literal["ssl", "starttls", "none"] = "ssl"
     imap_login_timeout_s: int = Field(default=10, ge=1, le=60)
+
+    # --- mail sync (CLAUDE.md §5): IDLE on INBOX, poll of the other subscribed folders
+    mail_sync_enabled: bool = True
+    mail_poll_seconds: int = Field(default=120, ge=30, le=3600)
+    mail_idle_renew_seconds: int = Field(default=1500, ge=60, le=1740)  # RFC 2177: re-IDLE before 29 minutes
+    mail_sync_batch: int = Field(default=500, ge=10, le=5000)
+    # outside prod the sync talks only to the local test server (docker compose `imap-test`) unless this is set
+    mail_sync_allow_real_server: bool = False
 
     # --- sessions and login protection (CLAUDE.md §11, SCREENS_SPEC W1/W1a)
     session_idle_hours: int = Field(default=12, ge=1)
@@ -112,6 +122,10 @@ class Settings(BaseSettings):
     @property
     def internal_domain_list(self) -> list[str]:
         return [d.strip().lower() for d in self.internal_domains.split(",") if d.strip()]
+
+    def sync_host_allowed(self, host: str) -> bool:
+        """Development and tests never sync a live mailbox by accident (no real customer mail outside prod)."""
+        return self.app_env == "prod" or self.mail_sync_allow_real_server or host.lower() in TEST_IMAP_HOSTS
 
     def is_internal_address(self, email: str) -> bool:
         _, _, domain = email.strip().lower().rpartition("@")

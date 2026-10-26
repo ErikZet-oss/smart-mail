@@ -30,7 +30,10 @@ TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+asyncpg://smartmail:smartmail@localhost:5432/smartmail_test"
 )
 TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15")
-TABLES = "device_person_memory, sessions, accounts, person_branches, persons, branches"
+TABLES = (
+    "messages, folders_meta, mailbox_access, mailboxes, device_person_memory, sessions, accounts, person_branches, "
+    "persons, branches"
+)
 
 
 async def _services_up() -> str | None:
@@ -79,6 +82,7 @@ def settings(migrated: str) -> Settings:
         app_secret_key="test-secret-key-that-is-long-enough-0123456789",
         database_url=migrated,
         redis_url=TEST_REDIS_URL,
+        mail_sync_enabled=False,  # tests that sync use the local test IMAP server (tests/integration)
     )
 
 
