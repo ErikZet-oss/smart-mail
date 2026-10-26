@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +27,22 @@ class Settings(BaseSettings):
     s3_access_key: SecretStr | None = None
     s3_secret_key: SecretStr | None = None
     clamav_host: str = "localhost"
+
+    # --- mailbox login (PRODUCT_SPEC §2.0): the IMAP server Roundcube uses. Per-mailbox servers come with
+    # Settings › Schránky; until then every login is verified against this server.
+    imap_login_host: str = "localhost"
+    imap_login_port: int = Field(default=993, ge=1, le=65535)
+    imap_login_security: Literal["ssl", "starttls", "none"] = "ssl"
+    imap_login_timeout_s: int = Field(default=10, ge=1, le=60)
+
+    # --- sessions and login protection (CLAUDE.md §11, SCREENS_SPEC W1/W1a)
+    session_idle_hours: int = Field(default=12, ge=1)
+    session_remember_days: int = Field(default=30, ge=1, le=30)
+    login_max_failures: int = Field(default=5, ge=1)
+    login_ip_max_failures: int = Field(default=20, ge=1)
+    login_lock_minutes: int = Field(default=5, ge=1)
+    mfa_max_failures: int = Field(default=5, ge=1)
+    mfa_trust_days: int = Field(default=30, ge=1)
 
     # --- auth (optional providers)
     oidc_ms_client_id: str | None = None
@@ -57,6 +73,23 @@ class Settings(BaseSettings):
 
     eshop_feed_url: str | None = None
     sentry_dsn: SecretStr | None = None
+
+    @property
+    def cookie_secure(self) -> bool:
+        return self.app_base_url.startswith("https://")
+
+    @model_validator(mode="after")
+    def _prod_requirements(self) -> Settings:
+        if self.app_env == "prod":
+            if self.app_secret_key.get_secret_value() in {"dev-only-change-me", "change-me"} or (
+                len(self.app_secret_key.get_secret_value()) < 32
+            ):
+                raise ValueError("APP_SECRET_KEY must be a random value of at least 32 characters in prod")
+            if self.app_encryption_key is None:
+                raise ValueError("APP_ENCRYPTION_KEY is required in prod")
+            if self.imap_login_security == "none":
+                raise ValueError("IMAP_LOGIN_SECURITY=none is not allowed in prod (passwords would travel unencrypted)")
+        return self
 
     @property
     def internal_domain_list(self) -> list[str]:

@@ -1,4 +1,4 @@
-"""Smart Mail API (Phase 0: health endpoints only — product code starts in Phase 1)."""
+"""Smart Mail API."""
 
 from __future__ import annotations
 
@@ -11,9 +11,11 @@ import structlog
 from fastapi import FastAPI, Response, status
 from redis.asyncio import Redis
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from app import __version__
+from app.api import auth, system
+from app.core import middleware
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 
@@ -48,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+        app.state.sessionmaker = async_sessionmaker(app.state.engine, expire_on_commit=False)
         app.state.redis = Redis.from_url(settings.redis_url)
         log.info("app.started", version=__version__, env=settings.app_env)
         try:
@@ -63,6 +66,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
     )
+    app.state.settings = settings
+    middleware.install(app, settings)
+    app.include_router(auth.router)
+    app.include_router(system.router)
 
     @app.get("/healthz", tags=["system"])
     async def healthz() -> dict[str, str]:
