@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 import app.auth.models
 import app.core.audit
-import app.mail.compose_models  # noqa: F401
+import app.mail.compose_models  # register compose tables on the metadata
 import app.mail.models  # noqa: F401  (register tables on the metadata)
 from app.core.config import get_settings
 from app.core.db import Base

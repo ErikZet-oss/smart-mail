@@ -6,7 +6,7 @@ Revises: 0006
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
