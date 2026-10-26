@@ -287,7 +287,7 @@ company/contact, Doklady module (Dodacie listy, Objednávky, Reklamácie, Upomie
 §1–§11, §13–§17** (detection, deterministic table parser + LLM extraction, customer/duplicate checks, matching cascade
 with critical-attribute guard, units, prices — no stock, no packaging rounding (D6) —, review screen W6f/M12, state machine with idempotency and reconciliation, read-back, undo,
 confirmation and clarification e-mails, change/cancel diff cards, Settings › Objednávky, per-customer templates).
-Received delivery note card W6h and rules DL-B1–B10 / DL-W1–W7 (DOCUMENTS_SPEC §2), branch template document,
+Received delivery note card W6h and rules DL-B1–B10 / DL-W1–W8 (DOCUMENTS_SPEC §2), branch template document,
 `money_probe.py --branches` read first. Acceptance on TEST agenda: 10 supplier documents with ≥ 15 lines each → 10
 received delivery notes, ≥ 95 % lines matched automatically after the second document of the same supplier, stock
 increased in the branch warehouse, 0 duplicates, totals match;
