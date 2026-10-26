@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-do
 import { ScreenW1 } from '../features/auth/ScreenW1';
 import { ScreenW1a } from '../features/auth/ScreenW1a';
 import { SignedInPlaceholder } from '../features/auth/SignedInPlaceholder';
+import { ScreenW1b } from '../features/persons/ScreenW1b';
 import { ScreenW16a, ScreenW16b, ScreenW16c } from '../features/system/ScreenW16';
 import { ScreenW17 } from '../features/system/ScreenW17';
 import { ApiError } from '../lib/api';
@@ -12,7 +13,7 @@ export const routeObjects: RouteObject[] = [
   { path: '/', element: <Navigate to={HOME} replace /> },
   { id: ROUTES.W1.id, path: ROUTES.W1.path, element: <ScreenW1 /> },
   { id: ROUTES.W1a.id, path: ROUTES.W1a.path, element: <ScreenW1a /> },
-  { id: ROUTES.W1b.id, path: ROUTES.W1b.path, element: <SignedInPlaceholder /> },
+  { id: ROUTES.W1b.id, path: ROUTES.W1b.path, element: <ScreenW1b /> },
   { id: ROUTES.W2.id, path: ROUTES.W2.path, element: <SignedInPlaceholder /> },
   { id: ROUTES.W16a.id, path: ROUTES.W16a.path, element: <ScreenW16a /> },
   { id: ROUTES.W16b.id, path: ROUTES.W16b.path, element: <ScreenW16b /> },
@@ -32,6 +33,10 @@ export function routeForError(error: ApiError, currentPath: string): string | nu
     if (reason === 'password_changed') return `${ROUTES.W1.path}?reason=password-changed`;
     if (reason === 'expired') return `${ROUTES.W1.path}?reason=expired`;
     return currentPath.startsWith(ROUTES.W1.path) ? null : ROUTES.W1.path;
+  }
+  // the active person was deactivated / removed from the branch, or an action needs a person (PRODUCT_SPEC §2.0)
+  if ((status === 409 && detail.code === 'person_inactive') || (status === 403 && detail.code === 'person_required')) {
+    return ROUTES.W1b.path;
   }
   if (status === 403 && detail.code !== 'csrf') return ROUTES.W16a.path;
   if (status >= 500 && detail.code === 'server_error') {

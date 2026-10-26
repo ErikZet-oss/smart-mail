@@ -1,6 +1,14 @@
 import { api } from '../../lib/api';
 
-export type Person = { id: string; first_name: string; last_name: string; full_name: string; role: string };
+export type Person = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  role: string;
+  function: string | null;
+  is_manager: boolean;
+};
 
 export type Me = {
   account_id: string;

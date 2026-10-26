@@ -42,4 +42,8 @@ body {
   .type-caption {
     font: var(--type-caption);
   }
+  .type-micro {
+    font: var(--type-micro);
+    letter-spacing: var(--type-micro-tracking);
+  }
 }

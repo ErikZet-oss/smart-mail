@@ -7,13 +7,32 @@ export const ME = {
   email: 'jana@smartsro.sk',
   kind: 'personal',
   branch: null,
-  person: { id: 'p1', first_name: 'Jana', last_name: 'Testová', full_name: 'Jana Testová', role: 'sales' },
+  person: {
+    id: 'p1',
+    first_name: 'Jana',
+    last_name: 'Testová',
+    full_name: 'Jana Testová',
+    role: 'sales',
+    function: null,
+    is_manager: false,
+  },
   needs_person: false,
   read_only: false,
 };
 
-/** Mock the API: "METHOD /path" → reply. Unmocked API calls answer 401 (not signed in). */
-export async function mockApi(page: Page, replies: Record<string, Reply>) {
+/** GET /api/auth/persons of the personal account ME (only itself, nothing to switch). */
+export const ME_PICKER = {
+  branch: null,
+  email: ME.email,
+  persons: [ME.person],
+  current_person_id: ME.person.id,
+  last_person_id: null,
+  idle_ask_minutes: null,
+};
+
+/** Mock the API: "METHOD /path" → reply (or a function of the JSON body for stateful flows). Unmocked API calls
+ * answer 401 (not signed in). */
+export async function mockApi(page: Page, replies: Record<string, Reply | ((body: unknown) => Reply)>) {
   await page.route('**/api/**', async (route: Route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -22,7 +41,11 @@ export async function mockApi(page: Page, replies: Record<string, Reply>) {
       await route.fulfill({ json: { ok: true }, headers: { 'set-cookie': 'sm_csrf=e2e-csrf; Path=/' } });
       return;
     }
-    const reply = replies[key] ?? { status: 401, body: { detail: { code: 'unauthenticated', reason: 'missing' } } };
+    const given = replies[key];
+    const reply =
+      typeof given === 'function'
+        ? given(request.postDataJSON() as unknown)
+        : (given ?? { status: 401, body: { detail: { code: 'unauthenticated', reason: 'missing' } } });
     if (reply.never) return; // keeps the request pending (submitting state)
     if (reply.delayMs) await new Promise((r) => setTimeout(r, reply.delayMs));
     await route.fulfill({ status: reply.status ?? 200, json: reply.body });
