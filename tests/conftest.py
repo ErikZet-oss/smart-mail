@@ -31,6 +31,7 @@ TEST_DATABASE_URL = os.environ.get(
 )
 TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15")
 TABLES = (
+    "compose_attachments, compose_drafts, responses, identities, "
     "attachments, messages, threads, user_settings, folders_meta, mailbox_access, mailboxes, "
     "device_person_memory, sessions, accounts, person_branches, persons, branches"
 )
@@ -75,7 +76,8 @@ def migrated() -> str:
 
 
 @pytest.fixture
-def settings(migrated: str) -> Settings:
+def settings(migrated: str, tmp_path_factory: pytest.TempPathFactory) -> Settings:
+    storage = tmp_path_factory.mktemp("storage")
     return Settings(
         app_env="test",
         app_base_url="http://test",
@@ -83,6 +85,14 @@ def settings(migrated: str) -> Settings:
         database_url=migrated,
         redis_url=TEST_REDIS_URL,
         mail_sync_enabled=False,  # tests that sync use the local test IMAP server (tests/integration)
+        storage_backend="local",
+        storage_path=str(storage),
+        s3_access_key="test",
+        s3_secret_key="test",
+        undo_send_seconds=0,
+        smtp_host="localhost",
+        smtp_port=1025,
+        smtp_security="none",
     )
 
 

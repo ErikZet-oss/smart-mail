@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 1e: compose
+
+- Compose W4: reply/forward/new, identities, branch signature with active person, Odpovede picker (W4d), attachments
+  (S3), drafts autosave 30 s, undo send (`UNDO_SEND_SECONDS`), priority, delivery receipt, pre-send checks (W4b).
+- Bodies fetched with **BODY.PEEK[] only** (never RFC822). Attachments/raw messages on **S3** (SeaweedFS in compose;
+  `STORAGE_BACKEND=local` for unit tests only). ADR-007.
+- IMAP seed ≥ 60 fictional messages (long subjects, threads, attachments, unread); W2 re-shots in Playwright.
+- ClamAV still deferred to 1h (`av_status=skipped`). No live mailboxes; `REAL_IMAP_TEST_*` still skipped.
+
 ## [Unreleased] — Phase 1d: list & reading
 ### Added
 - Threads, lazy message bodies, attachments and `user_settings` (migration `0006`); local file storage via

@@ -94,8 +94,8 @@ class RenameIn(BaseModel):
     name: str = Field(max_length=200)
 
 
-def fail(status: int, code: str) -> HTTPException:
-    return HTTPException(status_code=status, detail={"code": code})
+def fail(status: int, code: str, **extra: object) -> HTTPException:
+    return HTTPException(status_code=status, detail={"code": code, **extra})
 
 
 async def _inbox_unread(db: DB, mailbox_id: uuid.UUID) -> int:

@@ -1,0 +1,287 @@
+"""Compose drafts: create from reply/forward/new, autosave, send with undo (Phase 1e)."""
+
+from __future__ import annotations
+
+import re
+import uuid
+from datetime import UTC, datetime, timedelta
+from email.message import EmailMessage
+from email.utils import format_datetime, make_msgid
+from typing import Any, Literal
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth.models import Branch, Person
+from app.core.audit import audit
+from app.core.config import Settings
+from app.mail import storage
+from app.mail.compose_models import ComposeAttachment, ComposeDraft, Identity
+from app.mail.models import Mailbox, Message
+from app.mail.sanitize import sanitize_html
+from app.mail.signature import html_to_text, render_signature
+from app.mail.smtp import SmtpError, send_message
+
+Mode = Literal["new", "reply", "reply_all", "forward"]
+Priority = Literal["low", "normal", "high"]
+
+_PLACEHOLDER = re.compile(r"\[\[DOPLNIŤ\]\]", re.I)
+_ATTACH_MENTION = re.compile(r"\b(príloh|priloh|attachment|attach|pdf|docx?)\w*", re.I)
+
+
+def _addrs(raw: list[dict[str, Any]] | None) -> list[dict[str, str | None]]:
+    out: list[dict[str, str | None]] = []
+    for item in raw or []:
+        email = (item.get("email") or "").strip().lower()
+        if email:
+            out.append({"name": item.get("name"), "email": email})
+    return out
+
+
+async def ensure_default_identity(db: AsyncSession, mailbox: Mailbox, display_name: str | None = None) -> Identity:
+    existing = await db.scalar(
+        select(Identity).where(Identity.mailbox_id == mailbox.id).order_by(Identity.is_default.desc())
+    )
+    if existing:
+        return existing
+    identity = Identity(
+        mailbox_id=mailbox.id,
+        display_name=display_name or mailbox.email.split("@")[0],
+        email=mailbox.email,
+        organization="Smart s.r.o.",
+        is_default=True,
+    )
+    db.add(identity)
+    await db.flush()
+    return identity
+
+
+async def create_draft(
+    db: AsyncSession,
+    settings: Settings,
+    *,
+    mailbox: Mailbox,
+    account_id: uuid.UUID,
+    person: Person | None,
+    branch: Branch | None,
+    mode: Mode = "new",
+    source: Message | None = None,
+) -> ComposeDraft:
+    identity = await ensure_default_identity(db, mailbox, person.full_name if person else None)
+    to: list[dict[str, str | None]] = []
+    cc: list[dict[str, str | None]] = []
+    subject = ""
+    body_html = ""
+    if source and mode in ("reply", "reply_all"):
+        to = [{"name": source.from_name, "email": source.from_email}]
+        if mode == "reply_all":
+            for a in source.to_addrs or []:
+                if (a.get("email") or "").lower() != mailbox.email:
+                    cc.append({"name": a.get("name"), "email": a.get("email")})
+            cc.extend(_addrs(source.cc_addrs))
+        subj = source.subject or ""
+        subject = subj if subj.lower().startswith("re:") else f"Re: {subj}"
+        quoted = (source.body_html_sanitized or f"<pre>{html_to_text(source.body_text or '')}</pre>") if source else ""
+        body_html = f"<p></p><blockquote>{quoted}</blockquote>"
+    elif source and mode == "forward":
+        subj = source.subject or ""
+        subject = subj if subj.lower().startswith("fwd:") else f"Fwd: {subj}"
+        quoted = source.body_html_sanitized or f"<pre>{html_to_text(source.body_text or '')}</pre>"
+        body_html = f"<p></p><p>---------- Preposlaná správa ----------</p>{quoted}"
+
+    sig_person = person
+    signature = render_signature(
+        person=sig_person, branch=branch, identity=identity, email=identity.email, language="sk"
+    )
+    if signature:
+        body_html = f'{body_html}<div data-sm-signature="1">{signature}</div>'
+
+    draft = ComposeDraft(
+        mailbox_id=mailbox.id,
+        account_id=account_id,
+        person_id=person.id if person else None,
+        identity_id=identity.id,
+        mode=mode,
+        in_reply_to_message_id=source.id if source else None,
+        thread_id=source.thread_id if source else None,
+        to_addrs=to,
+        cc_addrs=cc,
+        subject=subject,
+        body_html=sanitize_html(body_html),
+        body_text=html_to_text(body_html),
+        signature_person_id=person.id if person else None,
+        include_signature=True,
+        status="editing",
+    )
+    db.add(draft)
+    await db.flush()
+    audit(
+        db,
+        action="mail.compose_created",
+        account_id=account_id,
+        person_id=person.id if person else None,
+        details={"draft_id": str(draft.id), "mode": mode},
+    )
+    return draft
+
+
+def pre_send_checks(draft: ComposeDraft, settings: Settings) -> list[dict[str, Any]]:
+    """W4b checks. Blocking items disable 'Odoslať aj tak'."""
+    issues: list[dict[str, Any]] = []
+    if not draft.to_addrs:
+        issues.append({"code": "no_recipients", "blocking": True, "message": "missing_to"})
+    if _PLACEHOLDER.search(draft.body_html or "") or _PLACEHOLDER.search(draft.body_text or ""):
+        issues.append({"code": "placeholder", "blocking": True, "message": "placeholder"})
+    body = f"{draft.subject}\n{draft.body_text}\n{draft.body_html}"
+    if _ATTACH_MENTION.search(body):
+        # attachment presence is checked by caller with attachment count
+        issues.append({"code": "attachment_mentioned", "blocking": False, "message": "attachment_mentioned"})
+    domains = {(a.get("email") or "").rsplit("@", 1)[-1] for a in draft.to_addrs + draft.cc_addrs}
+    external = [d for d in domains if d and not settings.is_internal_address(f"x@{d}")]
+    if external:
+        issues.append({"code": "external_recipient", "blocking": False, "message": "external"})
+    return issues
+
+
+async def build_mime(
+    db: AsyncSession,
+    settings: Settings,
+    draft: ComposeDraft,
+    identity: Identity,
+) -> EmailMessage:
+    msg = EmailMessage()
+    msg["From"] = f"{identity.display_name} <{identity.email}>"
+    msg["To"] = ", ".join(
+        f"{a['name']} <{a['email']}>" if a.get("name") else (a.get("email") or "") for a in draft.to_addrs
+    )
+    if draft.cc_addrs:
+        msg["Cc"] = ", ".join(a.get("email") or "" for a in draft.cc_addrs)
+    msg["Subject"] = draft.subject or ""
+    msg["Date"] = format_datetime(datetime.now(UTC))
+    mid = make_msgid(domain=identity.email.split("@")[-1])
+    msg["Message-ID"] = mid
+    if draft.priority == "high":
+        msg["X-Priority"] = "1"
+        msg["Importance"] = "high"
+    elif draft.priority == "low":
+        msg["X-Priority"] = "5"
+        msg["Importance"] = "low"
+    if draft.request_mdn:
+        msg["Disposition-Notification-To"] = identity.email
+    if draft.in_reply_to_message_id:
+        source = await db.get(Message, draft.in_reply_to_message_id)
+        if source and source.message_id:
+            msg["In-Reply-To"] = source.message_id
+            refs = (source.references or "").strip()
+            msg["References"] = f"{refs} {source.message_id}".strip() if refs else source.message_id
+
+    html = draft.body_html or ""
+    text = draft.body_text or html_to_text(html)
+    msg.set_content(text)
+    msg.add_alternative(html, subtype="html")
+
+    atts = list((await db.execute(select(ComposeAttachment).where(ComposeAttachment.draft_id == draft.id))).scalars())
+    for att in atts:
+        payload = storage.get_bytes(settings, att.storage_key) or b""
+        maintype, _, subtype = (att.content_type or "application/octet-stream").partition("/")
+        msg.add_attachment(
+            payload,
+            maintype=maintype or "application",
+            subtype=subtype or "octet-stream",
+            filename=att.filename,
+        )
+    draft.final_message_id = mid
+    return msg
+
+
+async def queue_send(
+    db: AsyncSession,
+    settings: Settings,
+    draft: ComposeDraft,
+    *,
+    account_id: uuid.UUID,
+    person_id: uuid.UUID | None,
+    force: bool = False,
+) -> ComposeDraft:
+    checks = pre_send_checks(draft, settings)
+    atts = list((await db.execute(select(ComposeAttachment).where(ComposeAttachment.draft_id == draft.id))).scalars())
+    if any(c["code"] == "attachment_mentioned" for c in checks) and not atts:
+        pass  # keep warning
+    else:
+        checks = [c for c in checks if c["code"] != "attachment_mentioned" or not atts]
+    blocking = [c for c in checks if c["blocking"]]
+    if blocking and not force:
+        raise ValueError("pre_send_blocked")
+    delay = settings.undo_send_seconds
+    draft.status = "queued"
+    draft.undo_until = datetime.now(UTC) + timedelta(seconds=delay) if delay > 0 else None
+    draft.send_error = None
+    audit(
+        db,
+        action="mail.compose_queued",
+        account_id=account_id,
+        person_id=person_id,
+        details={"draft_id": str(draft.id), "undo_seconds": delay},
+    )
+    await db.flush()
+    return draft
+
+
+async def cancel_send(
+    db: AsyncSession, draft: ComposeDraft, *, account_id: uuid.UUID, person_id: uuid.UUID | None
+) -> ComposeDraft:
+    if draft.status != "queued":
+        raise ValueError("not_queued")
+    draft.status = "editing"
+    draft.undo_until = None
+    audit(
+        db,
+        action="mail.compose_undo",
+        account_id=account_id,
+        person_id=person_id,
+        details={"draft_id": str(draft.id)},
+    )
+    await db.flush()
+    return draft
+
+
+async def execute_send(db: AsyncSession, settings: Settings, draft_id: uuid.UUID) -> str:
+    draft = await db.get(ComposeDraft, draft_id)
+    if draft is None:
+        return "missing"
+    if draft.status == "editing":
+        return "undone"
+    if draft.status == "sent":
+        return "already"
+    if draft.status not in {"queued", "scheduled", "sending"}:
+        return draft.status
+    if draft.undo_until and datetime.now(UTC) < draft.undo_until and draft.status == "queued":
+        return "waiting"
+    draft.status = "sending"
+    await db.flush()
+    identity = await db.get(Identity, draft.identity_id) if draft.identity_id else None
+    mailbox = await db.get(Mailbox, draft.mailbox_id)
+    if identity is None or mailbox is None:
+        draft.status = "failed"
+        draft.send_error = "identity_missing"
+        await db.commit()
+        return "failed"
+    try:
+        mime = await build_mime(db, settings, draft, identity)
+        await send_message(settings, mime)
+        draft.status = "sent"
+        draft.undo_until = None
+        audit(
+            db,
+            action="mail.compose_sent",
+            account_id=draft.account_id,
+            person_id=draft.person_id,
+            details={"draft_id": str(draft.id)},
+        )
+        await db.commit()
+        return "sent"
+    except SmtpError as exc:
+        draft.status = "failed"
+        draft.send_error = exc.reason[:200]
+        await db.commit()
+        return "failed"

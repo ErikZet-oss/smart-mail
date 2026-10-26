@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { Banner } from '../../components/Banner';
 import { Menu, type MenuEntry } from '../../components/Menu';
@@ -83,9 +83,10 @@ function menuAt(event: MouseEvent<HTMLButtonElement>) {
   return { x: r.left, y: r.bottom + 4 };
 }
 
-/** W2c reading pane: Roundcube toolbar order; Reply/Forward wait for 1e. */
+/** W2c reading pane: Roundcube toolbar order; Reply/Forward open W4 (Phase 1e). */
 export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared }: Props) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { classic } = useTheme();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -272,9 +273,29 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   return (
     <section aria-label={t('mail.readingPane')} className="hidden min-w-0 flex-1 flex-col bg-bg-canvas lg:flex">
       <div className="flex h-14 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border-default px-2">
-        <ToolBtn icon={<Reply size={18} />} label={t('mail.toolbar.reply')} />
-        <ToolBtn icon={<ReplyAll size={18} />} label={t('mail.toolbar.replyAll')} />
-        <ToolBtn icon={<Forward size={18} />} label={t('mail.toolbar.forward')} />
+        <ToolBtn
+          icon={<Reply size={18} />}
+          label={t('mail.toolbar.reply')}
+          onClick={() =>
+            navigate(`/compose?mode=reply&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`)
+          }
+        />
+        <ToolBtn
+          icon={<ReplyAll size={18} />}
+          label={t('mail.toolbar.replyAll')}
+          onClick={() =>
+            navigate(
+              `/compose?mode=reply_all&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`,
+            )
+          }
+        />
+        <ToolBtn
+          icon={<Forward size={18} />}
+          label={t('mail.toolbar.forward')}
+          onClick={() =>
+            navigate(`/compose?mode=forward&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`)
+          }
+        />
         <ToolBtn
           icon={<Trash2 size={18} />}
           label={t('mail.toolbar.delete')}

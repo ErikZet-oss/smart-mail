@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     app_encryption_key: SecretStr | None = None
     log_level: str = "INFO"
 
-    # --- storage
+    # --- storage (ADR-002 / ADR-007: S3 API primary; local only for isolated unit tests)
     database_url: str = "postgresql+asyncpg://smartmail:smartmail@localhost:5432/smartmail"
     redis_url: str = "redis://localhost:6379/0"
     s3_endpoint: str = "http://localhost:8333"
@@ -30,8 +30,14 @@ class Settings(BaseSettings):
     s3_access_key: SecretStr | None = None
     s3_secret_key: SecretStr | None = None
     clamav_host: str = "localhost"
-    # local driver for raw .eml and attachments until the S3 client is wired (CLAUDE.md §2)
-    storage_path: str = "./data/storage"
+    storage_backend: Literal["s3", "local"] = "s3"
+    storage_path: str = "./data/storage"  # used only when STORAGE_BACKEND=local
+
+    # --- outbound SMTP (compose → Mailpit in dev/CI; live host from mailbox settings later)
+    smtp_host: str = "localhost"
+    smtp_port: int = Field(default=1025, ge=1, le=65535)
+    smtp_security: Literal["ssl", "starttls", "none"] = "none"
+    undo_send_seconds: int = Field(default=10, ge=0, le=30)
 
     # --- mailbox login (PRODUCT_SPEC §2.0): the IMAP server Roundcube uses. Per-mailbox servers come with
     # Settings › Schránky; until then every login is verified against this server.

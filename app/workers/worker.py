@@ -43,6 +43,15 @@ async def sync_mailbox_job(ctx: dict[str, Any], mailbox_id: str, scope: Scope = 
         return await sync_mailbox(db, mailbox, settings, scope=scope, redis=ctx["redis"])
 
 
+async def send_compose_draft(ctx: dict[str, Any], draft_id: str) -> str:
+    """Finish a queued send after the undo window (Phase 1e)."""
+    from app.mail.compose import execute_send
+
+    settings: Settings = ctx["settings"]
+    async with ctx["sessionmaker"]() as db:
+        return await execute_send(db, settings, uuid.UUID(draft_id))
+
+
 async def _syncable(ctx: dict[str, Any]) -> list[Mailbox]:
     settings: Settings = ctx["settings"]
     async with ctx["sessionmaker"]() as db:
@@ -137,7 +146,11 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
     # keep_result=0 frees the job id at once, so the next IDLE push or poll can enqueue the same sync again
-    functions: ClassVar[list[Any]] = [heartbeat, func(sync_mailbox_job, keep_result=0)]
+    functions: ClassVar[list[Any]] = [
+        heartbeat,
+        func(sync_mailbox_job, keep_result=0),
+        func(send_compose_draft, keep_result=0),
+    ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, minute=set(range(60)), run_at_startup=True),
         cron(poll_mailboxes, minute=set(range(60)), run_at_startup=True, unique=True),

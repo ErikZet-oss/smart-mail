@@ -13,6 +13,11 @@ x-app-env: &app-env
   S3_BUCKET: smartmail
   S3_ACCESS_KEY: ${S3_ACCESS_KEY:-smartmail}
   S3_SECRET_KEY: ${S3_SECRET_KEY:-smartmail-dev-secret}
+  STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
+  SMTP_HOST: ${SMTP_HOST:-mailpit}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  SMTP_SECURITY: ${SMTP_SECURITY:-none}
+  UNDO_SEND_SECONDS: ${UNDO_SEND_SECONDS:-10}
   CLAMAV_HOST: clamav
   BRIDGE_URL: http://bridge:8100
   BRIDGE_HMAC_SECRET: ${BRIDGE_HMAC_SECRET:-dev-only-change-me}

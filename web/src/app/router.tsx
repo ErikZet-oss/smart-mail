@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-do
 
 import { ScreenW1 } from '../features/auth/ScreenW1';
 import { ScreenW1a } from '../features/auth/ScreenW1a';
+import { ScreenW4 } from '../features/compose/ScreenW4';
 import { ScreenW2 } from '../features/mail/ScreenW2';
 import { ScreenW2m } from '../features/mail/ScreenW2m';
 import { ScreenW2n } from '../features/mail/ScreenW2n';
@@ -17,7 +18,9 @@ export const routeObjects: RouteObject[] = [
   { id: ROUTES.W1.id, path: ROUTES.W1.path, element: <ScreenW1 /> },
   { id: ROUTES.W1a.id, path: ROUTES.W1a.path, element: <ScreenW1a /> },
   { id: ROUTES.W1b.id, path: ROUTES.W1b.path, element: <ScreenW1b /> },
-  // more specific mail routes first (print / source / thread) so they do not match W2
+  // more specific mail routes first (compose / print / source / thread) so they do not match W2.
+  // Single W4 id for both `/compose` and `/compose/:draftId` (SCREENS_SPEC §1); optional param keeps RR ids unique.
+  { id: ROUTES.W4.id, path: '/compose/:draftId?', element: <ScreenW4 /> },
   { id: ROUTES.W2m.id, path: ROUTES.W2m.path, element: <ScreenW2m /> },
   { id: ROUTES.W2n.id, path: ROUTES.W2n.path, element: <ScreenW2n /> },
   { id: ROUTES.W2c.id, path: ROUTES.W2c.path, element: <ScreenW2 /> },
