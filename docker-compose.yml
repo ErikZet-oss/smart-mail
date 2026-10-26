@@ -28,6 +28,11 @@ x-app-env: &app-env
   LOGIN_IP_ALLOWLIST: ${LOGIN_IP_ALLOWLIST:-}
   # uvicorn --proxy-headers: trust X-Forwarded-For from the web container (real client IP for the login rate limit)
   FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
+  MAIL_SYNC_ENABLED: ${MAIL_SYNC_ENABLED:-true}
+  MAIL_POLL_SECONDS: ${MAIL_POLL_SECONDS:-120}
+  MAIL_IDLE_RENEW_SECONDS: ${MAIL_IDLE_RENEW_SECONDS:-1500}
+  MAIL_SYNC_BATCH: ${MAIL_SYNC_BATCH:-500}
+  MAIL_SYNC_ALLOW_REAL_SERVER: ${MAIL_SYNC_ALLOW_REAL_SERVER:-false}
 
 services:
   db:
@@ -104,6 +109,7 @@ services:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
       s3: { condition: service_started }
+      imap-test: { condition: service_healthy }
     ports: ["127.0.0.1:8000:8000"]
 
   worker:
@@ -114,6 +120,7 @@ services:
       disable: true
     depends_on:
       app: { condition: service_healthy }
+      imap-test: { condition: service_healthy }
 
   web:
     build: ./web

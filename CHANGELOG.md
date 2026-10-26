@@ -2,7 +2,27 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
-## [Unreleased] — Phase 1b: branches & "Kto ste?"
+## [Unreleased] — Phase 1c: shell & folders
+### Added
+- Compose service `imap-test` (Dovecot: IMAP + SPECIAL-USE, IDLE, CONDSTORE, QUOTA, ManageSieve) with fictional
+  mailboxes `pilot@` / `plna@` (≥ 90 % quota) / `senica@smartmail.test` and seed tool `make imap-seed` (Roundcube
+  folder set of D21). ADR-005.
+- Data model (migration `0005`): `mailboxes`, `mailbox_access`, `folders_meta`, `messages` (envelopes); branch
+  `mailbox_id` FK. Login provisions the own mailbox from `IMAP_LOGIN_*` and links it to the branch.
+- IMAP sync: host guard (localhost / imap-test only outside prod unless `MAIL_SYNC_ALLOW_REAL_SERVER`), Redis lock,
+  envelope fetch in batches, CONDSTORE flag updates, IDLE watcher on INBOX + 2-min poll of other subscribed folders
+  (ARQ worker). Auth failure clears the stored password and revokes sessions (`password_changed`).
+- Folder API: list / refresh / create / rename / delete / mark-read / empty / compact with ActivePerson, SK order of
+  special folders + Slovak sort of own folders, quota `{percent, level}` (danger ≥ 90 %).
+- Web: G1 rail (white logo, E-mail badge = inbox unread, disabled items of later phases, Odhlásiť), G3 folder column
+  (⋮ mailbox menu, context menu, confirm/form dialogs, quota + Money ● grey), G4 toast stack, G5 dialogs, G6 banners
+  (offline, IMAP error), G7 drop zone; W2 shell with Obnoviť and "Vyberte správu"; W12 Môj profil read-only
+  placeholder. PersonChip always opens a menu with Môj profil + Odhlásiť (also with one person); below 820 px height
+  Tmavý režim and O systéme move into it.
+- Tests: 50 backend unit + IMAP integration against Dovecot (`REQUIRE_IMAP=1` in CI), real-server suite skipped until
+  `REAL_IMAP_TEST_*` are set; 24 vitest + Playwright desktop/mobile screenshots next to Figma.
+
+## Phase 1b: branches & "Kto ste?"
 ### Added
 - `GET /api/auth/persons` and `POST /api/auth/person`: person picker of a branch mailbox (managers first, then Slovak
   alphabetical, covering persons included, inactive hidden), one click selects or switches — no PIN (D9) — audited

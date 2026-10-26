@@ -102,7 +102,7 @@ Po prihlásení do pobočkovej schránky (napr. senica@smartsro.sk) sa zobrazí 
 pracujete – bez PIN-u. Vedúci je prvý, ostatní abecedne; kto naposledy pracoval na tomto počítači, je predvolený
 (stačí Enter). Osobu prepnete kedykoľvek vľavo dole (avatar s menom alebo `Ctrl+Shift+P`) bez odhlásenia. V audite
 je pri každom zázname schránka aj osoba. Neaktívna osoba sa v zozname nezobrazí; ak ju správca deaktivuje počas práce,
-aplikácia znova otvorí výber.
+aplikácia znova otvorí výber. Menu osoby vždy obsahuje **Môj profil** a **Odhlásiť** (aj pri jednej osobe).
 
 Pobočkové schránky a ďalšie osoby zatiaľ založíte príkazom (neskôr v Nastaveniach › Pobočky a osoby):
 
@@ -114,9 +114,30 @@ docker compose exec app python -m app.cli maintenance on --until 2026-11-01T08:0
 docker compose exec app python -m app.cli maintenance off
 ```
 
+### Priečinky a synchronizácia (fáza 1c)
+Po prihlásení sa otvorí E-mail (ľavý stĺpec ako v Roundcube): Doručená pošta, Koncepty, Odoslané, Nevyžiadaná pošta,
+Kôš a vlastné priečinky (Dodávatelia, Faktúry, Kurier, Nitra, Senica, Smart, Trenčín – D21). Dole je kvóta (červená
+nad 90 %) a stav Money (zatiaľ vypnuté). Worker sleduje Doručenú poštu cez IDLE a ostatné priečinky obnovuje každých
+2 minúty. Live schránky firmy (eshop@, info@, pobočky) sa vo vývoji **nikdy** nepoužívajú.
+
+Lokálny testovací IMAP (Dovecot) je v compose ako `imap-test`:
+
+```bash
+docker compose up -d imap-test
+make imap-seed                 # vymyslené správy; RESET=1 vymaže a naplní znova
+# prihlásenie: pilot@smartmail.test / pilot-test-heslo  (kvóta ~40 %)
+#              plna@smartmail.test  / plna-test-heslo   (kvóta ~93 %, červená)
+```
+
+Integrácia voči skutočnému serveru `mail2.nameserver.sk` beží len keď sú v `.env` vyplnené `REAL_IMAP_TEST_*`
+(výhradne testovacia schránka, ktorú dodá zákazník pred 1f) – inak sa test preskočí. Heslo nikdy do gitu ani do
+chatu.
+
 Pre programátora (agenta): `make check` spustí to isté čo CI okrem Dockeru (ruff, mypy, pytest vrátane golden
 testov tlačových dokladov, eslint, prettier, tsc, vitest). Golden testy potrebujú `poppler-utils` a písmo z
 `templates/print/fonts/`. Nastavenia: `.env.example` (skopírovať do `.env`, nikdy necommitovať).
 Testy prihlásenia potrebujú PostgreSQL a Redis (`docker compose up -d db redis`; databáza `smartmail_test`, adresy v
-`TEST_DATABASE_URL` / `TEST_REDIS_URL`) – bez nich sa lokálne preskočia, v CI musia prejsť. `make e2e` spustí
-Playwright (desktop + mobil, API simulované) a uloží snímky obrazoviek do `web/test-results/screens/`.
+`TEST_DATABASE_URL` / `TEST_REDIS_URL`) – bez nich sa lokálne preskočia, v CI musia prejsť. IMAP integračné testy
+v CI: `docker compose up -d imap-test && make imap-seed` a `TEST_IMAP_HOST=localhost TEST_IMAP_PORT=1143
+REQUIRE_IMAP=1`. `make e2e` spustí Playwright (desktop + mobil, API simulované) a uloží snímky obrazoviek do
+`web/test-results/screens/`.
