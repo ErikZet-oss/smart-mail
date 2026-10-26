@@ -1,7 +1,6 @@
-"""Mailboxes, access, folders and synced message envelopes (CLAUDE.md §4, §5).
+"""Mailboxes, access, folders, threads and synced messages (CLAUDE.md §4, §5; Phase 1d bodies/attachments).
 
-The IMAP server stays the source of truth; these tables are the local copy the UI reads (SCREENS_SPEC W2 "list data
-from local DB synced via IMAP"). Bodies, attachments and threads come with Phase 1d.
+The IMAP server stays the source of truth; these tables are the local copy the UI reads (SCREENS_SPEC W2).
 """
 
 from __future__ import annotations
@@ -10,7 +9,16 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -63,12 +71,30 @@ class FolderMeta(IdMixin, TimestampMixin, Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class Thread(IdMixin, TimestampMixin, Base):
+    __tablename__ = "threads"
+    __table_args__ = (UniqueConstraint("mailbox_id", "thread_key"),)
+
+    mailbox_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("mailboxes.id", ondelete="CASCADE"), index=True)
+    thread_key: Mapped[str] = mapped_column(String(80))  # "msgid:<id>" | "fallback:<hash>"
+    subject: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="open", server_default="open")  # open|waiting|done|snoozed
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"))
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    message_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    unread_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    has_attachments: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    flagged: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
 class Message(IdMixin, TimestampMixin, Base):
     __tablename__ = "messages"
     __table_args__ = (UniqueConstraint("folder_id", "uid"),)
 
     mailbox_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("mailboxes.id", ondelete="CASCADE"), index=True)
     folder_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("folders_meta.id", ondelete="CASCADE"))
+    thread_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("threads.id", ondelete="SET NULL"), index=True)
     uid: Mapped[int] = mapped_column(BigInteger)
     message_id: Mapped[str | None] = mapped_column(String(998), index=True)
     in_reply_to: Mapped[str | None] = mapped_column(String(998))
@@ -87,3 +113,37 @@ class Message(IdMixin, TimestampMixin, Base):
     answered: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     modseq: Mapped[int | None] = mapped_column(BigInteger)
+    has_attachments: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    preview: Mapped[str | None] = mapped_column(String(240))
+    body_text: Mapped[str | None] = mapped_column(Text)
+    body_html_sanitized: Mapped[str | None] = mapped_column(Text)
+    body_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    raw_storage_key: Mapped[str | None] = mapped_column(String(500))
+    auth_results: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+
+class Attachment(IdMixin, TimestampMixin, Base):
+    __tablename__ = "attachments"
+
+    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(200), default="application/octet-stream")
+    size: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    content_id: Mapped[str | None] = mapped_column(String(998))
+    is_inline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    storage_key: Mapped[str] = mapped_column(String(500))
+    sha256: Mapped[str] = mapped_column(String(64))
+    av_status: Mapped[str] = mapped_column(
+        String(16), default="skipped", server_default="skipped"
+    )  # clean|infected|skipped
+
+
+class UserSettings(IdMixin, TimestampMixin, Base):
+    """JSON prefs per person and section (SETTINGS_SPEC; 01a/01b used in Phase 1d)."""
+
+    __tablename__ = "user_settings"
+    __table_args__ = (UniqueConstraint("person_id", "section"),)
+
+    person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("persons.id", ondelete="CASCADE"), index=True)
+    section: Mapped[str] = mapped_column(String(64))  # e.g. prefs.list, prefs.ui
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")

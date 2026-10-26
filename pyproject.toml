@@ -18,6 +18,7 @@ dependencies = [
     "httpx>=0.28",
     "imapclient>=3.0",
     "cryptography>=43",
+    "nh3>=0.3.7",
 ]
 
 [dependency-groups]
