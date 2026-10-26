@@ -22,13 +22,16 @@ s Money S4 cez API modul – GraphQL podľa schémy vášho servera, REST na PDF
 | `design/` | farby, písmo, rozmery ako súbor na import do Figmy (`tokens.json`) a do kódu (`tokens.css`), kontrola kontrastu (`CONTRAST.md`), logo SVG/PNG a ikony aplikácie (`brand/`), anonymizované snímky vášho Roundcube ako predloha (`reference/roundcube/`) | Figma + agent |
 | `tools/money_probe.py` | bezpečný testovací skript (len čítanie; `--orders` pre objednávky, `--branches` pre pobočky a dodacie listy) na overenie API Money | vy (spustiť na serveri) |
 | `tools/validate_graphql.py` | kontrola všetkých GraphQL dopytov voči schéme vášho Money (beží v CI, chráni pred chybami v názvoch polí) | agent / CI |
+| `app/`, `bridge/`, `web/`, `migrations/`, `tests/` | kód aplikácie (od fázy 0), Money most, webová aplikácia, migrácie databázy, testy | agent |
+| `docker-compose.yml`, `.env.example`, `Makefile`, `.github/workflows/ci.yml` | spustenie celej aplikácie, popis nastavení, bežné príkazy, automatické kontroly na GitHube | agent / správca |
 | `.cursor/rules/smartmail.mdc` | pravidlo pre Cursor, ktoré ho nasmeruje na CLAUDE.md | Cursor |
 
 ## Postup krok za krokom
-1. **Vytvorte prázdny repozitár** a nakopírujte doň celý balík. Schéma GraphQL (`graphql_schema.json`) a oba swaggery (`swagger_v1.json`, `swagger_v2.json`) sú už v `bridge/schema/` – needitujte ich.
-2. **Claude Code**: v priečinku projektu spustite `claude` a napíšte: „Prečítaj CLAUDE.md a sprav Phase 0.“
-   Po každej fáze agent zastaví a čaká na vašu kontrolu, potom: „Pokračuj Phase 1.“
-   **Cursor**: otvorte priečinok, pravidlo `.cursor/rules/smartmail.mdc` sa načíta samo; v Agent režime napíšte to isté.
+1. **Repozitár je pripravený** (tento): zadania v2.10 + fáza 0 (kostra aplikácie, testy, Docker, CI). Schéma GraphQL
+   a oba swaggery sú v `bridge/schema/` – needitujte ich.
+2. **Claude Code**: otvorte priečinok v Cursore (rozšírenie Claude Code) alebo v termináli spustite `claude` a napíšte:
+   „Prečítaj CLAUDE.md a pokračuj Phase 1.“ Agent najprv navrhne plán, po vašom súhlase programuje a po fáze zastaví.
+   **Cursor (vlastný agent)**: pravidlo `.cursor/rules/smartmail.mdc` sa načíta samo.
 3. **Pred fázou 3 (Money)** spustite na serveri pri Money (proti TESTOVACEJ agende):
    `python tools/money_probe.py --env probe.env` (návod je v hlavičke skriptu). Výsledok `probe_output/report.md`
    dajte do repozitára – agent z neho zistí presnú syntax filtrov a kódy operácií.
@@ -39,9 +42,9 @@ s Money S4 cez API modul – GraphQL podľa schémy vášho servera, REST na PDF
    vypíše strediská, sklady, cenníky a číselné rady pre rozbaľovacie zoznamy v Nastaveniach a z existujúcich dodacích
    listov zistí, či má každá pobočka vlastný rad a ktoré pole obsahuje „Doklad prijatý“. Výsledok `probe_output/branches.md`.
 4. **Figma je hotová**: https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU. `docs/FIGMA_MAP.md` obsahuje odkaz na každú
-   obrazovku a jej stavy. Agent ju číta cez Figma MCP server – pripojte ho raz v priečinku projektu:
-   `claude mcp add --transport http figma https://mcp.figma.com/mcp`, potom v Claude Code `/mcp` → figma → prihlásiť
-   sa do Figmy. (Cursor: Settings › MCP › pridať server s rovnakou adresou.) Overenie: „Zobraz mi obrazovku W1 z Figmy.“
+   obrazovku a jej stavy. Figma MCP server je v repozitári už nastavený (`.mcp.json`) – pri prvom spustení Claude Code
+   potvrďte server „figma“ a v `/mcp` sa prihláste do Figmy. (Cursor: Settings › MCP › server `https://mcp.figma.com/mcp`.)
+   Overenie: „Zobraz mi obrazovku W1 z Figmy.“
 5. **Implementátor Money**: pošlite mu otázky z `docs/MONEY_API.md` §9 a `docs/ORDERS_SPEC.md` §20 (ponuky v API,
    zápis kódov dodávateľov, ID tlačových zostáv, práva API roly, termín dodania, rezervácia, zľavy, stavy objednávok,
    PDF dodacích listov a objednávok cez API).
@@ -63,3 +66,24 @@ k e-mailu priloží vždy originálne PDF z Money. Podrobnosti: `docs/DOCUMENTS_
 - Nové zápisové funkcie (dodacie listy prijaté, objednávky) bežia najprv v tieňovom režime: návrhy sa porovnávajú s tým, čo
   ľudia urobili v Money ručne, a tlačidlo zápisu sa zapne až pri dohodnutej presnosti.
 - Roundcube môže bežať súbežne počas pilotu – obe aplikácie pracujú s tou istou poštou na serveri.
+
+## Vývoj (od fázy 0)
+Potrebujete Docker Desktop. Bez ďalšieho nastavovania:
+
+```bash
+docker compose up -d --build      # celá aplikácia: http://localhost:8080
+docker compose ps                 # stav služieb
+docker compose down               # zastaviť
+```
+
+| Adresa | Čo tam je |
+|---|---|
+| http://localhost:8080 | webová aplikácia (vo fáze 0 stránka „Kostra aplikácie je pripravená“ so stavom servera) |
+| http://localhost:8000/api/docs | API backendu |
+| http://localhost:8100/healthz | Money most (vo fáze 0 len testovacie dáta, zápisy vypnuté) |
+| http://localhost:8025 | Mailpit – testovacia pošta, nič neodíde von |
+| http://localhost:9001 | MinIO – úložisko príloh |
+
+Pre programátora (agenta): `make check` spustí to isté čo CI okrem Dockeru (ruff, mypy, pytest vrátane golden
+testov tlačových dokladov, eslint, prettier, tsc, vitest). Golden testy potrebujú `poppler-utils` a písmo z
+`templates/print/fonts/`. Nastavenia: `.env.example` (skopírovať do `.env`, nikdy necommitovať).
