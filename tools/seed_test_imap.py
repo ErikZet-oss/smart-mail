@@ -122,7 +122,7 @@ def message(rng: random.Random, folder: str, index: int, to: str, *, attachment_
 def wipe(client: IMAPClient) -> None:
     """Empty every folder and delete all but INBOX and the SPECIAL-USE ones (also folders left over by tests)."""
     folders = client.list_folders()
-    for flags, _delim, name in folders:
+    for _flags, _delim, name in folders:
         client.select_folder(name)
         uids = client.search("ALL")
         if uids:

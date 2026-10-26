@@ -182,7 +182,10 @@ export function ScreenW2() {
   });
 
   const error = folders.error instanceof ApiError ? folders.error : null;
-  if (error?.status === 404) return <Navigate to={ROUTES.W16b.path} replace />;
+  // only a real "mailbox missing" 404 opens W16b — a concurrent 401/503 on /me must win the redirect (W1c / W17)
+  if (error?.status === 404 && error.detail.code === 'mailbox_not_found') {
+    return <Navigate to={ROUTES.W16b.path} replace />;
+  }
 
   const view = folders.data;
   const folder = view ? findFolder(view.folders, folderParam) : undefined;
