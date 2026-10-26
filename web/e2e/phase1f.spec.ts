@@ -101,7 +101,9 @@ test.describe('Phase 1f — settings + W4e', () => {
         body: { ...draft, signature_html_override: '<p>Upravený podpis</p>' },
       },
       'GET /api/mail/mailboxes/default/identities': {
-        body: [{ id: 'id-1', display_name: 'Jana Testová', email: 'jana@smartsro.sk', organization: null, is_default: true }],
+        body: [
+          { id: 'id-1', display_name: 'Jana Testová', email: 'jana@smartsro.sk', organization: null, is_default: true },
+        ],
       },
       'GET /api/mail/responses': { body: [] },
     });

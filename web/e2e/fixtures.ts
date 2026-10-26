@@ -109,13 +109,45 @@ export const MAIL_DEFAULTS: Record<string, Reply> = {
   'PUT /api/mail/prefs': { body: DEFAULT_PREFS },
 };
 
+/** Phase 1f W12: nav + profile so opening Nastavenia from older e2e shells does not 401 → /login. */
+export const SETTINGS_DEFAULTS: Record<string, Reply> = {
+  'GET /api/settings/nav': {
+    body: {
+      sections: [
+        {
+          id: '03',
+          path: 'identity',
+          title: 'Identity',
+          subs: [{ id: '03b', path: 'profile', title: 'Môj profil' }],
+        },
+      ],
+    },
+  },
+  'GET /api/settings/profile': {
+    body: {
+      id: ME.person.id,
+      first_name: ME.person.first_name,
+      last_name: ME.person.last_name,
+      function: null,
+      phone: null,
+      mobile: null,
+      personal_email: null,
+      languages: ['sk'],
+      style_guide: null,
+      role: ME.person.role,
+      signature_preview_html: '<p>Jana</p>',
+    },
+  },
+};
+
 const FOLDER_MESSAGES = /^GET \/api\/mail\/mailboxes\/[^/]+\/folders\/[^/]+\/messages$/;
 const MESSAGE_DETAIL = /^GET \/api\/mail\/mailboxes\/[^/]+\/messages\/[^/]+$/;
+const MAILBOX_FOLDERS = /^GET \/api\/mail\/mailboxes\/[^/]+\/folders$/;
 
 /** Mock the API: "METHOD /path" → reply (or a function of the JSON body for stateful flows). The W2 folder column
  * answers with `MAIL_DEFAULTS` unless overridden; other unmocked API calls answer 401 (not signed in). */
 export async function mockApi(page: Page, given: Record<string, Reply | ((body: unknown) => Reply)>) {
-  const replies = { ...MAIL_DEFAULTS, ...given };
+  const replies = { ...MAIL_DEFAULTS, ...SETTINGS_DEFAULTS, ...given };
   await page.route('**/api/**', async (route: Route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -131,6 +163,9 @@ export async function mockApi(page: Page, given: Record<string, Reply | ((body: 
       reply = { body: emptyMessagesList() };
     } else if (!reply && MESSAGE_DETAIL.test(key)) {
       reply = { status: 404, body: { detail: { code: 'message_not_found' } } };
+    } else if (!reply && MAILBOX_FOLDERS.test(key)) {
+      // deep-link mailboxes (e.g. nitra) share the seeded folder column unless overridden
+      reply = { body: foldersView() };
     } else if (!reply) {
       reply = { status: 401, body: { detail: { code: 'unauthenticated', reason: 'missing' } } };
     }

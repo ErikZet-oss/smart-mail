@@ -29,7 +29,8 @@ class Mailbox(IdMixin, TimestampMixin, Base):
     __tablename__ = "mailboxes"
 
     email: Mapped[str] = mapped_column(String(254), unique=True)  # lower-case
-    kind: Mapped[str] = mapped_column(String(16), default="personal", server_default="personal")  # personal|shared|branch
+    # personal | shared | branch
+    kind: Mapped[str] = mapped_column(String(16), default="personal", server_default="personal")
     imap_host: Mapped[str] = mapped_column(String(253))
     imap_port: Mapped[int] = mapped_column(Integer)
     imap_security: Mapped[str] = mapped_column(String(16))  # ssl | starttls | none

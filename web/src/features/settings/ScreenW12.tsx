@@ -612,8 +612,7 @@ function BranchesPanel({ sub }: { sub?: string }) {
   const qc = useQueryClient();
   const branches = useQuery({ queryKey: ['settings', 'branches'], queryFn: fetchAdminBranches });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const current =
-    (branches.data ?? []).find((b) => String(b.id) === selectedId) ?? branches.data?.[0] ?? null;
+  const current = (branches.data ?? []).find((b) => String(b.id) === selectedId) ?? branches.data?.[0] ?? null;
   const [sigById, setSigById] = useState<Record<string, string>>({});
   const branchId = current ? String(current.id) : '';
   const sig =

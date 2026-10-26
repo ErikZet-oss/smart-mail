@@ -146,7 +146,12 @@ describe('W2b PersonChip', () => {
       'GET /api/settings/nav': {
         body: {
           sections: [
-            { id: '03', path: 'identity', title: 'Identity', subs: [{ id: '03b', path: 'profile', title: 'Môj profil' }] },
+            {
+              id: '03',
+              path: 'identity',
+              title: 'Identity',
+              subs: [{ id: '03b', path: 'profile', title: 'Môj profil' }],
+            },
           ],
         },
       },
