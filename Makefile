@@ -1,5 +1,5 @@
 # Smart Mail — common commands (see README "Vývoj")
-.PHONY: up down logs test lint fmt types check tokens web-dev api-dev e2e
+.PHONY: up down logs test lint fmt types check tokens web-dev api-dev e2e imap-seed
 
 up:            ## start the whole stack (web http://localhost:8080)
 	docker compose up -d --build
@@ -35,3 +35,5 @@ web-dev:
 	cd web && npm run dev
 e2e:           ## Playwright (desktop + mobile, API mocked); screenshots in web/test-results/screens
 	cd web && npx playwright test
+imap-seed:     ## fill the local TEST mail server (compose service imap-test) with fictional mail; RESET=1 wipes first
+	uv run python tools/seed_test_imap.py --port 1143 $(if $(RESET),--reset,)
