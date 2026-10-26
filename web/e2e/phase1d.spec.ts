@@ -1,4 +1,6 @@
-import { DEFAULT_PREFS, expect, foldersView, ME, ME_PICKER, mockApi, shot, test, type Page } from './fixtures';
+import type { Page, Route } from '@playwright/test';
+
+import { DEFAULT_PREFS, expect, foldersView, ME, ME_PICKER, mockApi, shot, test } from './fixtures';
 
 const SIGNED_IN = { 'GET /api/auth/me': { body: ME }, 'GET /api/auth/persons': { body: ME_PICKER } };
 
@@ -109,7 +111,7 @@ async function mockMail(page: Page, extras: Record<string, { body: unknown; stat
     'PUT /api/mail/prefs': { body: DEFAULT_PREFS },
     ...extras,
   });
-  await page.route('**/api/mail/mailboxes/default/messages/m-1/source', async (route) => {
+  await page.route('**/api/mail/mailboxes/default/messages/m-1/source', async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: 'text/plain; charset=utf-8',
