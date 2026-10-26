@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # --- storage
     database_url: str = "postgresql+asyncpg://smartmail:smartmail@localhost:5432/smartmail"
     redis_url: str = "redis://localhost:6379/0"
-    s3_endpoint: str = "http://localhost:9000"
+    s3_endpoint: str = "http://localhost:8333"
     s3_bucket: str = "smartmail"
     s3_access_key: SecretStr | None = None
     s3_secret_key: SecretStr | None = None

@@ -14,7 +14,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   with server status.
 - Quality gates from day one: no `float(` in money code, tokens copy check, GraphQL schema drift check, fixtures
   marked fictional, golden print documents (< 0.5 % pixel diff).
-- Docker Compose stack (Postgres/pgvector, Redis, MinIO, ClamAV, Mailpit, bridge, app, worker, web) and GitHub Actions
+- Docker Compose stack (Postgres/pgvector, Redis, S3 storage (SeaweedFS, ADR-002), ClamAV, Mailpit, bridge, app, worker, web) and GitHub Actions
   CI with a compose smoke test; `.env.example` documenting every variable; ADR-001; Figma MCP config `.mcp.json`.
 ### Fixed
 - CLAUDE.md Phase 4 still referred to DL-W1–W7 → DL-W1–W8 (D23).

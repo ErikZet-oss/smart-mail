@@ -18,7 +18,7 @@
 - **Print documents**: reference renderer `tools/render_print.py` (WeasyPrint 70.0 pinned) with Liberation Sans Narrow
   committed in `templates/print/fonts/`; golden tests rasterise with poppler `pdftoppm -r 150`, the same tool that
   produced `fixtures/documents/*.png`.
-- **Local stack**: Docker Compose with Postgres (pgvector image), Redis, MinIO, ClamAV, Mailpit, bridge, app, worker,
+- **Local stack**: Docker Compose with Postgres (pgvector image), Redis, S3 storage (SeaweedFS — ADR-002), ClamAV, Mailpit, bridge, app, worker,
   web (nginx serving the build and proxying `/api`, `/healthz`, `/readyz`).
 - **CI**: GitHub Actions — backend, bridge and web jobs (lint, format, strict types, tests, dependency audit) and a
   `docker compose up --wait` smoke test. ClamAV is not started in CI (signature download takes minutes).

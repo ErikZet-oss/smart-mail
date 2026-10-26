@@ -82,7 +82,7 @@ docker compose down               # zastaviť
 | http://localhost:8000/api/docs | API backendu |
 | http://localhost:8100/healthz | Money most (vo fáze 0 len testovacie dáta, zápisy vypnuté) |
 | http://localhost:8025 | Mailpit – testovacia pošta, nič neodíde von |
-| http://localhost:9001 | MinIO – úložisko príloh |
+| http://localhost:8333 | úložisko príloh (S3) |
 
 Pre programátora (agenta): `make check` spustí to isté čo CI okrem Dockeru (ruff, mypy, pytest vrátane golden
 testov tlačových dokladov, eslint, prettier, tsc, vitest). Golden testy potrebujú `poppler-utils` a písmo z

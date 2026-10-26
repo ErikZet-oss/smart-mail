@@ -93,7 +93,7 @@ jobs:
       - name: Start the stack (ClamAV is skipped in CI — it downloads signatures for minutes)
         run: |
           set -o pipefail
-          docker compose up -d --wait --wait-timeout 300 db redis minio mailpit bridge app worker web 2>&1 | tee /tmp/up.log
+          docker compose up -d --wait --wait-timeout 300 db redis s3 mailpit bridge app worker web 2>&1 | tee /tmp/up.log
       - name: Smoke test
         run: |
           set -e
@@ -115,7 +115,7 @@ jobs:
           [ -f /tmp/build.log ] && echo "::error title=build log::$(grep -iE 'error|failed|unable|not found' /tmp/build.log | tail -40 | enc)"
           [ -f /tmp/up.log ] && echo "::error title=up log::$(tail -40 /tmp/up.log | enc)"
           echo "::error title=compose ps::$(docker compose ps -a --format '{{.Service}} {{.State}} {{.Health}} {{.ExitCode}}' | enc)"
-          for svc in db redis minio mailpit bridge app worker web; do
+          for svc in db redis s3 mailpit bridge app worker web; do
             echo "::error title=logs $svc::$(docker compose logs --no-color --tail=40 $svc 2>&1 | enc)"
           done
       - if: always()
