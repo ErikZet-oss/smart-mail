@@ -1,0 +1,11 @@
+.git
+.venv
+web
+bridge/.venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+fixtures
+docs
+design/reference
