@@ -43,7 +43,7 @@ services:
       retries: 20
 
   minio:
-    image: minio/minio:latest   # dev-only service; pin a RELEASE tag for production
+    image: quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z   # Docker Hub minio/minio no longer exists
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-smartmail}
