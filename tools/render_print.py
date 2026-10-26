@@ -16,6 +16,7 @@ Rules (never change without updating DOCUMENTS_SPEC §4.5):
   * SK number format: thousands separated by a space, decimal comma ("2 000 000,0000", "567,52 €").
 Requirements: weasyprint, jinja2, python-barcode (Code128 SVG).
 """
+
 from __future__ import annotations
 
 import io
@@ -32,7 +33,12 @@ from weasyprint import HTML
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "templates" / "print"
 Q2, Q4 = Decimal("0.01"), Decimal("0.0001")
-VAT_LABELS = {Decimal("0"): "nulová 0%", Decimal("5"): "znížená 5%", Decimal("19"): "znížená 19%", Decimal("23"): "základná 23%"}
+VAT_LABELS = {
+    Decimal("0"): "nulová 0%",
+    Decimal("5"): "znížená 5%",
+    Decimal("19"): "znížená 19%",
+    Decimal("23"): "základná 23%",
+}
 
 
 def dec(v) -> Decimal:
@@ -63,34 +69,65 @@ def compute_totals(items: list[dict]) -> dict:
         gross = (base * (1 + rate / 100)).quantize(Q2, rounding=ROUND_HALF_UP)
         recap.setdefault(rate, Decimal("0"))
         recap[rate] += base
-        lines.append({"is_text": False, "name": it["name"], "catalog": it.get("catalog", ""), "qty": fmt(qty, 4),
-                      "unit": it["unit"], "unit_price": fmt(price, 4), "vat_label": f"{rate.normalize():f}%",
-                      "base": fmt(base, 2), "gross": fmt(gross, 2) + " €", "_base": base, "_gross": gross})
+        lines.append(
+            {
+                "is_text": False,
+                "name": it["name"],
+                "catalog": it.get("catalog", ""),
+                "qty": fmt(qty, 4),
+                "unit": it["unit"],
+                "unit_price": fmt(price, 4),
+                "vat_label": f"{rate.normalize():f}%",
+                "base": fmt(base, 2),
+                "gross": fmt(gross, 2) + " €",
+                "_base": base,
+                "_gross": gross,
+            }
+        )
     rows, sb, sv = [], Decimal("0"), Decimal("0")
     for rate in sorted(recap):
         b = recap[rate]
         v = (b * rate / 100).quantize(Q2, rounding=ROUND_HALF_UP)
-        rows.append({"label": VAT_LABELS.get(rate, f"{rate.normalize():f}%"), "base": fmt(b, 2), "vat": fmt(v, 2), "total": fmt(b + v, 2)})
+        rows.append(
+            {
+                "label": VAT_LABELS.get(rate, f"{rate.normalize():f}%"),
+                "base": fmt(b, 2),
+                "vat": fmt(v, 2),
+                "total": fmt(b + v, 2),
+            }
+        )
         sb, sv = sb + b, sv + v
-    return {"lines": lines, "vat_rows": rows, "vat_sum": {"base": fmt(sb, 2), "vat": fmt(sv, 2), "total": fmt(sb + sv, 2)},
-            "total": fmt(sb + sv, 2) + " €", "_total": sb + sv}
+    return {
+        "lines": lines,
+        "vat_rows": rows,
+        "vat_sum": {"base": fmt(sb, 2), "vat": fmt(sv, 2), "total": fmt(sb + sv, 2)},
+        "total": fmt(sb + sv, 2) + " €",
+        "_total": sb + sv,
+    }
 
 
 def barcode_svg(value: str) -> str:
     buf = io.BytesIO()
-    barcode.get("code128", value, writer=SVGWriter()).write(buf, options={"write_text": False, "module_height": 6.4,
-                                                                           "quiet_zone": 0, "module_width": 0.25})
+    barcode.get("code128", value, writer=SVGWriter()).write(
+        buf, options={"write_text": False, "module_height": 6.4, "quiet_zone": 0, "module_width": 0.25}
+    )
     svg = buf.getvalue().decode("utf-8")
-    svg = svg[svg.index("<svg"):]
+    svg = svg[svg.index("<svg") :]
     return svg.replace("<svg ", '<svg preserveAspectRatio="none" ', 1)
 
 
 def build_context(data: dict) -> dict:
     doc = dict(data["doc"])
     doc.update(compute_totals(data["doc"]["items"]))
-    return {"doc": doc, "company": data["company"], "partner": data["partner"], "footer": data["footer"],
-            "barcode_svg": barcode_svg(doc["number"]), "css_href": (TEMPLATES / "money_print.css").as_uri(),
-            "logo_href": (TEMPLATES / "assets" / "logo.png").as_uri()}
+    return {
+        "doc": doc,
+        "company": data["company"],
+        "partner": data["partner"],
+        "footer": data["footer"],
+        "barcode_svg": barcode_svg(doc["number"]),
+        "css_href": (TEMPLATES / "money_print.css").as_uri(),
+        "logo_href": (TEMPLATES / "assets" / "logo.png").as_uri(),
+    }
 
 
 def render(data: dict, out_pdf: Path) -> None:

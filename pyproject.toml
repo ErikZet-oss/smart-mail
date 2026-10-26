@@ -1,0 +1,75 @@
+[project]
+name = "smart-mail"
+version = "0.1.0"
+description = "Smart Mail – AI-assisted company e-mail client for Smart s.r.o. (replaces Roundcube, integrates Money S4)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "redis>=5.2",
+    "arq>=0.26",
+    "structlog>=24.4",
+    "httpx>=0.28",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.120",
+    "respx>=0.21",
+    # reference print renderer + golden tests (tools/render_print.py, DOCUMENTS_SPEC §4)
+    "weasyprint==70.0",
+    "jinja2>=3.1.4",
+    "python-barcode>=0.15",
+    "pillow>=11.0",
+    # schema drift check (tools/validate_graphql.py)
+    "graphql-core>=3.2",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["bridge", "web", "design", "docs", "*.md", "tools/money_probe.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "TID", "RUF"]
+ignore = ["S101", "RUF001", "RUF002", "RUF003"]  # assert in tests; Slovak text uses – and „“
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S"]
+"migrations/**" = ["E501"]
+"tools/**" = ["S603", "S607", "E501"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# DECISIONS / CLAUDE.md §0.1: no floats for money or quantities — enforced by tests/test_quality_gates.py as well
+"decimal.getcontext".msg = "Use explicit quantize() with ROUND_HALF_UP instead of a global context."
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["app"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["arq.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "golden: rasterised comparison of print documents with fixtures/documents/*.png",
+]

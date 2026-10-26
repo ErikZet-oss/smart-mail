@@ -10,6 +10,7 @@ Exit code 1 if any operation uses an unknown type, field or argument. Run it in 
 Usage:  pip install graphql-core
         python tools/validate_graphql.py [--schema bridge/schema/graphql_schema.json] [paths...]
 """
+
 import argparse
 import json
 import pathlib
