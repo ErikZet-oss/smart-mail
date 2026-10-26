@@ -1,5 +1,5 @@
 # Smart Mail — common commands (see README "Vývoj")
-.PHONY: up down logs test lint fmt types check tokens web-dev api-dev
+.PHONY: up down logs test lint fmt types check tokens web-dev api-dev e2e
 
 up:            ## start the whole stack (web http://localhost:8080)
 	docker compose up -d --build
@@ -33,3 +33,5 @@ api-dev:
 	uv run uvicorn app.main:app --reload --port 8000
 web-dev:
 	cd web && npm run dev
+e2e:           ## Playwright (desktop + mobile, API mocked); screenshots in web/test-results/screens
+	cd web && npx playwright test

@@ -78,12 +78,28 @@ docker compose down               # zastaviť
 
 | Adresa | Čo tam je |
 |---|---|
-| http://localhost:8080 | webová aplikácia (vo fáze 0 stránka „Kostra aplikácie je pripravená“ so stavom servera) |
+| http://localhost:8080 | webová aplikácia (od fázy 1a prihlásenie e-mailom a heslom k pošte) |
 | http://localhost:8000/api/docs | API backendu |
 | http://localhost:8100/healthz | Money most (vo fáze 0 len testovacie dáta, zápisy vypnuté) |
 | http://localhost:8025 | Mailpit – testovacia pošta, nič neodíde von |
 | http://localhost:8333 | úložisko príloh (S3) |
 
+### Prihlásenie (fáza 1a)
+Prihlasuje sa e-mailom a heslom k pošte – heslo overí IMAP server (ten istý ako pre Roundcube). Server nastavte v `.env`:
+`IMAP_LOGIN_HOST`, `IMAP_LOGIN_PORT` (993), `IMAP_LOGIN_SECURITY` (`ssl`/`starttls`). Prihlásiť sa môžu len
+zaregistrované kontá (neskôr v Nastaveniach › Používatelia a role); zatiaľ ich založíte príkazom:
+
+```bash
+docker compose exec app python -m app.cli add-account jana@smartsro.sk --first-name Jana --last-name Nová --role sales
+docker compose exec app python -m app.cli add-account nitra@smartsro.sk --branch Nitra      # pobočková schránka
+docker compose exec app python -m app.cli add-person Nitra --first-name Peter --last-name Novák
+docker compose exec app python -m app.cli maintenance on --until 2026-11-01T08:00:00+01:00  # obrazovka Údržba
+docker compose exec app python -m app.cli maintenance off
+```
+
 Pre programátora (agenta): `make check` spustí to isté čo CI okrem Dockeru (ruff, mypy, pytest vrátane golden
 testov tlačových dokladov, eslint, prettier, tsc, vitest). Golden testy potrebujú `poppler-utils` a písmo z
 `templates/print/fonts/`. Nastavenia: `.env.example` (skopírovať do `.env`, nikdy necommitovať).
+Testy prihlásenia potrebujú PostgreSQL a Redis (`docker compose up -d db redis`; databáza `smartmail_test`, adresy v
+`TEST_DATABASE_URL` / `TEST_REDIS_URL`) – bez nich sa lokálne preskočia, v CI musia prejsť. `make e2e` spustí
+Playwright (desktop + mobil, API simulované) a uloží snímky obrazoviek do `web/test-results/screens/`.
