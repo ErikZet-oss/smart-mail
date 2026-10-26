@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
 type Variant = 'primary' | 'secondary';
 type Size = 'md' | 'lg';
@@ -21,9 +21,13 @@ const SIZE: Record<Size, string> = {
 };
 
 /** Figma `Button` (md 32 px, lg 40 px). */
-export function Button({ variant = 'primary', size = 'md', icon, className = '', children, ...button }: Props) {
+export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
+  { variant = 'primary', size = 'md', icon, className = '', children, ...button },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type="button"
       className={`inline-flex items-center justify-center gap-2 rounded-sm transition-colors duration-[var(--motion-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary-500 disabled:cursor-not-allowed ${VARIANT[variant]} ${SIZE[size]} ${className}`}
       {...button}
@@ -32,4 +36,4 @@ export function Button({ variant = 'primary', size = 'md', icon, className = '',
       {children}
     </button>
   );
-}
+});

@@ -26,6 +26,7 @@ export default {
         md: 'var(--radius-md)',
         lg: 'var(--radius-lg)',
       },
+      boxShadow: { e1: 'var(--shadow-e1)', e2: 'var(--shadow-e2)', e3: 'var(--shadow-e3)' },
     },
   },
   plugins: [],

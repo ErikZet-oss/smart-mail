@@ -62,4 +62,10 @@ describe('routeForError', () => {
     expect(routeForError(err(403, { code: 'csrf' }), '/mail')).toBeNull();
     expect(routeForError(err(409, { code: 'conflict' }), '/mail')).toBeNull();
   });
+
+  it('W1b: a deactivated active person (409) or an action without a person (403) opens the picker', () => {
+    expect(routeForError(err(409, { code: 'person_inactive' }), '/mail/default/inbox')).toBe('/who');
+    expect(routeForError(err(403, { code: 'person_required' }), '/mail/default/inbox')).toBe('/who');
+    expect(routeForError(err(403, { code: 'read_only' }), '/mail/default/inbox')).toBe('/403');
+  });
 });

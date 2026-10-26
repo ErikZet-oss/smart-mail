@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -116,6 +116,17 @@ class Account(IdMixin, TimestampMixin, Base):
 
     def __repr__(self) -> str:  # never show secrets in tracebacks or logs
         return f"Account(id={self.id!s}, email={self.email!r}, kind={self.kind!s})"
+
+
+class DevicePersonMemory(IdMixin, TimestampMixin, Base):
+    """Last person picked in "Kto ste?" on one browser (the `sm_device` cookie) for one login (PRODUCT_SPEC §2.0)."""
+
+    __tablename__ = "device_person_memory"
+    __table_args__ = (UniqueConstraint("device_id", "account_id"),)
+
+    device_id: Mapped[str] = mapped_column(String(64))
+    account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"))
+    last_person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"))
 
 
 class Session(IdMixin, Base):

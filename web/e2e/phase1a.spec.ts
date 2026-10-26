@@ -1,4 +1,4 @@
-import { expect, ME, mockApi, shot, test } from './fixtures';
+import { expect, ME, ME_PICKER, mockApi, shot, test } from './fixtures';
 
 const EMAIL = 'eshop@smartsro.sk';
 const PASSWORD = 'heslo12345';
@@ -67,6 +67,7 @@ test.describe('W1 Prihlásenie', () => {
     await mockApi(page, {
       'POST /api/auth/login': { body: { next: 'app', me: ME } },
       'GET /api/auth/me': { body: ME },
+      'GET /api/auth/persons': { body: ME_PICKER },
     });
     await page.goto('/login');
     await fillLogin(page);
@@ -88,7 +89,7 @@ test.describe('W1c', () => {
 
   test('a revoked session on a deep link ends on W1c and returns there after login', async ({ page }) => {
     let signedIn = false;
-    await mockApi(page, {});
+    await mockApi(page, { 'GET /api/auth/persons': { body: ME_PICKER } });
     await page.route('**/api/auth/me', (route) =>
       signedIn
         ? route.fulfill({ json: ME })

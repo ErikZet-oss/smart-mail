@@ -48,6 +48,21 @@
       "invalidCode_other": "Kód nie je správny. Zostáva {{count}} pokusov."
     }
   },
+  "person": {
+    "title": "Kto ste?",
+    "subtitle": "Pobočka {{branch}} · {{email}}",
+    "continue": "Pokračovať ako {{name}}",
+    "oneClick": "Jedno kliknutie na meno = hotovo.",
+    "deviceRemembers": "Zariadenie si pamätá, kto pracoval naposledy.",
+    "otherEmail": "Prihlásiť sa iným e-mailom",
+    "rememberPhone": "Zapamätať na tomto telefóne",
+    "mobileHint": "Kliknite na svoje meno – podpis sa nastaví sám. Bez PIN-u.",
+    "manager": "Vedúci",
+    "switch": "Kto pracuje?",
+    "chipLabel": "Pracuje: {{name}}",
+    "switched": "Teraz pracuje: {{name}} · podpis zmenený",
+    "close": "Zavrieť"
+  },
   "signedIn": {
     "title": "Ste prihlásený",
     "as": "Prihlásený ako {{email}}",

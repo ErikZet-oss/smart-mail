@@ -2,7 +2,24 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
-## [Unreleased] — Phase 1a: foundation & login
+## [Unreleased] — Phase 1b: branches & "Kto ste?"
+### Added
+- `GET /api/auth/persons` and `POST /api/auth/person`: person picker of a branch mailbox (managers first, then Slovak
+  alphabetical, covering persons included, inactive hidden), one click selects or switches — no PIN (D9) — audited
+  as `auth.person_selected` / `auth.person_switched`. ADR-004.
+- Device memory `device_person_memory` (migration `0004`): the last person on this device is preselected on the next
+  login; M0 "Zapamätať na tomto telefóne" off forgets it.
+- `409 person_inactive` when the active person was deactivated or removed from the branch (the web opens W1b);
+  `ActivePerson` dependency (`403 person_required` / `403 read_only`) for actions from 1c on.
+- Every audit entry of a signed-in request carries `account_id` and `person_id` (request-scoped audit actor).
+- Web: W1b Kto ste? (desktop) and M0 (mobile) per Figma, "Pokračovať ako …" with Enter, "Prihlásiť sa iným e-mailom";
+  W2b PersonChip with the "Kto pracuje?" popover, `Ctrl+Shift+P` and the 2 s toast "Teraz pracuje: … · podpis
+  zmenený"; idle re-ask by the branch setting; components `Avatar` (colour = stable hash of the person id), `Switch`,
+  `Toast`; shadow tokens in Tailwind. UX_SPEC W1b tile size 132 × 140 (Figma, D24).
+- Tests: 24 backend tests `test_persons_1b.py` (W1b/W2b/M0/§9 ids), vitest for W1b, M0 and W2b, Playwright Flow 0
+  (W1 → W1b → W2) and PersonChip switching on desktop + mobile, screenshots next to the Figma frames.
+
+## Phase 1a: foundation & login
 ### Added
 - Data model (migration `0002`): `branches`, `persons`, `person_branches`, `accounts`, `sessions`, `audit_log`
   (append-only, enforced by a database trigger).

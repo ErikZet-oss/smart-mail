@@ -11,6 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 
 from app.auth.security import csrf_valid
 from app.core import maintenance
+from app.core.audit import clear_actor
 from app.core.config import Settings
 
 log = structlog.get_logger(__name__)
@@ -43,6 +44,7 @@ def install(app: FastAPI, settings: Settings) -> None:
 
     class Guard(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+            clear_actor()
             path = request.url.path
             if path.startswith("/api/") and path not in MAINTENANCE_OPEN:
                 try:

@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.models import Account, AccountKind, Branch, Person, PersonBranch, Session
+from app.auth.models import Account, AccountKind, Branch, Session
+from app.auth.persons import eligible_persons
 from app.auth.security import new_token, sha256_hex
 from app.core.config import Settings
 
@@ -141,21 +142,7 @@ async def revoke_account_sessions(
 async def automatic_person(db: AsyncSession, account: Account) -> uuid.UUID | None:
     """Personal account → its person. Branch mailbox with exactly one active person → that person.
     Two or more → None: the person picker "Kto ste?" decides (PRODUCT_SPEC §2.0)."""
+    people = await eligible_persons(db, account)
     if account.kind == AccountKind.personal:
-        return account.person_id
-    if account.branch_id is None:
-        return None
-    covering = select(PersonBranch.person_id).where(PersonBranch.branch_id == account.branch_id)
-    ids = (
-        (
-            await db.execute(
-                select(Person.id)
-                .where(Person.active.is_(True))
-                .where((Person.branch_id == account.branch_id) | Person.id.in_(covering))
-                .limit(2)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return ids[0] if len(ids) == 1 else None
+        return people[0].id if people else None
+    return people[0].id if len(people) == 1 else None
