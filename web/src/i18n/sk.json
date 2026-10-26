@@ -1,0 +1,14 @@
+{
+  "app": {
+    "name": "Smart Mail",
+    "tagline": "Firemný e-mail s AI asistentom a prepojením na Money S4"
+  },
+  "phase0": {
+    "title": "Kostra aplikácie je pripravená",
+    "body": "Toto je fáza 0: projekt, testy a služby bežia. Pošta ako v Roundcube pribudne vo fáze 1.",
+    "status": "Stav servera",
+    "statusOk": "Server beží",
+    "statusDown": "Server nie je dostupný",
+    "statusChecking": "Overujem…"
+  }
+}
