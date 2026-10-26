@@ -15,3 +15,31 @@ body {
   color: var(--text-primary);
   background: var(--bg-canvas);
 }
+
+/* Typography tokens (UX_SPEC §2) as utility classes: font shorthand from tokens.css. */
+@layer utilities {
+  .type-display {
+    font: var(--type-display);
+  }
+  .type-title {
+    font: var(--type-title);
+  }
+  .type-heading {
+    font: var(--type-heading);
+  }
+  .type-body {
+    font: var(--type-body);
+  }
+  .type-body-strong {
+    font: var(--type-body-strong);
+  }
+  .type-label {
+    font: var(--type-label);
+  }
+  .type-small {
+    font: var(--type-small);
+  }
+  .type-caption {
+    font: var(--type-caption);
+  }
+}
