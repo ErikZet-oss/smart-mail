@@ -10,8 +10,10 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   source (.eml), attachment download, prefs (list + UI theme/classic).
 - Web W2 list (`MessageRow`, filters, pagination, Výber / Konverzácie / Možnosti W2o), reading pane W2c (Roundcube
   toolbar; Reply/Forward disabled until 1e), bulk bar W2e, print W2m, source W2n, dark mode and Klasické zobrazenie.
-- Tests: sanitize, threading, parse, message list/prefs/snooze; vitest for rows + date format. Real-server suite
-  still skipped without `REAL_IMAP_TEST_*`.
+- Tests: sanitize, threading, parse, message list/prefs/snooze; vitest for rows + date format; IMAP integration
+  against Dovecot (`tests/integration/test_imap_messages_1d.py`: list, thread, body, attachment — fictional mail
+  only). Real-server suite still skipped without `REAL_IMAP_TEST_*`. Playwright shots for W2 / W2c / W2e / W2o /
+  W2m / W2n (light, dark, Klasické).
 
 ## Phase 1c: shell & folders
 ### Added
