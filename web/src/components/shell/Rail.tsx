@@ -134,7 +134,7 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
       >
         <Logo width={52} tone="white" />
       </Link>
-      <RailItem icon={<SquarePen size={20} />} label={t('rail.compose')} tone="compose" />
+      <RailItem icon={<SquarePen size={20} />} label={t('rail.compose')} tone="compose" to="/compose" />
       <RailItem
         icon={<Mail size={20} />}
         label={t('rail.mail')}

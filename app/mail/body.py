@@ -1,4 +1,7 @@
-"""Lazy-fetch RFC822 bodies from IMAP into the local copy (Phase 1d)."""
+"""Lazy-fetch message bodies from IMAP into object storage (Phase 1d/1e).
+
+Fetch uses BODY.PEEK[] only — never RFC822 — so opening a message does not set \\Seen on the server.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +17,9 @@ from app.mail.models import Attachment, FolderMeta, Mailbox, Message
 from app.mail.parse import parse_rfc822
 from app.mail.sync import Credentials, SyncAuthError, SyncUnavailable, connect, logout_quietly, server_of
 
+# Never include RFC822: that fetch marks the message \\Seen on many servers.
+_BODY_FETCH = ["BODY.PEEK[]"]
+
 
 async def ensure_body(
     db: AsyncSession,
@@ -22,7 +28,7 @@ async def ensure_body(
     message: Message,
     creds: Credentials,
 ) -> Message:
-    """Fetch and store the body once; later opens reuse the local copy."""
+    """Fetch and store the body once; later opens reuse the stored copy."""
     if message.body_fetched_at is not None and message.raw_storage_key:
         return message
     folder = await db.get(FolderMeta, message.folder_id)
@@ -33,9 +39,9 @@ async def ensure_body(
         client = connect(server_of(mailbox, settings), creds)
         try:
             client.select_folder(folder.name, readonly=True)
-            data = client.fetch([message.uid], ["RFC822", "BODY.PEEK[]"])
+            data = client.fetch([message.uid], _BODY_FETCH)
             item = data.get(message.uid) or {}
-            raw = item.get(b"RFC822") or item.get(b"BODY[]") or b""
+            raw = item.get(b"BODY[]") or item.get(b"BODY.PEEK[]") or b""
             if not isinstance(raw, (bytes, bytearray)):
                 return b""
             return bytes(raw)

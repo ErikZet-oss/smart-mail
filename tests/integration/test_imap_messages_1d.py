@@ -67,7 +67,10 @@ def settings(migrated: str, tmp_path: Path) -> Settings:
         imap_login_port=PORT,
         imap_login_security="none",
         internal_domains=DOMAIN,
+        storage_backend="local",
         storage_path=str(tmp_path / "storage"),
+        s3_access_key="test",
+        s3_secret_key="test",
     )
 
 
@@ -203,4 +206,4 @@ async def test_1d_list_thread_body_and_attachment(
 
     folder = await db.scalar(select(FolderMeta).where(FolderMeta.id == stored.folder_id))
     assert folder is not None and folder.name == "INBOX"
-    assert settings.storage_path  # local driver for 1d (S3 deferred to 1e+)
+    assert settings.storage_backend in {"local", "s3"}

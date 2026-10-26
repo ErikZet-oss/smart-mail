@@ -123,13 +123,14 @@ async def test_1c_pilot_folder_column_like_roundcube(client: Client) -> None:
     assert [by_name[n]["special_use"] for n in ("INBOX", "Drafts", "Sent", "Junk", "Trash")] == [
         "inbox", "drafts", "sent", "junk", "trash",
     ]  # fmt: skip
-    assert (by_name["INBOX"]["total"], by_name["INBOX"]["unread"]) == (42, 12)
+    # PILOT_PLAN INBOX 48/14 + 3 thread pairs (3 unread parents) → 54/17 (Phase 1e seed)
+    assert (by_name["INBOX"]["total"], by_name["INBOX"]["unread"]) == (54, 17)
     r = await client.get("/api/mail/mailboxes/default/folders")
     quota = r.json()["quota"]
     assert quota["level"] == "normal" and 30 <= quota["percent"] < 75
     assert r.json()["sync"]["state"] == "ok"
     mailboxes = (await client.get("/api/mail/mailboxes")).json()
-    assert mailboxes[0]["unread"] == 12
+    assert mailboxes[0]["unread"] == 17
 
 
 async def test_g3_quota_above_90_percent_is_danger(client: Client) -> None:
@@ -149,11 +150,12 @@ async def test_1c_incremental_sync_new_message_flags_and_expunge(
     await db.commit()
     await login(client, "senica")
     before = (await folders(client))["INBOX"]
-    assert (before["total"], before["unread"]) == (15, 5)
+    # seed_branch INBOX 28/9 + 1 thread pair (unread parent) → 30/10 (Phase 1e)
+    assert (before["total"], before["unread"]) == (30, 10)
 
     imap.append("INBOX", raw_message("Dodávka č. 77 – potvrdenie"))
     after = {f["name"]: f for f in (await refresh(client))["folders"]}  # type: ignore[attr-defined]
-    assert (after["INBOX"]["total"], after["INBOX"]["unread"]) == (16, 6)
+    assert (after["INBOX"]["total"], after["INBOX"]["unread"]) == (31, 11)
     stored = (await db.execute(select(Message).where(Message.message_id == "<it-1c@dodavatel.example>"))).scalar_one()
     assert stored.subject == "Dodávka č. 77 – potvrdenie" and stored.from_email == "eva@dodavatel.example"
     assert not stored.seen
@@ -161,7 +163,7 @@ async def test_1c_incremental_sync_new_message_flags_and_expunge(
     imap.select_folder("INBOX")
     imap.add_flags([stored.uid], [b"\\Seen"])  # read in Roundcube
     after = {f["name"]: f for f in (await refresh(client))["folders"]}  # type: ignore[attr-defined]
-    assert after["INBOX"]["unread"] == 5
+    assert after["INBOX"]["unread"] == 10
     await db.refresh(stored)
     assert stored.seen is True
 
@@ -169,7 +171,7 @@ async def test_1c_incremental_sync_new_message_flags_and_expunge(
     imap.expunge()
     imap.close_folder()
     after = {f["name"]: f for f in (await refresh(client))["folders"]}  # type: ignore[attr-defined]
-    assert after["INBOX"]["total"] == 15
+    assert after["INBOX"]["total"] == 30
     assert (await db.execute(select(Message).where(Message.id == stored.id))).scalar_one_or_none() is None
 
 
@@ -213,7 +215,8 @@ async def test_g3_mark_read_and_empty_trash(client: Client, db: AsyncSession, im
     await folders(client)
     imap.append("Trash", raw_message("Do koša"))
     by_name = {f["name"]: f for f in (await refresh(client))["folders"]}  # type: ignore[attr-defined]
-    assert by_name["Trash"]["total"] == 1
+    # seed_branch Trash starts with 3; append → 4
+    assert by_name["Trash"]["total"] == 4
 
     r = await client.send_json("POST", f"/api/mail/mailboxes/default/folders/{by_name['Trash']['id']}/empty")
     assert r.status_code == 200, r.text

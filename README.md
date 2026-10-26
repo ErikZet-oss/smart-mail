@@ -114,13 +114,20 @@ docker compose exec app python -m app.cli maintenance on --until 2026-11-01T08:0
 docker compose exec app python -m app.cli maintenance off
 ```
 
+### Písanie (fáza 1e)
+Nová správa / Odpovedať / Poslať ďalej otvára W4 (`/compose`). Identita, podpis pobočky s aktívnou osobou,
+Odpovede (W4d), prílohy na S3 (SeaweedFS v compose), koncepty s autosave 30 s, Odoslať s Undo 10 s
+(`UNDO_SEND_SECONDS`), priorita a potvrdenie o prečítaní. Pred odoslaním bežia kontroly (W4b). Telá správ
+sa ťahajú len cez `BODY.PEEK[]` (nikdy RFC822). `STORAGE_BACKEND=s3` je predvolené; `local` len pre unit testy.
+ClamAV ostáva na 1h. Seed IMAP má ≥ 60 fiktívnych správ (dlhé predmety, prílohy, vlákna, neprečítané).
+
 ### Zoznam a čítanie (fáza 1d)
 Stredný stĺpec je zoznam správ (Zoznam / Konverzácie, hustota, filtre, stránkovanie ako Roundcube) a vpravo náhľad
 s panelom akcií (Vymazať, Nevyžiadané, Označiť, Viac → Tlač / Zdroj, Vybavené, Odložiť). Odpovedať / Poslať ďalej
-prídu vo fáze 1e. HTML je sanitizované, vzdialené obrázky sú zablokované (tlačidlo Zobraziť obrázky). Tmavý režim
-a Klasické zobrazenie sú v ľavom raili / menu osoby. Surové `.eml` a prílohy sú lokálne v `STORAGE_PATH` (S3 v 1e+,
-ClamAV najneskôr v 1h). IMAP integračný test 1d (zoznam, vlákno, telo, príloha) beží v CI proti `imap-test`
-spolu s 1c; nikdy proti live schránkam.
+otvárajú W4. HTML je sanitizované, vzdialené obrázky sú zablokované (tlačidlo Zobraziť obrázky). Tmavý režim
+a Klasické zobrazenie sú v ľavom raili / menu osoby. Surové `.eml` a prílohy sú na S3 (ADR-007; ClamAV najneskôr
+v 1h). IMAP integračný test 1d (zoznam, vlákno, telo, príloha) beží v CI proti `imap-test` spolu s 1c; nikdy proti
+live schránkam.
 
 ### Priečinky a synchronizácia (fáza 1c)
 Po prihlásení sa otvorí E-mail (ľavý stĺpec ako v Roundcube): Doručená pošta, Koncepty, Odoslané, Nevyžiadaná pošta,

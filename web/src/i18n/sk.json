@@ -192,6 +192,44 @@
       "off": "Money S4: nepripojené"
     }
   },
+  "compose": {
+    "save": "Uložiť",
+    "attach": "Priložiť",
+    "responses": "Odpovede",
+    "from": "Od",
+    "to": "Komu",
+    "cc": "Kópia",
+    "subject": "Predmet",
+    "editor": "Text správy",
+    "send": "Odoslať",
+    "options": "Možnosti a prílohy",
+    "priority": "Priorita",
+    "priorityLow": "Nízka",
+    "priorityNormal": "Normálna",
+    "priorityHigh": "Vysoká",
+    "mdn": "Potvrdenie o doručení",
+    "attachments": "Prílohy",
+    "aiLater": "AI panel príde v ďalšej fáze.",
+    "saved": "Koncept uložený.",
+    "sendingUndo": "Správa sa odosiela… Späť",
+    "undo": "Späť",
+    "undone": "Odoslanie zrušené.",
+    "sent": "Správa odoslaná.",
+    "sendFailed": "Odoslanie zlyhalo – skúste znova.",
+    "viewerBlocked": "Rola viewer nemôže odosielať.",
+    "preSendTitle": "Kontrola pred odoslaním",
+    "edit": "Upraviť",
+    "sendAnyway": "Odoslať aj tak",
+    "searchResponses": "Hľadať odpovede…",
+    "noResponses": "Zatiaľ žiadne odpovede.",
+    "replier": "Odpovedá: {{name}}",
+    "checks": {
+      "no_recipients": "Chýba príjemca.",
+      "placeholder": "V texte ostáva [[DOPLNIŤ]].",
+      "attachment_mentioned": "Spomínate prílohu – skontrolujte, či je priložená.",
+      "external_recipient": "Správa ide mimo firmu."
+    }
+  },
   "mail": {
     "toolbar": {
       "select": "Výber",

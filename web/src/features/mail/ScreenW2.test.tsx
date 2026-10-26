@@ -92,7 +92,7 @@ describe('W2 shell and folder column (1c)', () => {
     renderAt('/mail/default/trash');
     const mail = await screen.findByRole('link', { name: 'E-mail, neprečítané: 5' });
     expect(mail).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'Vytvoriť správu' })).toBeDisabled();
+    expect(screen.getByRole('link', { name: 'Vytvoriť správu' })).toHaveAttribute('href', '/compose');
     expect(screen.getByRole('button', { name: 'Odhlásiť' })).toBeEnabled();
   });
 
