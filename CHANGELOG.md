@@ -12,8 +12,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   `CF-Connecting-IP` (vps Caddy strips it); `FORWARDED_ALLOW_IPS` = Docker networks (never `*`).
   D26 tests: two IPs + audit IP; vps spoofed CF header ignored.
 - Caddy HSTS `max-age=31536000` + security headers for `/api`; pinned `caddy:2.11.7-alpine`,
-  `cloudflared:2026.10.4`. `update.sh`: backup before migrate, `git reset --hard` on branch (not detached),
-  restore hint on failure. `install.sh`: ufw 22/80/443 (tunnel: 22); keep `.env` without prompts.
+  `cloudflared:2026.10.4`. `update.sh`: backup before migrate, `git reset --hard` on branch
+  (CI: local `ci-deploy` keeps PR checkout, not origin/main); restore hint on failure.
+  `backup.sh` writes S3 tar as host user so CI chmod works. `install.sh`: ufw; keep `.env` silent.
 - `/api/docs` + `/api/openapi.json` off outside `APP_ENV=dev`. Deploy CI smoke independent of backend job.
 
 ## [Unreleased] — Phase 1h-c: W13 tour, W14/M16, W15, W15b, classic
