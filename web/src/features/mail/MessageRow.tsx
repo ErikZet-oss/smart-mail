@@ -1,5 +1,5 @@
 import { Flag, Paperclip, Reply } from 'lucide-react';
-import type { KeyboardEvent } from 'react';
+import { useRef, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Checkbox } from '../../components/Checkbox';
@@ -17,6 +17,8 @@ type Props = {
   classic: boolean;
   onSelect: () => void;
   onCheck: (checked: boolean) => void;
+  /** M1 long-press → multi-select (optional). */
+  onLongPress?: () => void;
 };
 
 function senderLabel(name: string | null, email: string | null): string {
@@ -24,8 +26,20 @@ function senderLabel(name: string | null, email: string | null): string {
 }
 
 /** Compact 52 px Roundcube two-line row; comfortable adds preview (UX_SPEC MessageRow). */
-export function MessageRow({ item, selected, checked, showCheckbox, density, classic, onSelect, onCheck }: Props) {
+export function MessageRow({
+  item,
+  selected,
+  checked,
+  showCheckbox,
+  density,
+  classic,
+  onSelect,
+  onCheck,
+  onLongPress,
+}: Props) {
   const { t } = useTranslation();
+  const pressTimer = useRef<number | null>(null);
+  const longPressed = useRef(false);
   const unread = item.kind === 'message' ? !item.data.seen : item.data.unread_count > 0;
   const subject = item.data.subject || t('mail.noSubject');
   const date = formatMailDate(item.kind === 'message' ? item.data.received_at : item.data.last_message_at);
@@ -36,6 +50,13 @@ export function MessageRow({ item, selected, checked, showCheckbox, density, cla
   const hasAttachments = item.data.has_attachments;
   const fromName = item.data.from_name;
   const fromEmail = item.data.from_email;
+
+  function clearPress() {
+    if (pressTimer.current !== null) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
 
   function onKey(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -49,8 +70,26 @@ export function MessageRow({ item, selected, checked, showCheckbox, density, cla
       role="option"
       aria-selected={selected}
       tabIndex={0}
-      onClick={onSelect}
+      onClick={() => {
+        if (longPressed.current) {
+          longPressed.current = false;
+          return;
+        }
+        onSelect();
+      }}
       onKeyDown={onKey}
+      onTouchStart={() => {
+        if (!onLongPress) return;
+        longPressed.current = false;
+        clearPress();
+        pressTimer.current = window.setTimeout(() => {
+          longPressed.current = true;
+          onLongPress();
+        }, 450);
+      }}
+      onTouchEnd={clearPress}
+      onTouchMove={clearPress}
+      onTouchCancel={clearPress}
       className={`relative flex cursor-pointer gap-2.5 border-b border-border-default px-3 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary-500 ${
         density === 'comfortable' ? 'min-h-[84px] py-2.5' : 'h-[52px] py-2'
       } ${selected ? 'bg-brand-primary-50' : 'bg-bg-canvas hover:bg-bg-subtle'} ${flagged ? 'text-danger-600' : ''}`}

@@ -10,6 +10,7 @@ import { Button } from '../../components/Button';
 import { Banner } from '../../components/Banner';
 import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
+import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
 import {
   createDraft,
@@ -205,11 +206,34 @@ export function ScreenW4() {
   const draft = draftQuery.data;
   const identity = identities.data?.find((i) => i.id === draft?.identity_id) ?? identities.data?.[0];
   const personName = me.data?.person?.full_name ?? '';
+  const mobile = useMediaQuery(MOBILE_QUERY);
 
   return (
-    <AppShell section="mail" mailbox={mailbox} unread={0}>
-      <div className="flex h-full min-w-0 flex-1 flex-col bg-bg-canvas">
-        <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-3">
+    <AppShell section="mail" mailbox={mailbox} unread={0} hideBottomNav={mobile}>
+      <div className="flex h-full min-w-0 flex-1 flex-col bg-bg-canvas" data-testid="compose-screen">
+        {mobile ? (
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border-default px-2">
+            <Link
+              to={`/mail/${encodeURIComponent(mailbox)}/inbox`}
+              className="flex size-11 items-center justify-center rounded-sm text-text-primary hover:bg-bg-subtle"
+              aria-label={t('common.close')}
+            >
+              <X size={22} />
+            </Link>
+            <h1 className="type-heading min-w-0 flex-1 truncate text-text-primary">{t('compose.title')}</h1>
+            <Button
+              type="button"
+              onClick={() => setPreSendOpen(true)}
+              disabled={!localId || send.isPending}
+              className="min-h-[44px]"
+            >
+              <Send size={16} /> {t('compose.send')}
+            </Button>
+          </header>
+        ) : null}
+        <header
+          className={`flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-3 ${mobile ? 'overflow-x-auto' : ''}`}
+        >
           <button
             type="button"
             className="flex h-14 w-20 flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle"
@@ -249,13 +273,15 @@ export function ScreenW4() {
             <span className="type-micro">{t('compose.responses')}</span>
           </button>
           <div className="flex-1" />
-          <Link
-            to={`/mail/${encodeURIComponent(mailbox)}/inbox`}
-            className="rounded-sm p-2 text-text-secondary hover:bg-bg-subtle"
-            aria-label={t('common.close')}
-          >
-            <X size={18} />
-          </Link>
+          {mobile ? null : (
+            <Link
+              to={`/mail/${encodeURIComponent(mailbox)}/inbox`}
+              className="rounded-sm p-2 text-text-secondary hover:bg-bg-subtle"
+              aria-label={t('common.close')}
+            >
+              <X size={18} />
+            </Link>
+          )}
         </header>
 
         <div className="flex min-h-0 flex-1">

@@ -1,0 +1,286 @@
+import type { Page } from '@playwright/test';
+
+import { DEFAULT_PREFS, expect, foldersView, ME, ME_PICKER, mockApi, shot, test } from './fixtures';
+
+const SIGNED_IN = { 'GET /api/auth/me': { body: ME }, 'GET /api/auth/persons': { body: ME_PICKER } };
+
+const LIST_PREFS = DEFAULT_PREFS.list;
+
+function inboxList(folderId: string) {
+  return {
+    mode: 'list' as const,
+    total: 2,
+    page: 1,
+    page_size: 50,
+    messages: [
+      {
+        id: 'm-1',
+        thread_id: 't-1',
+        folder_id: folderId,
+        uid: 1,
+        subject: 'Kópia faktúry 2026123',
+        from_name: 'Ján Novák',
+        from_email: 'novak@abcstav.example',
+        preview: 'Dobrý deň, prosím o zaslanie kópie faktúry…',
+        received_at: '2026-10-26T07:42:00Z',
+        sent_at: '2026-10-26T07:42:00Z',
+        size: 1200,
+        seen: false,
+        flagged: false,
+        answered: false,
+        has_attachments: true,
+        thread_count: 1,
+      },
+      {
+        id: 'm-2',
+        thread_id: 't-2',
+        folder_id: folderId,
+        uid: 2,
+        subject: 'Cenová ponuka M10×30 A2',
+        from_name: 'Petra Kováčová',
+        from_email: 'petra@example.test',
+        preview: 'Posielam ponuku na skrutky…',
+        received_at: '2026-10-26T06:10:00Z',
+        sent_at: '2026-10-26T06:10:00Z',
+        size: 800,
+        seen: true,
+        flagged: false,
+        answered: false,
+        has_attachments: false,
+        thread_count: 1,
+      },
+    ],
+    threads: [] as unknown[],
+    prefs: LIST_PREFS,
+  };
+}
+
+function detail(id = 'm-1') {
+  return {
+    id,
+    thread_id: 't-1',
+    folder_id: 'f-1',
+    uid: 1,
+    message_id: '<1@example.test>',
+    subject: 'Kópia faktúry 2026123',
+    from_name: 'Ján Novák',
+    from_email: 'novak@abcstav.example',
+    to: [{ name: null, email: 'pilot@smartmail.test' }],
+    cc: [],
+    sent_at: '2026-10-26T07:42:00Z',
+    received_at: '2026-10-26T07:42:00Z',
+    size: 1200,
+    seen: true,
+    flagged: false,
+    answered: false,
+    body_text: 'Dobrý deň,\nprosím o zaslanie kópie faktúry 2026123.\n',
+    body_html_sanitized: '<p>Dobrý deň,</p><p>prosím o zaslanie kópie faktúry 2026123.</p>',
+    attachments: [],
+    auth_results: null,
+    thread_status: 'open',
+    snoozed_until: null,
+    assignee_id: null,
+  };
+}
+
+const COMPOSE_DRAFT = {
+  id: 'd-1',
+  mailbox_id: 'mb-1',
+  mode: 'new',
+  identity_id: 'id-1',
+  to_addrs: [],
+  cc_addrs: [],
+  bcc_addrs: [],
+  subject: '',
+  body_html: '<p></p><div data-sm-signature="1"><p><strong>Jana Testová</strong></p></div>',
+  body_text: '',
+  include_signature: true,
+  signature_html_override: null,
+  signature_person_id: 'p1',
+  priority: 'normal',
+  request_mdn: false,
+  request_dsn: false,
+  save_sent: true,
+  status: 'editing',
+  scheduled_at: null,
+  undo_until: null,
+  send_error: null,
+  attachments: [],
+  checks: [],
+  updated_at: '2026-10-26T12:00:00Z',
+};
+
+async function mockMail(
+  page: Page,
+  extras: Record<string, { body: unknown; status?: number } | (() => { body: unknown })> = {},
+) {
+  const view = foldersView();
+  const inbox = view.folders.find((f) => f.special_use === 'inbox') ?? view.folders[0];
+  if (!inbox) throw new Error('foldersView has no inbox');
+  const list = inboxList(inbox.id);
+  const d = detail();
+  d.folder_id = inbox.id;
+  await mockApi(page, {
+    ...SIGNED_IN,
+    'GET /api/mail/mailboxes/default/folders': { body: view },
+    [`GET /api/mail/mailboxes/default/folders/${inbox.id}/messages`]: { body: list },
+    'GET /api/mail/mailboxes/default/messages/m-1': { body: d },
+    'GET /api/mail/mailboxes/default/messages/m-2': { body: { ...d, id: 'm-2', subject: 'Cenová ponuka M10×30 A2' } },
+    'POST /api/mail/mailboxes/default/messages/bulk': { body: { ok: 1 } },
+    'POST /api/mail/mailboxes/default/compose': { body: COMPOSE_DRAFT },
+    'GET /api/mail/compose/d-1': { body: COMPOSE_DRAFT },
+    'PATCH /api/mail/compose/d-1': { body: COMPOSE_DRAFT },
+    'GET /api/mail/mailboxes/default/identities': {
+      body: [
+        {
+          id: 'id-1',
+          display_name: 'Jana Testová',
+          email: 'jana@smartsro.sk',
+          organization: 'Smart s.r.o.',
+          is_default: true,
+        },
+      ],
+    },
+    'GET /api/mail/responses': { body: [] },
+    ...extras,
+  });
+  return { inbox, view };
+}
+
+const person = (id: string, first: string, last: string, fn: string, manager = false) => ({
+  id,
+  first_name: first,
+  last_name: last,
+  full_name: `${first} ${last}`,
+  role: 'sales',
+  function: fn,
+  is_manager: manager,
+});
+const PEOPLE = [
+  person('p-peter', 'Peter', 'Hudák', 'vedúci pobočky', true),
+  person('p-jana', 'Jana', 'Nováková', 'obchod'),
+  person('p-marek', 'Marek', 'Kováč', 'sklad'),
+];
+
+test.describe('Phase 1h-a: PWA + mobile shell M0–M4', () => {
+  test('M0 Kto ste? @mobile', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame');
+    const state = { current: null as (typeof PEOPLE)[number] | null, last: 'p-jana' as string | null };
+    const me = () => ({
+      account_id: 'a-senica',
+      email: 'senica@smartsro.sk',
+      kind: 'branch',
+      branch: 'Senica',
+      person: state.current,
+      needs_person: state.current === null,
+      read_only: state.current === null,
+    });
+    await mockApi(page, {
+      'GET /api/auth/me': () => ({ body: me() }),
+      'GET /api/auth/persons': () => ({
+        body: {
+          branch: 'Senica',
+          email: 'senica@smartsro.sk',
+          persons: PEOPLE,
+          current_person_id: state.current?.id ?? null,
+          last_person_id: state.last,
+          idle_ask_minutes: null,
+        },
+      }),
+    });
+    await page.goto('/who');
+    await expect(page.getByRole('heading', { name: 'Kto ste?' })).toBeVisible();
+    await expect(page.getByRole('switch', { name: 'Zapamätať na tomto telefóne' })).toBeVisible();
+    await shot(page, 'phase1h-M0-who');
+  });
+
+  test('M1 list + bottom nav + FAB @mobile', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame');
+    await mockMail(page);
+    await page.goto('/mail/default/inbox');
+    await expect(page.getByTestId('mobile-shell')).toBeVisible();
+    await expect(page.getByTestId('bottom-nav')).toBeVisible();
+    await expect(page.getByTestId('mobile-app-bar')).toBeVisible();
+    await expect(page.getByTestId('compose-fab')).toBeVisible();
+    await expect(page.getByText('Kópia faktúry 2026123')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'E-mail' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Kontakty' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Viac' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Dnes' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Doklady' })).toHaveCount(0);
+    await shot(page, 'phase1h-M1-list');
+  });
+
+  test('M1 dark @mobile', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame');
+    await mockMail(page, {
+      'GET /api/mail/prefs': {
+        body: { ...DEFAULT_PREFS, ui: { ...DEFAULT_PREFS.ui, theme: 'dark' } },
+      },
+    });
+    await page.goto('/mail/default/inbox');
+    await expect(page.getByTestId('bottom-nav')).toBeVisible();
+    await shot(page, 'phase1h-M1-dark');
+  });
+
+  test('M2 folders drawer @mobile', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame');
+    await mockMail(page);
+    await page.goto('/mail/default/inbox');
+    await page.getByTestId('mobile-app-bar').getByRole('button', { name: 'Priečinky' }).first().click();
+    await expect(page.getByTestId('folder-drawer')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Priečinky' })).toBeVisible();
+    await shot(page, 'phase1h-M2-folders');
+  });
+
+  test('M3 thread detail hides bottom nav @mobile', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame');
+    await mockMail(page);
+    await page.goto('/mail/default/inbox');
+    await page.getByText('Kópia faktúry 2026123').click();
+    await expect(page).toHaveURL(/\/mail\/default\/inbox\/t-1/);
+    await expect(page.getByTestId('mobile-thread')).toBeVisible();
+    await expect(page.getByTestId('bottom-nav')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Späť' })).toBeVisible();
+    await shot(page, 'phase1h-M3-detail');
+  });
+
+  test('M4 compose full screen @mobile', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame');
+    await mockMail(page);
+    await page.goto('/compose?mailbox=default');
+    await expect(page.getByTestId('compose-screen')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Nová správa' })).toBeVisible();
+    await expect(page.getByTestId('bottom-nav')).toHaveCount(0);
+    await shot(page, 'phase1h-M4-compose');
+  });
+
+  test('M1 long-press multi-select @mobile', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame');
+    await mockMail(page);
+    await page.goto('/mail/default/inbox');
+    const row = page.getByRole('option').filter({ hasText: 'Kópia faktúry 2026123' });
+    await row.dispatchEvent('touchstart');
+    await page.waitForTimeout(500);
+    await row.dispatchEvent('touchend');
+    await expect(page.getByText('Vybraté: 1')).toBeVisible();
+    await shot(page, 'phase1h-M1-multiselect');
+  });
+
+  test('desktop W2 still uses rail (no bottom nav)', async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop only');
+    await mockMail(page);
+    await page.goto('/mail/default/inbox');
+    await expect(page.getByTestId('bottom-nav')).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Hlavná navigácia' })).toBeVisible();
+    await shot(page, 'phase1h-W2-desktop-rail');
+  });
+
+  test('install meta + apple icon present', async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop', 'once');
+    await mockMail(page);
+    await page.goto('/mail/default/inbox');
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#0F75BC');
+    await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/apple-touch-icon.png');
+  });
+});

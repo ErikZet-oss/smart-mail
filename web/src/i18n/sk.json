@@ -210,6 +210,11 @@
     "dropFormats": "PDF, JPG/PNG, XLSX, CSV, XML, ISDOC · max 25 MB",
     "dropLater": "Nahrávanie dokladov zatiaľ nie je dostupné – súbor sme neotvorili."
   },
+  "mobile": {
+    "bottomNav": "Mobilná navigácia",
+    "more": "Viac",
+    "create": "Vytvoriť"
+  },
   "folders": {
     "label": "Priečinky",
     "withUnread": "{{name}}, neprečítané: {{count}}",
@@ -281,6 +286,7 @@
     }
   },
   "compose": {
+    "title": "Nová správa",
     "save": "Uložiť",
     "attach": "Priložiť",
     "responses": "Odpovede",

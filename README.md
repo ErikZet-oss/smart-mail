@@ -114,6 +114,14 @@ docker compose exec app python -m app.cli maintenance on --until 2026-11-01T08:0
 docker compose exec app python -m app.cli maintenance off
 ```
 
+### Mobil a PWA (fáza 1h-a)
+Pod `sm` (≤639 px) je mobilný shell: spodná navigácia **E-mail / Kontakty / Viac** (bez Dnes/Dokladov do
+neskorších fáz), app bar so zoznamom priečinkov (M2 drawer), FAB „Vytvoriť“, swipe Vybavené/Odložiť a
+dlhé stlačenie na výber. Detail vlákna (M3) a písanie (M4) skryjú spodnú lištu. PWA: inštalovateľný
+manifest, ikony, service worker (API len cez sieť). Ďalšie mobilné obrazovky (M8/M9/M15/M18) a systémové
+(W13–W15b, W14+M16) sú v ďalších PR 1h; produkčné nasadenie čaká na výslovný súhlas (Hyper-V / Cloudflare
+Tunnel / 443 — ešte nerozhodnuté).
+
 ### Kontakty a hľadanie (fáza 1g)
 Lokálne adresáre Osobné / Zdieľané, skupiny, vCard import/export (`fixtures/contacts/`), autocomplete;
 obrazovky W9 / W10 / W11 (základná paleta Ctrl+K).
