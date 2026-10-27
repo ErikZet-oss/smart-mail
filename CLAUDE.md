@@ -1,7 +1,7 @@
 # PROJECT: Smart Mail — AI-assisted company e-mail client for Smart s.r.o. (replaces Roundcube)
 
 Binding specification files (read the relevant one before each phase; they override assumptions):
-- `docs/DECISIONS.md` — **scope decisions of the customer (v2.12, D1–D28) — highest priority**; if any other file contradicts it,
+- `docs/DECISIONS.md` — **scope decisions of the customer (v2.13, D1–D31) — highest priority**; if any other file contradicts it,
   DECISIONS.md wins and you report the contradiction
 - `docs/PRODUCT_SPEC.md` — features, Roundcube parity, settings tree, roles, migration, non-goals
 - `docs/UX_SPEC.md` — design tokens, components, key screens (web + mobile), shortcuts, microcopy, accessibility
