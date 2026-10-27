@@ -1,0 +1,24 @@
+[
+  {
+    "email": "pilot@smartmail.test",
+    "name": "Pilot Test",
+    "organization": "Smart Test s.r.o.",
+    "reply_to": null,
+    "bcc": "",
+    "standard": 1,
+    "signature": "S pozdravom,\nPilot Test\nSmart Test s.r.o.",
+    "html_signature": 1,
+    "signature_html": "<p>S pozdravom,<br><strong>Pilot Test</strong><br>Smart Test s.r.o.</p>"
+  },
+  {
+    "email": "pilot@smartmail.test",
+    "name": "Pilot – EN",
+    "organization": "Smart Test s.r.o.",
+    "reply_to": "pilot@smartmail.test",
+    "bcc": "",
+    "standard": 0,
+    "signature": "Best regards,\nPilot Test",
+    "html_signature": 1,
+    "signature_html": "<p>Best regards,<br>Pilot Test</p>"
+  }
+]

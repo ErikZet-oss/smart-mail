@@ -86,7 +86,8 @@ docker compose down               # zastaviť
 
 ### Prihlásenie (fáza 1a)
 Prihlasuje sa e-mailom a heslom k pošte – heslo overí IMAP server (ten istý ako pre Roundcube). Server nastavte v `.env`:
-`IMAP_LOGIN_HOST` (mail2.nameserver.sk), `IMAP_LOGIN_PORT` (993), `IMAP_LOGIN_SECURITY` (`ssl`/`starttls`).
+`IMAP_LOGIN_HOST` (mail.nameserver.sk), `IMAP_LOGIN_PORT` (993), `IMAP_LOGIN_SECURITY` (`ssl`).
+Poskytovateľ: IMAP **993/SSL**, SMTP **465/SSL** alebo **587/STARTTLS**, ManageSieve **4190** (Filtre / Mimo kancelárie).
 
 - **Nové kontá (D25):** kto má adresu v doméne z `INTERNAL_DOMAINS`, tomu sa konto založí pri prvom úspešnom
   prihlásení – len na čítanie (rola viewer), kým mu správca nepridelí rolu. Adresy v `ADMIN_EMAILS` dostanú pri
@@ -127,6 +128,12 @@ manifest, ikony, service worker (API len cez sieť; `navigateFallback` nevyťahu
 pridelenie/odovzdanie pobočke — bez Web Push); W15 klávesové skratky (`?`); W15b O systéme; Klasické
 zobrazenie (`data-classic`). Produkčné nasadenie čaká na výslovný súhlas (Hyper-V / Cloudflare Tunnel /
 443 — ešte nerozhodnuté).
+
+### Dokončenie fázy 1 (1h-e)
+`tools/roundcube_import.py` načíta vCard + identity + Odpovede (bez filtrov; fiktívne fixtures `@smartmail.test`).
+Mimo kancelárie: jeden vacation text (SK + EN + DE) v tom istom ManageSieve skripte; predmet cez `variables`
+(`${orig}`). W9/W10 prázdne stavy podľa Figmy; axe bez
+serious. Predvolený poštový server v deploy: `mail.nameserver.sk`.
 
 ### Kontakty a hľadanie (fáza 1g)
 Lokálne adresáre Osobné / Zdieľané, skupiny, vCard import/export (`fixtures/contacts/`), autocomplete;
@@ -176,7 +183,7 @@ make imap-seed                 # vymyslené správy; RESET=1 vymaže a naplní z
 #              plna@smartmail.test  / plna-test-heslo   (kvóta ~93 %, červená)
 ```
 
-Integrácia voči skutočnému serveru `mail2.nameserver.sk` beží len keď sú v `.env` vyplnené `REAL_IMAP_TEST_*`
+Integrácia voči skutočnému serveru `mail.nameserver.sk` beží len keď sú v `.env` vyplnené `REAL_IMAP_TEST_*`
 (výhradne testovacia schránka, ktorú dodá zákazník pred 1f) – inak sa test preskočí. Heslo nikdy do gitu ani do
 chatu.
 
@@ -215,10 +222,14 @@ Skript sa spýta (slovensky, s predvolenými hodnotami):
 - **režim** `vps` (Caddy + Let’s Encrypt na 80/443) alebo `tunnel` (Cloudflare Tunnel),
 - **adresu aplikácie** (napr. `test-posta.smartsro.sk`),
 - **Cloudflare token** (len pri `tunnel`, skrytý vstup),
-- **IMAP/SMTP server** (predvolené `mail2.nameserver.sk`),
+- **IMAP/SMTP server** (predvolené `mail.nameserver.sk` — IMAP 993/SSL, SMTP 465/SSL alebo 587/STARTTLS),
 - **INTERNAL_DOMAINS**, **ADMIN_EMAILS**,
 - **LOGIN_ALLOWLIST** (predvolené `test@smartsro.sk`; prázdne = všetci z INTERNAL_DOMAINS),
 - **MAIL_SEND_TEST_ALLOWLIST** (kam smie testovací server posielať).
+
+Skript overí TCP na **993 / 465 / 4190** a vypíše slovenský výsledok (napr. keď 4190 nejde:
+„Filtre: server nedostupný na porte 4190 – Filtre a Mimo kancelárie nebudú fungovať“). Inštalácia
+**nespadne** pri nedostupnom 4190; výstrahy IMAP/SMTP existujúce `.env` nemažú.
 
 Vygeneruje `.env` (chmod 600), nainštaluje Docker ak chýba, zapne **ufw** (vps: 22/80/443; tunnel: len 22),
 spustí compose a na konci vypíše: `Smart Mail beží: https://…`. Druhé spustenie **neprepisuje** `.env` ani

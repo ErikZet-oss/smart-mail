@@ -23,7 +23,7 @@ else
     DEPLOY_MODE=ci
     APP_HOSTNAME="${APP_HOSTNAME:-localhost}"
     APP_BASE_URL="${APP_BASE_URL:-http://127.0.0.1:8080}"
-    IMAP_HOST="${IMAP_HOST:-mail2.nameserver.sk}"
+    IMAP_HOST="${IMAP_HOST:-mail.nameserver.sk}"
     INTERNAL_DOMAINS="${INTERNAL_DOMAINS:-smartsro.sk}"
     ADMIN_EMAILS="${ADMIN_EMAILS:-}"
     LOGIN_ALLOWLIST="${LOGIN_ALLOWLIST:-test@smartsro.sk}"
@@ -44,7 +44,7 @@ else
       [[ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]] || die "token je povinný pre režim tunnel"
     fi
 
-    prompt "IMAP/SMTP server" "mail2.nameserver.sk"
+    prompt "IMAP/SMTP server" "mail.nameserver.sk"
     IMAP_HOST="$REPLY"
 
     prompt "INTERNAL_DOMAINS (čiarkou)" "smartsro.sk"
@@ -109,6 +109,11 @@ EOF
 fi
 
 export DEPLOY_MODE="${DEPLOY_MODE:-ci}"
+
+# Resolve IMAP host for the probe (existing .env keeps IMAP_LOGIN_HOST; fresh install used IMAP_HOST).
+MAIL_PROBE_HOST="${IMAP_LOGIN_HOST:-${IMAP_HOST:-mail.nameserver.sk}}"
+# Never fails install — Slovak report only (4190 down must not block; IMAP/SMTP warnings keep existing .env).
+probe_mail_ports "$MAIL_PROBE_HOST" || true
 
 # Nginx (vps vs tunnel) + Caddyfile; CF-Connecting-IP only in tunnel mode.
 render_edge_configs

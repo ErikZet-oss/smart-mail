@@ -34,6 +34,7 @@ from app.mail.sieve import (
     get_script,
     parse_roundcube_script,
     put_script,
+    sieve_supports_variables,
     validate_editable_rules,
 )
 from app.mail.signature import default_branch_template, render_signature
@@ -549,6 +550,7 @@ async def put_filters(
                 vacation=parsed.vacation,
                 rules=rules,
                 include_vacation=parsed.vacation.enabled or any(r.kind == "vacation" for r in parsed.rules),
+                supports_variables=sieve_supports_variables(client),
             )
         except FilterValidationError as exc:
             raise fail(422, exc.code, message=exc.message) from exc
@@ -590,10 +592,10 @@ async def get_vacation(
         parsed = parse_roundcube_script(script, script_name=script_name)
         data = _vacation_payload(parsed.vacation)
         if stored:
-            # EN/DE live in DB (Sieve has one body — SK)
-            data["body_en"] = stored.get("body_en") or data["body_en"]
-            data["body_de"] = stored.get("body_de") or data["body_de"]
-            if stored.get("subject"):
+            # Prefer script (combined SK/EN/DE); fill gaps from last saved settings
+            data["body_en"] = data.get("body_en") or stored.get("body_en") or data["body_en"]
+            data["body_de"] = data.get("body_de") or stored.get("body_de") or data["body_de"]
+            if not data.get("subject") and stored.get("subject"):
                 data["subject"] = stored["subject"]
         data["script_name"] = script_name
         data["has_backup"] = (await _latest_backup(db, mailbox.id)) is not None
@@ -636,7 +638,12 @@ async def put_vacation(
             db, mailbox=mailbox, script_name=script_name, content=current, reason="vacation_save", person_id=person.id
         )
         # Same active script — never activate another set for vacation
-        new_script = apply_vacation_to_script(current, vac, script_name=script_name)
+        new_script = apply_vacation_to_script(
+            current,
+            vac,
+            script_name=script_name,
+            supports_variables=sieve_supports_variables(client),
+        )
         put_script(client, script_name, new_script, activate=True)
         client.logout()
     except SieveError as exc:

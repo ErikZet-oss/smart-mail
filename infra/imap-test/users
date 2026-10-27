@@ -3,3 +3,5 @@
 pilot@smartmail.test:{PLAIN}pilot-test-heslo::::::userdb_quota_rule=*:storage=50M
 plna@smartmail.test:{PLAIN}plna-test-heslo::::::userdb_quota_rule=*:storage=2M
 senica@smartmail.test:{PLAIN}senica-test-heslo::::::userdb_quota_rule=*:storage=50M
+# Sender mailbox for vacation auto-reply integration tests (receives the Sieve vacation reply).
+sender@smartmail.test:{PLAIN}sender-test-heslo::::::userdb_quota_rule=*:storage=50M

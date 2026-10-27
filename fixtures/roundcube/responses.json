@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Poďakovanie",
+    "is_html": 1,
+    "data": "<p>Ďakujem za správu. Ozveme sa čo najskôr.</p>",
+    "language": "sk"
+  },
+  {
+    "name": "Cenová ponuka",
+    "is_html": 1,
+    "data": "<p>V prílohe posielame cenovú ponuku pre {firma}.</p>",
+    "language": "sk",
+    "shared": true
+  },
+  {
+    "name": "Out of office note",
+    "is_html": 0,
+    "data": "Thank you for your message. We will reply soon.",
+    "language": "en"
+  }
+]

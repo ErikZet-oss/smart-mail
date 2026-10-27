@@ -34,7 +34,7 @@ type ItemProps = {
 const LABEL_TONE = {
   default: '',
   compose: 'text-brand-primary-400',
-  logout: 'text-cat-complaint',
+  logout: 'text-text-on-rail-danger',
 } as const;
 
 /** Figma `RailItem`: 20 px icon over a micro label, active = rail-active + 3 px primary-400 bar. */
@@ -63,7 +63,7 @@ function RailItem({
       {active ? <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-brand-primary-400" /> : null}
       <span
         aria-hidden="true"
-        className={tone === 'logout' ? 'text-cat-complaint' : tone === 'compose' ? 'text-brand-primary-400' : ''}
+        className={tone === 'logout' ? 'text-text-on-rail-danger' : tone === 'compose' ? 'text-brand-primary-400' : ''}
       >
         {icon}
       </span>

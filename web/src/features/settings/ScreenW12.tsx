@@ -823,6 +823,9 @@ function VacationPanel() {
           onChange={(event) => setDraft({ ...form, [bodyKey]: event.target.value })}
         />
       </label>
+      {(lang === 'en' || lang === 'de') && (
+        <p className="type-caption text-text-tertiary">{t('settings.vacation.langHelp')}</p>
+      )}
       <label className="flex flex-col gap-1">
         <span className="type-label text-text-secondary">{t('settings.vacation.days')}</span>
         <select
