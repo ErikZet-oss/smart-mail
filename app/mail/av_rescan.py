@@ -19,6 +19,9 @@ log = structlog.get_logger(__name__)
 PENDING_STATUSES = ("skipped", "error")
 DEFAULT_BATCH = 200
 
+# Both models share storage_key / av_status; annotate explicitly so mypy does not widen to Base.
+ScannableAttachment = Attachment | ComposeAttachment
+
 
 async def rescan_pending_attachments(
     db: AsyncSession,
@@ -36,7 +39,7 @@ async def rescan_pending_attachments(
     if remaining == 0:
         return counts
 
-    inbound = list(
+    inbound: list[Attachment] = list(
         (
             await db.execute(
                 select(Attachment)
@@ -60,7 +63,8 @@ async def rescan_pending_attachments(
             ).scalars()
         )
 
-    for row in (*inbound, *compose):
+    rows: list[ScannableAttachment] = [*inbound, *compose]
+    for row in rows:
         counts["checked"] += 1
         new_status = await _rescan_one(settings, row.storage_key)
         if new_status == "skipped":
