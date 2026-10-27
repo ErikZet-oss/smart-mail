@@ -131,7 +131,8 @@ zobrazenie (`data-classic`). Produkčné nasadenie čaká na výslovný súhlas 
 
 ### Dokončenie fázy 1 (1h-e)
 `tools/roundcube_import.py` načíta vCard + identity + Odpovede (bez filtrov; fiktívne fixtures `@smartmail.test`).
-Mimo kancelárie zapisuje SK/EN/DE do toho istého ManageSieve skriptu. W9/W10 prázdne stavy podľa Figmy; axe bez
+Mimo kancelárie: jeden vacation text (SK + EN + DE) v tom istom ManageSieve skripte; predmet cez `variables`
+(`${orig}`). W9/W10 prázdne stavy podľa Figmy; axe bez
 serious. Predvolený poštový server v deploy: `mail.nameserver.sk`.
 
 ### Kontakty a hľadanie (fáza 1g)

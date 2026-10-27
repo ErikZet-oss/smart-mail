@@ -191,7 +191,7 @@ shown under the form.
 | Automatická odpoveď | switch | vypnuté | — | Na pobočkovej schránke odpovedá za celú pobočku. | M |
 | Od – do | date-time range | dnes – (prázdne) | koniec po začiatku | Bez dátumu do platí, kým ju nevypnete. | M |
 | Predmet | text | Mimo kancelárie: {predmet} | max 120 | — | M |
-| Text odpovede | rich editor, tabs SK / EN / DE | predvolený text SK | povinné SK | — | M |
+| Text odpovede | rich editor, tabs SK / EN / DE | predvolený text SK | povinné SK | Odpoveď sa odošle v jednom e-maile – slovensky, potom anglicky a nemecky. | M |
 | Odpovedať tomu istému odosielateľovi najviac raz za | select 1 / 3 / 7 dní | 7 dní | — | — | M |
 | Pre adresy | multi-select identities of the mailbox | všetky | ≥ 1 | — | M |
 | Neodpovedať na hromadné a automatické správy | switch (locked on) | zapnuté | — | — | M |

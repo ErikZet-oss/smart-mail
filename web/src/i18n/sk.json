@@ -675,6 +675,7 @@
       "days": "Odpovedať tomu istému odosielateľovi najviac raz za (dni)",
       "branchHelp": "Na pobočkovej schránke odpovedá za celú pobočku. Ukladá sa do toho istého aktívneho Sieve skriptu ako filtre.",
       "rangeHelp": "Bez dátumu do platí, kým ju nevypnete.",
+      "langHelp": "Odpoveď sa odošle v jednom e-maile – slovensky, potom anglicky a nemecky.",
       "mailboxScope": "Platí pre celú schránku",
       "lastChanged": "Naposledy {{state}}: {{who}}, {{when}}",
       "stateOn": "zapnuté",

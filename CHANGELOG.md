@@ -6,7 +6,11 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 - `tools/roundcube_import.py` — vCard + identities + Odpovede only (no filters); dry-run default; fixtures
   `@smartmail.test` only; optional read-only Roundcube DSN (SELECT).
-- Vacation EN/DE: extra `Accept-Language` rules in the **same** active ManageSieve script (+ `stop`), SK fallback.
+- Vacation (Mimo kancelárie): **one** Sieve rule / one text — SK, then `---`, then EN, then DE (only filled
+  languages). No `Accept-Language`, no `stop`. Subject via `variables`: `set "orig" "${1}"` +
+  `:subject "Mimo kancelárie: ${orig}"` (omit `:subject` if the server lacks `variables`). Loading a legacy
+  three-rule script merges into one. W12-06 help under EN/DE: „Odpoveď sa odošle v jednom e-maile…“.
+  imap-test: LMTP + local sendmail stub; integration test checks ManageSieve script + real auto-reply.
 - W9: viewer hides Upraviť / Zmazať / Import; empty / pick illustration per Figma.
 - W10: empty tips + illustration + „Hľadať vo všetkých schránkach“.
 - Playwright axe: no serious/critical on mail, contacts, search, settings.

@@ -22,11 +22,13 @@ from app.mail.models import Mailbox
 # Historical Roundcube ManageSieve plugin name; we keep it when it is already active.
 DEFAULT_SCRIPT_NAME = "roundcube"
 VACATION_RULE_NAME = "Mimo kancelárie"
-VACATION_RULE_NAME_EN = "Mimo kancelárie EN"
-VACATION_RULE_NAME_DE = "Mimo kancelárie DE"
+VACATION_RULE_NAME_EN = "Mimo kancelárie EN"  # legacy multi-rule scripts only
+VACATION_RULE_NAME_DE = "Mimo kancelárie DE"  # legacy multi-rule scripts only
 VACATION_MARKER = "# smartmail:vacation"
-VACATION_MARKER_EN = "# smartmail:vacation:en"
-VACATION_MARKER_DE = "# smartmail:vacation:de"
+VACATION_MARKER_EN = "# smartmail:vacation:en"  # legacy — merged on load
+VACATION_MARKER_DE = "# smartmail:vacation:de"  # legacy — merged on load
+# One vacation action, one text: SK then EN then DE (only filled languages). Roundcube shows one rule.
+VACATION_BODY_SEPARATOR = "\n\n---\n\n"
 
 _TEST_SIEVE_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "imap-test"})
 
@@ -439,22 +441,56 @@ def _parse_rule_block(name: str, block: str, *, index: int) -> FilterRule:
     )
 
 
+def combine_vacation_bodies(v: VacationSettings) -> str:
+    """SK, then separator, then EN, then DE — only languages that are filled in."""
+    parts: list[str] = []
+    for part in (v.body_sk, v.body_en, v.body_de):
+        text = (part or "").strip()
+        if text:
+            parts.append(text)
+    return VACATION_BODY_SEPARATOR.join(parts)
+
+
+def split_vacation_body(combined: str) -> tuple[str, str, str]:
+    """Split a combined vacation reason back into SK / EN / DE (best-effort)."""
+    parts = combined.split(VACATION_BODY_SEPARATOR)
+    sk = parts[0].strip() if parts else combined.strip()
+    en = parts[1].strip() if len(parts) > 1 else ""
+    de = parts[2].strip() if len(parts) > 2 else ""
+    return sk, en, de
+
+
+def _vacation_subject_from_sieve(raw: str) -> str:
+    """Map Sieve ``:subject`` (``${orig}`` / ``%s``) back to UI ``{predmet}``."""
+    subject = raw.replace("${orig}", "{predmet}").replace("%s", "{predmet}")
+    return subject or "Mimo kancelárie: {predmet}"
+
+
 def _vacation_from_sieve_body(body: str) -> VacationSettings:
     """Best-effort vacation fields from a Sieve vacation command."""
     enabled = "vacation" in body
     subject = "Mimo kancelárie: {predmet}"
     body_sk = VacationSettings().body_sk
+    body_en = ""
+    body_de = ""
     days = 7
     start = end = None
     if m := re.search(r':subject\s+"([^"]*)"', body):
-        subject = m.group(1).replace("%s", "{predmet}")
+        subject = _vacation_subject_from_sieve(m.group(1))
     if m := re.search(r":days\s+(\d+)", body):
         days = int(m.group(1))
-    # text: … .  or quoted string
-    if m := re.search(r'vacation[^;]*\n?"([^"]*)"\s*;', body, re.S):
-        body_sk = m.group(1)
-    elif m := re.search(r"text:\s*\n(.*?)\n\.\s*;", body, re.S):
-        body_sk = m.group(1)
+    reason = ""
+    if m := re.search(r"text:\s*\n(.*?)\n\s*\.\s*;", body, re.S):
+        reason = m.group(1)
+    elif m := re.search(r'vacation[^;]*\n?\s*"([^"]*)"\s*;', body, re.S):
+        reason = m.group(1)
+    if reason:
+        if VACATION_BODY_SEPARATOR in reason:
+            body_sk, body_en, body_de = split_vacation_body(reason)
+            if not body_sk:
+                body_sk = reason.strip()
+        else:
+            body_sk = reason.strip()
     if m := re.search(r'currentdate[^"]*"ge"[^"]*"([^"]+)"', body):
         start = m.group(1)
     if m := re.search(r'currentdate[^"]*"le"[^"]*"([^"]+)"', body):
@@ -463,6 +499,8 @@ def _vacation_from_sieve_body(body: str) -> VacationSettings:
         enabled=enabled,
         subject=subject,
         body_sk=body_sk,
+        body_en=body_en,
+        body_de=body_de,
         days=days,
         start=start,
         end=end,
@@ -501,13 +539,18 @@ def parse_roundcube_script(script: str, *, script_name: str = DEFAULT_SCRIPT_NAM
                 vac_body = _uncomment_disabled_body(block) if not rule.enabled else block
                 vac_body = _RULE_NAME.sub("", vac_body, count=1)
                 extracted = _vacation_from_sieve_body(vac_body)
-                if rule.name == VACATION_RULE_NAME_EN:
+                if rule.name == VACATION_RULE_NAME_EN or VACATION_MARKER_EN in block:
+                    # Legacy Accept-Language EN rule — body is the EN text alone
                     vacation.body_en = extracted.body_sk
-                elif rule.name == VACATION_RULE_NAME_DE:
+                elif rule.name == VACATION_RULE_NAME_DE or VACATION_MARKER_DE in block:
                     vacation.body_de = extracted.body_sk
                 else:
                     vacation.subject = extracted.subject
                     vacation.body_sk = extracted.body_sk
+                    if extracted.body_en:
+                        vacation.body_en = extracted.body_en
+                    if extracted.body_de:
+                        vacation.body_de = extracted.body_de
                     vacation.days = extracted.days
                     vacation.start = extracted.start
                     vacation.end = extracted.end
@@ -748,116 +791,98 @@ def _vacation_date_tests(v: VacationSettings) -> list[str]:
     return tests
 
 
-def _compile_one_vacation_rule(
-    *,
-    name: str,
-    marker: str,
-    body: str,
-    subject: str,
-    days: int,
-    date_tests: list[str],
-    lang_tag: str | None,
-    stop: bool,
-) -> str:
-    """One vacation rule; optional Accept-Language gate + stop (EN/DE before SK fallback)."""
-    lines = [f"# rule:[{name}]", marker]
-    tests = list(date_tests)
-    if lang_tag:
-        # Match BCP 47 tags like en, en-US, en-GB inside Accept-Language.
-        tests.append(f'header :comparator "i;ascii-casemap" :matches "Accept-Language" "*{lang_tag}*"')
-    if tests:
-        test = tests[0] if len(tests) == 1 else f"allof ({', '.join(tests)})"
+def _vacation_subject_for_sieve(v: VacationSettings) -> str:
+    """UI ``{predmet}`` / legacy ``%s`` → variables ``${orig}`` (Sieve does not expand ``%s``)."""
+    raw = (v.subject or "Mimo kancelárie: {predmet}").strip() or "Mimo kancelárie: {predmet}"
+    return raw.replace("{predmet}", "${orig}").replace("%s", "${orig}")
+
+
+def compile_vacation_rule(v: VacationSettings, *, supports_variables: bool = True) -> str:
+    """One vacation rule in the active script: combined SK/EN/DE text, optional ``:subject`` via variables.
+
+    Clients rarely send Accept-Language, so language variants are one reason string (SK, separator, EN,
+    DE — only filled languages). No extra rules and no ``stop``. If the server lacks ``variables``,
+    ``:subject`` is omitted (Dovecot then uses ``Auto: <original subject>``).
+    """
+    if not v.enabled:
+        lines = [f"# rule:[{VACATION_RULE_NAME}]", VACATION_MARKER]
+        stub = 'if true {\n\tvacation :days 7 "";\n}\n'
+        lines.append(_comment_out_rule_body(stub).rstrip("\n"))
+        return "\n".join(lines) + "\n"
+
+    date_tests = _vacation_date_tests(v)
+    test = date_tests[0] if len(date_tests) == 1 else (f"allof ({', '.join(date_tests)})" if date_tests else "true")
+    reason = combine_vacation_bodies(v) or (v.body_sk or "").strip() or VacationSettings().body_sk
+    lines = [f"# rule:[{VACATION_RULE_NAME}]", VACATION_MARKER, f"if {test} {{"]
+    if supports_variables:
+        lines.append('\tif header :matches "subject" "*" {')
+        lines.append('\t\tset "orig" "${1}";')
+        lines.append("\t}")
+        subject = _escape(_vacation_subject_for_sieve(v))
+        vac_head = f'\tvacation :days {int(v.days)} :subject "{subject}"'
     else:
-        test = "true"
-    lines.append(f"if {test} {{")
-    lines.append(f'\tvacation :days {int(days)} :subject "{subject}"')
-    lines.append(f'\t"{_escape(body)}";')
-    if stop:
-        lines.append("\tstop;")
+        vac_head = f"\tvacation :days {int(v.days)}"
+    if "\n" in reason:
+        lines.append(f"{vac_head} text:")
+        lines.append(reason)
+        lines.append(".")
+        lines.append(";")
+    else:
+        lines.append(vac_head)
+        lines.append(f'\t"{_escape(reason)}";')
     lines.append("}")
     return "\n".join(lines) + "\n"
 
 
-def compile_vacation_rule(v: VacationSettings) -> str:
-    """Vacation rules in the same active script: optional EN/DE then SK fallback (Phase 1h-e).
+def _ensure_requires(preamble: str, *, vacation: bool, body: bool = False, variables: bool = False) -> str:
+    """Ensure needed extensions appear in ``require […]``.
 
-    RFC 5230 allows one reason per ``vacation`` action; language variants are extra rules
-    gated by ``Accept-Language``, each ending with ``stop`` so only one reply is sent.
+    Preserves a single existing require line byte-for-byte when it already lists everything
+    we need (load→save identity for filter-only scripts). Collapses stacked require lines
+    (legacy / ManageSieve uploads) into one.
     """
-    if not v.enabled:
-        lines = [f"# rule:[{VACATION_RULE_NAME}]", VACATION_MARKER]
-        stub = 'if true {\n\tvacation :days 7 :subject "off" "";\n}\n'
-        lines.append(_comment_out_rule_body(stub).rstrip("\n"))
-        return "\n".join(lines) + "\n"
-
-    subject = _escape(v.subject.replace("{predmet}", "%s"))
-    date_tests = _vacation_date_tests(v)
-    chunks: list[str] = []
-    if (v.body_en or "").strip():
-        chunks.append(
-            _compile_one_vacation_rule(
-                name=VACATION_RULE_NAME_EN,
-                marker=VACATION_MARKER_EN,
-                body=v.body_en.strip(),
-                subject=subject,
-                days=v.days,
-                date_tests=date_tests,
-                lang_tag="en",
-                stop=True,
-            )
-        )
-    if (v.body_de or "").strip():
-        chunks.append(
-            _compile_one_vacation_rule(
-                name=VACATION_RULE_NAME_DE,
-                marker=VACATION_MARKER_DE,
-                body=v.body_de.strip(),
-                subject=subject,
-                days=v.days,
-                date_tests=date_tests,
-                lang_tag="de",
-                stop=True,
-            )
-        )
-    chunks.append(
-        _compile_one_vacation_rule(
-            name=VACATION_RULE_NAME,
-            marker=VACATION_MARKER,
-            body=v.body_sk,
-            subject=subject,
-            days=v.days,
-            date_tests=date_tests,
-            lang_tag=None,
-            stop=False,
-        )
-    )
-    return "".join(chunks)
-
-
-def _ensure_requires(preamble: str, *, vacation: bool, body: bool = False) -> str:
-    needed = ["fileinto", "reject", "imap4flags", "vacation", "date", "relational"]
-    if body:
-        needed.append("body")
-    if "require" not in preamble:
-        caps = ", ".join(f'"{n}"' for n in needed)
-        return f"require [{caps}];\n"
-
-    def inject(cap: str, text: str) -> str:
-        if f'"{cap}"' in text or f"'{cap}'" in text:
-            return text
-
-        def add(m: re.Match[str]) -> str:
-            inner = m.group(1)
-            return f'require [{inner.rstrip()}, "{cap}"];'
-
-        return re.sub(r"require\s*\[([^\]]*)\]\s*;", add, text, count=1)
-
-    out = preamble
+    extras: list[str] = []
     if vacation:
-        out = inject("vacation", out)
+        extras.append("vacation")
     if body:
-        out = inject("body", out)
-    return out
+        extras.append("body")
+    if variables:
+        extras.append("variables")
+
+    requires = re.findall(r"require\s*\[[^\]]*\]\s*;", preamble or "")
+    if not requires:
+        base = ["fileinto", "reject", "imap4flags", "vacation", "date", "relational", *extras]
+        # dedupe preserving order
+        caps: list[str] = []
+        for c in base:
+            if c not in caps:
+                caps.append(c)
+        return "require [" + ", ".join(f'"{c}"' for c in caps) + "];\n"
+
+    if len(requires) == 1:
+        out = preamble
+        for cap in extras:
+            if f'"{cap}"' in out or f"'{cap}'" in out:
+                continue
+
+            def add(m: re.Match[str], *, _cap: str = cap) -> str:
+                inner = m.group(1)
+                return f'require [{inner.rstrip()}, "{_cap}"];'
+
+            out = re.sub(r"require\s*\[([^\]]*)\]\s*;", add, out, count=1)
+        return out
+
+    # Multiple require lines → merge (keeps first-seen order, appends missing extras)
+    caps = []
+    for req in requires:
+        for cap in re.findall(r'"([^"]+)"', req):
+            if cap not in caps:
+                caps.append(cap)
+    for cap in extras:
+        if cap not in caps:
+            caps.append(cap)
+    rest = re.sub(r"require\s*\[[^\]]*\]\s*;\s*", "", preamble or "")
+    return "require [" + ", ".join(f'"{c}"' for c in caps) + "];\n" + rest.lstrip("\n")
 
 
 def compile_script(
@@ -866,6 +891,7 @@ def compile_script(
     vacation: VacationSettings | None = None,
     rules: list[FilterRule] | None = None,
     include_vacation: bool | None = None,
+    supports_variables: bool = True,
 ) -> str:
     """Rebuild script. Prefer each rule's ``raw`` when present (load→save identical)."""
     vac = vacation if vacation is not None else parsed.vacation
@@ -873,8 +899,11 @@ def compile_script(
     had_vacation = any(r.kind == "vacation" for r in parsed.rules)
     write_vacation = include_vacation if include_vacation is not None else (vac.enabled or had_vacation)
     needs_body = any(c.field == "body" for rule in rule_list if rule.editable for c in rule.conditions)
+    use_variables = bool(write_vacation and vac.enabled and supports_variables)
 
-    preamble = _ensure_requires(parsed.preamble or "", vacation=write_vacation, body=needs_body)
+    preamble = _ensure_requires(
+        parsed.preamble or "", vacation=write_vacation, body=needs_body, variables=use_variables
+    )
     if not preamble.endswith("\n"):
         preamble += "\n"
 
@@ -888,7 +917,7 @@ def compile_script(
             chunks.append(compile_rule_from_structured(rule))
 
     if write_vacation:
-        chunks.append(compile_vacation_rule(vac))
+        chunks.append(compile_vacation_rule(vac, supports_variables=supports_variables))
 
     text = "".join(chunks)
     if not text.endswith("\n"):
@@ -896,8 +925,14 @@ def compile_script(
     return text
 
 
-def apply_vacation_to_script(script: str, vacation: VacationSettings, *, script_name: str = DEFAULT_SCRIPT_NAME) -> str:
-    """Replace only the vacation rule; filter rules keep their raw text."""
+def apply_vacation_to_script(
+    script: str,
+    vacation: VacationSettings,
+    *,
+    script_name: str = DEFAULT_SCRIPT_NAME,
+    supports_variables: bool = True,
+) -> str:
+    """Replace vacation rule(s) with a single combined rule; filter rules keep their raw text."""
     parsed = parse_roundcube_script(script, script_name=script_name)
     filters = [r for r in parsed.rules if r.kind != "vacation"]
     rebuilt = ParsedScript(
@@ -906,7 +941,7 @@ def apply_vacation_to_script(script: str, vacation: VacationSettings, *, script_
         vacation=vacation,
         script_name=script_name,
     )
-    return compile_script(rebuilt, vacation=vacation, rules=filters)
+    return compile_script(rebuilt, vacation=vacation, rules=filters, supports_variables=supports_variables)
 
 
 def compile_filters(rules: list[FilterRule]) -> str:
@@ -935,11 +970,23 @@ def compile_filters(rules: list[FilterRule]) -> str:
     return compile_script(parsed, vacation=VacationSettings(enabled=False), rules=cleaned)
 
 
-def compile_vacation(v: VacationSettings) -> str:
+def compile_vacation(v: VacationSettings, *, supports_variables: bool = True) -> str:
     """Deprecated standalone vacation script — kept for unit tests; prefer apply_vacation_to_script."""
     if not v.enabled:
         return 'require ["vacation"];\n'
-    return 'require ["vacation","date","relational"];\n' + compile_vacation_rule(v)
+    caps = '"vacation","date","relational"'
+    if supports_variables:
+        caps += ',"variables"'
+    return f"require [{caps}];\n" + compile_vacation_rule(v, supports_variables=supports_variables)
+
+
+def sieve_supports_variables(client: ManageSieveClient) -> bool:
+    """True when the ManageSieve server advertises the ``variables`` extension (RFC 5229)."""
+    try:
+        caps = client.get_sieve_capabilities() or []
+    except Exception:
+        return False
+    return any(str(c).lower() == "variables" for c in caps)
 
 
 def connect_sieve(
@@ -955,7 +1002,11 @@ def connect_sieve(
     if not sieve_host_allowed(settings, host):
         raise SieveError("sieve_host_not_allowed", host)
     client = ManageSieveClient(host, port)
-    if not client.connect(username, password, starttls=True, authmech="LOGIN"):
+    try:
+        ok = client.connect(username, password, starttls=True, authmech="LOGIN")
+    except Exception:
+        ok = False
+    if not ok:
         client = ManageSieveClient(host, port)
         if not client.connect(username, password, starttls=False, authmech="LOGIN"):
             raise SieveError("sieve_auth_failed")
@@ -984,11 +1035,10 @@ def put_script(client: ManageSieveClient, name: str, content: str, *, activate: 
     if not ok:
         raise SieveError("sieve_put_failed", getattr(client, "errmsg", None) or str(client))
     if activate:
-        # Ensure this script stays the active set (do not activate a different name).
-        current = active_script_name(client)
-        if current != name:
-            if not client.setactive(name):
-                raise SieveError("sieve_setactive_failed", name)
+        # Always SETACTIVE after PUTSCRIPT. Fresh mailboxes report no ACTIVE; falling back to
+        # DEFAULT_SCRIPT_NAME and skipping SETACTIVE left vacation scripts inactive on imap-test.
+        if not client.setactive(name):
+            raise SieveError("sieve_setactive_failed", name)
 
 
 def filters_to_dicts(rules: list[FilterRule]) -> list[dict[str, Any]]:
