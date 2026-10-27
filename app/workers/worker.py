@@ -52,6 +52,34 @@ async def send_compose_draft(ctx: dict[str, Any], draft_id: str) -> str:
         return await execute_send(db, settings, uuid.UUID(draft_id))
 
 
+async def flush_scheduled_sends(ctx: dict[str, Any]) -> int:
+    """W4c: enqueue drafts whose scheduled_at has passed (every minute)."""
+    from app.mail.compose_models import ComposeDraft
+
+    now = datetime.now(UTC)
+    async with ctx["sessionmaker"]() as db:
+        rows = await db.execute(
+            select(ComposeDraft).where(
+                ComposeDraft.status == "scheduled",
+                ComposeDraft.scheduled_at.is_not(None),
+                ComposeDraft.scheduled_at <= now,
+            )
+        )
+        drafts = list(rows.scalars())
+        for draft in drafts:
+            draft.status = "queued"
+            draft.undo_until = None
+            await db.flush()
+            await ctx["redis"].enqueue_job(
+                "send_compose_draft",
+                str(draft.id),
+                _job_id=f"compose-scheduled:{draft.id}",
+            )
+        if drafts:
+            await db.commit()
+        return len(drafts)
+
+
 async def _syncable(ctx: dict[str, Any]) -> list[Mailbox]:
     settings: Settings = ctx["settings"]
     async with ctx["sessionmaker"]() as db:
@@ -150,10 +178,12 @@ class WorkerSettings:
         heartbeat,
         func(sync_mailbox_job, keep_result=0),
         func(send_compose_draft, keep_result=0),
+        func(flush_scheduled_sends, keep_result=0),
     ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, minute=set(range(60)), run_at_startup=True),
         cron(poll_mailboxes, minute=set(range(60)), run_at_startup=True, unique=True),
+        cron(flush_scheduled_sends, minute=set(range(60)), run_at_startup=True, unique=True),
     ]
     on_startup = startup
     on_shutdown = shutdown

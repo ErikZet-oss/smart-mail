@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 1h-d (PR 4): W4c schedule, W4f popup, ClamAV
+
+- **W4c** Naplánovať odoslanie: send-menu presets (Zajtra 8:00 / Pondelok 8:00 / Vlastný čas), chip + cancel;
+  worker cron flushes due scheduled drafts.
+- **W4f** Okno písania: `?popup=1` 720×640 chrome, minimize bar, max 3 popups, „Otvoriť v novom okne“.
+- **ClamAV**: `scan_bytes` on compose upload + inbound attachments; infected rejected (422); unreachable → skipped.
+- Deploy: `nginx-active.conf` (gitignored) generated from DEPLOY_MODE — never overwrite git templates;
+  CI: edit `nginx-deploy.vps.conf` → update regenerates active conf.
+
 ## [Unreleased] — Phase 1h-f (PR 6): VPS deploy (Caddy / Cloudflare Tunnel)
 
 - `deploy/install.sh` (vps | tunnel | CI), `update.sh` (rollback on failure), `status.sh`, `backup.sh` (7 days).

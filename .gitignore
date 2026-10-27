@@ -21,6 +21,7 @@ probe.env
 *.pem
 *.key
 deploy/Caddyfile
+deploy/nginx-active.conf
 deploy/.state*/
 deploy/.backups*/
 # Money probe output may contain business data until reviewed

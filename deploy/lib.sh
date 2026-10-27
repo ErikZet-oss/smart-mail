@@ -75,14 +75,15 @@ ensure_ufw_installed() {
 
 render_edge_configs() {
   # Nginx: CF-Connecting-IP only in tunnel mode. VPS/CI ignore it (spoofable via Caddy).
+  # Write to nginx-active.conf (gitignored) — never overwrite templates committed in git.
   # Caddy (vps): strip CF-Connecting-IP before proxying to web.
   local mode="${DEPLOY_MODE:-ci}"
   case "$mode" in
     tunnel)
-      cp "$DEPLOY_DIR/nginx-deploy.tunnel.conf" "$DEPLOY_DIR/nginx-deploy.conf"
+      cp "$DEPLOY_DIR/nginx-deploy.tunnel.conf" "$DEPLOY_DIR/nginx-active.conf"
       ;;
     vps | ci)
-      cp "$DEPLOY_DIR/nginx-deploy.vps.conf" "$DEPLOY_DIR/nginx-deploy.conf"
+      cp "$DEPLOY_DIR/nginx-deploy.vps.conf" "$DEPLOY_DIR/nginx-active.conf"
       ;;
     *)
       die "neznámy režim: $mode"

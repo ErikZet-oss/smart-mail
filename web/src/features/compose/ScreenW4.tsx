@@ -1,8 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Bold, Italic, List, Paperclip, PenLine, Reply, Save, Send, Underline as UnderlineIcon, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+  Bold,
+  ChevronDown,
+  Clock,
+  Italic,
+  List,
+  Maximize2,
+  Minimize2,
+  Paperclip,
+  PenLine,
+  Reply,
+  Save,
+  Send,
+  Underline as UnderlineIcon,
+  X,
+} from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -24,7 +39,30 @@ import {
 } from './composeApi';
 import { PreSendDialog } from './PreSendDialog';
 import { ResponsesPicker } from './ResponsesPicker';
+import { ScheduleSendDialog } from './ScheduleSendDialog';
 import { SignatureEditDialog } from './SignatureEditDialog';
+
+const POPUP_KEY = 'sm-compose-popups';
+const POPUP_MAX = 3;
+
+function popupCount(): number {
+  try {
+    return JSON.parse(sessionStorage.getItem(POPUP_KEY) ?? '[]').length;
+  } catch {
+    return 0;
+  }
+}
+
+function trackPopup(id: string, add: boolean) {
+  try {
+    const cur = new Set<string>(JSON.parse(sessionStorage.getItem(POPUP_KEY) ?? '[]') as string[]);
+    if (add) cur.add(id);
+    else cur.delete(id);
+    sessionStorage.setItem(POPUP_KEY, JSON.stringify([...cur]));
+  } catch {
+    /* ignore */
+  }
+}
 
 function parseAddrs(raw: string): { email: string; name?: string }[] {
   return raw
@@ -44,7 +82,7 @@ function formatAddrs(addrs: { name?: string | null; email: string }[]): string {
 
 /** W4 Písanie — Roundcube-like compose (Phase 1e). AI tab deferred (no AI in Phase 1). */
 export function ScreenW4() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const params = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
@@ -56,6 +94,7 @@ export function ScreenW4() {
   const messageId = search.get('m') ?? undefined;
   /** Prefill To from contacts / search (never mailto: — keep send inside Smart Mail). */
   const seedTo = search.get('to')?.trim() ?? '';
+  const isPopup = search.get('popup') === '1';
 
   const me = useQuery({ queryKey: ['auth', 'me'], queryFn: fetchMe });
   const [localId, setLocalId] = useState<string | null>(draftId ?? null);
@@ -66,9 +105,18 @@ export function ScreenW4() {
   const [mdn, setMdn] = useState(false);
   const [showCc, setShowCc] = useState(false);
   const [preSendOpen, setPreSendOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [sendMenuOpen, setSendMenuOpen] = useState(false);
   const [responsesOpen, setResponsesOpen] = useState(false);
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+
+  useEffect(() => {
+    if (!isPopup || !localId) return;
+    trackPopup(localId, true);
+    return () => trackPopup(localId, false);
+  }, [isPopup, localId]);
 
   const bootstrap = useMutation({
     mutationFn: () => createDraft(mailbox, { mode, message_id: messageId }),
@@ -208,13 +256,86 @@ export function ScreenW4() {
     onSuccess: (d) => void qc.setQueryData(['compose', localId], d),
   });
 
+  const schedule = useMutation({
+    mutationFn: async (when: Date) => {
+      if (!localId) throw new Error('no draft');
+      await patchDraft(localId, {
+        to_addrs: parseAddrs(to),
+        cc_addrs: parseAddrs(cc),
+        subject,
+        body_html: editor?.getHTML() ?? '',
+        priority,
+        request_mdn: mdn,
+        scheduled_at: when.toISOString(),
+      });
+      return when;
+    },
+    onSuccess: (when) => {
+      setScheduleOpen(false);
+      void draftQuery.refetch();
+      toasts.success(
+        t('compose.scheduleDone', {
+          when: when.toLocaleString(i18n.language?.startsWith('sk') ? 'sk-SK' : undefined, {
+            dateStyle: 'short',
+            timeStyle: 'short',
+          }),
+        }),
+      );
+    },
+  });
+
+  const cancelSchedule = useMutation({
+    mutationFn: async () => {
+      if (!localId) throw new Error('no draft');
+      return patchDraft(localId, { scheduled_at: null });
+    },
+    onSuccess: (d) => void qc.setQueryData(['compose', localId], d),
+  });
+
   const draft = draftQuery.data;
   const identity = identities.data?.find((i) => i.id === draft?.identity_id) ?? identities.data?.[0];
   const personName = me.data?.person?.full_name ?? '';
   const mobile = useMediaQuery(MOBILE_QUERY);
 
-  return (
-    <AppShell section="mail" mailbox={mailbox} unread={0} hideBottomNav={mobile}>
+  function openPopupWindow() {
+    if (!localId) return;
+    if (popupCount() >= POPUP_MAX) {
+      toasts.error(t('compose.popupLimit'));
+      return;
+    }
+    const url = `/compose/${localId}?mailbox=${encodeURIComponent(mailbox)}&popup=1`;
+    window.open(url, `sm-compose-${localId}`, 'popup=yes,width=720,height=640');
+  }
+
+  const shell = (children: ReactNode) =>
+    isPopup ? (
+      <div className="flex h-screen min-h-0 flex-col bg-bg-canvas" data-testid="compose-popup">
+        {children}
+      </div>
+    ) : (
+      <AppShell section="mail" mailbox={mailbox} unread={0} hideBottomNav={mobile}>
+        {children}
+      </AppShell>
+    );
+
+  if (isPopup && minimized) {
+    return (
+      <div className="fixed inset-x-0 bottom-0 z-50 flex justify-center p-2" data-testid="compose-minimized">
+        <button
+          type="button"
+          className="flex h-12 w-[720px] max-w-full items-center gap-3 rounded-t-md border border-border-default bg-bg-canvas px-4 shadow-e3"
+          onClick={() => setMinimized(false)}
+        >
+          <Maximize2 size={16} />
+          <span className="type-body truncate text-text-primary">{subject || t('compose.title')}</span>
+          <span className="type-caption text-text-secondary">{t('compose.restore')}</span>
+        </button>
+      </div>
+    );
+  }
+
+  return shell(
+    <>
       <div className="flex h-full min-w-0 flex-1 flex-col bg-bg-canvas" data-testid="compose-screen">
         {mobile ? (
           <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border-default px-2">
@@ -278,7 +399,17 @@ export function ScreenW4() {
             <span className="type-micro">{t('compose.responses')}</span>
           </button>
           <div className="flex-1" />
-          {mobile ? null : (
+          {isPopup ? (
+            <button
+              type="button"
+              className="rounded-sm p-2 text-text-secondary hover:bg-bg-subtle"
+              aria-label={t('compose.minimize')}
+              onClick={() => setMinimized(true)}
+            >
+              <Minimize2 size={18} />
+            </button>
+          ) : null}
+          {mobile || isPopup ? null : (
             <Link
               to={`/mail/${encodeURIComponent(mailbox)}/inbox`}
               className="rounded-sm p-2 text-text-secondary hover:bg-bg-subtle"
@@ -287,6 +418,16 @@ export function ScreenW4() {
               <X size={18} />
             </Link>
           )}
+          {isPopup ? (
+            <button
+              type="button"
+              className="rounded-sm p-2 text-text-secondary hover:bg-bg-subtle"
+              aria-label={t('common.close')}
+              onClick={() => window.close()}
+            >
+              <X size={18} />
+            </button>
+          ) : null}
         </header>
 
         <div className="flex min-h-0 flex-1">
@@ -378,25 +519,84 @@ export function ScreenW4() {
               <EditorContent editor={editor} />
             </div>
 
-            <div className="flex items-center gap-3 border-t border-border-default px-4 py-3">
-              <Button
-                type="button"
-                onClick={() => {
-                  const checks = draft?.checks ?? [];
-                  if (checks.some((c) => c.blocking) || checks.length > 0) {
-                    void save.mutateAsync().then(() => setPreSendOpen(true));
-                  } else {
-                    send.mutate(false);
-                  }
-                }}
-                disabled={send.isPending || me.data?.read_only}
-              >
-                <Send size={16} className="mr-2 inline" />
-                {t('compose.send')}
-              </Button>
+            <div className="flex flex-wrap items-center gap-3 border-t border-border-default px-4 py-3">
+              <div className="relative flex">
+                <Button
+                  type="button"
+                  className="rounded-r-none"
+                  onClick={() => {
+                    const checks = draft?.checks ?? [];
+                    if (checks.some((c) => c.blocking) || checks.length > 0) {
+                      void save.mutateAsync().then(() => setPreSendOpen(true));
+                    } else {
+                      send.mutate(false);
+                    }
+                  }}
+                  disabled={send.isPending || me.data?.read_only}
+                >
+                  <Send size={16} className="mr-2 inline" />
+                  {t('compose.send')}
+                </Button>
+                <Button
+                  type="button"
+                  className="rounded-l-none border-l border-brand-primary-700 px-2"
+                  aria-label={t('compose.sendMenu')}
+                  aria-expanded={sendMenuOpen}
+                  disabled={send.isPending || me.data?.read_only}
+                  onClick={() => setSendMenuOpen((v) => !v)}
+                >
+                  <ChevronDown size={16} />
+                </Button>
+                {sendMenuOpen ? (
+                  <div
+                    role="menu"
+                    className="absolute bottom-full left-0 z-10 mb-1 min-w-[200px] rounded-sm border border-border-default bg-bg-canvas py-1 shadow-e2"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="type-body flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-bg-subtle"
+                      onClick={() => {
+                        setSendMenuOpen(false);
+                        setScheduleOpen(true);
+                      }}
+                    >
+                      <Clock size={16} />
+                      {t('compose.schedule')}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              {draft?.status === 'scheduled' && draft.scheduled_at ? (
+                <span className="type-caption inline-flex items-center gap-2 rounded-full bg-bg-subtle px-3 py-1 text-text-secondary">
+                  <Clock size={14} />
+                  {t('compose.scheduleChip', {
+                    when: new Date(draft.scheduled_at).toLocaleString(
+                      i18n.language?.startsWith('sk') ? 'sk-SK' : undefined,
+                      { dateStyle: 'short', timeStyle: 'short' },
+                    ),
+                  })}
+                  <button
+                    type="button"
+                    className="text-brand-primary-600 underline"
+                    onClick={() => cancelSchedule.mutate()}
+                  >
+                    {t('compose.scheduleCancel')}
+                  </button>
+                </span>
+              ) : null}
               {me.data?.read_only ? (
                 <span className="type-caption text-text-secondary">{t('compose.viewerBlocked')}</span>
               ) : null}
+              {isPopup || mobile ? null : (
+                <button
+                  type="button"
+                  className="type-caption ml-auto text-brand-primary-600 underline"
+                  onClick={openPopupWindow}
+                >
+                  {t('compose.openPopup')}
+                </button>
+              )}
             </div>
           </div>
 
@@ -454,6 +654,13 @@ export function ScreenW4() {
           busy={send.isPending}
         />
       ) : null}
+      {scheduleOpen ? (
+        <ScheduleSendDialog
+          onCancel={() => setScheduleOpen(false)}
+          onSchedule={(when) => schedule.mutate(when)}
+          busy={schedule.isPending}
+        />
+      ) : null}
       {responsesOpen ? (
         <ResponsesPicker
           onClose={() => setResponsesOpen(false)}
@@ -485,6 +692,6 @@ export function ScreenW4() {
           }}
         />
       ) : null}
-    </AppShell>
+    </>,
   );
 }
