@@ -74,7 +74,8 @@ export function ScreenW9() {
   const activeBook = useMemo(() => {
     if (!books.data?.length) return null;
     if (bookParam === 'shared') return books.data.find((b) => b.kind === 'shared') ?? books.data[0] ?? null;
-    if (bookParam === 'personal' || !bookParam) return books.data.find((b) => b.kind === 'personal') ?? books.data[0] ?? null;
+    if (bookParam === 'personal' || !bookParam)
+      return books.data.find((b) => b.kind === 'personal') ?? books.data[0] ?? null;
     return books.data.find((b) => b.id === bookParam) ?? books.data[0] ?? null;
   }, [books.data, bookParam]);
 
@@ -216,7 +217,9 @@ export function ScreenW9() {
                     active ? 'bg-brand-primary-50 text-brand-primary-800' : 'text-text-primary hover:bg-bg-subtle'
                   }`}
                 >
-                  <span className="truncate">{b.kind === 'shared' ? t('contacts.shared') : t('contacts.personal')}</span>
+                  <span className="truncate">
+                    {b.kind === 'shared' ? t('contacts.shared') : t('contacts.personal')}
+                  </span>
                 </button>
               );
             })}
@@ -324,7 +327,9 @@ export function ScreenW9() {
                     >
                       <Avatar initials={initialsOf(c.display_name)} seed={c.id} size={32} />
                       <span className="min-w-0 flex-1">
-                        <span className="type-small block truncate font-medium text-text-primary">{c.display_name}</span>
+                        <span className="type-small block truncate font-medium text-text-primary">
+                          {c.display_name}
+                        </span>
                         {c.organization ? (
                           <span className="type-caption block truncate text-text-secondary">{c.organization}</span>
                         ) : null}
@@ -505,12 +510,7 @@ export function ScreenW9() {
           <fieldset className="mb-3 flex flex-col gap-2">
             <legend className="type-caption text-text-tertiary">{t('contacts.onDuplicate')}</legend>
             <label className="type-small flex items-center gap-2">
-              <input
-                type="radio"
-                name="dup"
-                checked={onDuplicate === 'skip'}
-                onChange={() => setOnDuplicate('skip')}
-              />
+              <input type="radio" name="dup" checked={onDuplicate === 'skip'} onChange={() => setOnDuplicate('skip')} />
               {t('contacts.skipDup')}
             </label>
             <label className="type-small flex items-center gap-2">

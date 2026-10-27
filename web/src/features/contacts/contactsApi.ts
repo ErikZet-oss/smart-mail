@@ -37,8 +37,7 @@ export function fetchContacts(bookId: string, q?: string) {
   return api<Contact[]>('GET', `/api/contacts/books/${bookId}/contacts${qs}`);
 }
 
-export const fetchGroups = (bookId: string) =>
-  api<ContactGroup[]>('GET', `/api/contacts/books/${bookId}/groups`);
+export const fetchGroups = (bookId: string) => api<ContactGroup[]>('GET', `/api/contacts/books/${bookId}/groups`);
 
 export const createContact = (bookId: string, body: ContactIn) =>
   api<Contact>('POST', `/api/contacts/books/${bookId}/contacts`, body);
@@ -46,8 +45,7 @@ export const createContact = (bookId: string, body: ContactIn) =>
 export const updateContact = (contactId: string, body: ContactIn) =>
   api<Contact>('PATCH', `/api/contacts/contacts/${contactId}`, body);
 
-export const deleteContact = (contactId: string) =>
-  api<undefined>('DELETE', `/api/contacts/contacts/${contactId}`);
+export const deleteContact = (contactId: string) => api<undefined>('DELETE', `/api/contacts/contacts/${contactId}`);
 
 export const createGroup = (bookId: string, name: string) =>
   api<ContactGroup>('POST', `/api/contacts/books/${bookId}/groups`, { name });

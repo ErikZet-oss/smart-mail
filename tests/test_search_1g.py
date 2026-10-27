@@ -180,9 +180,7 @@ async def test_1g_full_field_finds_firma_sk_via_address_substring(
 
 
 @pytest.mark.asyncio
-async def test_1g_special_char_query_returns_200(
-    client: Client, db: AsyncSession, mail_server: FakeMailServer
-) -> None:
+async def test_1g_special_char_query_returns_200(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
     """Query with &, (), !, :*, quotes, backslash must not crash (200)."""
     _, mailbox = await _signed_in(client, db, mail_server)
     inbox = await _folder(db, mailbox, "INBOX", special_use="inbox")
