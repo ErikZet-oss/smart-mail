@@ -4,13 +4,12 @@ import { useTranslation } from 'react-i18next';
 type Props = {
   children: ReactNode;
   onDone: () => void;
-  onSnooze: () => void;
 };
 
 const THRESHOLD = 72;
 
-/** M1 swipe: left = Vybavené, right = Odložiť (Phase 1 snooze = toast “coming soon” if not wired). */
-export function SwipeRow({ children, onDone, onSnooze }: Props) {
+/** M1 swipe left = Vybavené only. Right-swipe Odložiť is Phase 5 — omit until it works. */
+export function SwipeRow({ children, onDone }: Props) {
   const { t } = useTranslation();
   const startX = useRef(0);
   const [dx, setDx] = useState(0);
@@ -18,14 +17,6 @@ export function SwipeRow({ children, onDone, onSnooze }: Props) {
 
   return (
     <div className="relative overflow-hidden">
-      <div
-        aria-hidden="true"
-        className={`absolute inset-y-0 left-0 flex w-24 items-center justify-center bg-success-50 text-success-700 ${
-          dx > 20 ? 'opacity-100' : 'opacity-0'
-        }`}
-      >
-        <span className="type-caption">{t('mail.toolbar.snooze')}</span>
-      </div>
       <div
         aria-hidden="true"
         className={`absolute inset-y-0 right-0 flex w-24 items-center justify-center bg-brand-primary-50 text-brand-primary-800 ${
@@ -44,12 +35,12 @@ export function SwipeRow({ children, onDone, onSnooze }: Props) {
         onTouchMove={(e) => {
           if (!dragging.current) return;
           const x = e.touches[0]?.clientX ?? startX.current;
-          setDx(Math.max(-120, Math.min(120, x - startX.current)));
+          // Left swipe only (negative dx); block right swipe until snooze ships.
+          setDx(Math.max(-120, Math.min(0, x - startX.current)));
         }}
         onTouchEnd={() => {
           dragging.current = false;
           if (dx <= -THRESHOLD) onDone();
-          else if (dx >= THRESHOLD) onSnooze();
           setDx(0);
         }}
         onTouchCancel={() => {

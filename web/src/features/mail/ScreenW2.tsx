@@ -569,11 +569,7 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
               const key = item.kind === 'message' ? item.data.id : item.data.id;
               if (!mobile) return <div key={key}>{row}</div>;
               return (
-                <SwipeRow
-                  key={key}
-                  onDone={() => bulk.mutate({ action: 'done', ids: [id] })}
-                  onSnooze={() => toasts.info(t('common.comingSoon'))}
-                >
+                <SwipeRow key={key} onDone={() => bulk.mutate({ action: 'done', ids: [id] })}>
                   {row}
                 </SwipeRow>
               );

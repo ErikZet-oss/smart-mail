@@ -283,4 +283,32 @@ test.describe('Phase 1h-a: PWA + mobile shell M0–M4', () => {
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#0F75BC');
     await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/apple-touch-icon.png');
   });
+
+  // Allows the real SW (blocked by default so mockApi works) to prove denylist behaviour.
+  test.describe('PWA service worker', () => {
+    test.use({ serviceWorkers: 'allow' });
+
+    test('SW navigateFallbackDenylist: /api/version stays JSON after SW registers', async ({ page }, info) => {
+      test.skip(info.project.name !== 'desktop', 'once');
+      await mockMail(page);
+      await page.goto('/mail/default/inbox');
+      await page.waitForFunction(async () => {
+        if (!('serviceWorker' in navigator)) return false;
+        const reg = await navigator.serviceWorker.ready;
+        return Boolean(reg.active);
+      });
+      // Without denylist the SW would serve index.html for this navigation (breaks OIDC /api returns).
+      // Preview middleware stubs JSON when no backend is running (CI).
+      const response = await page.goto('/api/version');
+      expect(response, 'expected a network response for /api/version').toBeTruthy();
+      if (!response) return;
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type'] ?? '').toMatch(/application\/json/);
+      const body = (await response.json()) as { version?: string; env?: string };
+      expect(body.version).toEqual(expect.any(String));
+      expect(body.version?.length).toBeGreaterThan(0);
+      // Must not be the SPA shell
+      await expect(page.locator('#root')).toHaveCount(0);
+    });
+  });
 });
