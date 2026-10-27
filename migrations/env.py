@@ -7,6 +7,7 @@ from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
 import app.auth.models
+import app.contacts.models  # noqa: F401  (register contacts tables)
 import app.core.audit
 import app.mail.compose_models  # register compose tables on the metadata
 import app.mail.models  # noqa: F401  (register tables on the metadata)

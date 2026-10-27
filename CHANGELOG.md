@@ -2,6 +2,18 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 1g: contacts & search (backend)
+
+- Local address books (Osobné / Zdieľané), groups, contacts CRUD; vCard import/export (Roundcube export fixture);
+  compose autocomplete. Contacts live only in our DB — IMAP is never written for the address book.
+- Mail search API: Roundcube scope (current / subfolders / all) and fields (Predmet, Od, Komu, Kópia, Telo,
+  Celá správa); Postgres FTS `tsvector` with `simple` + `unaccent` (cena ↔ céna, Trenčín ↔ trencin).
+- ACL: only mailboxes with `mailbox_access`; private folders of other persons are excluded.
+- **W11 scope (UI in 1g-b):** basic palette only — Phase 1 commands (Vytvoriť správu, Prejsť na priečinok,
+  Prepnúť osobu, Nastavenia), E-maily, Kontakty. Firmy / Doklady / Asistent are not shown (arrive in phases 3 and 5).
+  CLAUDE.md still lists the full palette in Phase 5; `docs/plans/phase-1.md` records this 1g subset.
+- Screens W9/W10/W11 → follow-up PR 1g-b. Money search → Phase 3; AI search → Phase 2.
+
 ## [Unreleased] — Phase 1f: settings + send guard
 
 - Send guard (ADR-008): outside prod, SMTP only via Mailpit/localhost unless `MAIL_SEND_ALLOW_REAL_SERVER`;

@@ -1,0 +1,8 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Ján Novák (aktualizovaný)
+N:Novák;Ján;;;
+EMAIL;TYPE=INTERNET;TYPE=PREF:jan.novak@smartmail.test
+EMAIL;TYPE=INTERNET:jan.extra@smartmail.test
+TEL;TYPE=WORK:+421900999888
+END:VCARD

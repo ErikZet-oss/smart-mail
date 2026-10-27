@@ -1,0 +1,25 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Ján Novák
+N:Novák;Ján;;;
+ORG:Smart Test s.r.o.
+EMAIL;TYPE=INTERNET;TYPE=WORK;TYPE=PREF:jan.novak@smartmail.test
+EMAIL;TYPE=INTERNET;TYPE=HOME:jan.home@smartmail.test
+TEL;TYPE=WORK:+421900111222
+TEL;TYPE=CELL:+421900111223
+NOTE:Diakritika: cena a čéna\, pobočka Trenčín
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+FN:Mária Čéna
+N:Čéna;Mária;;;
+ORG:ABC Stav Test
+EMAIL;TYPE=INTERNET;TYPE=PREF:maria.cena@smartmail.test
+TEL;TYPE=WORK:+421900333444
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+FN:Trenčín Sklad
+N:Sklad;Trenčín;;;
+EMAIL;TYPE=INTERNET:trencin.sklad@smartmail.test
+END:VCARD
