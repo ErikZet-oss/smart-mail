@@ -210,7 +210,8 @@ test.describe('Phase 1h-b: M8 M9 M15 M18', () => {
     await expect(theme.getByRole('radio', { name: 'Podľa zariadenia' })).toBeVisible();
     await expect(more.getByRole('switch')).toHaveCount(0);
     await expect(more.getByRole('button', { name: 'Odhlásiť' })).toBeVisible();
-    await expect(more.getByText('O systéme')).toHaveCount(0);
+    // O systéme lands in 1h-c with W15b — assert absence only while this suite stays on 1h-b branch;
+    // after merge of 1h-c the item is present (covered by phase1h-c.spec.ts).
     // Bottom nav Phase-1: no Dnes / Doklady tabs
     await expect(page.getByTestId('bottom-nav').getByText('Dnes')).toHaveCount(0);
     await expect(page.getByTestId('bottom-nav').getByText('Doklady')).toHaveCount(0);

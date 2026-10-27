@@ -1,4 +1,5 @@
-import { CircleHelp, Mail, Moon, Power, Settings, SquarePen, Sun, Users } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Bell, CircleHelp, Mail, Moon, Power, Settings, SquarePen, Sun, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -7,6 +8,8 @@ import { HOME } from '../../app/routes';
 import { formatCount } from '../../features/mail/mailApi';
 import { PersonChip, type ChipExtra } from '../../features/persons/PersonChip';
 import { useTheme } from '../../features/prefs/ThemeProvider';
+import { fetchNotifications, NOTIFS_KEY } from '../../features/system/notificationsApi';
+import { useSystemUi } from '../../features/system/systemUi';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { Logo } from '../Logo';
 
@@ -92,12 +95,13 @@ function RailItem({
 
 type Props = { section: RailSection; mailbox: string; unread: number; onLogout: () => void };
 
-/** G1 rail (72 px, dark) in the Roundcube order; items of later phases are not shown yet (Dnes, Doklady, Asistent,
- * Notifikácie). O systéme stays disabled until 1h. */
+/** G1 rail (72 px, dark). Phase-1: E-mail / Kontakty / Nastavenia + Notifikácie + O systéme (no Dnes/Doklady/Asistent). */
 export function Rail({ section, mailbox, unread, onLogout }: Props) {
   const { t } = useTranslation();
   const low = useMediaQuery(LOW_RAIL_QUERY);
   const { theme, toggleTheme, classic, setClassic } = useTheme();
+  const { open } = useSystemUi();
+  const notifs = useQuery({ queryKey: NOTIFS_KEY, queryFn: fetchNotifications, staleTime: 30_000 });
   const systemDark =
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -112,7 +116,12 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
             icon: darkOn ? <Sun size={16} /> : <Moon size={16} />,
             onSelect: toggleTheme,
           },
-          { id: 'about', label: t('rail.about'), icon: <CircleHelp size={16} />, hint: t('common.comingSoon') },
+          {
+            id: 'about',
+            label: t('rail.about'),
+            icon: <CircleHelp size={16} />,
+            onSelect: () => open('about'),
+          },
         ]
       : []),
     {
@@ -120,6 +129,12 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
       label: t('rail.classic'),
       icon: <ListIcon />,
       onSelect: () => setClassic(!classic),
+    },
+    {
+      id: 'shortcuts',
+      label: t('shortcuts.title'),
+      icon: <CircleHelp size={16} />,
+      onSelect: () => open('shortcuts'),
     },
   ];
   return (
@@ -155,6 +170,13 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
         active={section === 'settings'}
       />
       <div className="min-h-2 flex-1" />
+      <RailItem
+        icon={<Bell size={20} />}
+        label={t('rail.notifications')}
+        tall={false}
+        badge={notifs.data?.unread_count}
+        onClick={() => open('notifications')}
+      />
       <PersonChip onLogout={onLogout} extras={extras} />
       {low ? null : (
         <>
@@ -164,7 +186,12 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
             tall={false}
             onClick={toggleTheme}
           />
-          <RailItem icon={<CircleHelp size={20} />} label={t('rail.about')} tall={false} />
+          <RailItem
+            icon={<CircleHelp size={20} />}
+            label={t('rail.about')}
+            tall={false}
+            onClick={() => open('about')}
+          />
         </>
       )}
       <RailItem icon={<Power size={20} />} label={t('rail.logout')} tall={false} tone="logout" onClick={onLogout} />

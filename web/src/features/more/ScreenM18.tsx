@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ChevronRight, LogOut, Moon, Settings, UserCheck, Users } from 'lucide-react';
+import { ArrowLeft, Bell, ChevronRight, CircleHelp, LogOut, Moon, Settings, UserCheck, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { fetchMe } from '../auth/authApi';
 import { choosePerson, fetchPicker, initials, PICKER_KEY } from '../persons/personsApi';
 import { useTheme } from '../prefs/ThemeProvider';
 import type { UiPrefs } from '../prefs/prefsApi';
+import { useSystemUi } from '../system/systemUi';
 
 type Props = {
   onClose: () => void;
@@ -22,13 +23,14 @@ const THEME_OPTS: { value: UiPrefs['theme']; labelKey: string }[] = [
 ];
 
 /**
- * M18 Viac — Phase 1 items only (SCREENS_SPEC §13): Kontakty, Nastavenia, Prepnúť osobu,
- * Vzhľad (Svetlý / Tmavý / Podľa zariadenia), Odhlásiť. O systéme waits for W15b (1h-c).
+ * M18 Viac — Phase 1 items (SCREENS_SPEC §13): Kontakty, Nastavenia, Notifikácie, Prepnúť osobu,
+ * Vzhľad, O systéme (W15b), Odhlásiť.
  */
 export function ScreenM18({ onClose, onLogout }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
+  const { open } = useSystemUi();
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const picker = useQuery({ queryKey: PICKER_KEY, queryFn: fetchPicker });
   const [switchOpen, setSwitchOpen] = useState(false);
@@ -132,6 +134,18 @@ export function ScreenM18({ onClose, onLogout }: Props) {
           <span className="type-body flex-1">{t('rail.settings')}</span>
           <ChevronRight size={18} className="text-text-tertiary" aria-hidden="true" />
         </Link>
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            open('notifications');
+          }}
+          className="flex min-h-[48px] w-full items-center gap-3 border-b border-border-subtle px-4 py-3 text-left text-text-primary hover:bg-bg-subtle"
+        >
+          <Bell size={20} aria-hidden="true" />
+          <span className="type-body flex-1">{t('rail.notifications')}</span>
+          <ChevronRight size={18} className="text-text-tertiary" aria-hidden="true" />
+        </button>
         {canSwitch ? (
           <button
             type="button"
@@ -177,6 +191,18 @@ export function ScreenM18({ onClose, onLogout }: Props) {
             ))}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            open('about');
+          }}
+          className="flex min-h-[48px] w-full items-center gap-3 border-b border-border-subtle px-4 py-3 text-left text-text-primary hover:bg-bg-subtle"
+        >
+          <CircleHelp size={20} aria-hidden="true" />
+          <span className="type-body flex-1">{t('rail.about')}</span>
+          <ChevronRight size={18} className="text-text-tertiary" aria-hidden="true" />
+        </button>
         <button
           type="button"
           onClick={onLogout}

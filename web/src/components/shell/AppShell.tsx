@@ -8,6 +8,8 @@ import { ScreenM18 } from '../../features/more/ScreenM18';
 import { fetchPicker, PICKER_KEY } from '../../features/persons/personsApi';
 import { useIdleAsk } from '../../features/persons/useIdleAsk';
 import { CommandPaletteHost } from '../../features/search/CommandPalette';
+import { SystemHost } from '../../features/system/SystemHost';
+import { useGlobalShortcuts } from '../../features/system/useGlobalShortcuts';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { Banner } from '../Banner';
 import { BottomNav, type BottomSection } from './BottomNav';
@@ -56,6 +58,7 @@ export function AppShell({ section, mailbox = 'default', unread = 0, children, h
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const picker = useQuery({ queryKey: PICKER_KEY, queryFn: fetchPicker, enabled: me.data?.kind === 'branch' });
   useIdleAsk(picker.data?.idle_ask_minutes, (picker.data?.persons.length ?? 0) > 1);
+  useGlobalShortcuts();
 
   const signOut = useCallback(async () => {
     try {
@@ -85,6 +88,7 @@ export function AppShell({ section, mailbox = 'default', unread = 0, children, h
           />
         )}
         <DropZone />
+        <SystemHost />
       </div>
     );
   }
@@ -98,6 +102,7 @@ export function AppShell({ section, mailbox = 'default', unread = 0, children, h
       </div>
       <DropZone />
       <CommandPaletteHost />
+      <SystemHost />
     </div>
   );
 }

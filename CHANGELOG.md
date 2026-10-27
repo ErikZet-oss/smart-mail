@@ -2,6 +2,16 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 1h-c: W13 tour, W14/M16, W15, W15b, classic
+
+- **W13 / M-W13** Úvodná prehliadka (desktop Phase-1 steps + branch PersonChip step; mobile 3 steps).
+- **W14 + M16** in-app notifications (sync failure, assignment/handover only — no Web Push / Money / AI).
+  API returns `kind` + params (no SK strings); UI maps error codes (Nesprávne heslo / Server nedostupný…).
+  Href → mailbox inbox or thread; ids include event time; dismiss list capped (500 / 30 days); self-assign skipped.
+- **W15** Klávesové skratky (`?`) — Phase-1 groups only.
+- **W15b** O systéme + **M18** row that opens it; restart tour; provider admin link (D20).
+- **Klasické zobrazenie**: `data-classic` on `<html>`, list banner, filter chips remain hidden.
+
 ## [Unreleased] — Phase 1h-b: mobile M8 / M9 / M15 / M18
 
 - **M8** Hľadanie: full-screen mobile search with recent queries; sender address opens compose (not mailto).

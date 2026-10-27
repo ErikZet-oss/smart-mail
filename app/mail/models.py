@@ -93,6 +93,8 @@ class Thread(IdMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(16), default="open", server_default="open")  # open|waiting|done|snoozed
     snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     assignee_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"))
+    assigned_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"), index=True)
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     message_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     unread_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
