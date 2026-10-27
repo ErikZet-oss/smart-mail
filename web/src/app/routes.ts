@@ -8,6 +8,7 @@ export const ROUTES = {
   W1a: { id: 'W1a', path: '/login/2fa' },
   W1b: { id: 'W1b', path: '/who', signedIn: true },
   W2: { id: 'W2', path: '/mail/:mailbox/:folder', signedIn: true },
+  W2f: { id: 'W2f', path: '/mail/:mailbox/view/:category', signedIn: true },
   W2c: { id: 'W2c', path: '/mail/:mailbox/:folder/:threadId', signedIn: true },
   W2m: { id: 'W2m', path: '/mail/:mailbox/:folder/:threadId/print', signedIn: true },
   W2n: { id: 'W2n', path: '/mail/:mailbox/:folder/:threadId/source/:messageId', signedIn: true },

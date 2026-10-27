@@ -88,6 +88,20 @@ export type MessageListItem = {
   answered: boolean;
   has_attachments: boolean;
   thread_count: number;
+  ai_category?: string | null;
+  ai_priority?: string | null;
+  ai_summary?: string | null;
+  ai_language?: string | null;
+  ai_confidence?: number | null;
+  ai_note_codes?: string[];
+};
+
+export type AiCategory = {
+  id: string;
+  label_sk: string;
+  description_sk: string;
+  color_token: string;
+  count: number;
 };
 
 export type ThreadListItem = {
@@ -152,6 +166,10 @@ export type MessageDetail = {
   thread_status: string | null;
   snoozed_until: string | null;
   assignee_id: string | null;
+  ai_category?: string | null;
+  ai_summary?: string | null;
+  ai_language?: string | null;
+  security_notes?: string[];
 };
 
 export type BulkAction =
@@ -174,6 +192,31 @@ export const fetchMessages = (
   if (opts.q) params.set('q', opts.q);
   const qs = params.toString();
   return api<MessagesList>('GET', `${base(mailbox)}/folders/${folderId}/messages${qs ? `?${qs}` : ''}`);
+};
+
+export const aiCategoriesKey = (mailbox: string) => ['mail', 'ai-categories', mailbox] as const;
+
+export const fetchAiCategories = (mailbox: string) =>
+  api<{ categories: AiCategory[] }>('GET', `${base(mailbox)}/ai/categories`);
+
+export const fetchCategoryMessages = (
+  mailbox: string,
+  category: string,
+  opts: { page?: number; pageSize?: number; filter?: MessageFilter; q?: string } = {},
+) => {
+  const params = new URLSearchParams();
+  if (opts.page) params.set('page', String(opts.page));
+  if (opts.pageSize) params.set('page_size', String(opts.pageSize));
+  if (opts.filter && opts.filter !== 'all') params.set('filter', opts.filter);
+  if (opts.q) params.set('q', opts.q);
+  const qs = params.toString();
+  return api<{
+    category: AiCategory;
+    total: number;
+    page: number;
+    page_size: number;
+    messages: MessageListItem[];
+  }>('GET', `${base(mailbox)}/ai/views/${encodeURIComponent(category)}/messages${qs ? `?${qs}` : ''}`);
 };
 
 export const fetchMessage = (mailbox: string, id: string, markRead = true) =>

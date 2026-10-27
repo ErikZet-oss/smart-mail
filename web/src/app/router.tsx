@@ -25,6 +25,7 @@ export const routeObjects: RouteObject[] = [
   { id: ROUTES.W4.id, path: '/compose/:draftId?', element: <ScreenW4 /> },
   { id: ROUTES.W2m.id, path: ROUTES.W2m.path, element: <ScreenW2m /> },
   { id: ROUTES.W2n.id, path: ROUTES.W2n.path, element: <ScreenW2n /> },
+  { id: ROUTES.W2f.id, path: ROUTES.W2f.path, element: <ScreenW2 /> },
   { id: ROUTES.W2c.id, path: ROUTES.W2c.path, element: <ScreenW2 /> },
   { id: ROUTES.W2.id, path: ROUTES.W2.path, element: <ScreenW2 /> },
   { id: ROUTES.W9.id, path: '/contacts/:book/:contactId?', element: <ScreenW9 /> },

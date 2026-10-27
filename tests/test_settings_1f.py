@@ -24,8 +24,10 @@ from tests.test_mail_sync_1c import PASSWORD
 def test_1f_settings_schema_has_phase_sections() -> None:
     doc = schema_document()
     ids = {s["id"] for s in doc["sections"]}
-    assert {"01", "02", "03", "04", "05", "06", "09", "09b", "10", "11", "12"} <= ids
-    assert "07" not in ids  # AI settings = Phase 2
+    assert {"01", "02", "03", "04", "05", "06", "07", "09", "09b", "10", "11", "12"} <= ids
+    # 07 in 2b = summaries only; autonomy matrix = later Phase 2 milestones
+    ai = next(s for s in doc["sections"] if s["id"] == "07")
+    assert any(f["id"] == "show_ai_summary" for f in ai["fields"])
     root = Path(__file__).resolve().parents[1] / "settings_schema.json"
     assert json.loads(root.read_text(encoding="utf-8"))["version"] == doc["version"]
 

@@ -2,6 +2,16 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2b: classify + AI views (W2f)
+
+- Deterministic rules first (List-Unsubscribe, carriers, internal domains, ISDOC/UBL, DMARC candidate);
+  classify JSON schema (AI_ASSISTANT §4); language detection (sk/cs/en/de/pl/hu/other).
+- Pipeline classifies mail after `ai_enabled_at` only; private / special folders skipped; budget gates live LLM.
+- W2f AI triedenie: `/mail/:mailbox/view/:category`, folder-column counts, list badges + AI summary toggle
+  (SETTINGS 07 + list options); Klasické zobrazenie hides triage.
+- `SecurityBanner` for DMARC / SPF / display spoof / IBAN-change notes (no reply suggestion cards — that is 2c).
+- Slovak strings in `web/src/i18n/sk.json`; Playwright vs Figma `26:21256` / `26:21793`.
+
 ## [Unreleased] — Phase 2a: AI foundation (provider, schema, pipeline gates)
 
 - **D31 / ADR-011**: Claude API (`LLM_PROVIDER=anthropic`); Bedrock interface stub only. ADR records official

@@ -320,6 +320,12 @@
   "classic": {
     "banner": "Klasické zobrazenie – AI filtre a zhrnutia sú skryté."
   },
+  "settingsAi": {
+    "title": "AI asistent",
+    "summaries": "Zhrnutia v zozname",
+    "summariesHelp": "Pod predmetom v zozname zobrazí krátke AI zhrnutie (v Klasickom zobrazení vypnuté).",
+    "comingAutonomy": "Samostatnosť AI a ďalšie voľby pribudnú v ďalšej fáze."
+  },
   "shell": {
     "offline": "Ste offline – zobrazujeme uložené správy, odoslanie počká.",
     "dropHere": "Pustite súbor sem – doklad dodávateľa alebo objednávka",
@@ -707,6 +713,36 @@
     }
   },
   "ai": {
+    "triage": {
+      "title": "AI triedenie",
+      "emptyTitle": "Žiadne {{name}}",
+      "emptyText": "AI ich sem zaradí automaticky."
+    },
+    "categories": {
+      "inquiry": { "label": "Dopyty", "description": "žiadosti o ceny a dostupnosť" },
+      "order": { "label": "Objednávky", "description": "objednávky tovaru od zákazníkov" },
+      "order_change": { "label": "Zmeny objednávok", "description": "zmeny existujúcich objednávok" },
+      "order_cancel": { "label": "Storná objednávok", "description": "storná objednávok" },
+      "invoice_request": { "label": "Žiadosti o faktúru", "description": "prosby o vystavenie alebo kópiu faktúry" },
+      "supplier_document": { "label": "Doklady dodávateľov", "description": "faktúry a dodacie listy od dodávateľov" },
+      "complaint": { "label": "Reklamácie", "description": "reklamácie tovaru alebo služieb" },
+      "shipping": { "label": "Doprava", "description": "zásielky, tracking, kuriér" },
+      "payment": { "label": "Platby", "description": "platby, upomienky, potvrdenia úhrad" },
+      "document_request": { "label": "Žiadosti o dokument", "description": "atesty, certifikáty, technické listy, VOP" },
+      "supplier_info": { "label": "Dodávatelia – info", "description": "cenníky, výpadky, zmeny cien" },
+      "newsletter": { "label": "Feed", "description": "newslettre a hromadné správy" },
+      "notification": { "label": "Notifikácie", "description": "systémové a automatické oznámenia" },
+      "spam": { "label": "Spam", "description": "nevyžiadaná pošta" },
+      "internal": { "label": "Interné", "description": "pošta v rámci firmy" },
+      "other": { "label": "Iné", "description": "nezaradené správy" }
+    },
+    "security": {
+      "security_dmarc_fail": "Overenie odosielateľa (DMARC) zlyhalo — správa môže byť podvodná.",
+      "security_spf_fail": "Overenie SPF zlyhalo — adresa odosielateľa nemusí byť dôveryhodná.",
+      "security_display_spoof": "Odosielateľ sa vydáva za firmu alebo kolegu — skontrolujte skutočnú e-mailovú adresu.",
+      "security_iban_change": "Pozor: správa žiada zmenu bankového spojenia (IBAN). Overte ju iným kanálom.",
+      "attachment_unscanned": "Príloha ešte nebola skontrolovaná antivírusom — AI ju nespracovala."
+    },
     "notes": {
       "attachment_unscanned": "príloha ešte nebola skontrolovaná",
       "attachment_infected": "príloha obsahuje vírus a nebola spracovaná"

@@ -1,6 +1,6 @@
 {
-  "version": "1f",
-  "phase": "1f",
+  "version": "2b",
+  "phase": "2b",
   "sections": [
     {
       "id": "01",
@@ -658,6 +658,26 @@
               "label": "7 dní"
             }
           ],
+          "validation": {},
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "id": "07",
+      "path": "ai",
+      "title": "AI asistent",
+      "admin_only": false,
+      "subs": [],
+      "fields": [
+        {
+          "id": "show_ai_summary",
+          "label": "Zhrnutia v zozname",
+          "control": "switch",
+          "default": true,
+          "help": "Pod predmetom v zozname zobrazí krátke AI zhrnutie. V Klasickom zobrazení je vypnuté.",
+          "scope": "P",
+          "options": [],
           "validation": {},
           "admin_only": false
         }

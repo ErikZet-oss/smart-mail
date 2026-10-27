@@ -2,7 +2,7 @@ import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { FolderColumn } from './FolderColumn';
-import type { FoldersView } from './mailApi';
+import type { AiCategory, FoldersView } from './mailApi';
 
 type Props = {
   open: boolean;
@@ -11,10 +11,23 @@ type Props = {
   view: FoldersView;
   activeRef: string;
   readOnly: boolean;
+  classic?: boolean;
+  aiCategories?: AiCategory[];
+  activeCategory?: string | null;
 };
 
 /** M2 Priečinky — left drawer over the mobile list. */
-export function MobileFolderDrawer({ open, onClose, mailboxRef, view, activeRef, readOnly }: Props) {
+export function MobileFolderDrawer({
+  open,
+  onClose,
+  mailboxRef,
+  view,
+  activeRef,
+  readOnly,
+  classic = false,
+  aiCategories = [],
+  activeCategory = null,
+}: Props) {
   const { t } = useTranslation();
   if (!open) return null;
   return (
@@ -45,7 +58,15 @@ export function MobileFolderDrawer({ open, onClose, mailboxRef, view, activeRef,
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-hidden" onClick={onClose}>
-          <FolderColumn mailboxRef={mailboxRef} view={view} activeRef={activeRef} readOnly={readOnly} />
+          <FolderColumn
+            mailboxRef={mailboxRef}
+            view={view}
+            activeRef={activeRef}
+            readOnly={readOnly}
+            classic={classic}
+            aiCategories={aiCategories}
+            activeCategory={activeCategory}
+          />
         </div>
       </div>
     </div>

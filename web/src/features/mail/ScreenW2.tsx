@@ -8,6 +8,7 @@ import {
   MousePointer2,
   RefreshCw,
   Search,
+  Sparkles,
   Trash2,
   UserPlus,
   X,
@@ -32,7 +33,10 @@ import { MobileAppBar } from './MobileAppBar';
 import { MobileFolderDrawer } from './MobileFolderDrawer';
 import { SwipeRow } from './SwipeRow';
 import {
+  aiCategoriesKey,
   bulkMessages,
+  fetchAiCategories,
+  fetchCategoryMessages,
   fetchFolders,
   fetchMessages,
   findFolder,
@@ -44,7 +48,7 @@ import {
   type MessageListItem,
   type ThreadListItem,
 } from './mailApi';
-import { MessageRow, type RowItem } from './MessageRow';
+import { CATEGORY_COLOR_TOKEN, MessageRow, categoryDotClass, type RowItem } from './MessageRow';
 import { ReadingPane } from './ReadingPane';
 import { useFolderLabel } from './useFolderLabel';
 
@@ -101,15 +105,31 @@ function EmptyState({ icon, title, text }: { icon: ReactNode; title: string; tex
 
 const FILTERS: MessageFilter[] = ['all', 'unread', 'flagged', 'attachments'];
 
-/** W2 E-mail — list + reading (Phase 1d). Remounts per folder so list UI state resets cleanly. */
+/** W2 E-mail — list + reading (Phase 1d). W2f when `category` is set. Remounts per folder/view. */
 export function ScreenW2() {
   const params = useParams();
   const mailboxRef = params.mailbox ?? 'default';
+  const category = params.category ?? null;
   const folderParam = params.folder ?? 'inbox';
-  return <ScreenW2Body key={`${mailboxRef}/${folderParam}`} mailboxRef={mailboxRef} folderParam={folderParam} />;
+  return (
+    <ScreenW2Body
+      key={`${mailboxRef}/${category ?? folderParam}`}
+      mailboxRef={mailboxRef}
+      folderParam={folderParam}
+      category={category}
+    />
+  );
 }
 
-function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderParam: string }) {
+function ScreenW2Body({
+  mailboxRef,
+  folderParam,
+  category,
+}: {
+  mailboxRef: string;
+  folderParam: string;
+  category: string | null;
+}) {
   const { t } = useTranslation();
   const params = useParams();
   const [search, setSearch] = useSearchParams();
@@ -119,6 +139,7 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
   const toasts = useToasts();
   const labelOf = useFolderLabel();
   const { classic, prefs } = useTheme();
+  const aiView = Boolean(category) && !classic;
 
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<MessageFilter>('all');
@@ -154,9 +175,35 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
   const mode = listPrefs?.mode ?? 'list';
 
   const folderId = folder?.id;
+  const aiCats = useQuery({
+    queryKey: aiCategoriesKey(mailboxRef),
+    queryFn: () => fetchAiCategories(mailboxRef),
+    enabled: !classic,
+    refetchInterval: FOLDERS_REFETCH_MS,
+  });
   const list = useQuery({
-    queryKey: [...messagesKey(mailboxRef, folderId ?? '', page, filter), q],
-    queryFn: () => {
+    queryKey: aiView
+      ? ['mail', 'ai-view', mailboxRef, category, page, filter, q]
+      : [...messagesKey(mailboxRef, folderId ?? '', page, filter), q],
+    queryFn: async () => {
+      if (aiView && category) {
+        const data = await fetchCategoryMessages(mailboxRef, category, {
+          page,
+          pageSize: listPrefs?.page_size,
+          filter,
+          q: q.trim() || undefined,
+        });
+        return {
+          mode: 'list' as const,
+          total: data.total,
+          page: data.page,
+          page_size: data.page_size,
+          messages: data.messages,
+          threads: [] as ThreadListItem[],
+          prefs: listPrefs!,
+          categoryMeta: data.category,
+        };
+      }
       if (!folderId) throw new Error('folder missing');
       return fetchMessages(mailboxRef, folderId, {
         page,
@@ -165,7 +212,7 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
         q: q.trim() || undefined,
       });
     },
-    enabled: Boolean(folderId),
+    enabled: aiView ? Boolean(category) : Boolean(folderId),
     refetchInterval: FOLDERS_REFETCH_MS,
   });
 
@@ -227,15 +274,28 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
     onError: () => toasts.error(t('mail.errors.generic')),
   });
 
+  const listBasePath = aiView
+    ? `/mail/${encodeURIComponent(mailboxRef)}/view/${encodeURIComponent(category!)}`
+    : `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`;
+
   const openMessage = useCallback(
     (messageId: string, threadId: string | null, full = false) => {
       setPickedMessageId(messageId);
       const tid = threadId ?? messageId;
-      const path = `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}/${encodeURIComponent(tid)}`;
+      // Thread deep-link stays on folder route (W2c); AI view keeps selection in-pane.
+      if (aiView && !full) {
+        navigate(listBasePath, { replace: true });
+        return;
+      }
+      const folderForThread =
+        aiView && list.data?.messages.find((m) => m.id === messageId)?.folder_id
+          ? 'inbox'
+          : folderParam;
+      const path = `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderForThread)}/${encodeURIComponent(tid)}`;
       if (full) navigate(path);
       else navigate(path, { replace: true });
     },
-    [mailboxRef, folderParam, navigate],
+    [mailboxRef, folderParam, navigate, aiView, listBasePath, list.data?.messages],
   );
 
   const rows: RowItem[] = useMemo(() => {
@@ -246,11 +306,23 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
     return list.data.messages.map((data: MessageListItem) => ({ kind: 'message' as const, data }));
   }, [list.data]);
 
+  const colorByCategory = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of aiCats.data?.categories ?? []) map.set(c.id, c.color_token);
+    return map;
+  }, [aiCats.data?.categories]);
+
+  const categoryMeta = aiCats.data?.categories.find((c) => c.id === category) ?? null;
+  const showAiSummary = Boolean(listPrefs?.show_ai_summary) && !classic;
+
   const error = folders.error instanceof ApiError ? folders.error : null;
   if (error?.status === 404 && error.detail.code === 'mailbox_not_found') {
     return <Navigate to={ROUTES.W16b.path} replace />;
   }
-  if (view && !folder) return <Navigate to={ROUTES.W16b.path} replace />;
+  if (view && !folder && !aiView) return <Navigate to={ROUTES.W16b.path} replace />;
+  if (classic && category) {
+    return <Navigate to={`/mail/${encodeURIComponent(mailboxRef)}/inbox`} replace />;
+  }
 
   const serverDown =
     error?.detail.code === 'mail_server_unavailable' ||
@@ -258,8 +330,12 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
       refresh.error.detail.code === 'mail_server_unavailable' &&
       refresh.submittedAt >= folders.dataUpdatedAt) ||
     view?.sync.state === 'error';
-  const label = folder ? labelOf(folder) : '';
-  const total = list.data?.total ?? folder?.total ?? 0;
+  const label = aiView
+    ? (categoryMeta?.label_sk ?? t(`ai.categories.${category}.label`, { defaultValue: category ?? '' }))
+    : folder
+      ? labelOf(folder)
+      : '';
+  const total = list.data?.total ?? (aiView ? 0 : (folder?.total ?? 0));
   const pageSize = list.data?.page_size ?? listPrefs?.page_size ?? 50;
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
@@ -316,6 +392,9 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
           view={view}
           activeRef={folder ? (folder.special_use ?? folder.id) : folderParam}
           readOnly={me.data?.read_only ?? true}
+          classic={classic}
+          aiCategories={aiCats.data?.categories ?? []}
+          activeCategory={aiView ? category : null}
         />
       ) : (
         <FolderSkeleton />
@@ -329,6 +408,9 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
           view={view}
           activeRef={folder ? (folder.special_use ?? folder.id) : folderParam}
           readOnly={me.data?.read_only ?? true}
+          classic={classic}
+          aiCategories={aiCats.data?.categories ?? []}
+          activeCategory={aiView ? category : null}
         />
       ) : null}
 
@@ -341,7 +423,7 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
             threadId={activeThreadId}
             onCleared={() => {
               setPickedMessageId(null);
-              navigate(`/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`);
+              navigate(listBasePath);
               void list.refetch();
             }}
           />
@@ -451,6 +533,18 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
         )}
 
         <div className="flex shrink-0 flex-col gap-2 border-b border-border-default px-2 pb-2">
+          {aiView && categoryMeta ? (
+            <div className="flex items-center gap-2 px-1 pt-1" data-testid="ai-category-header">
+              <span
+                aria-hidden="true"
+                className={`size-2.5 shrink-0 rounded-full ${categoryDotClass(categoryMeta.color_token)}`}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="type-label truncate text-text-primary">{categoryMeta.label_sk}</p>
+                <p className="type-caption truncate text-text-secondary">{categoryMeta.description_sk}</p>
+              </div>
+            </div>
+          ) : null}
           <label className="relative block">
             <Search
               size={14}
@@ -520,8 +614,15 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
           role={rows.length > 0 && !list.isLoading ? 'listbox' : undefined}
           aria-label={label}
           className="min-h-0 flex-1 overflow-y-auto"
+          data-testid={aiView ? 'ai-category-list' : 'folder-message-list'}
         >
-          {folder && folder.total === 0 ? (
+          {aiView && !list.isLoading && total === 0 && !q.trim() && filter === 'all' ? (
+            <EmptyState
+              icon={<Sparkles size={20} />}
+              title={t('ai.triage.emptyTitle', { name: label })}
+              text={t('ai.triage.emptyText')}
+            />
+          ) : !aiView && folder && folder.total === 0 ? (
             folder.special_use === 'inbox' ? (
               <EmptyState icon={<CircleCheck size={20} />} title={t('mail.allDone')} text={t('mail.allDoneText')} />
             ) : (
@@ -548,8 +649,10 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
               const tid = item.kind === 'message' ? item.data.thread_id : item.data.id;
               const selected =
                 activeMessageId === id ||
-                (activeThreadId !== null &&
+                (!aiView &&
+                  activeThreadId !== null &&
                   (item.kind === 'thread' ? item.data.id === activeThreadId : item.data.thread_id === activeThreadId));
+              const catId = item.kind === 'message' ? item.data.ai_category : null;
               const row = (
                 <MessageRow
                   item={item}
@@ -558,6 +661,10 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
                   showCheckbox={selectMode || selectedIds.size > 0}
                   density={density}
                   classic={classic}
+                  showAiSummary={showAiSummary}
+                  categoryColorToken={
+                    catId ? (colorByCategory.get(catId) ?? CATEGORY_COLOR_TOKEN[catId] ?? null) : null
+                  }
                   onSelect={() => openMessage(id, tid, mobile)}
                   onCheck={(checked) => {
                     setSelectMode(true);
@@ -627,12 +734,12 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
       {mobile || mobileThread ? null : (
         <ReadingPane
           mailbox={mailboxRef}
-          folderRef={folderParam}
+          folderRef={aiView ? 'inbox' : folderParam}
           messageId={activeMessageId}
           threadId={activeThreadId}
           onCleared={() => {
             setPickedMessageId(null);
-            navigate(`/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`, { replace: true });
+            navigate(listBasePath, { replace: true });
             void list.refetch();
           }}
         />
