@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 1g: contacts & search (UI)
+
+- Screens **W9** Kontakty, **W10** Hľadanie, **W11** Ctrl+K basic palette (no Firmy/Doklady/Asistent).
+- W10 corpus banner „Hľadá sa v správach od …“; special-char query → 200; Celá správa finds `firma.sk` via address LIKE.
+- First sync downloads **full** subscribed-folder history (`SEARCH ALL`) — documented in README.
+
 ## [Unreleased] — Phase 1g: contacts & search (backend)
 
 - Local address books (Osobné / Zdieľané), groups, contacts CRUD; vCard 2.1/3.0 import/export (Roundcube + QP
@@ -10,8 +16,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - Mail search: Roundcube scope/fields; prefix FTS (`to_tsquery` + `:*` after unaccent); Od/Komu/Kópia also substring
   LIKE (escaped); weighted `search_vector` (A/B/D); `pg_trgm` GIN; subfolders `startswith(..., autoescape=True)`.
   Search covers **downloaded** messages only (README). Migration `0010`+`0011`; ADR-009.
-- **W11 scope (UI in 1g-b):** basic palette only — Phase 1 commands, E-maily, Kontakty (no Firmy/Doklady/Asistent).
-- Screens W9/W10/W11 → 1g-b. Money search → Phase 3; AI search → Phase 2.
+- Money search → Phase 3; AI search → Phase 2.
 
 ## [Unreleased] — Phase 1f: settings + send guard
 

@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchMe, logout } from '../../features/auth/authApi';
 import { fetchPicker, PICKER_KEY } from '../../features/persons/personsApi';
 import { useIdleAsk } from '../../features/persons/useIdleAsk';
+import { CommandPaletteHost } from '../../features/search/CommandPalette';
 import { Banner } from '../Banner';
 import { DropZone } from './DropZone';
 import { Rail, type RailSection } from './Rail';
@@ -55,6 +56,7 @@ export function AppShell({ section, mailbox = 'default', unread = 0, children }:
         <div className="flex min-h-0 flex-1">{children}</div>
       </div>
       <DropZone />
+      <CommandPaletteHost />
     </div>
   );
 }

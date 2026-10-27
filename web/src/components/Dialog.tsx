@@ -16,6 +16,14 @@ type ShellProps = {
 const FOCUSABLE = 'button:not([disabled]),input:not([disabled]),select,textarea,[href],[tabindex]:not([tabindex="-1"])';
 
 /** G5 modal shell: overlay, title row with close, Esc closes, focus is trapped and returned to the opener. */
+export function Dialog({ title, width, onClose, children, footer, onSubmit }: ShellProps) {
+  return (
+    <DialogShell title={title} width={width} onClose={onClose} footer={footer} onSubmit={onSubmit}>
+      {children}
+    </DialogShell>
+  );
+}
+
 function DialogShell({ title, width, onClose, children, footer, onSubmit }: ShellProps) {
   const { t } = useTranslation();
   const titleId = useId();

@@ -114,11 +114,14 @@ docker compose exec app python -m app.cli maintenance on --until 2026-11-01T08:0
 docker compose exec app python -m app.cli maintenance off
 ```
 
-### Kontakty a hľadanie (fáza 1g — backend)
-Lokálne adresáre Osobné / Zdieľané, skupiny, vCard import/export (`fixtures/contacts/`), autocomplete.
+### Kontakty a hľadanie (fáza 1g)
+Lokálne adresáre Osobné / Zdieľané, skupiny, vCard import/export (`fixtures/contacts/`), autocomplete;
+obrazovky W9 / W10 / W11 (základná paleta Ctrl+K).
 Hľadanie: Roundcube rozsah a polia, Postgres FTS (`simple` + `unaccent`, prefix `:*`) + substring adries
-(`pg_trgm`). **Hľadá sa len v správach už stiahnutých do Postgres** (prvá synchronizácia stiahne históriu
-schránky podľa sync jobu) — nie online cez IMAP. Obrazovky (1g-b) majú zobraziť „Hľadá sa v správach od …“.
+(`pg_trgm`). **Hľadá sa len v správach už stiahnutých do Postgres** — nie online cez IMAP.
+**Prvá synchronizácia stiahne celú históriu každej odoberanej schránky/priečinka** (`SEARCH ALL` + fetch
+všetkých UID; žiadny časový limit). W10 zobrazí „Hľadá sa v správach od {dátum najstaršej stiahnutej
+správy}“. Ak by sa v budúcnosti orezávala história, je to **pilotné riziko** (neúplné výsledky).
 W11 v 1g len základná paleta (Príkazy fázy 1, E-maily, Kontakty — bez Firiem/Dokladov/Asistenta).
 
 ### Nastavenia (fáza 1f)

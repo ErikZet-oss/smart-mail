@@ -411,6 +411,18 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
               onChange={(event) => setQ(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
+                  const needle = q.trim();
+                  if (needle) {
+                    const qs = new URLSearchParams({
+                      q: needle,
+                      scope: 'current',
+                      field: 'full',
+                      mailbox: mailboxRef,
+                    });
+                    if (folder?.id) qs.set('folder_id', folder.id);
+                    navigate(`/search?${qs.toString()}`);
+                    return;
+                  }
                   setPage(1);
                   void list.refetch();
                 }
