@@ -20,6 +20,9 @@ test-results/
 probe.env
 *.pem
 *.key
+deploy/Caddyfile
+deploy/.state*/
+deploy/.backups*/
 # Money probe output may contain business data until reviewed
 probe_output/raw/
 # OS / editors

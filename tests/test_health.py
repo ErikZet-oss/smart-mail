@@ -34,3 +34,20 @@ def test_version_endpoint() -> None:
         r = client.get("/api/version")
     assert r.status_code == 200
     assert r.json()["env"] == "test"
+
+
+def test_openapi_docs_disabled_outside_dev() -> None:
+    with TestClient(create_app(_unreachable_settings())) as client:
+        assert client.get("/api/docs").status_code == 404
+        assert client.get("/api/openapi.json").status_code == 404
+
+
+def test_openapi_docs_enabled_in_dev() -> None:
+    settings = Settings(
+        app_env="dev",
+        database_url="postgresql+asyncpg://x:y@127.0.0.1:1/none",
+        redis_url="redis://127.0.0.1:1/0",
+    )
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/api/openapi.json").status_code == 200
+        assert client.get("/api/docs").status_code == 200

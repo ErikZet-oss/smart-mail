@@ -180,6 +180,64 @@ Integrácia voči skutočnému serveru `mail2.nameserver.sk` beží len keď sú
 (výhradne testovacia schránka, ktorú dodá zákazník pred 1f) – inak sa test preskočí. Heslo nikdy do gitu ani do
 chatu.
 
+## Nasadenie (pilot na VPS)
+
+Pilot beží na prenajatom VPS (Hetzner CX33 alebo netcup VPS 1000, Ubuntu 24.04, 8 GB RAM). Firemný Hyper-V
+prichádza až pred produkciou. Podrobnosti: `docs/adr/010-vps-caddy-cloudflare-tunnel.md`.
+
+### 1. Vytvorte server
+1. V konzole Hetzner / netcup založte VPS s **Ubuntu 24.04**, aspoň **8 GB RAM**.
+2. Poznačte si **verejnú IPv4** adresu.
+
+### 2. DNS
+1. V DNS pre doménu (napr. `smartsro.sk`) pridajte záznam **A**:
+   - meno: `test-posta` (alebo iný hostname),
+   - hodnota: IPv4 servera,
+   - TTL: 300.
+2. Počkajte, kým `ping test-posta.smartsro.sk` ukáže IP servera.
+
+### 3. SSH a kód
+1. Prihláste sa: `ssh root@IP_SERVERA`.
+2. V GitHub → Settings → Deploy keys pridajte **read-only** kľúč zo servera
+   (`ssh-keygen -t ed25519 -f ~/.ssh/smartmail -N ""` a obsah `~.ssh/smartmail.pub`).
+3. Naklonujte repozitár:
+   ```bash
+   git clone git@github.com:ErikZet-oss/smart-mail.git /opt/smart-mail
+   cd /opt/smart-mail
+   ```
+
+### 4. Inštalácia
+```bash
+cd /opt/smart-mail
+sudo ./deploy/install.sh
+```
+Skript sa spýta (slovensky, s predvolenými hodnotami):
+- **režim** `vps` (Caddy + Let’s Encrypt na 80/443) alebo `tunnel` (Cloudflare Tunnel),
+- **adresu aplikácie** (napr. `test-posta.smartsro.sk`),
+- **Cloudflare token** (len pri `tunnel`, skrytý vstup),
+- **IMAP/SMTP server** (predvolené `mail2.nameserver.sk`),
+- **INTERNAL_DOMAINS**, **ADMIN_EMAILS**,
+- **LOGIN_ALLOWLIST** (predvolené `test@smartsro.sk`; prázdne = všetci z INTERNAL_DOMAINS),
+- **MAIL_SEND_TEST_ALLOWLIST** (kam smie testovací server posielať).
+
+Vygeneruje `.env` (chmod 600), nainštaluje Docker ak chýba, zapne **ufw** (vps: 22/80/443; tunnel: len 22),
+spustí compose a na konci vypíše: `Smart Mail beží: https://…`. Druhé spustenie **neprepisuje** `.env` ani
+dáta a vypíše `Nastavenia ponechávam z .env…` (bez otázok) — zmeny robte v `deploy/.env` a `./deploy/update.sh`.
+
+Testovací režim: `APP_ENV=test`, sync voči reálnemu IMAP, odosielanie len na allowlist. Bez Mailpit a bez
+`imap-test`. Money (mock bridge) v UI skryté. `/api/docs` je vypnuté (len pri `APP_ENV=dev`).
+
+### 5. Bežná správa
+```bash
+./deploy/status.sh    # stav služieb, disk, posledný sync (bez tajomstiev a tiel správ)
+./deploy/update.sh    # git pull + záloha + rebuild + migrácie; pri chybe reset --hard na vetve
+./deploy/backup.sh    # ručná záloha (cron o 02:15 ukladá do /var/backups/smartmail, 7 dní)
+```
+Migrácie sa pri zlyhaní update **samy nevracajú** — skript vypíše postup `pg_restore` zo zálohy.
+
+**Nikdy** nepoužívajte live schránky eshop@ / info@ / pobočky na pilot — len `test@smartsro.sk` (alebo
+LOGIN_ALLOWLIST).
+
 Pre programátora (agenta): `make check` spustí to isté čo CI okrem Dockeru (ruff, mypy, pytest vrátane golden
 testov tlačových dokladov, eslint, prettier, tsc, vitest). Golden testy potrebujú `poppler-utils` a písmo z
 `templates/print/fonts/`. Nastavenia: `.env.example` (skopírovať do `.env`, nikdy necommitovať).

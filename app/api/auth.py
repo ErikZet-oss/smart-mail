@@ -182,6 +182,11 @@ async def login(
     ip = client_ip(request)
     if not EMAIL_RE.match(email):
         raise fail(401, "invalid_credentials")
+    if not settings.login_allowed(email):
+        # Same opaque error as a wrong password — do not reveal allowlist membership.
+        audit(db, "auth.login_failed", ip=ip, details={"email": email, "reason": "not_allowlisted"})
+        await db.commit()
+        raise fail(401, "invalid_credentials")
     lock = await limiter.check(email, ip)
     if lock.locked:
         known = (await db.execute(select(Account.id).where(Account.email == email))).scalar_one_or_none()

@@ -95,6 +95,11 @@ def settings(migrated: str, tmp_path_factory: pytest.TempPathFactory) -> Setting
         smtp_host="localhost",
         smtp_port=1025,
         smtp_security="none",
+        internal_domains="smartsro.sk,smartmail.test",
+        login_allowlist="",  # empty = all INTERNAL_DOMAINS (CI has no .env)
+        feature_money=False,
+        # ASGI test client peers as 127.0.0.1 — trust X-Forwarded-For for D26 IP tests
+        forwarded_allow_ips="127.0.0.1",
     )
 
 
@@ -151,9 +156,26 @@ class Client(httpx.AsyncClient):
         await self.csrf()
         return await self.request(method, url, json=json, headers={"X-CSRF-Token": self.cookies["sm_csrf"]})
 
-    async def login(self, email: str, password: str, remember: bool = False) -> httpx.Response:
-        return await self.send_json(
-            "POST", "/api/auth/login", {"email": email, "password": password, "remember": remember}
+    async def login(
+        self,
+        email: str,
+        password: str,
+        remember: bool = False,
+        *,
+        forwarded_for: str | None = None,
+        cf_connecting_ip: str | None = None,
+    ) -> httpx.Response:
+        await self.csrf()
+        headers: dict[str, str] = {"X-CSRF-Token": self.cookies["sm_csrf"]}
+        if forwarded_for is not None:
+            headers["X-Forwarded-For"] = forwarded_for
+        if cf_connecting_ip is not None:
+            headers["CF-Connecting-IP"] = cf_connecting_ip
+        return await self.request(
+            "POST",
+            "/api/auth/login",
+            json={"email": email, "password": password, "remember": remember},
+            headers=headers,
         )
 
 

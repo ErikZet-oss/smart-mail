@@ -60,15 +60,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await app.state.redis.aclose()
             await app.state.engine.dispose()
 
+    # OpenAPI UI only in local development — never on test/prod VPS (CLAUDE.md §11).
+    docs = "/api/docs" if settings.app_env == "dev" else None
+    openapi = "/api/openapi.json" if settings.app_env == "dev" else None
     app = FastAPI(
         title="Smart Mail",
         version=__version__,
         lifespan=lifespan,
-        docs_url="/api/docs",
-        openapi_url="/api/openapi.json",
+        docs_url=docs,
+        openapi_url=openapi,
     )
     app.state.settings = settings
     middleware.install(app, settings)
+    # Trust X-Forwarded-For from Docker-edge proxies (nginx ← Caddy / cloudflared). Same list as
+    # FORWARDED_ALLOW_IPS for uvicorn --proxy-headers; required in tests (no uvicorn wrapper).
+    if settings.forwarded_allow_ips.strip():
+        from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+        app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=settings.forwarded_allow_ips)
     app.include_router(auth.router)
     app.include_router(persons.router)
     app.include_router(mail.router)

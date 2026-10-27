@@ -109,6 +109,7 @@ export const MAIL_DEFAULTS: Record<string, Reply> = {
   'PUT /api/mail/prefs': { body: DEFAULT_PREFS },
   // Rail polls notifications; unmocked 401 would kick the shell to login.
   'GET /api/notifications': { body: { items: [], unread_count: 0 } },
+  'GET /api/system/info': { body: { admin_contact_email: null, features: { money: false } } },
 };
 
 /** Phase 1f W12: nav + profile so opening Nastavenia from older e2e shells does not 401 → /login. */

@@ -2,6 +2,21 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 1h-f (PR 6): VPS deploy (Caddy / Cloudflare Tunnel)
+
+- `deploy/install.sh` (vps | tunnel | CI), `update.sh` (rollback on failure), `status.sh`, `backup.sh` (7 days).
+- Compose stack without Mailpit / imap-test; edge Caddy (Let’s Encrypt) or cloudflared; other ports on 127.0.0.1.
+- `LOGIN_ALLOWLIST`, `FEATURE_MONEY=false` (Money UI hidden; mock bridge only). ADR-010.
+- CI job runs `deploy/ci-smoke.sh` (no certificate, no tunnel). README „Nasadenie“ (SK).
+- Real client IP: nginx `$proxy_add_x_forwarded_for` + Docker `real_ip`, proto from Caddy; tunnel-only
+  `CF-Connecting-IP` (vps Caddy strips it); `FORWARDED_ALLOW_IPS` = Docker networks (never `*`).
+  D26 tests: two IPs + audit IP; vps spoofed CF header ignored.
+- Caddy HSTS `max-age=31536000` + security headers for `/api`; pinned `caddy:2.11.7-alpine`,
+  `cloudflared:2026.10.4`. `update.sh`: backup before migrate, `git reset --hard` on branch
+  (CI: local `ci-deploy` keeps PR checkout, not origin/main); restore hint on failure.
+  `backup.sh` writes S3 tar as host user so CI chmod works. `install.sh`: ufw; keep `.env` silent.
+- `/api/docs` + `/api/openapi.json` off outside `APP_ENV=dev`. Deploy CI smoke independent of backend job.
+
 ## [Unreleased] — Phase 1h-c: W13 tour, W14/M16, W15, W15b, classic
 
 - **W13 / M-W13** Úvodná prehliadka (desktop Phase-1 steps + branch PersonChip step; mobile 3 steps).

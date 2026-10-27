@@ -23,6 +23,7 @@ import { Menu, type MenuEntry } from '../../components/Menu';
 import { useToasts } from '../../components/toastContext';
 import { useMenu } from '../../components/useMenu';
 import { ApiError } from '../../lib/api';
+import { useFeatures } from '../system/features';
 import {
   createFolder,
   deleteFolder,
@@ -478,6 +479,7 @@ function megabytes(kb: number): string {
 /** Roundcube's quota line (icon + bar + %, red ≥ 90 %) and the Money ● status (Money comes in Phase 3). */
 function QuotaRow({ quota }: { quota: Quota | null }) {
   const { t } = useTranslation();
+  const { money: moneyFeature } = useFeatures();
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-t border-border-default bg-bg-subtle px-3">
       {quota ? (
@@ -512,11 +514,13 @@ function QuotaRow({ quota }: { quota: Quota | null }) {
         </div>
       ) : null}
       <span className="flex-1" />
-      <span className="flex items-center gap-1.5" title={t('folders.money.off')}>
-        <span aria-hidden="true" className="size-[7px] rounded-full bg-text-tertiary" />
-        <span className="type-caption text-text-secondary">{t('folders.money.label')}</span>
-        <span className="sr-only">{t('folders.money.off')}</span>
-      </span>
+      {moneyFeature ? (
+        <span className="flex items-center gap-1.5" title={t('folders.money.off')}>
+          <span aria-hidden="true" className="size-[7px] rounded-full bg-text-tertiary" />
+          <span className="type-caption text-text-secondary">{t('folders.money.label')}</span>
+          <span className="sr-only">{t('folders.money.off')}</span>
+        </span>
+      ) : null}
     </div>
   );
 }
