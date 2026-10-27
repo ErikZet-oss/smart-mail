@@ -19,6 +19,9 @@ all CI gates green, push, Playwright screenshots next to the Figma frames sent t
 Nastavenia), E-maily, Kontakty. Groups **Firmy**, **Doklady** and **Asistent** are not rendered at all (not disabled
 buttons) — they arrive in Phase 3 (Firmy/Doklady) and Phase 5 (Asistent / full palette).
 
+**Search coverage (1g-b UI):** backend search only covers messages already downloaded into Postgres (not live IMAP).
+When the corpus is incomplete, W10 must show „Hľadá sa v správach od …“ (see README / ADR-009).
+
 Guards: no real e-mail during development (test IMAP server + Mailpit), no Money, no AI in Phase 1.
 
 Needed from the customer (not blocking 1a–1b): a test mailbox on mail2.nameserver.sk (credentials only in `.env`,

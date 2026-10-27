@@ -4,15 +4,14 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — Phase 1g: contacts & search (backend)
 
-- Local address books (Osobné / Zdieľané), groups, contacts CRUD; vCard import/export (Roundcube export fixture);
-  compose autocomplete. Contacts live only in our DB — IMAP is never written for the address book.
-- Mail search API: Roundcube scope (current / subfolders / all) and fields (Predmet, Od, Komu, Kópia, Telo,
-  Celá správa); Postgres FTS `tsvector` with `simple` + `unaccent` (cena ↔ céna, Trenčín ↔ trencin).
-- ACL: only mailboxes with `mailbox_access`; private folders of other persons are excluded.
-- **W11 scope (UI in 1g-b):** basic palette only — Phase 1 commands (Vytvoriť správu, Prejsť na priečinok,
-  Prepnúť osobu, Nastavenia), E-maily, Kontakty. Firmy / Doklady / Asistent are not shown (arrive in phases 3 and 5).
-  CLAUDE.md still lists the full palette in Phase 5; `docs/plans/phase-1.md` records this 1g subset.
-- Screens W9/W10/W11 → follow-up PR 1g-b. Money search → Phase 3; AI search → Phase 2.
+- Local address books (Osobné / Zdieľané), groups, contacts CRUD; vCard 2.1/3.0 import/export (Roundcube + QP
+  CHARSET fixtures); compose autocomplete. Contacts only in DB — IMAP never written. Viewer: shared book read-only
+  (403). Shared mutations audited. Partial unique index for one shared book. Import limits 5 MB / 5 000 contacts (413).
+- Mail search: Roundcube scope/fields; prefix FTS (`to_tsquery` + `:*` after unaccent); Od/Komu/Kópia also substring
+  LIKE (escaped); weighted `search_vector` (A/B/D); `pg_trgm` GIN; subfolders `startswith(..., autoescape=True)`.
+  Search covers **downloaded** messages only (README). Migration `0010`+`0011`; ADR-009.
+- **W11 scope (UI in 1g-b):** basic palette only — Phase 1 commands, E-maily, Kontakty (no Firmy/Doklady/Asistent).
+- Screens W9/W10/W11 → 1g-b. Money search → Phase 3; AI search → Phase 2.
 
 ## [Unreleased] — Phase 1f: settings + send guard
 

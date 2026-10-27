@@ -1,16 +1,33 @@
-"""Minimal vCard 3.0 parse/serialize for Roundcube-compatible import/export (PRODUCT_SPEC §2.6).
+"""vCard 2.1/3.0 parse/serialize for Roundcube-compatible import/export (PRODUCT_SPEC §2.6).
 
-No third-party vCard library: keep the surface small for Phase 1g. Fixtures must use @smartmail.test only.
+Supports ENCODING=QUOTED-PRINTABLE and CHARSET= (utf-8, windows-1250). Fixtures: @smartmail.test only.
 """
 
 from __future__ import annotations
 
+import quopri
 from dataclasses import dataclass, field
 from typing import Any
 
 
 class VCardError(ValueError):
     """Invalid or empty vCard payload."""
+
+
+class VCardTooLarge(VCardError):
+    """Import exceeds size or contact count limit."""
+
+
+MAX_VCARD_BYTES = 5 * 1024 * 1024
+MAX_VCARD_CONTACTS = 5_000
+
+_CHARSETS = {
+    "utf-8": "utf-8",
+    "utf8": "utf-8",
+    "windows-1250": "cp1250",
+    "windows1250": "cp1250",
+    "cp1250": "cp1250",
+}
 
 
 @dataclass
@@ -25,8 +42,11 @@ class ParsedContact:
 
 
 def _unfold(text: str) -> list[str]:
-    """RFC 6350 line unfolding (CRLF + space/tab continuation)."""
+    """RFC 6350 / vCard 2.1 line unfolding (CRLF + space/tab, and QP soft breaks)."""
     raw = text.replace("\r\n", "\n").replace("\r", "\n")
+    # Quoted-printable soft line breaks (= at EOL) before structural unfold
+    while "=\n" in raw:
+        raw = raw.replace("=\n", "")
     lines: list[str] = []
     for line in raw.split("\n"):
         if line.startswith((" ", "\t")) and lines:
@@ -44,6 +64,35 @@ def _escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 
+def _param_map(params: list[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for p in params:
+        if "=" in p:
+            k, v = p.split("=", 1)
+            out[k.upper()] = v
+        else:
+            out[p.upper()] = ""
+    return out
+
+
+def _decode_value(raw_value: str, params: list[str]) -> str:
+    pmap = _param_map(params)
+    encoding = (pmap.get("ENCODING") or "").upper()
+    charset_key = (pmap.get("CHARSET") or "utf-8").lower()
+    charset = _CHARSETS.get(charset_key, "utf-8")
+    if encoding in {"QUOTED-PRINTABLE", "QP"}:
+        # Soft breaks already removed in _unfold; decode QP then charset.
+        try:
+            raw_bytes = quopri.decodestring(raw_value.encode("ascii", errors="replace"))
+        except Exception as exc:
+            raise VCardError("quoted_printable") from exc
+        return raw_bytes.decode(charset, errors="replace")
+    if charset != "utf-8":
+        # Plain value labeled with a non-UTF charset (rare); interpret latin-1 bytes as charset.
+        return raw_value.encode("latin-1", errors="replace").decode(charset, errors="replace")
+    return _unescape(raw_value.strip())
+
+
 def _parse_line(line: str) -> tuple[str, list[str], str] | None:
     if not line or line.startswith(" ") or ":" not in line:
         return None
@@ -52,11 +101,17 @@ def _parse_line(line: str) -> tuple[str, list[str], str] | None:
     name = parts[0].upper()
     if name.startswith("ITEM") and "." in name:
         name = name.split(".", 1)[1]
-    params = [p.upper() for p in parts[1:]]
-    return name, params, value
+    fixed: list[str] = []
+    for p in parts[1:]:
+        if "=" in p:
+            k, v = p.split("=", 1)
+            fixed.append(f"{k.upper()}={v}")
+        else:
+            fixed.append(p.upper())
+    return name, fixed, value
 
 
-def parse_vcards(text: str) -> list[ParsedContact]:
+def parse_vcards(text: str, *, max_contacts: int = MAX_VCARD_CONTACTS) -> list[ParsedContact]:
     """Parse one or more BEGIN:VCARD … END:VCARD blocks. Raises VCardError if none are valid."""
     if not text or not text.strip():
         raise VCardError("empty")
@@ -76,6 +131,8 @@ def parse_vcards(text: str) -> list[ParsedContact]:
                     current.display_name = str(current.emails[0].get("email") or "")
                 if current.display_name or current.emails:
                     contacts.append(current)
+                    if len(contacts) > max_contacts:
+                        raise VCardTooLarge("too_many_contacts")
             current = None
             continue
         if current is None:
@@ -84,7 +141,10 @@ def parse_vcards(text: str) -> list[ParsedContact]:
         if parsed is None:
             continue
         name, params, raw_value = parsed
-        value = _unescape(raw_value.strip())
+        try:
+            value = _decode_value(raw_value, params)
+        except VCardError:
+            value = _unescape(raw_value.strip())
         if name == "FN":
             current.display_name = value
         elif name == "N":
@@ -97,8 +157,8 @@ def parse_vcards(text: str) -> list[ParsedContact]:
             current.notes = value
         elif name == "EMAIL" and value:
             label = "work" if any("WORK" in p for p in params) else "home" if any("HOME" in p for p in params) else None
-            primary = any("PREF" in p or p == "TYPE=PREF" for p in params) or not current.emails
-            current.emails.append({"email": value.lower(), "label": label, "primary": primary})
+            primary = any("PREF" in p or p.endswith("=PREF") for p in params) or not current.emails
+            current.emails.append({"email": value.lower().strip(), "label": label, "primary": primary})
         elif name == "TEL" and value:
             label = (
                 "work"

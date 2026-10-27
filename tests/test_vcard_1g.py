@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.contacts.vcard import VCardError, parse_vcards, serialize_vcards
+from app.contacts.vcard import VCardError, VCardTooLarge, parse_vcards, serialize_vcards
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "contacts"
 
@@ -42,3 +42,35 @@ def test_1g_bad_vcard_raises() -> None:
 def test_1g_empty_vcard_raises() -> None:
     with pytest.raises(VCardError):
         parse_vcards("   ")
+
+
+def test_1g_vcard21_quoted_printable_slovak() -> None:
+    text = (FIXTURES / "vcard21_slovak_qp.vcf").read_text(encoding="utf-8")
+    contacts = parse_vcards(text)
+    assert len(contacts) == 1
+    c = contacts[0]
+    assert c.display_name == "Ján Novák"
+    assert c.first_name == "Ján"
+    assert c.last_name == "Novák"
+    assert c.organization == "Pobočka Trenčín"
+    assert c.emails[0]["email"] == "jan.qp@smartmail.test"
+    assert c.notes is not None and "čéna" in c.notes
+
+
+def test_1g_vcard21_windows1250_quoted_printable_slovak() -> None:
+    text = (FIXTURES / "vcard21_slovak_cp1250.vcf").read_text(encoding="utf-8")
+    contacts = parse_vcards(text)
+    assert len(contacts) == 1
+    c = contacts[0]
+    assert c.display_name == "Mária Čéna"
+    assert c.first_name == "Mária"
+    assert c.last_name == "Čéna"
+    assert c.organization == "Pobočka Trenčín"
+    assert c.emails[0]["email"] == "maria.cp1250@smartmail.test"
+    assert c.notes is not None and "faktúra" in c.notes and "cena" in c.notes
+
+
+def test_1g_vcard_too_many_contacts() -> None:
+    card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:X\r\nEMAIL:a@smartmail.test\r\nEND:VCARD\r\n"
+    with pytest.raises(VCardTooLarge):
+        parse_vcards(card * 3, max_contacts=2)

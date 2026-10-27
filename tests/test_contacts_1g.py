@@ -179,3 +179,55 @@ async def test_1g_contacts_never_touch_imap_tables_only(
     after = (await db.execute(select(Mailbox))).scalars().all()
     assert len(after) == len(before)
     assert await db.scalar(select(Contact).where(Contact.display_name == "Len DB")) is not None
+
+
+@pytest.mark.asyncio
+async def test_1g_viewer_shared_book_read_only(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
+    from app.core.audit import AuditLog
+
+    sales = await make_personal(db, email="sales@smartmail.test", role=Role.sales)
+    mail_server.passwords[sales.email] = PASSWORD
+    assert (await client.login(sales.email, PASSWORD)).status_code == 200
+    books = (await client.get("/api/contacts/books")).json()
+    shared = next(b for b in books if b["kind"] == "shared")
+    created = await client.send_json(
+        "POST",
+        f"/api/contacts/books/{shared['id']}/contacts",
+        {"display_name": "Zdieľaný", "emails": [{"email": "shared@smartmail.test"}]},
+    )
+    assert created.status_code == 201, created.text
+    audits = list((await db.execute(select(AuditLog).where(AuditLog.action == "contacts.shared_create"))).scalars())
+    assert audits and audits[-1].person_id is not None
+
+    viewer = await make_personal(db, email="viewer@smartmail.test", role=Role.viewer)
+    mail_server.passwords[viewer.email] = PASSWORD
+    assert (await client.login(viewer.email, PASSWORD)).status_code == 200
+    listed = await client.get(f"/api/contacts/books/{shared['id']}/contacts")
+    assert listed.status_code == 200
+    assert any(c["display_name"] == "Zdieľaný" for c in listed.json())
+    denied = await client.send_json(
+        "POST",
+        f"/api/contacts/books/{shared['id']}/contacts",
+        {"display_name": "Nesmie", "emails": [{"email": "no@smartmail.test"}]},
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["code"] == "read_only"
+
+
+@pytest.mark.asyncio
+async def test_1g_vcard_import_413_too_large(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
+    await _signed_in(client, db, mail_server)
+    books = (await client.get("/api/contacts/books")).json()
+    book_id = books[0]["id"]
+    await client.csrf()
+    huge = b"BEGIN:VCARD\n" + (b"X:" + b"a" * 1024 + b"\n") * (5 * 1024) + b"END:VCARD\n"
+    assert len(huge) > 5 * 1024 * 1024
+    r = await client.post(
+        f"/api/contacts/books/{book_id}/import",
+        files={"file": ("huge.vcf", huge, "text/vcard")},
+        data={"on_duplicate": "skip"},
+        headers={"X-CSRF-Token": client.cookies["sm_csrf"]},
+    )
+    assert r.status_code == 413
+    assert r.json()["detail"]["code"] == "vcard_too_large"
+    assert "5 MB" in r.json()["detail"]["message"]

@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from app.auth.deps import DB, ActivePerson, Auth
+from app.auth.deps import DB, Auth, SignedInPerson
 from app.mail.search import SearchScope, search_messages
 
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -38,7 +38,7 @@ class SearchOut(BaseModel):
 @router.get("")
 async def search(
     ctx: Auth,
-    person: ActivePerson,
+    person: SignedInPerson,
     db: DB,
     q: Annotated[str, Query(min_length=1, max_length=500)],
     scope: Annotated[SearchScope, Query()] = "all",

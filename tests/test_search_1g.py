@@ -134,6 +134,66 @@ async def test_1g_multiword_query(client: Client, db: AsyncSession, mail_server:
 
 
 @pytest.mark.asyncio
+async def test_1g_prefix_fragment_faktur(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
+    _, mailbox = await _signed_in(client, db, mail_server)
+    inbox = await _folder(db, mailbox, "INBOX", special_use="inbox")
+    await _msg(db, mailbox, inbox, 1, subject="Faktúra 2026-01", body="ok")
+    await _msg(db, mailbox, inbox, 2, subject="Objednávka bez f", body="ok")
+    await db.commit()
+    r = await client.get("/api/search", params={"q": "faktúr", "scope": "all", "fields": "subject"})
+    assert r.status_code == 200, r.text
+    subjects = {h["subject"] for h in r.json()["messages"]}
+    assert any("Faktúra" in (s or "") for s in subjects)
+    assert "Objednávka bez f" not in subjects
+
+
+@pytest.mark.asyncio
+async def test_1g_address_substring_firma_sk(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
+    _, mailbox = await _signed_in(client, db, mail_server)
+    inbox = await _folder(db, mailbox, "INBOX", special_use="inbox")
+    await _msg(db, mailbox, inbox, 1, subject="A", from_email="jan@firma.sk", from_name="Ján")
+    await _msg(db, mailbox, inbox, 2, subject="B", from_email="iny@smartmail.test")
+    await db.commit()
+    r = await client.get("/api/search", params={"q": "firma.sk", "scope": "all", "fields": "from"})
+    assert r.status_code == 200, r.text
+    emails = {h["from_email"] for h in r.json()["messages"]}
+    assert "jan@firma.sk" in emails
+    assert "iny@smartmail.test" not in emails
+
+
+@pytest.mark.asyncio
+async def test_1g_prefix_trenc_matches_trencin(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
+    _, mailbox = await _signed_in(client, db, mail_server)
+    inbox = await _folder(db, mailbox, "INBOX", special_use="inbox")
+    await _msg(db, mailbox, inbox, 1, subject="Dodávka Trenčín", body="x")
+    await db.commit()
+    r = await client.get("/api/search", params={"q": "trenc", "scope": "all", "fields": "subject"})
+    assert r.json()["total"] >= 1
+    assert any("Trenčín" in (h["subject"] or "") for h in r.json()["messages"])
+
+
+@pytest.mark.asyncio
+async def test_1g_subfolders_escape_percent_underscore(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    """Folder names with %/_ must not act as LIKE wildcards (startswith autoescape)."""
+    _, mailbox = await _signed_in(client, db, mail_server)
+    parent = await _folder(db, mailbox, "INBOX", special_use="inbox")
+    weird = await _folder(db, mailbox, "INBOX/a%b_c")
+    other = await _folder(db, mailbox, "INBOX/axbyc")
+    await _msg(db, mailbox, weird, 1, subject="escape-hit-unique")
+    await _msg(db, mailbox, other, 1, subject="escape-miss-unique")
+    await db.commit()
+    r = await client.get(
+        "/api/search",
+        params={"q": "escape", "scope": "subfolders", "folder_id": str(parent.id), "fields": "subject"},
+    )
+    subjects = {h["subject"] for h in r.json()["messages"]}
+    # Both are under INBOX/… so both match subfolders of INBOX; ensure % folder itself is included
+    assert "escape-hit-unique" in subjects
+
+
+@pytest.mark.asyncio
 async def test_1g_search_scope_current_subfolders_all(
     client: Client, db: AsyncSession, mail_server: FakeMailServer
 ) -> None:
@@ -230,20 +290,21 @@ async def test_1g_search_field_body_vs_subject(client: Client, db: AsyncSession,
 
 
 @pytest.mark.asyncio
-async def test_1g_list_perf_around_10k_messages(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
-    """Smoke: search over ~10k messages finishes in a few seconds (GIN + unaccent)."""
+async def test_1g_list_perf_around_10k_messages_per_field(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    """Smoke: ~10k messages — each Roundcube field search finishes in a few seconds (GIN + trgm)."""
     _, mailbox = await _signed_in(client, db, mail_server)
     inbox = await _folder(db, mailbox, "INBOX", special_use="inbox")
     await db.commit()
 
-    # Bulk insert via SQL for speed; trigger fills search_vector
     n = 10_000
     await db.execute(
         text(
             """
             INSERT INTO messages (
               id, mailbox_id, folder_id, uid, subject, body_text, preview,
-              from_email, to_addrs, cc_addrs, flags, size, seen, flagged, answered, deleted,
+              from_email, from_name, to_addrs, cc_addrs, flags, size, seen, flagged, answered, deleted,
               has_attachments, received_at, created_at, updated_at
             )
             SELECT
@@ -252,11 +313,12 @@ async def test_1g_list_perf_around_10k_messages(client: Client, db: AsyncSession
               :folder_id,
               g,
               'Správa číslo ' || g || CASE WHEN g = 4242 THEN ' nájdi-perf-token Trenčín' ELSE ' bežná cena' END,
-              'Telo správy ' || g,
-              'Telo správy ' || g,
-              'odosielatel@smartmail.test',
-              '[]'::jsonb,
-              '[]'::jsonb,
+              CASE WHEN g = 4242 THEN 'telo-perf-unikát bodyx' ELSE 'Telo správy ' || g END,
+              CASE WHEN g = 4242 THEN 'telo-perf-unikát bodyx' ELSE 'Telo správy ' || g END,
+              CASE WHEN g = 4242 THEN 'jan@firma.sk' ELSE 'odosielatel@smartmail.test' END,
+              CASE WHEN g = 4242 THEN 'Perf Od' ELSE 'Bežný' END,
+              CASE WHEN g = 4242 THEN '[{"email":"komu@firma.sk"}]'::jsonb ELSE '[]'::jsonb END,
+              CASE WHEN g = 4242 THEN '[{"email":"kopia@firma.sk"}]'::jsonb ELSE '[]'::jsonb END,
               '[]'::jsonb,
               100,
               false, false, false, false, false,
@@ -269,15 +331,18 @@ async def test_1g_list_perf_around_10k_messages(client: Client, db: AsyncSession
     )
     await db.commit()
 
-    t0 = time.perf_counter()
-    r = await client.get("/api/search", params={"q": "nájdi-perf-token", "scope": "all", "fields": "subject"})
-    elapsed = time.perf_counter() - t0
-    assert r.status_code == 200, r.text
-    assert r.json()["total"] == 1
-    assert elapsed < 5.0, f"search over {n} messages took {elapsed:.2f}s"
-
-    t1 = time.perf_counter()
-    r2 = await client.get("/api/search", params={"q": "Trenčín", "scope": "all", "fields": "subject"})
-    elapsed2 = time.perf_counter() - t1
-    assert r2.json()["total"] >= 1
-    assert elapsed2 < 5.0, f"unaccent search over {n} messages took {elapsed2:.2f}s"
+    cases = [
+        ("subject", "nájdi-perf-token"),
+        ("from", "firma.sk"),
+        ("to", "komu@firma.sk"),
+        ("cc", "kopia@firma.sk"),
+        ("body", "telo-perf-unikát"),
+        ("full", "Trenčín"),
+    ]
+    for field, q in cases:
+        t0 = time.perf_counter()
+        r = await client.get("/api/search", params={"q": q, "scope": "all", "fields": field})
+        elapsed = time.perf_counter() - t0
+        assert r.status_code == 200, f"{field}: {r.text}"
+        assert r.json()["total"] >= 1, f"{field} q={q!r} total=0"
+        assert elapsed < 5.0, f"{field} search over {n} messages took {elapsed:.2f}s"

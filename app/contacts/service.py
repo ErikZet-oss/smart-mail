@@ -9,7 +9,14 @@ from sqlalchemy import String, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contacts.models import AddressBook, Contact, RecentRecipient
-from app.contacts.vcard import ParsedContact, VCardError, parse_vcards, serialize_vcards
+from app.contacts.vcard import (
+    MAX_VCARD_CONTACTS,
+    ParsedContact,
+    VCardError,
+    VCardTooLarge,
+    parse_vcards,
+    serialize_vcards,
+)
 
 DuplicateMode = Literal["merge", "skip"]
 
@@ -112,7 +119,9 @@ async def import_vcard(
     on_duplicate: DuplicateMode = "skip",
 ) -> dict[str, int]:
     try:
-        parsed_list = parse_vcards(text)
+        parsed_list = parse_vcards(text, max_contacts=MAX_VCARD_CONTACTS)
+    except VCardTooLarge:
+        raise
     except VCardError as exc:
         raise ValueError(str(exc)) from exc
     created = merged = skipped = 0

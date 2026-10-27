@@ -5,14 +5,17 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import String, func, or_, select
 
-from app.auth.deps import DB, ActivePerson, Auth
+from app.auth.deps import DB, Auth, SignedInPerson, client_ip
+from app.auth.models import Role
 from app.contacts import service
-from app.contacts.models import Contact, ContactGroup, ContactGroupMember
+from app.contacts.models import AddressBook, Contact, ContactGroup, ContactGroupMember
+from app.contacts.vcard import MAX_VCARD_BYTES, MAX_VCARD_CONTACTS, VCardError, VCardTooLarge
+from app.core.audit import audit
 
 router = APIRouter(prefix="/api/contacts", tags=["contacts"])
 
@@ -87,8 +90,35 @@ async def _group_ids(db: DB, contact_id: uuid.UUID) -> list[str]:
     return [str(g) for g in rows.scalars()]
 
 
+def _require_write(person: SignedInPerson, book: AddressBook) -> None:
+    """Viewers are read-only on every book; shared-book writes also audited by callers."""
+    if person.role == Role.viewer:
+        raise _fail(403, "read_only", message="Prehliadač má zdieľaný adresár len na čítanie.")
+
+
+def _audit_shared(
+    db: DB,
+    request: Request,
+    action: str,
+    book: AddressBook,
+    *,
+    object_id: str,
+    details: dict[str, object] | None = None,
+) -> None:
+    if book.kind != "shared":
+        return
+    audit(
+        db,
+        action,
+        object_type="address_book",
+        object_id=object_id,
+        ip=client_ip(request),
+        details={"book_id": str(book.id), "kind": book.kind, **(details or {})},
+    )
+
+
 @router.get("/books")
-async def list_books(ctx: Auth, person: ActivePerson, db: DB) -> list[BookOut]:
+async def list_books(ctx: Auth, person: SignedInPerson, db: DB) -> list[BookOut]:
     books = await service.list_books(db, person.id)
     await db.commit()
     return [BookOut(id=str(b.id), kind=b.kind, name=b.name) for b in books]
@@ -98,7 +128,7 @@ async def list_books(ctx: Auth, person: ActivePerson, db: DB) -> list[BookOut]:
 async def list_contacts(
     book_id: uuid.UUID,
     ctx: Auth,
-    person: ActivePerson,
+    person: SignedInPerson,
     db: DB,
     q: str | None = None,
 ) -> list[ContactOut]:
@@ -125,10 +155,13 @@ async def list_contacts(
 
 
 @router.post("/books/{book_id}/contacts", status_code=201)
-async def create_contact(book_id: uuid.UUID, body: ContactIn, ctx: Auth, person: ActivePerson, db: DB) -> ContactOut:
+async def create_contact(
+    book_id: uuid.UUID, body: ContactIn, request: Request, ctx: Auth, person: SignedInPerson, db: DB
+) -> ContactOut:
     book = await service.get_book(db, book_id, person.id)
     if book is None:
         raise _fail(404, "book_not_found")
+    _require_write(person, book)
     c = Contact(
         address_book_id=book.id,
         display_name=body.display_name.strip(),
@@ -146,13 +179,14 @@ async def create_contact(book_id: uuid.UUID, body: ContactIn, ctx: Auth, person:
         if g is None or g.address_book_id != book.id:
             raise _fail(400, "group_not_found", group_id=str(gid))
         db.add(ContactGroupMember(contact_id=c.id, group_id=gid))
+    _audit_shared(db, request, "contacts.shared_create", book, object_id=str(c.id))
     await db.commit()
     await db.refresh(c)
     return _contact_out(c, [str(g) for g in body.group_ids])
 
 
 @router.get("/contacts/{contact_id}")
-async def get_contact(contact_id: uuid.UUID, ctx: Auth, person: ActivePerson, db: DB) -> ContactOut:
+async def get_contact(contact_id: uuid.UUID, ctx: Auth, person: SignedInPerson, db: DB) -> ContactOut:
     c = await db.get(Contact, contact_id)
     if c is None:
         raise _fail(404, "contact_not_found")
@@ -163,13 +197,16 @@ async def get_contact(contact_id: uuid.UUID, ctx: Auth, person: ActivePerson, db
 
 
 @router.patch("/contacts/{contact_id}")
-async def patch_contact(contact_id: uuid.UUID, body: ContactIn, ctx: Auth, person: ActivePerson, db: DB) -> ContactOut:
+async def patch_contact(
+    contact_id: uuid.UUID, body: ContactIn, request: Request, ctx: Auth, person: SignedInPerson, db: DB
+) -> ContactOut:
     c = await db.get(Contact, contact_id)
     if c is None:
         raise _fail(404, "contact_not_found")
     book = await service.get_book(db, c.address_book_id, person.id)
     if book is None:
         raise _fail(404, "contact_not_found")
+    _require_write(person, book)
     c.display_name = body.display_name.strip()
     c.first_name = body.first_name
     c.last_name = body.last_name
@@ -187,25 +224,28 @@ async def patch_contact(contact_id: uuid.UUID, body: ContactIn, ctx: Auth, perso
         if g is None or g.address_book_id != book.id:
             raise _fail(400, "group_not_found", group_id=str(gid))
         db.add(ContactGroupMember(contact_id=c.id, group_id=gid))
+    _audit_shared(db, request, "contacts.shared_update", book, object_id=str(c.id))
     await db.commit()
     await db.refresh(c)
     return _contact_out(c, [str(g) for g in body.group_ids])
 
 
 @router.delete("/contacts/{contact_id}", status_code=204)
-async def delete_contact(contact_id: uuid.UUID, ctx: Auth, person: ActivePerson, db: DB) -> None:
+async def delete_contact(contact_id: uuid.UUID, request: Request, ctx: Auth, person: SignedInPerson, db: DB) -> None:
     c = await db.get(Contact, contact_id)
     if c is None:
         raise _fail(404, "contact_not_found")
     book = await service.get_book(db, c.address_book_id, person.id)
     if book is None:
         raise _fail(404, "contact_not_found")
+    _require_write(person, book)
+    _audit_shared(db, request, "contacts.shared_delete", book, object_id=str(c.id))
     await db.delete(c)
     await db.commit()
 
 
 @router.get("/books/{book_id}/groups")
-async def list_groups(book_id: uuid.UUID, ctx: Auth, person: ActivePerson, db: DB) -> list[GroupOut]:
+async def list_groups(book_id: uuid.UUID, ctx: Auth, person: SignedInPerson, db: DB) -> list[GroupOut]:
     book = await service.get_book(db, book_id, person.id)
     if book is None:
         raise _fail(404, "book_not_found")
@@ -220,25 +260,32 @@ async def list_groups(book_id: uuid.UUID, ctx: Auth, person: ActivePerson, db: D
 
 
 @router.post("/books/{book_id}/groups", status_code=201)
-async def create_group(book_id: uuid.UUID, body: GroupIn, ctx: Auth, person: ActivePerson, db: DB) -> GroupOut:
+async def create_group(
+    book_id: uuid.UUID, body: GroupIn, request: Request, ctx: Auth, person: SignedInPerson, db: DB
+) -> GroupOut:
     book = await service.get_book(db, book_id, person.id)
     if book is None:
         raise _fail(404, "book_not_found")
+    _require_write(person, book)
     g = ContactGroup(address_book_id=book.id, name=body.name.strip())
     db.add(g)
+    await db.flush()
+    _audit_shared(db, request, "contacts.shared_group_create", book, object_id=str(g.id), details={"name": g.name})
     await db.commit()
     await db.refresh(g)
     return GroupOut(id=str(g.id), address_book_id=str(g.address_book_id), name=g.name)
 
 
 @router.delete("/groups/{group_id}", status_code=204)
-async def delete_group(group_id: uuid.UUID, ctx: Auth, person: ActivePerson, db: DB) -> None:
+async def delete_group(group_id: uuid.UUID, request: Request, ctx: Auth, person: SignedInPerson, db: DB) -> None:
     g = await db.get(ContactGroup, group_id)
     if g is None:
         raise _fail(404, "group_not_found")
     book = await service.get_book(db, g.address_book_id, person.id)
     if book is None:
         raise _fail(404, "group_not_found")
+    _require_write(person, book)
+    _audit_shared(db, request, "contacts.shared_group_delete", book, object_id=str(g.id))
     await db.delete(g)
     await db.commit()
 
@@ -246,8 +293,9 @@ async def delete_group(group_id: uuid.UUID, ctx: Auth, person: ActivePerson, db:
 @router.post("/books/{book_id}/import")
 async def import_vcard(
     book_id: uuid.UUID,
+    request: Request,
     ctx: Auth,
-    person: ActivePerson,
+    person: SignedInPerson,
     db: DB,
     file: Annotated[UploadFile, File()],
     on_duplicate: Annotated[Literal["merge", "skip"], Form()] = "skip",
@@ -255,17 +303,40 @@ async def import_vcard(
     book = await service.get_book(db, book_id, person.id)
     if book is None:
         raise _fail(404, "book_not_found")
-    raw = (await file.read()).decode("utf-8", errors="replace")
+    _require_write(person, book)
+    raw_bytes = await file.read(MAX_VCARD_BYTES + 1)
+    if len(raw_bytes) > MAX_VCARD_BYTES:
+        raise _fail(
+            413,
+            "vcard_too_large",
+            message="Súbor vCard je príliš veľký (max. 5 MB).",
+        )
+    raw = raw_bytes.decode("utf-8", errors="replace")
     try:
         stats = await service.import_vcard(db, book, raw, on_duplicate=on_duplicate)
-    except ValueError as exc:
+    except VCardTooLarge as exc:
+        raise _fail(
+            413,
+            "vcard_too_many",
+            message=f"Import môže obsahovať najviac {MAX_VCARD_CONTACTS} kontaktov.",
+            reason=str(exc),
+        ) from exc
+    except (VCardError, ValueError) as exc:
         raise _fail(422, "invalid_vcard", reason=str(exc)) from exc
+    _audit_shared(
+        db,
+        request,
+        "contacts.shared_import",
+        book,
+        object_id=str(book.id),
+        details={"created": stats["created"], "merged": stats["merged"], "skipped": stats["skipped"]},
+    )
     await db.commit()
     return ImportOut(**stats)
 
 
 @router.get("/books/{book_id}/export")
-async def export_vcard(book_id: uuid.UUID, ctx: Auth, person: ActivePerson, db: DB) -> PlainTextResponse:
+async def export_vcard(book_id: uuid.UUID, ctx: Auth, person: SignedInPerson, db: DB) -> PlainTextResponse:
     book = await service.get_book(db, book_id, person.id)
     if book is None:
         raise _fail(404, "book_not_found")
@@ -280,7 +351,7 @@ async def export_vcard(book_id: uuid.UUID, ctx: Auth, person: ActivePerson, db: 
 @router.get("/autocomplete")
 async def autocomplete(
     ctx: Auth,
-    person: ActivePerson,
+    person: SignedInPerson,
     db: DB,
     q: Annotated[str, Query(min_length=1, max_length=120)],
     limit: Annotated[int, Query(ge=1, le=50)] = 20,

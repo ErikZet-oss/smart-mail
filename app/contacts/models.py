@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,7 +16,21 @@ class AddressBook(IdMixin, TimestampMixin, Base):
     """Osobné adresy (person) or Zdieľané (company-wide). Money book is Phase 3 (not stored here)."""
 
     __tablename__ = "address_books"
-    __table_args__ = (UniqueConstraint("kind", "owner_person_id", name="uq_address_books_personal"),)
+    __table_args__ = (
+        # UNIQUE(kind, owner_person_id) is a no-op for shared (NULL owner); use partial indexes (0011).
+        Index(
+            "uq_address_books_personal",
+            "owner_person_id",
+            unique=True,
+            postgresql_where=text("kind = 'personal'"),
+        ),
+        Index(
+            "uq_address_books_one_shared",
+            "kind",
+            unique=True,
+            postgresql_where=text("kind = 'shared'"),
+        ),
+    )
 
     kind: Mapped[str] = mapped_column(String(16))  # personal | shared
     name: Mapped[str] = mapped_column(String(120))
@@ -40,9 +54,7 @@ class Contact(IdMixin, TimestampMixin, Base):
     last_name: Mapped[str | None] = mapped_column(String(80))
     organization: Mapped[str | None] = mapped_column(String(200))
     notes: Mapped[str | None] = mapped_column(Text)
-    # list of {email, label?, primary?}
     emails: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default="[]")
-    # list of {phone, label?}
     phones: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default="[]")
 
 

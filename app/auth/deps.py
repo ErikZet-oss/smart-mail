@@ -96,3 +96,13 @@ async def get_active_person(ctx: Auth) -> Person:
 
 
 ActivePerson = Annotated[Person, Depends(get_active_person)]
+
+
+async def get_signed_in_person(ctx: Auth) -> Person:
+    """Person is selected; viewers are allowed (read-only callers check role themselves — contacts 1g)."""
+    if ctx.person is None:
+        raise HTTPException(status_code=403, detail={"code": "person_required"})
+    return ctx.person
+
+
+SignedInPerson = Annotated[Person, Depends(get_signed_in_person)]
