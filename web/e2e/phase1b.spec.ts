@@ -82,7 +82,9 @@ test.describe('Flow 0: W1 → W1b → W2', () => {
     await shot(page, 'W1b-hover-desktop');
   });
 
-  test('login of a branch mailbox → one click on Jana → inbox, every request as Jana @mobile', async ({ page }) => {
+  test('login of a branch mailbox → one click on Jana → inbox, every request as Jana @mobile', async ({
+    page,
+  }, info) => {
     const server = branchServer(null);
     await mockApi(page, server.replies);
     await page.goto('/login');
@@ -92,7 +94,14 @@ test.describe('Flow 0: W1 → W1b → W2', () => {
     await expect(page).toHaveURL(/\/who$/);
     await page.getByRole('button', { name: /Jana Nováková/ }).click();
     await expect(page).toHaveURL(/\/mail\/default\/inbox$/);
-    await expect(page.getByRole('button', { name: 'Pracuje: Jana Nováková' })).toBeVisible();
+    if (info.project.name === 'mobile') {
+      // 1h-a mobile shell: PersonChip is desktop rail; session person is still Jana.
+      await expect(page.getByTestId('mobile-shell')).toBeVisible();
+      await expect(page.getByTestId('bottom-nav')).toBeVisible();
+    } else {
+      await expect(page.getByRole('button', { name: 'Pracuje: Jana Nováková' })).toBeVisible();
+    }
+    expect(server.state.current?.full_name).toBe('Jana Nováková');
     expect(server.state.last).toBe('p-jana');
   });
 

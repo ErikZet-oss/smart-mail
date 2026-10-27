@@ -150,10 +150,15 @@ test.describe('W2 shell & folders (1c)', () => {
     await shot(page, 'phase1c-G1-low-rail-chip-menu');
   });
 
-  test('W2 on a phone: rail + folder column (M1–M3 follow in 1h) @mobile', async ({ page }) => {
+  test('W2 on a phone: mobile shell + folder drawer (1h-a M1/M2) @mobile', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame only');
     await mockApi(page, SIGNED_IN);
     await page.goto('/mail/default/inbox');
-    await expect(page.getByRole('navigation', { name: 'Priečinky' })).toBeVisible();
-    await shot(page, 'phase1c-W2-mobile-fallback');
+    await expect(page.getByTestId('mobile-shell')).toBeVisible();
+    await expect(page.getByTestId('bottom-nav')).toBeVisible();
+    await page.getByTestId('mobile-app-bar').getByRole('button', { name: 'Priečinky' }).first().click();
+    await expect(page.getByTestId('folder-drawer')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Priečinky' })).toBeVisible();
+    await shot(page, 'phase1c-W2-mobile-shell');
   });
 });
