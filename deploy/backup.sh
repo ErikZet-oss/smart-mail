@@ -14,9 +14,11 @@ echo "Záloha $STAMP → $OUT"
 "${COMPOSE[@]}" exec -T db pg_dump -U smartmail -d smartmail -Fc >"$OUT/db.dump"
 
 # SeaweedFS volume is named project_s3-data; copy via a helper container if possible.
+# Run as the host user so the archive is not root-owned (chmod on the runner must work in CI).
 if docker volume ls --format '{{.Name}}' | grep -q 's3-data'; then
   VOL="$(docker volume ls --format '{{.Name}}' | grep 's3-data' | head -1)"
-  docker run --rm -v "$VOL:/data:ro" -v "$OUT:/out" alpine:3.20 \
+  docker run --rm --user "$(id -u):$(id -g)" \
+    -v "$VOL:/data:ro" -v "$OUT:/out" alpine:3.20 \
     tar -C /data -czf /out/s3-data.tgz .
 fi
 

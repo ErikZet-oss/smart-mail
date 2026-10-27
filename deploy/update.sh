@@ -20,8 +20,14 @@ PREV="$(last_good_sha || true)"
 CURRENT="$(git rev-parse HEAD)"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 if [[ "$BRANCH" == "HEAD" ]]; then
-  BRANCH="main"
-  git checkout "$BRANCH" 2>/dev/null || git checkout -B main
+  # Detached HEAD (GitHub PR merge checkout, or a bad prior rollback). Stay on this commit —
+  # never jump to origin/main, which would drop the PR tree in CI.
+  if [[ -n "${SMARTMAIL_CI:-}" ]]; then
+    BRANCH="${SMARTMAIL_GIT_BRANCH:-ci-deploy}"
+  else
+    BRANCH="main"
+  fi
+  git checkout -B "$BRANCH" "$CURRENT"
 fi
 echo "Aktuálna verzia: $CURRENT (vetva $BRANCH)"
 [[ -n "$PREV" ]] || PREV="$CURRENT"
