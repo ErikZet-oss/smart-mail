@@ -331,10 +331,7 @@ def _parse_rule_block(name: str, block: str, *, index: int) -> FilterRule:
             kind="vacation",
         )
 
-    require = (
-        'require ["fileinto","reject","vacation","imap4flags",'
-        '"regex","body","envelope","date","relational"];'
-    )
+    require = 'require ["fileinto","reject","vacation","imap4flags","regex","body","envelope","date","relational"];'
     mini = f"{require}\n{live_body}\n"
     parser = Parser()
     ok = parser.parse(mini)
@@ -653,9 +650,7 @@ def compile_script(
     return text
 
 
-def apply_vacation_to_script(
-    script: str, vacation: VacationSettings, *, script_name: str = DEFAULT_SCRIPT_NAME
-) -> str:
+def apply_vacation_to_script(script: str, vacation: VacationSettings, *, script_name: str = DEFAULT_SCRIPT_NAME) -> str:
     """Replace only the vacation rule; filter rules keep their raw text."""
     parsed = parse_roundcube_script(script, script_name=script_name)
     filters = [r for r in parsed.rules if r.kind != "vacation"]
