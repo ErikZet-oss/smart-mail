@@ -1,0 +1,10 @@
+{
+  "id": "fictional-002",
+  "subject": "Weekly fastener tips",
+  "from": "news@vendor-example.test",
+  "body_text": "Unsubscribe: https://vendor-example.test/unsub\nThis week: coating guide.",
+  "language": "en",
+  "category": "newsletter",
+  "list_unsubscribe": true,
+  "notes": "Fictional smoke fixture only — never replace with real mail."
+}

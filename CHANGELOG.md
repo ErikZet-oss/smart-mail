@@ -2,6 +2,18 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2a: AI foundation (provider, schema, pipeline gates)
+
+- **D31 / ADR-011**: Claude API (`LLM_PROVIDER=anthropic`); Bedrock interface stub only. ADR records official
+  Anthropic data handling (processing location, retention, training, DPA) and cost per 1 000 mails for classify/draft.
+  Model ids only from env — never `latest`.
+- `LLMProvider` + `NullLLMProvider` (no key); `ai_runs` / `classifications` / `ai_suggestions` / `feature_flags`;
+  `mailboxes.ai_enabled_at`; AI off by default until enabled (sets `ai_enabled_at`).
+- Worker hook after sync gated by `ai_enabled_at`, D21 folders, Message-ID idempotency; AV gate helper; daily budget
+  check; `ai_shadow_mode` flag seeded. **No classify UI / suggestion cards** (2b+).
+- `deploy/install.sh` asks for `AI_DAILY_BUDGET_USD` (default 5) and Claude env; `tools/eval_label.py` + fictional
+  `fixtures/ai/eval_smoke/` only (no real mail in git).
+
 ## [Unreleased] — Phase 1h-e (PR 5): Roundcube import, vacation EN/DE, W9/W10 empty, axe
 
 - `tools/roundcube_import.py` — vCard + identities + Odpovede only (no filters); dry-run default; fixtures

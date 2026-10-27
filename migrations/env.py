@@ -6,6 +6,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
+import app.ai.models  # register AI tables on the metadata
 import app.auth.models
 import app.contacts.models  # register contacts tables on the metadata
 import app.core.audit

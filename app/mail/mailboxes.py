@@ -20,6 +20,7 @@ async def ensure_own_mailbox(db: AsyncSession, account: Account, settings: Setti
     """Called after IMAP accepted the password (the password is stored on the account just before)."""
     mailbox = (await db.execute(select(Mailbox).where(Mailbox.email == account.email))).scalar_one_or_none()
     if mailbox is None:
+        # AI off until an admin enables it (sets ai_enabled_at); test/non-prod never auto-enables (Phase 2a D).
         mailbox = Mailbox(
             email=account.email,
             imap_host=settings.imap_login_host,
@@ -27,6 +28,8 @@ async def ensure_own_mailbox(db: AsyncSession, account: Account, settings: Setti
             imap_security=settings.imap_login_security,
             credential_account_id=account.id,
             sync_state="new",
+            ai_enabled=False,
+            ai_enabled_at=None,
         )
         db.add(mailbox)
         await db.flush()

@@ -1,0 +1,9 @@
+{
+  "id": "fictional-003",
+  "subject": "Objednávka PO-TEST-42",
+  "from": "nakup@firma-example.test",
+  "body_text": "Prosím o potvrdenie objednávky:\n1) DIN 933 M10×30 — 100 ks\n2) podložka 10 — 100 ks\nDodanie: Nitra.",
+  "language": "sk",
+  "category": "order",
+  "notes": "Fictional smoke fixture only — never replace with real mail."
+}

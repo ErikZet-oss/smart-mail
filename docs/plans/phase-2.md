@@ -43,10 +43,11 @@ screens.
 
 ### C. ADR-011 in milestone 2a
 
-- Deliver `docs/adr/011-llm-provider.md` in **2a**: Anthropic API vs Bedrock EU — where data is processed, retention,
-  training use, DPA, **price per 1 000 e-mails** for classify and for reply drafts, latency.
+- Deliver `docs/adr/011-llm-provider.md` in **2a** as a **data-handling record for the Claude API** (D31 — not a
+  Bedrock comparison): where data is processed, retention, training use, DPA (official Anthropic docs + links),
+  **price per 1 000 e-mails** for classify and for reply drafts.
 - **No “latest” recommendation** — concrete **model IDs as env variables** (`LLM_MODEL_CLASSIFY`, `LLM_MODEL_DRAFT`,
-  etc.).
+  etc.); Bedrock stays an interface stub.
 
 ### D. Install defaults
 
@@ -110,7 +111,7 @@ Not all items block 2a; call out blockers explicitly.
 | Need | Blocks | Notes |
 |---|---|---|
 | **Phase 1 pilot day on a real mailbox** (or written waiver) | Declaring Phase 1 accepted | Filtre/Mimo ↔ Roundcube; branch picker + signature in audit; real host `mail.nameserver.sk` / agreed mailbox |
-| Choose Anthropic vs Bedrock EU after ADR-011 | Live non-mock classify/draft | Keys only in env/secret store; model IDs as env vars (no “latest”) |
+| ~~Choose Anthropic vs Bedrock EU after ADR-011~~ **Done — D31: Claude API** | Live classify/draft needs key + model ids | ADR-011 records data handling + cost; Bedrock stub only; model IDs as env vars (no “latest”) |
 | Model IDs for classify / draft / embed (and later assistant) | Production quality | Env names in CLAUDE.md §13 |
 | Server access for `eval_label.py` + labeled set (≥ 200) | Acceptance ≥ 90 % | Labels stay on the server; git = fictional only |
 | Confirmation of shadow-mode pilot week | Turning suggestions visible | First week: create suggestions, hide in UI, measure accuracy (AI_ASSISTANT §2) |

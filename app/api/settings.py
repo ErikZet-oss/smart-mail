@@ -1064,7 +1064,17 @@ async def update_mailbox_admin(
     mailbox = await db.get(Mailbox, mailbox_id)
     if mailbox is None:
         raise fail(404, "mailbox_not_found")
-    for key, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "ai_enabled" in data:
+        from datetime import UTC, datetime
+
+        from app.ai.service import disable_ai_on_mailbox, enable_ai_on_mailbox
+
+        if data.pop("ai_enabled"):
+            enable_ai_on_mailbox(mailbox, now=datetime.now(UTC))
+        else:
+            disable_ai_on_mailbox(mailbox)
+    for key, value in data.items():
         setattr(mailbox, key, value)
     audit(
         db,
@@ -1095,6 +1105,7 @@ def _mailbox_admin_out(m: Mailbox) -> dict[str, Any]:
         "sieve_port": m.sieve_port,
         "provider_admin_url": m.provider_admin_url,
         "ai_enabled": m.ai_enabled,
+        "ai_enabled_at": m.ai_enabled_at.isoformat() if m.ai_enabled_at else None,
         "sync_state": m.sync_state,
         "quota_used_kb": m.quota_used_kb,
         "quota_limit_kb": m.quota_limit_kb,
