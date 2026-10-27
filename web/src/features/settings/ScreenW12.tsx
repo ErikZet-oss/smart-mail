@@ -88,6 +88,12 @@ const PREF_FIELDS_LIST: SettingsField[] = [
     ],
   },
   {
+    id: 'show_ai_summary',
+    label: 'Zobraziť AI zhrnutie v zozname',
+    control: 'switch',
+    default: true,
+  },
+  {
     id: 'mode',
     label: 'Režim zoznamu',
     control: 'segmented',
@@ -108,6 +114,16 @@ const PREF_FIELDS_LIST: SettingsField[] = [
       { value: '100', label: '100' },
       { value: '200', label: '200' },
     ],
+  },
+];
+
+const AI_FIELDS: SettingsField[] = [
+  {
+    id: 'show_ai_summary',
+    label: 'Zhrnutia v zozname',
+    control: 'switch',
+    default: true,
+    help: 'Pod predmetom v zozname zobrazí krátke AI zhrnutie. V Klasickom zobrazení je vypnuté.',
   },
 ];
 
@@ -236,6 +252,7 @@ function SectionBody({ section, sub, meRole }: { section: string; sub?: string; 
   if (section === 'responses') return <ResponsesPanel />;
   if (section === 'filters') return <FiltersPanel />;
   if (section === 'vacation') return <VacationPanel />;
+  if (section === 'ai') return <AiPanel />;
   if (section === 'provider') return <ProviderPanel />;
   if (section === 'security') return <SecurityPanel />;
   if (section === 'folders') return <FoldersHint />;
@@ -243,6 +260,51 @@ function SectionBody({ section, sub, meRole }: { section: string; sub?: string; 
   if (section === 'branches') return meRole === 'admin' ? <BranchesPanel sub={sub} /> : <AdminOnly />;
   if (section === 'mailboxes') return meRole === 'admin' ? <MailboxesPanel /> : <AdminOnly />;
   return <p className="type-body text-text-secondary">…</p>;
+}
+
+/** W12-07 — Phase 2b: list summaries only (autonomy matrix = later milestones). */
+function AiPanel() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const toasts = useToasts();
+  const prefs = useQuery({ queryKey: ['settings', 'prefs'], queryFn: fetchPreferences });
+  const classic = Boolean(prefs.data?.ui?.classic);
+  const value = Boolean(prefs.data?.list?.show_ai_summary ?? true);
+  const save = useMutation({
+    mutationFn: (next: boolean) =>
+      savePreferences({
+        ui: prefs.data?.ui ?? {},
+        list: {
+          ...(prefs.data?.list ?? {}),
+          show_ai_summary: next,
+          page_size: Number(prefs.data?.list?.page_size ?? 50),
+        },
+        composing: prefs.data?.composing ?? {},
+        reading: prefs.data?.reading ?? {},
+        shortcuts: prefs.data?.shortcuts ?? {},
+      }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['settings', 'prefs'], data);
+      queryClient.setQueryData(['mail', 'prefs'], data);
+      toasts.success(t('settings.saved'));
+    },
+  });
+  return (
+    <div className="flex max-w-xl flex-col gap-4" data-testid="settings-ai">
+      <h2 className="type-heading text-text-primary">{t('settingsAi.title')}</h2>
+      {AI_FIELDS.map((field) => (
+        <SettingsFieldControl
+          key={field.id}
+          field={field}
+          value={value}
+          disabled={classic || save.isPending}
+          onChange={(next) => save.mutate(Boolean(next))}
+        />
+      ))}
+      {classic ? <Banner kind="info" message={t('classic.banner')} /> : null}
+      <p className="type-small text-text-secondary">{t('settingsAi.comingAutonomy')}</p>
+    </div>
+  );
 }
 
 function AdminOnly() {

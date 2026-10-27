@@ -103,7 +103,8 @@ test.describe('Phase 1h-b: M8 M9 M15 M18', () => {
     await expect(page.getByText('Len na počítači')).toBeVisible();
     await expect(page.getByRole('link', { name: /Môj profil/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /Vzhľad/ })).toBeVisible();
-    await expect(page.getByText('AI asistent')).toHaveCount(0);
+    // SETTINGS 07 (summaries) landed in Phase 2b; Notifikácie (08) still later.
+    await expect(page.getByRole('link', { name: /AI asistent/ })).toBeVisible();
     await expect(page.getByText('Notifikácie')).toHaveCount(0);
     await shot(page, 'phase1hb-M9-settings');
     await page.getByRole('link', { name: /Vzhľad/ }).click();

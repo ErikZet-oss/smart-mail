@@ -37,7 +37,9 @@ class AiRun(IdMixin, TimestampMixin, Base):
     latency_ms: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     mailbox_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("mailboxes.id", ondelete="SET NULL"), index=True)
     message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"), index=True)
-    status: Mapped[str] = mapped_column(String(16), default="ok", server_default="ok")  # ok|error|skipped
+    status: Mapped[str] = mapped_column(
+        String(16), default="ok", server_default="ok"
+    )  # ok|invalid_output|error|skipped
     error_class: Mapped[str | None] = mapped_column(String(64))  # type name only, never payload
 
 

@@ -24,6 +24,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { Banner } from '../../components/Banner';
 import { Menu, type MenuEntry } from '../../components/Menu';
+import { SecurityBanner } from '../../components/SecurityBanner';
 import { useToast } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
@@ -423,7 +424,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
             </div>
           ) : null}
 
-          {classic ? null : null}
+          {classic ? null : <SecurityBanner notes={msg.security_notes ?? []} />}
 
           {msg.attachments.filter((a) => !a.is_inline).length > 0 ? (
             <ul className="mb-4 flex flex-wrap gap-2">

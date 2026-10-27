@@ -12,6 +12,7 @@ import {
   Pencil,
   Send,
   Settings,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
@@ -35,12 +36,14 @@ import {
   MAILBOXES_KEY,
   renameFolder,
   runFolderAction,
+  type AiCategory,
   type Folder,
   type FolderAction,
   type FoldersView,
   type Quota,
   type SpecialUse,
 } from './mailApi';
+import { categoryDotClass } from './categoryStyles';
 import { useFolderLabel } from './useFolderLabel';
 
 const SPECIAL_ICON: Record<SpecialUse, ReactNode> = {
@@ -60,10 +63,26 @@ type Dialog =
   | { kind: 'create'; parent: Folder }
   | { kind: 'rename'; folder: Folder };
 
-type Props = { mailboxRef: string; view: FoldersView; activeRef: string; readOnly: boolean };
+type Props = {
+  mailboxRef: string;
+  view: FoldersView;
+  activeRef: string;
+  readOnly: boolean;
+  classic?: boolean;
+  aiCategories?: AiCategory[];
+  activeCategory?: string | null;
+};
 
 /** G3 folder column (232 px): mailbox header with ⋮, folders in Roundcube order with counts, quota + Money status. */
-export function FolderColumn({ mailboxRef, view, activeRef, readOnly }: Props) {
+export function FolderColumn({
+  mailboxRef,
+  view,
+  activeRef,
+  readOnly,
+  classic = false,
+  aiCategories = [],
+  activeCategory = null,
+}: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -291,13 +310,46 @@ export function FolderColumn({ mailboxRef, view, activeRef, readOnly }: Props) {
                 folder={folder}
                 label={labelOf(folder)}
                 to={`/mail/${encodeURIComponent(mailboxRef)}/${folderRef(folder)}`}
-                active={folderRef(folder) === activeRef}
+                active={!activeCategory && folderRef(folder) === activeRef}
                 onContextMenu={(event) => onItemContext(event, folder)}
                 onKeyDown={(event) => onItemKey(event, folder)}
               />
             </li>
           ))}
         </ul>
+        {!classic && aiCategories.length > 0 ? (
+          <div className="mt-3 border-t border-border-default pt-3" data-testid="ai-triage">
+            <div className="mb-1 flex items-center gap-1.5 px-2 text-text-tertiary">
+              <Sparkles size={14} aria-hidden="true" className="text-brand-primary-500" />
+              <span className="type-caption uppercase tracking-wide">{t('ai.triage.title')}</span>
+            </div>
+            <ul className="flex flex-col">
+              {aiCategories.map((cat) => {
+                const active = activeCategory === cat.id;
+                return (
+                  <li key={cat.id}>
+                    <Link
+                      to={`/mail/${encodeURIComponent(mailboxRef)}/view/${encodeURIComponent(cat.id)}`}
+                      aria-current={active ? 'page' : undefined}
+                      className={`flex h-8 items-center gap-2 rounded-sm px-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary-500 ${
+                        active ? 'bg-brand-primary-50 text-text-primary' : 'text-text-secondary hover:bg-bg-muted'
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`size-2 shrink-0 rounded-full ${categoryDotClass(cat.color_token)}`}
+                      />
+                      <span className="type-small min-w-0 flex-1 truncate">{cat.label_sk}</span>
+                      {cat.count > 0 ? (
+                        <span className="type-caption tabular-nums text-text-tertiary">{formatCount(cat.count)}</span>
+                      ) : null}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
       </nav>
       <QuotaRow quota={view.quota} />
 

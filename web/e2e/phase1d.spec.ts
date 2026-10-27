@@ -153,8 +153,24 @@ test.describe('W2 list & reading (1d)', () => {
       'GET /api/mail/prefs': {
         body: { ...DEFAULT_PREFS, ui: { ...DEFAULT_PREFS.ui, classic: true } },
       },
+      // Even with triage categories, classic must hide AI TRIEDENIE.
+      'GET /api/mail/mailboxes/default/ai/categories': {
+        body: {
+          categories: [
+            {
+              id: 'inquiry',
+              label_sk: 'Dopyty',
+              description_sk: 'žiadosti o ceny',
+              color_token: 'warning',
+              count: 3,
+            },
+          ],
+        },
+      },
     });
     await page.goto('/mail/default/inbox');
+    await expect(page.getByTestId('classic-banner')).toBeVisible();
+    await expect(page.getByTestId('ai-triage')).toHaveCount(0);
     await page.getByRole('button', { name: /Jana Testová/ }).click();
     await expect(page.getByRole('menuitem', { name: 'Klasické zobrazenie' })).toBeVisible();
     await shot(page, 'phase1d-W2-classic');

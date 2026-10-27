@@ -2,13 +2,13 @@ import { ArrowLeft, ChevronRight, Monitor } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-/** Phase-1 sections editable on mobile (SETTINGS_SPEC §M9). AI/Notifications omitted until later phases. */
-/** Phase-1 editable rows only — AI (07) and Notifikácie (08) wait for later phases. */
+/** Mobile-editable rows (SETTINGS_SPEC §M9). Notifikácie (08) wait for later phases. */
 const MOBILE_SECTIONS: { to: string; titleKey: string; hintKey?: string }[] = [
   { to: '/settings/preferences', titleKey: 'settings.mobile.prefs', hintKey: 'settings.mobile.prefsHint' },
   { to: '/settings/identity/profile', titleKey: 'settings.profile.title' },
   { to: '/settings/responses', titleKey: 'settings.mobile.responses', hintKey: 'settings.mobile.responsesHint' },
   { to: '/settings/vacation', titleKey: 'settings.mobile.vacation' },
+  { to: '/settings/ai', titleKey: 'settingsAi.title' },
   { to: '/settings/security', titleKey: 'settings.mobile.security', hintKey: 'settings.mobile.securityHint' },
 ];
 

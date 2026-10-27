@@ -11,6 +11,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, asc, desc, func, or_, select
 
+from app.ai.models import Classification
 from app.api.mail import _folder, _mailbox, _sync, fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep, client_ip
 from app.core.audit import audit
@@ -51,6 +52,13 @@ class MessageListItem(BaseModel):
     answered: bool
     has_attachments: bool
     thread_count: int = 1
+    # Phase 2b — from classifications (optional)
+    ai_category: str | None = None
+    ai_priority: str | None = None
+    ai_summary: str | None = None
+    ai_language: str | None = None
+    ai_confidence: float | None = None
+    ai_note_codes: list[str] = []
 
 
 class ThreadListItem(BaseModel):
@@ -113,6 +121,11 @@ class MessageDetail(BaseModel):
     thread_status: str | None = None
     snoozed_until: datetime | None = None
     assignee_id: str | None = None
+    # Phase 2b
+    ai_category: str | None = None
+    ai_summary: str | None = None
+    ai_language: str | None = None
+    security_notes: list[str] = []
 
 
 class FlagIn(BaseModel):
@@ -260,13 +273,18 @@ async def list_messages(
             if tid:
                 thread_counts[tid] = int(cnt)
 
-    return ListOut(
-        mode="list",
-        total=total,
-        page=page,
-        page_size=size,
-        prefs=prefs,
-        messages=[
+    cls_by_msg: dict[uuid.UUID, Classification] = {}
+    if rows:
+        for cls in (
+            await db.execute(select(Classification).where(Classification.message_id.in_([m.id for m in rows])))
+        ).scalars():
+            cls_by_msg[cls.message_id] = cls
+
+    messages_out: list[MessageListItem] = []
+    for m in rows:
+        classification = cls_by_msg.get(m.id)
+        payload = (classification.payload if classification else None) or {}
+        messages_out.append(
             MessageListItem(
                 id=str(m.id),
                 thread_id=str(m.thread_id) if m.thread_id else None,
@@ -284,9 +302,22 @@ async def list_messages(
                 answered=m.answered,
                 has_attachments=m.has_attachments,
                 thread_count=thread_counts.get(m.thread_id, 1) if m.thread_id else 1,
+                ai_category=classification.category if classification else None,
+                ai_priority=classification.priority if classification else None,
+                ai_summary=payload.get("summary_sk") if classification else None,
+                ai_language=classification.language if classification else None,
+                ai_confidence=payload.get("confidence") if classification else None,
+                ai_note_codes=list(payload.get("note_codes") or []) if classification else [],
             )
-            for m in rows
-        ],
+        )
+
+    return ListOut(
+        mode="list",
+        total=total,
+        page=page,
+        page_size=size,
+        prefs=prefs,
+        messages=messages_out,
     )
 
 
@@ -439,7 +470,31 @@ async def get_message(
         thread_status=thread.status if thread else None,
         snoozed_until=thread.snoozed_until if thread else None,
         assignee_id=str(thread.assignee_id) if thread and thread.assignee_id else None,
+        **(await _message_ai_fields(db, settings, message)),
     )
+
+
+async def _message_ai_fields(db: DB, settings: Settings, message: Message) -> dict[str, Any]:
+    from app.ai.classify import phishing_signals
+
+    cls = await db.scalar(select(Classification).where(Classification.message_id == message.id).limit(1))
+    payload = (cls.payload if cls else None) or {}
+    notes = list(payload.get("note_codes") or [])
+    for code in phishing_signals(
+        from_name=message.from_name,
+        from_email=message.from_email,
+        auth_results=message.auth_results,
+        body_text=message.body_text,
+        internal_domains=settings.internal_domain_list,
+    ):
+        if code not in notes:
+            notes.append(code)
+    return {
+        "ai_category": cls.category if cls else None,
+        "ai_summary": payload.get("summary_sk"),
+        "ai_language": cls.language if cls else None,
+        "security_notes": notes,
+    }
 
 
 @router.patch("/mailboxes/{ref}/messages/{message_id}/flags")

@@ -1,6 +1,7 @@
-"""Typed settings schema for W12 sections in Phase 1f (SETTINGS_SPEC 01–06, 09, 09b, 10–12).
+"""Typed settings schema for W12 (SETTINGS_SPEC 01–07, 09, 09b, 10–12).
 
 Exported as `settings_schema.json` for the web client and a CI snapshot vs the spec.
+Section 07 in Phase 2b is summaries-only; autonomy matrix lands in 2f.
 """
 
 from __future__ import annotations
@@ -375,6 +376,23 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
         ],
     },
     {
+        "id": "07",
+        "path": "ai",
+        "title": "AI asistent",
+        "admin_only": False,
+        "subs": [],
+        "fields": [
+            field(
+                "show_ai_summary",
+                label="Zhrnutia v zozname",
+                control="switch",
+                default=True,
+                help="Pod predmetom v zozname zobrazí krátke AI zhrnutie. V Klasickom zobrazení je vypnuté.",
+                scope="P",
+            ),
+        ],
+    },
+    {
         "id": "09",
         "path": "security",
         "title": "Bezpečnosť",
@@ -447,8 +465,8 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
 
 def schema_document() -> dict[str, Any]:
     return {
-        "version": "1f",
-        "phase": "1f",
+        "version": "2b",
+        "phase": "2b",
         "sections": PHASE_1F_SECTIONS,
     }
 
@@ -460,6 +478,7 @@ SECTION_PATHS = {
     "responses": "04",
     "filters": "05",
     "vacation": "06",
+    "ai": "07",
     "security": "09",
     "provider": "09b",
     "users": "10",

@@ -1,8 +1,9 @@
-import { Flag, Paperclip, Reply } from 'lucide-react';
+import { Flag, Paperclip, Reply, Sparkles } from 'lucide-react';
 import { useRef, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Checkbox } from '../../components/Checkbox';
+import { categoryDotClass } from './categoryStyles';
 import { formatMailDate } from './formatMailDate';
 import type { MessageListItem, ThreadListItem } from './mailApi';
 
@@ -15,6 +16,8 @@ type Props = {
   showCheckbox: boolean;
   density: 'compact' | 'comfortable';
   classic: boolean;
+  showAiSummary?: boolean;
+  categoryColorToken?: string | null;
   onSelect: () => void;
   onCheck: (checked: boolean) => void;
   /** M1 long-press → multi-select (optional). */
@@ -33,6 +36,8 @@ export function MessageRow({
   showCheckbox,
   density,
   classic,
+  showAiSummary = false,
+  categoryColorToken = null,
   onSelect,
   onCheck,
   onLongPress,
@@ -50,6 +55,10 @@ export function MessageRow({
   const hasAttachments = item.data.has_attachments;
   const fromName = item.data.from_name;
   const fromEmail = item.data.from_email;
+  const aiCategory = item.kind === 'message' ? item.data.ai_category : null;
+  const aiSummary = item.kind === 'message' ? item.data.ai_summary : null;
+  const showSummary = !classic && showAiSummary && Boolean(aiSummary);
+  const summaryOrPreview = showSummary ? aiSummary : density === 'comfortable' && !classic ? preview : null;
 
   function clearPress() {
     if (pressTimer.current !== null) {
@@ -91,7 +100,7 @@ export function MessageRow({
       onTouchMove={clearPress}
       onTouchCancel={clearPress}
       className={`relative flex cursor-pointer gap-2.5 border-b border-border-default px-3 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary-500 ${
-        density === 'comfortable' ? 'min-h-[84px] py-2.5' : 'h-[52px] py-2'
+        density === 'comfortable' || showSummary ? 'min-h-[84px] py-2.5' : 'h-[52px] py-2'
       } ${selected ? 'bg-brand-primary-50' : 'bg-bg-canvas hover:bg-bg-subtle'} ${flagged ? 'text-danger-600' : ''}`}
     >
       {selected ? <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-brand-primary-400" /> : null}
@@ -117,7 +126,13 @@ export function MessageRow({
           <span className="type-caption shrink-0 text-brand-primary-600">{date}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          {unread ? (
+          {aiCategory && categoryColorToken ? (
+            <span
+              aria-hidden="true"
+              title={t(`ai.categories.${aiCategory}.label`, { defaultValue: aiCategory })}
+              className={`size-2 shrink-0 rounded-full ${categoryDotClass(categoryColorToken)}`}
+            />
+          ) : unread ? (
             <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-warning-400" />
           ) : answered ? (
             <Reply size={14} aria-hidden="true" className="shrink-0 text-text-tertiary" />
@@ -133,9 +148,12 @@ export function MessageRow({
           </span>
           {flagged ? <Flag size={14} aria-hidden="true" className="shrink-0 fill-danger-600 text-danger-600" /> : null}
           {hasAttachments ? <Paperclip size={14} aria-hidden="true" className="shrink-0 text-text-tertiary" /> : null}
+          {!classic && aiCategory ? (
+            <Sparkles size={14} aria-hidden="true" className="shrink-0 text-brand-primary-500" data-testid="ai-badge" />
+          ) : null}
         </div>
-        {density === 'comfortable' && !classic && preview ? (
-          <p className="type-caption truncate pl-3.5 text-text-secondary">{preview}</p>
+        {summaryOrPreview ? (
+          <p className="type-caption truncate pl-3.5 text-text-secondary">{summaryOrPreview}</p>
         ) : null}
       </div>
     </div>
