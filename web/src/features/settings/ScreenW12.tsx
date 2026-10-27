@@ -1013,7 +1013,8 @@ function BranchesPanel({ sub }: { sub?: string }) {
   }
 
   if (sub === 'money') {
-    return <Banner kind="info" message={t('settings.branches.moneyLater')} />;
+    // Pilot deploy keeps FEATURE_MONEY=false — no Money bindings in the UI (ADR-010).
+    return <Banner kind="info" message={t('settings.branches.moneyHidden')} />;
   }
 
   return (

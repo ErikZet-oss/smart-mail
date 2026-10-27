@@ -184,3 +184,27 @@ jobs:
           done
       - if: always()
         run: docker compose down -v
+
+  deploy:
+    name: Deploy scripts (install + update smoke, no cert / tunnel)
+    runs-on: ubuntu-24.04
+    needs: [backend, bridge, web]
+    steps:
+      - uses: actions/checkout@v4
+      - name: install.sh + update.sh (SMARTMAIL_CI=1)
+        run: |
+          chmod +x deploy/*.sh
+          ./deploy/ci-smoke.sh
+      - name: Logs on failure
+        if: failure()
+        working-directory: deploy
+        run: |
+          docker compose --env-file .env.ci -f docker-compose.yml ps -a || true
+          docker compose --env-file .env.ci -f docker-compose.yml logs --no-color --tail=80 || true
+      - if: always()
+        working-directory: deploy
+        run: |
+          if [[ -f .env.ci ]]; then
+            docker compose --env-file .env.ci -f docker-compose.yml down -v || true
+          fi
+

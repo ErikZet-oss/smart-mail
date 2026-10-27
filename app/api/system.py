@@ -18,6 +18,10 @@ async def maintenance_state(request: Request) -> dict[str, Any]:
 
 
 @router.get("/info")
-async def system_info(request: Request) -> dict[str, str | None]:
-    """Public, no session needed: W16a shows "Požiadať správcu" as a mailto to this address."""
-    return {"admin_contact_email": request.app.state.settings.admin_contact_email}
+async def system_info(request: Request) -> dict[str, object]:
+    """Public, no session needed: W16a admin mailto + feature flags for the SPA."""
+    settings = request.app.state.settings
+    return {
+        "admin_contact_email": settings.admin_contact_email,
+        "features": {"money": settings.feature_money},
+    }

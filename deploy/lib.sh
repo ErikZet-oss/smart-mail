@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Shared helpers for deploy/*.sh (ADR-010). Never print secrets or mail bodies.
+set -euo pipefail
+
+DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$DEPLOY_DIR/.." && pwd)"
+ENV_FILE="${SMARTMAIL_ENV_FILE:-$DEPLOY_DIR/.env}"
+COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$DEPLOY_DIR/docker-compose.yml")
+BACKUP_DIR="${SMARTMAIL_BACKUP_DIR:-/var/backups/smartmail}"
+STATE_DIR="${SMARTMAIL_STATE_DIR:-$DEPLOY_DIR/.state}"
+
+die() { echo "Chyba: $*" >&2; exit 1; }
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "chýba príkaz: $1"
+}
+
+rand_hex() { openssl rand -hex "${1:-32}"; }
+
+# Fernet-compatible key without importing cryptography.
+fernet_key() {
+  openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n'
+}
+
+prompt() {
+  # prompt "Otázka" "default" → writes answer to REPLY
+  local q="$1" def="${2:-}"
+  if [[ -n "${SMARTMAIL_CI:-}" ]]; then
+    REPLY="$def"
+    return
+  fi
+  if [[ -n "$def" ]]; then
+    read -r -e -p "$q [$def]: " REPLY || true
+    REPLY="${REPLY:-$def}"
+  else
+    read -r -e -p "$q: " REPLY || true
+  fi
+}
+
+prompt_secret() {
+  local q="$1"
+  if [[ -n "${SMARTMAIL_CI:-}" ]]; then
+    REPLY="${2:-}"
+    return
+  fi
+  read -r -s -p "$q: " REPLY || true
+  echo
+}
+
+ensure_docker() {
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    return
+  fi
+  echo "Inštalujem Docker…"
+  need_cmd curl
+  curl -fsSL https://get.docker.com | sh
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable --now docker || true
+  fi
+  docker compose version >/dev/null 2>&1 || die "Docker Compose plugin nie je dostupný"
+}
+
+compose_up() {
+  local profiles=()
+  case "${DEPLOY_MODE:-ci}" in
+    vps) profiles=(--profile vps) ;;
+    tunnel) profiles=(--profile tunnel) ;;
+    ci) profiles=() ;;
+    *) die "neznámy režim: ${DEPLOY_MODE:-}" ;;
+  esac
+  # ClamAV downloads signatures for minutes — skip in CI smoke.
+  if [[ -z "${SMARTMAIL_CI:-}" ]]; then
+    :
+  fi
+  "${COMPOSE[@]}" "${profiles[@]}" up -d --build --remove-orphans "$@"
+}
+
+wait_healthy() {
+  local url="${1:-http://127.0.0.1:8080/readyz}"
+  local i
+  for i in $(seq 1 90); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      echo "Služby sú pripravené (${i}×5 s)."
+      return 0
+    fi
+    sleep 5
+  done
+  die "timeout: $url neodpovedá"
+}
+
+save_git_sha() {
+  mkdir -p "$STATE_DIR"
+  git -C "$ROOT_DIR" rev-parse HEAD >"$STATE_DIR/last_good_sha"
+}
+
+last_good_sha() {
+  [[ -f "$STATE_DIR/last_good_sha" ]] && cat "$STATE_DIR/last_good_sha"
+}

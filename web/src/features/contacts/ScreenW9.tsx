@@ -244,9 +244,7 @@ export function ScreenW9() {
               );
             })}
             <p className="type-caption mt-3 px-2 py-1 text-text-tertiary">{t('contacts.stubs')}</p>
-            <div className="type-small px-2 py-1.5 text-text-tertiary" title={t('common.comingSoon')}>
-              {t('contacts.moneyBook')}
-            </div>
+            {/* Money address book stays hidden until FEATURE_MONEY (Phase 3+). */}
             <div className="type-small px-2 py-1.5 text-text-tertiary" title={t('common.comingSoon')}>
               {t('contacts.recent')}
             </div>

@@ -71,8 +71,13 @@ class Settings(BaseSettings):
     admin_emails: str = ""
     # W16a "Požiadať správcu" opens a mailto to this address
     admin_contact_email: str | None = None
+    # Who may sign in. Empty = every address in INTERNAL_DOMAINS. Non-empty = exact e-mail allowlist
+    # (still only INTERNAL_DOMAINS are auto-provisioned). Deploy default: test@smartsro.sk
+    login_allowlist: str = ""
     mfa_max_failures: int = Field(default=5, ge=1)
     mfa_trust_days: int = Field(default=30, ge=1)
+    # Hide Money / Doklady UI until the real bridge is enabled (pilot deploy keeps mock + FEATURE_MONEY=false)
+    feature_money: bool = False
 
     # --- auth (optional providers)
     oidc_ms_client_id: str | None = None
@@ -147,6 +152,18 @@ class Settings(BaseSettings):
     @property
     def admin_email_list(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+
+    @property
+    def login_allowlist_set(self) -> set[str]:
+        return {e.strip().lower() for e in self.login_allowlist.split(",") if e.strip()}
+
+    def login_allowed(self, email: str) -> bool:
+        """Empty LOGIN_ALLOWLIST → any INTERNAL_DOMAINS address; otherwise exact match on the list."""
+        addr = email.strip().lower()
+        allowed = self.login_allowlist_set
+        if allowed:
+            return addr in allowed
+        return self.is_internal_address(addr)
 
     def ip_exempt_from_limit(self, ip: str | None) -> bool:
         if not ip:

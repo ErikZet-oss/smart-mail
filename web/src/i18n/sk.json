@@ -674,7 +674,8 @@
       "empty": "Zatiaľ nie sú žiadne pobočky.",
       "addPerson": "Pridať osobu",
       "signature": "Šablóna podpisu pobočky",
-      "moneyLater": "Väzby na Money (stredisko, cenník, sklad) sa nastavia po napojení Money bridge (fáza 3)."
+      "moneyLater": "Väzby na Money (stredisko, cenník, sklad) sa nastavia po napojení Money bridge (fáza 3).",
+      "moneyHidden": "Money nie je v tomto nasadení zapnuté (mock bridge beží na pozadí, v rozhraní sa nezobrazuje)."
     },
     "mailboxes": {
       "sieve": "ManageSieve (filtre, mimo kancelárie)"

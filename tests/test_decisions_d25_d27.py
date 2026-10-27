@@ -248,10 +248,16 @@ def test_d27_account_repr_hides_the_cipher() -> None:
 # --- decision 7: W16a "Požiadať správcu" = mailto to the admin address from config ------------------------------
 async def test_w16a_admin_contact_comes_from_config(client: Client, app: FastAPI) -> None:
     app.state.settings.admin_contact_email = "it@smartsro.sk"
+    app.state.settings.feature_money = False
     r = await client.get("/api/system/info")
-    assert r.status_code == 200 and r.json() == {"admin_contact_email": "it@smartsro.sk"}
+    assert r.status_code == 200
+    assert r.json() == {"admin_contact_email": "it@smartsro.sk", "features": {"money": False}}
 
 
 async def test_w16a_admin_contact_empty_when_unset(client: Client, app: FastAPI) -> None:
     app.state.settings.admin_contact_email = None
-    assert (await client.get("/api/system/info")).json() == {"admin_contact_email": None}
+    app.state.settings.feature_money = False
+    assert (await client.get("/api/system/info")).json() == {
+        "admin_contact_email": None,
+        "features": {"money": False},
+    }
