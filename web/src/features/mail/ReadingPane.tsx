@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlarmClock,
   Archive,
+  ArrowLeft,
   CircleCheck,
   Code,
   Ellipsis,
@@ -25,6 +26,7 @@ import { Banner } from '../../components/Banner';
 import { Menu, type MenuEntry } from '../../components/Menu';
 import { useToast } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
+import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { useTheme } from '../prefs/ThemeProvider';
 import { formatMailDate } from './formatMailDate';
 import { attachmentUrl, bulkMessages, fetchMessage, messageKey, patchFlags, snoozeThread } from './mailApi';
@@ -85,6 +87,7 @@ function menuAt(event: MouseEvent<HTMLButtonElement>) {
 
 /** W2c reading pane: Roundcube toolbar order; Reply/Forward open W4 (Phase 1e). */
 export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared }: Props) {
+  const mobile = useMediaQuery(MOBILE_QUERY);
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { classic } = useTheme();
@@ -271,7 +274,22 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   ];
 
   return (
-    <section aria-label={t('mail.readingPane')} className="hidden min-w-0 flex-1 flex-col bg-bg-canvas lg:flex">
+    <section aria-label={t('mail.readingPane')} className="flex min-w-0 flex-1 flex-col bg-bg-canvas">
+      {mobile ? (
+        <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border-default px-1">
+          <button
+            type="button"
+            onClick={onCleared}
+            aria-label={t('system.back')}
+            className="flex size-11 items-center justify-center rounded-sm text-text-primary hover:bg-bg-subtle"
+          >
+            <ArrowLeft size={22} />
+          </button>
+          <p className="type-heading min-w-0 flex-1 truncate text-text-primary">
+            {msg?.subject || t('search.noSubject')}
+          </p>
+        </header>
+      ) : null}
       <div className="flex h-14 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border-default px-2">
         <ToolBtn
           icon={<Reply size={18} />}

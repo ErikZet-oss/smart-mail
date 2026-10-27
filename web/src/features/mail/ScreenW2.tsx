@@ -22,11 +22,15 @@ import { Menu, type MenuEntry } from '../../components/Menu';
 import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
+import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
 import { savePrefs } from '../prefs/prefsApi';
 import { useTheme } from '../prefs/ThemeProvider';
 import { FolderColumn } from './FolderColumn';
 import { ListOptionsDialog } from './ListOptionsDialog';
+import { MobileAppBar } from './MobileAppBar';
+import { MobileFolderDrawer } from './MobileFolderDrawer';
+import { SwipeRow } from './SwipeRow';
 import {
   bulkMessages,
   fetchFolders,
@@ -123,7 +127,9 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pickedMessageId, setPickedMessageId] = useState<string | null>(null);
   const [selectMenu, setSelectMenu] = useState<{ x: number; y: number } | null>(null);
+  const [folderDrawer, setFolderDrawer] = useState(false);
   const showOptions = search.get('dialog') === 'list-options';
+  const mobile = useMediaQuery(MOBILE_QUERY);
 
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const folders = useQuery({
@@ -209,9 +215,9 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
   });
 
   const bulk = useMutation({
-    mutationFn: (action: 'mark_seen' | 'delete' | 'archive' | 'done') =>
-      bulkMessages(mailboxRef, { message_ids: [...selectedIds], action }),
-    onSuccess: (_r, action) => {
+    mutationFn: ({ action, ids }: { action: 'mark_seen' | 'delete' | 'archive' | 'done'; ids?: string[] }) =>
+      bulkMessages(mailboxRef, { message_ids: ids ?? [...selectedIds], action }),
+    onSuccess: (_r, { action }) => {
       toasts.success(t(`mail.toast.${action}`));
       setSelectedIds(new Set());
       setSelectMode(false);
@@ -299,10 +305,12 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
     },
   ];
 
+  const mobileThread = mobile && Boolean(threadParam);
+
   return (
-    <AppShell section="mail" mailbox={mailboxRef} unread={view?.mailbox.unread ?? 0}>
+    <AppShell section="mail" mailbox={mailboxRef} unread={view?.mailbox.unread ?? 0} hideBottomNav={mobileThread}>
       <h1 className="sr-only">{label || t('rail.mail')}</h1>
-      {view ? (
+      {mobile ? null : view ? (
         <FolderColumn
           mailboxRef={mailboxRef}
           view={view}
@@ -313,10 +321,46 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
         <FolderSkeleton />
       )}
 
+      {mobile && view ? (
+        <MobileFolderDrawer
+          open={folderDrawer}
+          onClose={() => setFolderDrawer(false)}
+          mailboxRef={mailboxRef}
+          view={view}
+          activeRef={folder ? (folder.special_use ?? folder.id) : folderParam}
+          readOnly={me.data?.read_only ?? true}
+        />
+      ) : null}
+
+      {mobileThread ? (
+        <div className="flex min-h-0 flex-1 flex-col" data-testid="mobile-thread">
+          <ReadingPane
+            mailbox={mailboxRef}
+            folderRef={folderParam}
+            messageId={activeMessageId}
+            threadId={activeThreadId}
+            onCleared={() => {
+              setPickedMessageId(null);
+              navigate(`/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`);
+              void list.refetch();
+            }}
+          />
+        </div>
+      ) : null}
+
       <section
         aria-label={label}
-        className="flex h-full w-full shrink-0 flex-col border-r border-border-default bg-bg-canvas sm:w-[360px]"
+        className={`flex h-full w-full shrink-0 flex-col border-r border-border-default bg-bg-canvas sm:w-[360px] ${
+          mobileThread ? 'hidden' : ''
+        }`}
       >
+        {mobile ? (
+          <MobileAppBar
+            title={label || t('rail.mail')}
+            onOpenFolders={() => setFolderDrawer(true)}
+            onSearch={() => navigate('/search')}
+          />
+        ) : null}
         {selectedIds.size > 0 ? (
           <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-2">
             <span className="type-small mr-2 text-text-primary">
@@ -325,14 +369,14 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
             <button
               type="button"
               className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate('mark_seen')}
+              onClick={() => bulk.mutate({ action: 'mark_seen' })}
             >
               {t('mail.bulk.markRead')}
             </button>
             <button
               type="button"
               className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate('done')}
+              onClick={() => bulk.mutate({ action: 'done' })}
             >
               <CircleCheck size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.toolbar.done')}
@@ -340,7 +384,7 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
             <button
               type="button"
               className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate('archive')}
+              onClick={() => bulk.mutate({ action: 'archive' })}
             >
               <Archive size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.toolbar.archive')}
@@ -348,7 +392,7 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
             <button
               type="button"
               className="type-caption rounded-sm px-2 py-1 text-danger-600 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate('delete')}
+              onClick={() => bulk.mutate({ action: 'delete' })}
             >
               <Trash2 size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.toolbar.delete')}
@@ -367,7 +411,7 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
             <span className="sr-only">{t('mail.bulk.assignSoon')}</span>
             <UserPlus size={14} className="text-text-tertiary" aria-hidden="true" />
           </div>
-        ) : (
+        ) : mobile ? null : (
           <div className="flex h-14 shrink-0 items-center justify-center gap-1 px-2">
             <ToolbarButton
               icon={<MousePointer2 size={18} />}
@@ -494,16 +538,15 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
                 activeMessageId === id ||
                 (activeThreadId !== null &&
                   (item.kind === 'thread' ? item.data.id === activeThreadId : item.data.thread_id === activeThreadId));
-              return (
+              const row = (
                 <MessageRow
-                  key={item.kind === 'message' ? item.data.id : item.data.id}
                   item={item}
                   selected={selected}
                   checked={selectedIds.has(id)}
                   showCheckbox={selectMode || selectedIds.size > 0}
                   density={density}
                   classic={classic}
-                  onSelect={() => openMessage(id, tid)}
+                  onSelect={() => openMessage(id, tid, mobile)}
                   onCheck={(checked) => {
                     setSelectMode(true);
                     setSelectedIds((prev) => {
@@ -513,7 +556,22 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
                       return next;
                     });
                   }}
+                  onLongPress={
+                    mobile
+                      ? () => {
+                          setSelectMode(true);
+                          setSelectedIds((prev) => new Set(prev).add(id));
+                        }
+                      : undefined
+                  }
                 />
+              );
+              const key = item.kind === 'message' ? item.data.id : item.data.id;
+              if (!mobile) return <div key={key}>{row}</div>;
+              return (
+                <SwipeRow key={key} onDone={() => bulk.mutate({ action: 'done', ids: [id] })}>
+                  {row}
+                </SwipeRow>
               );
             })
           )}
@@ -553,17 +611,21 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
         </div>
       </section>
 
-      <ReadingPane
-        mailbox={mailboxRef}
-        folderRef={folderParam}
-        messageId={activeMessageId}
-        threadId={activeThreadId}
-        onCleared={() => {
-          setPickedMessageId(null);
-          navigate(`/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`, { replace: true });
-          void list.refetch();
-        }}
-      />
+      {mobile || mobileThread ? null : (
+        <ReadingPane
+          mailbox={mailboxRef}
+          folderRef={folderParam}
+          messageId={activeMessageId}
+          threadId={activeThreadId}
+          onCleared={() => {
+            setPickedMessageId(null);
+            navigate(`/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`, { replace: true });
+            void list.refetch();
+          }}
+        />
+      )}
+
+      {mobile && !mobileThread ? <LinkFab mailbox={mailboxRef} /> : null}
 
       {selectMenu ? (
         <Menu
@@ -598,5 +660,38 @@ function FolderSkeleton() {
         <div key={i} className="h-5 rounded-xs bg-bg-muted" style={{ width: `${70 - (i % 3) * 12}%` }} />
       ))}
     </div>
+  );
+}
+
+function LinkFab({ mailbox }: { mailbox: string }) {
+  const { t } = useTranslation();
+  return (
+    <a
+      href={`/compose?mailbox=${encodeURIComponent(mailbox)}`}
+      data-testid="compose-fab"
+      aria-label={t('rail.compose')}
+      className="fixed bottom-20 right-4 z-30 flex h-12 items-center gap-2 rounded-md bg-brand-primary-600 px-4 text-text-on-primary shadow-e3 sm:hidden"
+      style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      <SquarePenIcon />
+      <span className="type-label">{t('mobile.create')}</span>
+    </a>
+  );
+}
+
+function SquarePenIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
   );
 }
