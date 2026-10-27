@@ -121,8 +121,77 @@ test.describe('Phase 1h-b: M8 M9 M15 M18', () => {
     await shot(page, 'phase1hb-M15-list');
     await page.getByRole('button', { name: /Ján Novák/ }).click();
     await expect(page.getByTestId('screen-m15-detail')).toBeVisible();
-    await expect(page.getByRole('link', { name: /novak@abcstav\.example/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /novak@abcstav\.example/i })).toBeVisible();
+    await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
+    // Header call icon + detail phone field both use tel:
+    await expect(page.locator('a[href^="tel:"]')).toHaveCount(2);
     await shot(page, 'phase1hb-M15-detail');
+  });
+
+  test('M15 contact email opens Smart Mail compose (not mailto) @mobile', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile');
+    const draft = {
+      id: 'd-contact',
+      mailbox_id: 'mb-1',
+      mode: 'new',
+      identity_id: 'id-1',
+      to_addrs: [] as { email: string }[],
+      cc_addrs: [] as unknown[],
+      bcc_addrs: [] as unknown[],
+      subject: '',
+      body_html: '<p></p>',
+      body_text: '',
+      include_signature: true,
+      signature_html_override: null,
+      signature_person_id: 'p1',
+      priority: 'normal',
+      request_mdn: false,
+      request_dsn: false,
+      save_sent: true,
+      status: 'editing',
+      scheduled_at: null,
+      undo_until: null,
+      send_error: null,
+      attachments: [],
+      checks: [],
+      updated_at: '2026-10-26T12:00:00Z',
+    };
+    await mockShell(page);
+    await mockApi(page, {
+      ...SIGNED_IN,
+      'GET /api/mail/prefs': { body: DEFAULT_PREFS },
+      'PUT /api/mail/prefs': { body: DEFAULT_PREFS },
+      'GET /api/contacts/books': {
+        body: [
+          { id: 'book-p', kind: 'personal', name: 'Osobné' },
+          { id: 'book-s', kind: 'shared', name: 'Zdieľané' },
+        ],
+      },
+      'GET /api/contacts/books/book-p/contacts': { body: [CONTACT] },
+      'GET /api/contacts/books/book-p/groups': { body: [] },
+      'POST /api/mail/mailboxes/default/compose': { body: draft },
+      'GET /api/mail/compose/d-contact': { body: draft },
+      'PATCH /api/mail/compose/d-contact': { body: draft },
+      'GET /api/mail/mailboxes/default/identities': {
+        body: [
+          {
+            id: 'id-1',
+            display_name: 'Jana Testová',
+            email: 'jana@smartsro.sk',
+            organization: 'Smart s.r.o.',
+            is_default: true,
+          },
+        ],
+      },
+      'GET /api/mail/responses': { body: [] },
+      'GET /api/mail/mailboxes/default/folders': { body: foldersView() },
+    });
+    await page.goto('/contacts/personal/c-1');
+    await expect(page.getByTestId('screen-m15-detail')).toBeVisible();
+    await page.getByRole('button', { name: /novak@abcstav\.example/i }).click();
+    await expect(page).toHaveURL(/\/compose/);
+    await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
+    await expect(page.getByLabel('Komu')).toHaveValue(/novak@abcstav\.example/);
   });
 
   test('M18 Viac Phase-1 items only @mobile', async ({ page }, info) => {
@@ -135,7 +204,11 @@ test.describe('Phase 1h-b: M8 M9 M15 M18', () => {
     await expect(more.getByRole('heading', { name: 'Viac' })).toBeVisible();
     await expect(more.getByRole('link', { name: 'Kontakty' })).toBeVisible();
     await expect(more.getByRole('link', { name: 'Nastavenia' })).toBeVisible();
-    await expect(more.getByRole('switch', { name: 'Tmavý režim' })).toBeVisible();
+    const theme = more.getByTestId('m18-theme');
+    await expect(theme.getByRole('radio', { name: 'Svetlý' })).toBeVisible();
+    await expect(theme.getByRole('radio', { name: 'Tmavý' })).toBeVisible();
+    await expect(theme.getByRole('radio', { name: 'Podľa zariadenia' })).toBeVisible();
+    await expect(more.getByRole('switch')).toHaveCount(0);
     await expect(more.getByRole('button', { name: 'Odhlásiť' })).toBeVisible();
     await expect(more.getByText('O systéme')).toHaveCount(0);
     // Bottom nav Phase-1: no Dnes / Doklady tabs

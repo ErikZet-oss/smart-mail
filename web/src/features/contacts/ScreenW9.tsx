@@ -426,13 +426,17 @@ export function ScreenW9() {
                 ) : null}
                 <h2 className="type-heading min-w-0 flex-1 truncate sm:hidden">{selected.display_name}</h2>
                 {selected.emails[0]?.email ? (
-                  <a
-                    href={`mailto:${selected.emails[0].email}`}
+                  <button
+                    type="button"
                     aria-label={t('contacts.write')}
                     className="flex size-11 items-center justify-center rounded-sm text-brand-primary-600 hover:bg-bg-subtle sm:hidden"
+                    onClick={() => {
+                      const email = selected.emails[0]?.email;
+                      if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
+                    }}
                   >
                     <Mail size={20} />
-                  </a>
+                  </button>
                 ) : null}
                 {selected.phones[0]?.number ? (
                   <a
@@ -487,9 +491,13 @@ export function ScreenW9() {
                     <div key={`${e.email}-${i}`}>
                       <dt className="type-caption text-text-tertiary">{t('contacts.fields.email')}</dt>
                       <dd className="type-body text-text-primary">
-                        <a className="text-brand-primary-700 underline" href={`mailto:${e.email}`}>
+                        <button
+                          type="button"
+                          className="text-left text-brand-primary-700 underline"
+                          onClick={() => navigate(`/compose?to=${encodeURIComponent(e.email)}`)}
+                        >
                           {e.email}
-                        </a>
+                        </button>
                       </dd>
                     </div>
                   ))}

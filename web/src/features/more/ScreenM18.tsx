@@ -1,23 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ChevronRight, LogOut, Moon, Settings, UserCheck, Users } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { Avatar } from '../../components/Avatar';
-import { Switch } from '../../components/Switch';
 import { fetchMe } from '../auth/authApi';
 import { choosePerson, fetchPicker, initials, PICKER_KEY } from '../persons/personsApi';
 import { useTheme } from '../prefs/ThemeProvider';
+import type { UiPrefs } from '../prefs/prefsApi';
 
 type Props = {
   onClose: () => void;
   onLogout: () => void;
 };
 
+const THEME_OPTS: { value: UiPrefs['theme']; labelKey: string }[] = [
+  { value: 'light', labelKey: 'prefs.themeLight' },
+  { value: 'dark', labelKey: 'prefs.themeDark' },
+  { value: 'system', labelKey: 'prefs.themeSystem' },
+];
+
 /**
  * M18 Viac — Phase 1 items only (SCREENS_SPEC §13): Kontakty, Nastavenia, Prepnúť osobu,
- * Tmavý režim, Odhlásiť. O systéme waits for W15b (1h-c).
+ * Vzhľad (Svetlý / Tmavý / Podľa zariadenia), Odhlásiť. O systéme waits for W15b (1h-c).
  */
 export function ScreenM18({ onClose, onLogout }: Props) {
   const { t } = useTranslation();
@@ -26,12 +32,6 @@ export function ScreenM18({ onClose, onLogout }: Props) {
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const picker = useQuery({ queryKey: PICKER_KEY, queryFn: fetchPicker });
   const [switchOpen, setSwitchOpen] = useState(false);
-
-  const isDark = useMemo(() => {
-    if (theme === 'dark') return true;
-    if (theme === 'light') return false;
-    return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }, [theme]);
 
   const person = me.data?.person;
   const persons = picker.data?.persons ?? [];
@@ -148,14 +148,34 @@ export function ScreenM18({ onClose, onLogout }: Props) {
             <ChevronRight size={18} className="text-text-tertiary" aria-hidden="true" />
           </button>
         ) : null}
-        <div className="flex min-h-[48px] items-center gap-3 border-b border-border-subtle px-4 py-3">
-          <Moon size={20} aria-hidden="true" className="text-text-primary" />
-          <span className="type-body flex-1 text-text-primary">{t('rail.darkMode')}</span>
-          <Switch
-            checked={isDark}
-            onChange={(on) => setTheme(on ? 'dark' : 'light')}
-            label={<span className="sr-only">{t('rail.darkMode')}</span>}
-          />
+        <div className="flex flex-col gap-2 border-b border-border-subtle px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Moon size={20} aria-hidden="true" className="text-text-primary" />
+            <span className="type-body text-text-primary">{t('prefs.theme')}</span>
+          </div>
+          <div
+            role="radiogroup"
+            aria-label={t('prefs.theme')}
+            className="ml-8 flex flex-wrap gap-1.5"
+            data-testid="m18-theme"
+          >
+            {THEME_OPTS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                role="radio"
+                aria-checked={theme === opt.value}
+                onClick={() => setTheme(opt.value)}
+                className={`type-caption rounded-full px-2.5 py-1.5 ${
+                  theme === opt.value
+                    ? 'bg-brand-primary-600 text-text-on-primary'
+                    : 'bg-bg-muted text-text-secondary hover:bg-bg-subtle'
+                }`}
+              >
+                {t(opt.labelKey)}
+              </button>
+            ))}
+          </div>
         </div>
         <button
           type="button"

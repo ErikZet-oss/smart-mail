@@ -212,25 +212,41 @@ export function ScreenW10() {
               </li>
               {messages.map((m) => (
                 <li key={m.id}>
-                  <Link
-                    to={`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`}
-                    className="flex flex-col gap-0.5 px-4 py-3 hover:bg-bg-subtle"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate(`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`);
-                    }}
-                  >
-                    <span className="type-small font-medium text-text-primary">
+                  <div className="flex flex-col gap-0.5 px-4 py-3 hover:bg-bg-subtle">
+                    <Link
+                      to={`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`}
+                      className="type-small font-medium text-text-primary"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate(`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`);
+                      }}
+                    >
                       {m.subject || t('search.noSubject')}
-                    </span>
+                    </Link>
                     <span className="type-caption text-text-secondary">
-                      {m.from_name || m.from_email || '—'}
-                      {m.from_email && m.from_name ? ` · ${m.from_email}` : ''}
+                      {m.from_name ? <span>{m.from_name}</span> : null}
+                      {m.from_email ? (
+                        <>
+                          {m.from_name ? ' · ' : null}
+                          <button
+                            type="button"
+                            className="text-brand-primary-700 underline"
+                            onClick={() => {
+                              const email = m.from_email;
+                              if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
+                            }}
+                          >
+                            {m.from_email}
+                          </button>
+                        </>
+                      ) : !m.from_name ? (
+                        '—'
+                      ) : null}
                     </span>
                     {m.preview ? (
                       <span className="type-caption line-clamp-2 text-text-tertiary">{m.preview}</span>
                     ) : null}
-                  </Link>
+                  </div>
                 </li>
               ))}
             </ul>

@@ -218,6 +218,12 @@
     "more": "Viac",
     "create": "Vytvoriť"
   },
+  "prefs": {
+    "theme": "Vzhľad",
+    "themeLight": "Svetlý",
+    "themeDark": "Tmavý",
+    "themeSystem": "Podľa zariadenia"
+  },
   "folders": {
     "label": "Priečinky",
     "withUnread": "{{name}}, neprečítané: {{count}}",
