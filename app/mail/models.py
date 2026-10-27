@@ -29,9 +29,19 @@ class Mailbox(IdMixin, TimestampMixin, Base):
     __tablename__ = "mailboxes"
 
     email: Mapped[str] = mapped_column(String(254), unique=True)  # lower-case
+    # personal | shared | branch
+    kind: Mapped[str] = mapped_column(String(16), default="personal", server_default="personal")
     imap_host: Mapped[str] = mapped_column(String(253))
     imap_port: Mapped[int] = mapped_column(Integer)
     imap_security: Mapped[str] = mapped_column(String(16))  # ssl | starttls | none
+    smtp_host: Mapped[str | None] = mapped_column(String(253))
+    smtp_port: Mapped[int | None] = mapped_column(Integer)
+    smtp_security: Mapped[str | None] = mapped_column(String(16))
+    sieve_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    sieve_host: Mapped[str | None] = mapped_column(String(253))
+    sieve_port: Mapped[int | None] = mapped_column(Integer, default=4190, server_default="4190")
+    provider_admin_url: Mapped[str | None] = mapped_column(String(500))
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     # the login whose stored mailbox password (DECISIONS D27) the background sync uses
     credential_account_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"))
     capabilities: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
@@ -147,3 +157,15 @@ class UserSettings(IdMixin, TimestampMixin, Base):
     person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("persons.id", ondelete="CASCADE"), index=True)
     section: Mapped[str] = mapped_column(String(64))  # e.g. prefs.list, prefs.ui
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+
+
+class SieveScriptBackup(IdMixin, TimestampMixin, Base):
+    """Previous ManageSieve script content before each write (Filtre / Mimo kancelárie)."""
+
+    __tablename__ = "sieve_script_backups"
+
+    mailbox_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("mailboxes.id", ondelete="CASCADE"), index=True)
+    script_name: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(String(64))  # filters_save | vacation_save | restore
+    person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"))

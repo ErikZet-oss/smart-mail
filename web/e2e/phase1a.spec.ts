@@ -99,11 +99,12 @@ test.describe('W1c', () => {
       signedIn = true;
       return route.fulfill({ json: { next: 'app', me: ME } });
     });
-    await page.goto('/mail/nitra/INBOX');
+    // folder param is special_use (`inbox`), not IMAP name `INBOX` — otherwise ScreenW2 → /404 races login
+    await page.goto('/mail/nitra/inbox');
     await expect(page).toHaveURL(/reason=password-changed/);
     await fillLogin(page);
     await page.getByRole('button', { name: 'PRIHLÁSIŤ' }).click();
-    await expect(page).toHaveURL(/\/mail\/nitra\/INBOX$/);
+    await expect(page).toHaveURL(/\/mail\/nitra\/inbox$/);
   });
 });
 

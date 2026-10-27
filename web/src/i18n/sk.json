@@ -196,6 +196,12 @@
     "save": "Uložiť",
     "attach": "Priložiť",
     "responses": "Odpovede",
+    "signature": "Podpis",
+    "signatureEditTitle": "Upraviť podpis pre túto správu",
+    "signatureEditHint": "Zmena platí len pre túto správu. Predvolený podpis pobočky ostane v nastaveniach.",
+    "signatureSource": "<> Zdrojový kód",
+    "signatureVisual": "Náhľad",
+    "signatureSaved": "Podpis pre túto správu uložený.",
     "from": "Od",
     "to": "Komu",
     "cc": "Kópia",
@@ -345,14 +351,105 @@
   },
   "settings": {
     "title": "Nastavenia",
+    "nav": "Sekcie nastavení",
     "later": "Úpravy nastavení pripravujeme.",
+    "save": "Uložiť",
+    "saved": "Nastavenia uložené.",
+    "adminOnly": "Túto sekciu môže upravovať len správca.",
+    "foldersHint": "Priečinky spravujete aj v ľavom stĺpci pošty (Vytvoriť, Premenovať, Vyprázdniť). Tu nastavíte odber a súkromné priečinky.",
+    "sieveError": "ManageSieve server neodpovedal – skontrolujte pripojenie schránky.",
     "profile": {
       "title": "Môj profil",
       "firstName": "Meno",
       "lastName": "Priezvisko",
       "function": "Funkcia",
+      "phone": "Telefón",
+      "mobile": "Mobil",
+      "personalEmail": "Osobný e-mail",
       "login": "Prihlásenie",
       "noPerson": "Osoba nie je vybraná – len na čítanie."
+    },
+    "identity": {
+      "displayName": "Zobrazované meno",
+      "signature": "Podpis"
+    },
+    "signature": {
+      "source": "<> Zdrojový kód",
+      "visual": "Náhľad",
+      "editor": "Editor podpisu",
+      "hint": "HTML max 64 kB. Vlastné HTML vložte cez <> Zdrojový kód (D22)."
+    },
+    "responses": {
+      "name": "Názov odpovede",
+      "body": "Text",
+      "create": "Nová odpoveď",
+      "delete": "Vymazať"
+    },
+    "filtersHelp": "Filtre fungujú na serveri – aj keď je aplikácia zatvorená, aj v Roundcube.",
+    "sieveRestore": "Obnoviť predchádzajúcu verziu",
+    "sieveRestored": "Predchádzajúca verzia filtrov bola obnovená.",
+    "filters": {
+      "enabled": "Zapnutý",
+      "add": "Pridať filter",
+      "newName": "Nový filter (Od → priečinok)",
+      "from": "Od (adresa alebo doména odosielateľa)",
+      "fileinto": "Presunúť do priečinka",
+      "mailboxScope": "Filter platí pre celú schránku – osobnú aj pobočkovú.",
+      "notDefaults": "Filtre nie sú predvolené. Každá schránka má vlastné pravidlá (rovnaké ako v Roundcube).",
+      "roundcubeReadonly": "Pravidlo z Roundcube (len na čítanie)",
+      "scopeKind": "Typ schránky",
+      "conditionField": "Pole",
+      "conditionValue": "Hodnota",
+      "headerName": "Názov hlavičky",
+      "sizeKb": "Veľkosť (kB)",
+      "readOnly": "Túto akciu môže vykonať len osoba s právom odosielať (nie divák).",
+      "noSend": "Na tejto schránke nemáte právo odosielať – filtre a mimo kancelárie nemôžete meniť.",
+      "fields": {
+        "from": "Od",
+        "to": "Komu",
+        "cc": "Kópia",
+        "subject": "Predmet",
+        "body": "Telo",
+        "header": "Hlavička",
+        "size": "Veľkosť"
+      }
+    },
+    "vacation": {
+      "enabled": "Automatická odpoveď",
+      "subject": "Predmet",
+      "body": "Text odpovede",
+      "start": "Od",
+      "end": "Do",
+      "days": "Odpovedať tomu istému odosielateľovi najviac raz za (dni)",
+      "branchHelp": "Na pobočkovej schránke odpovedá za celú pobočku. Ukladá sa do toho istého aktívneho Sieve skriptu ako filtre.",
+      "rangeHelp": "Bez dátumu do platí, kým ju nevypnete.",
+      "mailboxScope": "Platí pre celú schránku",
+      "lastChanged": "Naposledy {{state}}: {{who}}, {{when}}",
+      "stateOn": "zapnuté",
+      "stateOff": "vypnuté",
+      "unknownPerson": "neznáma osoba"
+    },
+    "provider": {
+      "mailbox": "E-mailová schránka",
+      "server": "Server",
+      "open": "Otvoriť správu schránky u poskytovateľa",
+      "noUrl": "Odkaz na správu schránky ešte nie je nastavený (Settings › Schránky).",
+      "vacationHint": "Automatickú odpoveď nastavte v Mimo kancelárie – nezapínajte ju aj u poskytovateľa.",
+      "toVacation": "Prejsť na Mimo kancelárie"
+    },
+    "security": {
+      "loginInfo": "Prihlasujete sa e-mailom a heslom k pošte. Heslo sa mení na mailovom serveri.",
+      "current": "táto relácia",
+      "revoke": "Odhlásiť"
+    },
+    "branches": {
+      "empty": "Zatiaľ nie sú žiadne pobočky.",
+      "addPerson": "Pridať osobu",
+      "signature": "Šablóna podpisu pobočky",
+      "moneyLater": "Väzby na Money (stredisko, cenník, sklad) sa nastavia po napojení Money bridge (fáza 3)."
+    },
+    "mailboxes": {
+      "sieve": "ManageSieve (filtre, mimo kancelárie)"
     }
   }
 }

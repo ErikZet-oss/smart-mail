@@ -2,6 +2,27 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 1f: settings + send guard
+
+- Send guard (ADR-008): outside prod, SMTP only via Mailpit/localhost unless `MAIL_SEND_ALLOW_REAL_SERVER`;
+  recipients limited to `@smartmail.test` + `MAIL_SEND_TEST_ALLOWLIST` (even with the flag).
+- W4e: edit signature for this message only (`<>` source view, D22). W4c/W4f deferred to 1h.
+- Settings W12: sections 01–06, 09, 09b, 10–12 — preferences, folders hint, identities + profile, Odpovede,
+  Filtre + Mimo kancelárie (ManageSieve), security sessions, provider (D20), admin users / branches / mailboxes.
+  Schema: `settings_schema.json` + `web/src/features/settings/schema.ts`. HTML signature editor (D22).
+- Migration `0008` mailbox SMTP/Sieve/provider URL + person profile fields. Test against local `imap-test`;
+  `REAL_IMAP_*` still skipped. ClamAV still deferred to 1h.
+- Filtre / Mimo kancelárie: Roundcube `# rule:[Name]` parse via sievelib; load→save keeps conditions (Od →
+  fileinto); unsupported rules stay raw („Pravidlo z Roundcube (len na čítanie)“); vacation writes into the
+  **same active script** (never activates another set); Od–do + SK/EN/DE; script backup + „Obnoviť predchádzajúcu
+  verziu“ (migration `0009`). Fixture `fixtures/sieve/roundcube_filters.sieve`.
+- Filtre validation: ≥ 1 non-empty condition (422 SK message); size must be a positive integer; `compile_condition`
+  never emits a match-all test. Telo = Sieve `body` extension; Hlavička = custom header name. Readonly rules take
+  `raw` from the live script on save. PUT filters / vacation / restore require send access + non-viewer (admin
+  always). W12-06 shows „Platí pre celú schránku“ + who last changed vacation (audit).
+- **Known limitation (→ 1h):** EN/DE vacation bodies are stored in settings but **not** written to Sieve yet
+  (RFC 5230 has one reason string). Phase 1h: reply by language via multiple vacation rules.
+
 ## [Unreleased] — Phase 1e: compose
 
 - Compose W4: reply/forward/new, identities, branch signature with active person, Odpovede picker (W4d), attachments

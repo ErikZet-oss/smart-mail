@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     smtp_port: int = Field(default=1025, ge=1, le=65535)
     smtp_security: Literal["ssl", "starttls", "none"] = "none"
     undo_send_seconds: int = Field(default=10, ge=0, le=30)
+    # Phase 1f send guard (mirrors MAIL_SYNC_ALLOW_REAL_SERVER): outside prod, SMTP only to
+    # Mailpit/localhost unless this is true; recipients always limited to @smartmail.test + allowlist.
+    mail_send_allow_real_server: bool = False
+    # comma-separated extra To/Cc/Bcc addresses allowed outside prod (never live eshop@/info@)
+    mail_send_test_allowlist: str = ""
 
     # --- mailbox login (PRODUCT_SPEC §2.0): the IMAP server Roundcube uses. Per-mailbox servers come with
     # Settings › Schránky; until then every login is verified against this server.

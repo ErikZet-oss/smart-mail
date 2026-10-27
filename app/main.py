@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async
 
 from app import __version__
 from app.api import auth, compose, mail, messages, persons, system
+from app.api import settings as settings_api
 from app.core import middleware
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -73,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(mail.router)
     app.include_router(messages.router)
     app.include_router(compose.router)
+    app.include_router(settings_api.router)
     app.include_router(system.router)
 
     @app.get("/healthz", tags=["system"])
