@@ -11,6 +11,7 @@ htmlcov/
 node_modules/
 web/dist/
 web/dev-dist/
+web/tsconfig.tsbuildinfo
 playwright-report/
 test-results/
 # Env & secrets — never commit

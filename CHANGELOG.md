@@ -8,6 +8,11 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   worker cron flushes due scheduled drafts.
 - **W4f** Okno písania: `?popup=1` 720×640 chrome, minimize bar, max 3 popups, „Otvoriť v novom okne“.
 - **ClamAV**: `scan_bytes` on compose upload + inbound attachments; infected rejected (422); unreachable → skipped.
+  Worker re-scans `skipped`/`error` every 15 min (batch 200). UI: „Ešte neskontrolované antivírusom“ + confirm
+  before download. Phase-2 rule (AI_ASSISTANT): AI processes only `av_status=clean` attachments.
+- **Downloads**: RFC 6266/5987 `Content-Disposition` (`filename` ASCII + `filename*=UTF-8''…`) so Slovak names
+  (č/š/ž/ľ) no longer crash latin-1 headers.
+- `web/tsconfig.tsbuildinfo` removed from git / gitignored.
 - Deploy: `nginx-active.conf` (gitignored) generated from DEPLOY_MODE — never overwrite git templates;
   CI: edit `nginx-deploy.vps.conf` → update regenerates active conf.
 

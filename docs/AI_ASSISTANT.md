@@ -60,6 +60,9 @@ with one-line previews before confirming. Send happens with the standard undo de
    sets the branch of the suggestions.
 1. **Parse**: MIME → text/html (sanitized), attachments (AV scan), headers incl. SPF/DKIM/DMARC results,
    strip quoted history and signature (keep signature separately for contact extraction).
+   **Phase 2 rule — AV gate:** AI (classify, extract, `get_attachment_text`, order/supplier parsers) may process an
+   attachment only when `av_status = clean`. Attachments left `skipped`/`error` (ClamAV down) are re-scanned by the
+   worker every 15 minutes and stay out of the AI pipeline until clean; `infected` is never fed to the model.
 2. **Language** detection (sk, cs, en, de, pl, hu, other).
 3. **Rules** (deterministic, cheap): user/admin rules, `List-Unsubscribe` → newsletter, carrier domains → shipping
    notification, internal domains → internal, ISDOC/UBL/Factur-X attachment → supplier_document, known supplier + PDF
@@ -230,6 +233,8 @@ can highlight it in the PDF.
   otherwise a failed (non-blocking for dates/prices → blocking) check and red highlight.
 - **Placeholder block**: `[[DOPLNIŤ…]]` blocks sending.
 - **Attachment check** before any send: text says "v prílohe/attached/im Anhang" but no attachment → warning.
+- **AV-clean attachments only** (Phase 2): tools and extractors that read attachment bytes/text refuse
+  `av_status` other than `clean` (same gate as pipeline step 1).
 - **New recipient / external domain / many recipients** warning; reply-all with external recipients warning.
 - **IBAN change, sender display-name spoofing, look-alike domains** (levenshtein ≤ 2 to known partner domains),
   DMARC fail → phishing banner on the message and block of any Money write from that message until confirmed.
