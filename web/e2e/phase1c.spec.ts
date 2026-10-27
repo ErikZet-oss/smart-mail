@@ -7,11 +7,15 @@ test.describe('W2 shell & folders (1c)', () => {
     await mockApi(page, SIGNED_IN);
     await page.goto('/mail/default/inbox');
     const nav = page.getByRole('navigation', { name: 'Priečinky' });
-    await expect(nav.getByRole('link')).toHaveCount(13);
-    await expect(nav.getByRole('link').nth(0)).toHaveAttribute('aria-current', 'page');
+    // Folder links only (first <ul>) — AI TRIEDENIE is a separate list when categories exist.
+    const folderLinks = nav.locator(':scope > ul').getByRole('link');
+    await expect(folderLinks).toHaveCount(13);
+    await expect(folderLinks.nth(0)).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('link', { name: 'E-mail, neprečítané: 12' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByText('Vyberte správu')).toBeVisible();
     await expect(page.getByRole('meter', { name: 'Využitie schránky' })).toHaveAttribute('aria-valuenow', '40');
+    // Empty categories mock → no triage block (classic still hides it when present — see phase2b).
+    await expect(page.getByTestId('ai-triage')).toHaveCount(0);
     await shot(page, 'phase1c-W2-default');
   });
 

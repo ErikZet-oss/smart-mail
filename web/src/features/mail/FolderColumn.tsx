@@ -43,7 +43,7 @@ import {
   type Quota,
   type SpecialUse,
 } from './mailApi';
-import { categoryDotClass } from './MessageRow';
+import { categoryDotClass } from './categoryStyles';
 import { useFolderLabel } from './useFolderLabel';
 
 const SPECIAL_ICON: Record<SpecialUse, ReactNode> = {

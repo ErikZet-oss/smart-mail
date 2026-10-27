@@ -282,8 +282,8 @@ async def list_messages(
 
     messages_out: list[MessageListItem] = []
     for m in rows:
-        cls = cls_by_msg.get(m.id)
-        payload = (cls.payload if cls else None) or {}
+        classification = cls_by_msg.get(m.id)
+        payload = (classification.payload if classification else None) or {}
         messages_out.append(
             MessageListItem(
                 id=str(m.id),
@@ -302,12 +302,12 @@ async def list_messages(
                 answered=m.answered,
                 has_attachments=m.has_attachments,
                 thread_count=thread_counts.get(m.thread_id, 1) if m.thread_id else 1,
-                ai_category=cls.category if cls else None,
-                ai_priority=cls.priority if cls else None,
-                ai_summary=payload.get("summary_sk") if cls else None,
-                ai_language=cls.language if cls else None,
-                ai_confidence=payload.get("confidence") if cls else None,
-                ai_note_codes=list(payload.get("note_codes") or []) if cls else [],
+                ai_category=classification.category if classification else None,
+                ai_priority=classification.priority if classification else None,
+                ai_summary=payload.get("summary_sk") if classification else None,
+                ai_language=classification.language if classification else None,
+                ai_confidence=payload.get("confidence") if classification else None,
+                ai_note_codes=list(payload.get("note_codes") or []) if classification else [],
             )
         )
 

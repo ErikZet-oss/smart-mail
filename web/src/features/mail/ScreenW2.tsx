@@ -48,7 +48,8 @@ import {
   type MessageListItem,
   type ThreadListItem,
 } from './mailApi';
-import { CATEGORY_COLOR_TOKEN, MessageRow, categoryDotClass, type RowItem } from './MessageRow';
+import { CATEGORY_COLOR_TOKEN, categoryDotClass } from './categoryStyles';
+import { MessageRow, type RowItem } from './MessageRow';
 import { ReadingPane } from './ReadingPane';
 import { useFolderLabel } from './useFolderLabel';
 
@@ -200,7 +201,16 @@ function ScreenW2Body({
           page_size: data.page_size,
           messages: data.messages,
           threads: [] as ThreadListItem[],
-          prefs: listPrefs!,
+          prefs: listPrefs ?? {
+            sort: 'date_received' as const,
+            sort_dir: 'desc' as const,
+            mode: 'list' as const,
+            density: 'compact' as const,
+            page_size: 50,
+            show_ai_summary: true,
+            mark_read: 'delay3' as const,
+            after_delete: 'next' as const,
+          },
           categoryMeta: data.category,
         };
       }
@@ -274,9 +284,10 @@ function ScreenW2Body({
     onError: () => toasts.error(t('mail.errors.generic')),
   });
 
-  const listBasePath = aiView
-    ? `/mail/${encodeURIComponent(mailboxRef)}/view/${encodeURIComponent(category!)}`
-    : `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`;
+  const listBasePath =
+    aiView && category
+      ? `/mail/${encodeURIComponent(mailboxRef)}/view/${encodeURIComponent(category)}`
+      : `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`;
 
   const openMessage = useCallback(
     (messageId: string, threadId: string | null, full = false) => {

@@ -102,11 +102,15 @@ export function emptyMessagesList() {
   };
 }
 
+/** Empty AI triage — Phase 1 shells must not 401 on the 2b categories poll. Override in phase2b. */
+export const EMPTY_AI_CATEGORIES = { categories: [] as unknown[] };
+
 export const MAIL_DEFAULTS: Record<string, Reply> = {
   'GET /api/mail/mailboxes': { body: [foldersView().mailbox] },
   'GET /api/mail/mailboxes/default/folders': { body: foldersView() },
   'GET /api/mail/prefs': { body: DEFAULT_PREFS },
   'PUT /api/mail/prefs': { body: DEFAULT_PREFS },
+  'GET /api/mail/mailboxes/default/ai/categories': { body: EMPTY_AI_CATEGORIES },
   // Rail polls notifications; unmocked 401 would kick the shell to login.
   'GET /api/notifications': { body: { items: [], unread_count: 0 } },
   'GET /api/system/info': { body: { admin_contact_email: null, features: { money: false } } },
@@ -146,6 +150,7 @@ export const SETTINGS_DEFAULTS: Record<string, Reply> = {
 const FOLDER_MESSAGES = /^GET \/api\/mail\/mailboxes\/[^/]+\/folders\/[^/]+\/messages$/;
 const MESSAGE_DETAIL = /^GET \/api\/mail\/mailboxes\/[^/]+\/messages\/[^/]+$/;
 const MAILBOX_FOLDERS = /^GET \/api\/mail\/mailboxes\/[^/]+\/folders$/;
+const AI_CATEGORIES = /^GET \/api\/mail\/mailboxes\/[^/]+\/ai\/categories$/;
 
 /** Mock the API: "METHOD /path" → reply (or a function of the JSON body for stateful flows). The W2 folder column
  * answers with `MAIL_DEFAULTS` unless overridden; other unmocked API calls answer 401 (not signed in). */
@@ -169,6 +174,9 @@ export async function mockApi(page: Page, given: Record<string, Reply | ((body: 
     } else if (!reply && MAILBOX_FOLDERS.test(key)) {
       // deep-link mailboxes (e.g. nitra) share the seeded folder column unless overridden
       reply = { body: foldersView() };
+    } else if (!reply && AI_CATEGORIES.test(key)) {
+      // Phase 2b poll — empty triage so Phase 1 shells stay signed in
+      reply = { body: EMPTY_AI_CATEGORIES };
     } else if (!reply) {
       reply = { status: 401, body: { detail: { code: 'unauthenticated', reason: 'missing' } } };
     }

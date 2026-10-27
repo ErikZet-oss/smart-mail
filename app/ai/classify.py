@@ -190,7 +190,12 @@ async def classify_message(
         notes.extend(rule.notes)
     # dedupe preserving order
     seen: set[str] = set()
-    notes = [n for n in notes if not (n in seen or seen.add(n))]
+    deduped: list[str] = []
+    for note in notes:
+        if note not in seen:
+            seen.add(note)
+            deduped.append(note)
+    notes = deduped
 
     if rule and rule.decisive:
         return ClassifyOutcome(
