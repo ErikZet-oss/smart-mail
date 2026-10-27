@@ -1,11 +1,32 @@
 import { useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { ArrowLeft, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AppShell } from '../../components/shell/AppShell';
+import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { runSearch, searchKey, type SearchField, type SearchScope } from './searchApi';
+
+const RECENT_KEY = 'sm.search.recent';
+const MAX_RECENT = 8;
+
+function loadRecent(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string').slice(0, MAX_RECENT) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecent(q: string) {
+  const clean = q.trim();
+  if (!clean) return;
+  const next = [clean, ...loadRecent().filter((x) => x.toLowerCase() !== clean.toLowerCase())].slice(0, MAX_RECENT);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+}
 
 const SCOPES: SearchScope[] = ['current', 'subfolders', 'all'];
 const FIELDS: { id: SearchField; labelKey: string }[] = [
@@ -24,13 +45,15 @@ function formatSkDate(iso: string | null): string {
   return d.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric', year: 'numeric' });
 }
 
-/** W10 Hľadanie — Roundcube scope/fields, results + empty (SCREENS_SPEC W10; Figma 61:49657 / 61:50001). */
+/** W10 / M8 Hľadanie — Roundcube scope/fields; mobile full-screen with recent (SCREENS_SPEC). */
 export function ScreenW10() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const mobile = useMediaQuery(MOBILE_QUERY);
   const [params, setParams] = useSearchParams();
   const qParam = params.get('q') ?? '';
   const [draft, setDraft] = useState(qParam);
+  const [recent] = useState(loadRecent);
   const scope = (params.get('scope') as SearchScope) || 'all';
   const field = (params.get('field') as SearchField) || 'full';
   const folderId = params.get('folder_id') ?? undefined;
@@ -50,6 +73,7 @@ export function ScreenW10() {
 
   function applyQuery(next: string) {
     const clean = next.trim();
+    if (clean) pushRecent(clean);
     const nextParams = new URLSearchParams(params);
     if (clean) nextParams.set('q', clean);
     else nextParams.delete('q');
@@ -73,9 +97,19 @@ export function ScreenW10() {
 
   return (
     <AppShell section="mail">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg-canvas">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg-canvas" data-testid={mobile ? 'screen-m8' : undefined}>
         <header className="flex shrink-0 flex-col gap-3 border-b border-border-default px-4 py-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {mobile ? (
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                aria-label={t('system.back')}
+                className="flex size-11 shrink-0 items-center justify-center rounded-sm text-text-primary hover:bg-bg-subtle"
+              >
+                <ArrowLeft size={22} />
+              </button>
+            ) : null}
             <h1 className="type-heading text-text-primary">{t('search.title')}</h1>
             {oldestLabel ? (
               <p className="type-caption text-text-tertiary" data-testid="search-corpus-banner">
@@ -88,6 +122,7 @@ export function ScreenW10() {
             <input
               type="search"
               value={draft}
+              autoFocus={mobile}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') applyQuery(draft);
@@ -137,7 +172,30 @@ export function ScreenW10() {
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {!enabled ? (
-            <p className="type-body p-8 text-text-tertiary">{t('search.typeHint')}</p>
+            mobile && recent.length > 0 ? (
+              <div className="p-4" data-testid="search-recent">
+                <p className="type-caption mb-2 text-text-tertiary">{t('search.recent')}</p>
+                <ul className="divide-y divide-border-subtle rounded-sm border border-border-default">
+                  {recent.map((q) => (
+                    <li key={q}>
+                      <button
+                        type="button"
+                        className="type-body flex w-full items-center gap-2 px-3 py-3 text-left text-text-primary hover:bg-bg-subtle"
+                        onClick={() => {
+                          setDraft(q);
+                          applyQuery(q);
+                        }}
+                      >
+                        <Search size={16} className="text-text-tertiary" aria-hidden="true" />
+                        {q}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="type-body p-8 text-text-tertiary">{t('search.typeHint')}</p>
+            )
           ) : result.isLoading ? (
             <p className="type-body p-8 text-text-tertiary" aria-busy="true">
               {t('search.loading')}
@@ -154,25 +212,41 @@ export function ScreenW10() {
               </li>
               {messages.map((m) => (
                 <li key={m.id}>
-                  <Link
-                    to={`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`}
-                    className="flex flex-col gap-0.5 px-4 py-3 hover:bg-bg-subtle"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate(`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`);
-                    }}
-                  >
-                    <span className="type-small font-medium text-text-primary">
+                  <div className="flex flex-col gap-0.5 px-4 py-3 hover:bg-bg-subtle">
+                    <Link
+                      to={`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`}
+                      className="type-small font-medium text-text-primary"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate(`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`);
+                      }}
+                    >
                       {m.subject || t('search.noSubject')}
-                    </span>
+                    </Link>
                     <span className="type-caption text-text-secondary">
-                      {m.from_name || m.from_email || '—'}
-                      {m.from_email && m.from_name ? ` · ${m.from_email}` : ''}
+                      {m.from_name ? <span>{m.from_name}</span> : null}
+                      {m.from_email ? (
+                        <>
+                          {m.from_name ? ' · ' : null}
+                          <button
+                            type="button"
+                            className="text-brand-primary-700 underline"
+                            onClick={() => {
+                              const email = m.from_email;
+                              if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
+                            }}
+                          >
+                            {m.from_email}
+                          </button>
+                        </>
+                      ) : !m.from_name ? (
+                        '—'
+                      ) : null}
                     </span>
                     {m.preview ? (
                       <span className="type-caption line-clamp-2 text-text-tertiary">{m.preview}</span>
                     ) : null}
-                  </Link>
+                  </div>
                 </li>
               ))}
             </ul>

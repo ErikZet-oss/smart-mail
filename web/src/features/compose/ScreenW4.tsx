@@ -54,10 +54,12 @@ export function ScreenW4() {
   const draftId = params.draftId;
   const mode = (search.get('mode') as ComposeMode | null) ?? 'new';
   const messageId = search.get('m') ?? undefined;
+  /** Prefill To from contacts / search (never mailto: — keep send inside Smart Mail). */
+  const seedTo = search.get('to')?.trim() ?? '';
 
   const me = useQuery({ queryKey: ['auth', 'me'], queryFn: fetchMe });
   const [localId, setLocalId] = useState<string | null>(draftId ?? null);
-  const [to, setTo] = useState('');
+  const [to, setTo] = useState(seedTo);
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState('');
   const [priority, setPriority] = useState<'low' | 'normal' | 'high'>('normal');
@@ -72,7 +74,9 @@ export function ScreenW4() {
     mutationFn: () => createDraft(mailbox, { mode, message_id: messageId }),
     onSuccess: (draft) => {
       setLocalId(draft.id);
-      navigate(`/compose/${draft.id}?mailbox=${encodeURIComponent(mailbox)}`, { replace: true });
+      const qs = new URLSearchParams({ mailbox });
+      if (seedTo) qs.set('to', seedTo);
+      navigate(`/compose/${draft.id}?${qs.toString()}`, { replace: true });
       applyDraft(draft);
     },
   });
@@ -104,14 +108,15 @@ export function ScreenW4() {
   });
 
   function applyDraft(d: NonNullable<typeof draftQuery.data>) {
-    setTo(formatAddrs(d.to_addrs));
+    const draftTo = formatAddrs(d.to_addrs);
+    setTo(draftTo || seedTo);
     setCc(formatAddrs(d.cc_addrs));
     if (d.cc_addrs.length) setShowCc(true);
     setSubject(d.subject);
     setPriority(d.priority);
     setMdn(d.request_mdn);
     editor?.commands.setContent(d.body_html || '<p></p>');
-    setDirty(false);
+    setDirty(Boolean(seedTo && !draftTo));
   }
 
   useEffect(() => {

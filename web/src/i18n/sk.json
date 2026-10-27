@@ -59,6 +59,7 @@
     "mobileHint": "Kliknite na svoje meno – podpis sa nastaví sám. Bez PIN-u.",
     "manager": "Vedúci",
     "switch": "Kto pracuje?",
+    "switchAction": "Prepnúť osobu",
     "chipLabel": "Pracuje: {{name}}",
     "switched": "Teraz pracuje: {{name}} · podpis zmenený",
     "close": "Zavrieť",
@@ -109,6 +110,7 @@
     "groups": "Skupiny",
     "stubs": "Ďalšie",
     "personal": "Osobné adresy",
+    "personalShort": "Osobné",
     "shared": "Zdieľané",
     "moneyBook": "Money – adresár",
     "recent": "Naposledy použité",
@@ -152,6 +154,7 @@
     "title": "Hľadanie",
     "placeholder": "Hľadať v správach…",
     "typeHint": "Zadajte hľadaný výraz a stlačte Enter.",
+    "recent": "Nedávne hľadania",
     "loading": "Hľadám…",
     "emptyTitle": "Nič sme nenašli",
     "emptyHint": "Skúste iný výraz, inú schránku alebo pole (Predmet, Od, Celá správa).",
@@ -214,6 +217,12 @@
     "bottomNav": "Mobilná navigácia",
     "more": "Viac",
     "create": "Vytvoriť"
+  },
+  "prefs": {
+    "theme": "Vzhľad",
+    "themeLight": "Svetlý",
+    "themeDark": "Tmavý",
+    "themeSystem": "Podľa zariadenia"
   },
   "folders": {
     "label": "Priečinky",
@@ -452,6 +461,21 @@
     "adminOnly": "Túto sekciu môže upravovať len správca.",
     "foldersHint": "Priečinky spravujete aj v ľavom stĺpci pošty (Vytvoriť, Premenovať, Vyprázdniť). Tu nastavíte odber a súkromné priečinky.",
     "sieveError": "ManageSieve server neodpovedal – skontrolujte pripojenie schránky.",
+    "mobile": {
+      "prefs": "Vzhľad",
+      "prefsHint": "Svetlý / tmavý / podľa systému, Klasické zobrazenie",
+      "responses": "Odpovede",
+      "responsesHint": "čítanie a použitie",
+      "vacation": "Mimo kancelárie",
+      "security": "Bezpečnosť",
+      "securityHint": "relácie, zariadenia",
+      "desktopOnly": "Len na počítači",
+      "editOnDesktop": "upravíte na počítači",
+      "folders": "Priečinky",
+      "identities": "Identity",
+      "filters": "Filtre",
+      "admin": "Správa (10–20)"
+    },
     "profile": {
       "title": "Môj profil",
       "firstName": "Meno",

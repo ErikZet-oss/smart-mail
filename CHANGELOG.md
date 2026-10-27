@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 1h-b: mobile M8 / M9 / M15 / M18
+
+- **M8** Hľadanie: full-screen mobile search with recent queries; sender address opens compose (not mailto).
+- **M9** Nastavenia: mobile section index (SETTINGS_SPEC §M9 Phase-1 subset); desktop-only group for
+  folders/identity/filters/admin; AI and notifications omitted until later phases.
+- **M15** Kontakty: list ↔ detail stack; e-mail opens Smart Mail compose (signature + audit); `tel:` kept for phones.
+- **M18** Viac: Kontakty, Nastavenia, Prepnúť osobu, Vzhľad (Svetlý / Tmavý / Podľa zariadenia), Odhlásiť
+  (no O systéme until 1h-c with W15b; no Dnes / Doklady).
+
 ## [Unreleased] — Phase 1h-a: PWA + mobile shell (M0–M4)
 
 - Installable PWA (`vite-plugin-pwa`): manifest SK, icons from `design/brand/`, SW with `/api` NetworkOnly,

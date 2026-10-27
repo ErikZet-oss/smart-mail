@@ -1,5 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, UserPlus } from 'lucide-react';
+import {
+  ArrowLeft,
+  Download,
+  Mail,
+  MoreHorizontal,
+  Pencil,
+  Phone,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+  UserPlus,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
@@ -10,6 +22,7 @@ import { Dialog } from '../../components/Dialog';
 import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
+import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import {
   booksKey,
   contactsKey,
@@ -55,10 +68,11 @@ function toForm(c: Contact): ContactIn {
   };
 }
 
-/** W9 Kontakty — Osobné / Zdieľané books, list, detail, import (SCREENS_SPEC W9; Figma 59:47915). */
+/** W9 / M15 Kontakty — Osobné / Zdieľané; mobile list+detail stack (SCREENS_SPEC). */
 export function ScreenW9() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const mobile = useMediaQuery(MOBILE_QUERY);
   const { book: bookParam, contactId } = useParams<{ book?: string; contactId?: string }>();
   const toasts = useToasts();
   const queryClient = useQueryClient();
@@ -98,18 +112,20 @@ export function ScreenW9() {
     enabled: Boolean(activeBook),
   });
 
-  const selected = useMemo(
-    () => contacts.data?.find((c) => c.id === contactId) ?? contacts.data?.[0] ?? null,
-    [contacts.data, contactId],
-  );
+  const selected = useMemo(() => {
+    if (contactId) return contacts.data?.find((c) => c.id === contactId) ?? null;
+    if (mobile) return null;
+    return contacts.data?.[0] ?? null;
+  }, [contacts.data, contactId, mobile]);
 
   useEffect(() => {
+    if (mobile) return; // M15: stay on list until the user opens a contact
     if (!activeBook || !contacts.data?.length) return;
     if (contactId && contacts.data.some((c) => c.id === contactId)) return;
     if (contacts.data[0] && !contactId) {
       navigate(`/contacts/${bookParam ?? activeBook.kind}/${contacts.data[0].id}`, { replace: true });
     }
-  }, [contacts.data, contactId, activeBook, bookParam, navigate]);
+  }, [contacts.data, contactId, activeBook, bookParam, navigate, mobile]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -194,12 +210,16 @@ export function ScreenW9() {
 
   const bookSlug = activeBook.kind === 'shared' ? 'shared' : 'personal';
   const empty = (contacts.data?.length ?? 0) === 0 && !filter.trim();
+  const mobileDetail = mobile && Boolean(contactId) && selected;
 
   return (
     <AppShell section="contacts">
-      <div className="flex min-h-0 min-w-0 flex-1">
-        {/* Left: address books + groups */}
-        <aside className="flex w-60 shrink-0 flex-col border-r border-border-default bg-bg-canvas">
+      <div
+        className="flex min-h-0 min-w-0 flex-1"
+        data-testid={mobile ? (mobileDetail ? 'screen-m15-detail' : 'screen-m15') : undefined}
+      >
+        {/* Left: address books + groups (desktop) */}
+        <aside className="hidden w-60 shrink-0 flex-col border-r border-border-default bg-bg-canvas sm:flex">
           <header className="flex h-12 items-center justify-between border-b border-border-default px-3">
             <h1 className="type-heading text-text-primary">{t('contacts.title')}</h1>
           </header>
@@ -243,11 +263,19 @@ export function ScreenW9() {
           </div>
         </aside>
 
-        {/* Middle: contact list */}
-        <section className="flex w-80 shrink-0 flex-col border-r border-border-default bg-bg-canvas">
+        {/* Middle: contact list — full width on mobile when no detail */}
+        <section
+          className={`flex min-h-0 flex-col border-r border-border-default bg-bg-canvas sm:w-80 sm:shrink-0 ${
+            mobileDetail ? 'hidden' : 'w-full flex-1'
+          }`}
+        >
           <header className="flex h-12 items-center gap-1 border-b border-border-default px-2">
             <h2 className="type-heading min-w-0 flex-1 truncate text-text-primary">
-              {activeBook.kind === 'shared' ? t('contacts.shared') : t('contacts.personal')}
+              {mobile
+                ? t('contacts.title')
+                : activeBook.kind === 'shared'
+                  ? t('contacts.shared')
+                  : t('contacts.personal')}
             </h2>
             <button
               type="button"
@@ -260,30 +288,34 @@ export function ScreenW9() {
             >
               <UserPlus size={18} />
             </button>
-            <button
-              type="button"
-              aria-label={t('contacts.export')}
-              className="rounded-sm p-1.5 text-text-secondary hover:bg-bg-subtle"
-              onClick={() => {
-                window.location.href = exportVcardUrl(activeBook.id);
-              }}
-            >
-              <Download size={18} />
-            </button>
-            <button
-              type="button"
-              aria-label={t('contacts.import')}
-              className="rounded-sm p-1.5 text-text-secondary hover:bg-bg-subtle"
-              onClick={() => {
-                setImportError(null);
-                setImportOpen(true);
-              }}
-            >
-              <Upload size={18} />
-            </button>
-            <span className="rounded-sm p-1.5 text-text-tertiary" aria-hidden="true">
-              <MoreHorizontal size={18} />
-            </span>
+            {!mobile ? (
+              <>
+                <button
+                  type="button"
+                  aria-label={t('contacts.export')}
+                  className="rounded-sm p-1.5 text-text-secondary hover:bg-bg-subtle"
+                  onClick={() => {
+                    window.location.href = exportVcardUrl(activeBook.id);
+                  }}
+                >
+                  <Download size={18} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t('contacts.import')}
+                  className="rounded-sm p-1.5 text-text-secondary hover:bg-bg-subtle"
+                  onClick={() => {
+                    setImportError(null);
+                    setImportOpen(true);
+                  }}
+                >
+                  <Upload size={18} />
+                </button>
+                <span className="rounded-sm p-1.5 text-text-tertiary" aria-hidden="true">
+                  <MoreHorizontal size={18} />
+                </span>
+              </>
+            ) : null}
           </header>
           <div className="border-b border-border-default p-2">
             <label className="relative block">
@@ -296,6 +328,36 @@ export function ScreenW9() {
                 className="type-small h-9 w-full rounded-sm border border-border-default bg-bg-canvas pl-8 pr-3 text-text-primary placeholder:text-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand-primary-500"
               />
             </label>
+            {mobile ? (
+              <div className="mt-2 flex gap-1.5" role="tablist" aria-label={t('contacts.books')}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={bookSlug === 'personal'}
+                  className={`type-caption rounded-full px-2.5 py-1 ${
+                    bookSlug === 'personal'
+                      ? 'bg-brand-primary-600 text-text-on-primary'
+                      : 'bg-bg-muted text-text-secondary'
+                  }`}
+                  onClick={() => navigate('/contacts/personal')}
+                >
+                  {t('contacts.personalShort')}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={bookSlug === 'shared'}
+                  className={`type-caption rounded-full px-2.5 py-1 ${
+                    bookSlug === 'shared'
+                      ? 'bg-brand-primary-600 text-text-on-primary'
+                      : 'bg-bg-muted text-text-secondary'
+                  }`}
+                  onClick={() => navigate('/contacts/shared')}
+                >
+                  {t('contacts.shared')}
+                </button>
+              </div>
+            ) : null}
           </div>
           <ul className="min-h-0 flex-1 overflow-y-auto">
             {empty ? (
@@ -343,36 +405,75 @@ export function ScreenW9() {
           </ul>
         </section>
 
-        {/* Right: detail */}
-        <section className="flex min-w-0 flex-1 flex-col bg-bg-canvas">
+        {/* Right: detail — full screen on mobile when a contact is open */}
+        <section
+          className={`min-w-0 flex-col bg-bg-canvas ${
+            mobileDetail ? 'flex w-full flex-1' : mobile ? 'hidden' : 'flex min-w-0 flex-1'
+          }`}
+        >
           {selected ? (
             <>
-              <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border-default px-3">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    const email = selected.emails[0]?.email;
-                    if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
-                  }}
-                >
-                  {t('contacts.write')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setForm(toForm(selected));
-                    setEditor('edit');
-                  }}
-                >
-                  <Pencil size={14} /> {t('contacts.edit')}
-                </Button>
-                <Button type="button" variant="secondary" onClick={() => remove.mutate()} disabled={remove.isPending}>
-                  <Trash2 size={14} /> {t('contacts.delete')}
-                </Button>
+              <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border-default px-2 sm:px-3">
+                {mobile ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/contacts/${bookSlug}`)}
+                    aria-label={t('system.back')}
+                    className="flex size-11 items-center justify-center rounded-sm text-text-primary hover:bg-bg-subtle"
+                  >
+                    <ArrowLeft size={22} />
+                  </button>
+                ) : null}
+                <h2 className="type-heading min-w-0 flex-1 truncate sm:hidden">{selected.display_name}</h2>
+                {selected.emails[0]?.email ? (
+                  <button
+                    type="button"
+                    aria-label={t('contacts.write')}
+                    className="flex size-11 items-center justify-center rounded-sm text-brand-primary-600 hover:bg-bg-subtle sm:hidden"
+                    onClick={() => {
+                      const email = selected.emails[0]?.email;
+                      if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
+                    }}
+                  >
+                    <Mail size={20} />
+                  </button>
+                ) : null}
+                {selected.phones[0]?.number ? (
+                  <a
+                    href={`tel:${selected.phones[0].number}`}
+                    aria-label={t('contacts.fields.phone')}
+                    className="flex size-11 items-center justify-center rounded-sm text-brand-primary-600 hover:bg-bg-subtle sm:hidden"
+                  >
+                    <Phone size={20} />
+                  </a>
+                ) : null}
+                <div className="hidden items-center gap-2 sm:flex">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      const email = selected.emails[0]?.email;
+                      if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
+                    }}
+                  >
+                    {t('contacts.write')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setForm(toForm(selected));
+                      setEditor('edit');
+                    }}
+                  >
+                    <Pencil size={14} /> {t('contacts.edit')}
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => remove.mutate()} disabled={remove.isPending}>
+                    <Trash2 size={14} /> {t('contacts.delete')}
+                  </Button>
+                </div>
               </header>
-              <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
                 <div className="mb-6 flex items-center gap-4">
                   <Avatar initials={initialsOf(selected.display_name)} seed={selected.id} size={56} />
                   <div>
@@ -389,13 +490,25 @@ export function ScreenW9() {
                   {selected.emails.map((e, i) => (
                     <div key={`${e.email}-${i}`}>
                       <dt className="type-caption text-text-tertiary">{t('contacts.fields.email')}</dt>
-                      <dd className="type-body text-text-primary">{e.email}</dd>
+                      <dd className="type-body text-text-primary">
+                        <button
+                          type="button"
+                          className="text-left text-brand-primary-700 underline"
+                          onClick={() => navigate(`/compose?to=${encodeURIComponent(e.email)}`)}
+                        >
+                          {e.email}
+                        </button>
+                      </dd>
                     </div>
                   ))}
                   {selected.phones.map((p, i) => (
                     <div key={`${p.number}-${i}`}>
                       <dt className="type-caption text-text-tertiary">{t('contacts.fields.phone')}</dt>
-                      <dd className="type-body text-text-primary">{p.number}</dd>
+                      <dd className="type-body text-text-primary">
+                        <a className="text-brand-primary-700 underline" href={`tel:${p.number}`}>
+                          {p.number}
+                        </a>
+                      </dd>
                     </div>
                   ))}
                   {selected.organization ? (
