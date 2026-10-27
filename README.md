@@ -114,6 +114,13 @@ docker compose exec app python -m app.cli maintenance on --until 2026-11-01T08:0
 docker compose exec app python -m app.cli maintenance off
 ```
 
+### Kontakty a hľadanie (fáza 1g — backend)
+Lokálne adresáre Osobné / Zdieľané, skupiny, vCard import/export (`fixtures/contacts/`), autocomplete.
+Hľadanie: Roundcube rozsah a polia, Postgres FTS (`simple` + `unaccent`, prefix `:*`) + substring adries
+(`pg_trgm`). **Hľadá sa len v správach už stiahnutých do Postgres** (prvá synchronizácia stiahne históriu
+schránky podľa sync jobu) — nie online cez IMAP. Obrazovky (1g-b) majú zobraziť „Hľadá sa v správach od …“.
+W11 v 1g len základná paleta (Príkazy fázy 1, E-maily, Kontakty — bez Firiem/Dokladov/Asistenta).
+
 ### Nastavenia (fáza 1f)
 Sekcie W12 v poradí Roundcube: Nastavenia (01a–e), Priečinky, Identity / Môj profil, Odpovede, Filtre,
 Mimo kancelárie (ManageSieve), Nastavenia e-mail schránky (09b, D20), Bezpečnosť, a pre správcu Používatelia,

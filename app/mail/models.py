@@ -19,7 +19,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, IdMixin, TimestampMixin
@@ -73,6 +73,8 @@ class FolderMeta(IdMixin, TimestampMixin, Base):
     subscribed: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     selectable: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     private: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # SETTINGS 02, D21
+    # When private=true, only this person may search/list the folder (ADR-009). Null + private → hidden from all.
+    owner_person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"), index=True)
     uidvalidity: Mapped[int | None] = mapped_column(BigInteger)
     uidnext: Mapped[int | None] = mapped_column(BigInteger)
     highestmodseq: Mapped[int | None] = mapped_column(BigInteger)
@@ -130,6 +132,8 @@ class Message(IdMixin, TimestampMixin, Base):
     body_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     raw_storage_key: Mapped[str | None] = mapped_column(String(500))
     auth_results: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Maintained by DB trigger (simple + unaccent); used by GET /api/search (ADR-009).
+    search_vector: Mapped[Any | None] = mapped_column(TSVECTOR)
 
 
 class Attachment(IdMixin, TimestampMixin, Base):
