@@ -29,7 +29,8 @@ export const routeObjects: RouteObject[] = [
   { id: ROUTES.W2.id, path: ROUTES.W2.path, element: <ScreenW2 /> },
   { id: ROUTES.W9.id, path: '/contacts/:book/:contactId?', element: <ScreenW9 /> },
   { id: ROUTES.W10.id, path: '/search', element: <ScreenW10 /> },
-  { id: ROUTES.W12.id, path: ROUTES.W12.path, element: <ScreenW12 /> },
+  // Optional section so `/settings` opens the M9 mobile index (SCREENS_SPEC W12 path still listed in ROUTES).
+  { id: ROUTES.W12.id, path: '/settings/:section?/:sub?', element: <ScreenW12 /> },
   { id: ROUTES.W16a.id, path: ROUTES.W16a.path, element: <ScreenW16a /> },
   { id: ROUTES.W16b.id, path: ROUTES.W16b.path, element: <ScreenW16b /> },
   { id: ROUTES.W16c.id, path: ROUTES.W16c.path, element: <ScreenW16c /> },

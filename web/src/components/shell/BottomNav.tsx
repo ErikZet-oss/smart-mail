@@ -25,7 +25,13 @@ function NavItem({ to, onClick, active, icon, label }: ItemProps) {
   );
   if (to) {
     return (
-      <Link to={to} aria-current={active ? 'page' : undefined} aria-label={label} className={className}>
+      <Link
+        to={to}
+        onClick={onClick}
+        aria-current={active ? 'page' : undefined}
+        aria-label={label}
+        className={className}
+      >
         {body}
       </Link>
     );
@@ -42,13 +48,15 @@ type Props = {
   mailbox?: string;
   unread?: number;
   onMore: () => void;
+  /** Close M18 when leaving via E-mail / Kontakty. */
+  onLeaveMore?: () => void;
 };
 
 /**
  * M1 bottom nav — Phase 1 items only: E-mail, Kontakty, Viac.
  * Dnes / Doklady are not rendered (phases 5 / 4), same rule as W11.
  */
-export function BottomNav({ section, mailbox = 'default', unread = 0, onMore }: Props) {
+export function BottomNav({ section, mailbox = 'default', unread = 0, onMore, onLeaveMore }: Props) {
   const { t } = useTranslation();
   const mailIcon =
     unread > 0 ? (
@@ -70,12 +78,14 @@ export function BottomNav({ section, mailbox = 'default', unread = 0, onMore }: 
     >
       <NavItem
         to={`/mail/${encodeURIComponent(mailbox)}/inbox`}
+        onClick={onLeaveMore}
         active={section === 'mail'}
         icon={mailIcon}
         label={t('rail.mail')}
       />
       <NavItem
         to="/contacts/personal"
+        onClick={onLeaveMore}
         active={section === 'contacts'}
         icon={<Users size={22} />}
         label={t('rail.contacts')}

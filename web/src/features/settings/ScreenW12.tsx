@@ -1,16 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '../../components/Button';
 import { Banner } from '../../components/Banner';
 import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
+import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
 import { SettingsFieldControl } from './Field';
 import { HtmlSignatureEditor } from './HtmlSignatureEditor';
+import { MobileSettingsIndex } from './MobileSettingsIndex';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
   addPersonAdmin,
@@ -121,16 +124,54 @@ const PREF_FIELDS_COMPOSING: SettingsField[] = [
   { id: 'pre_send_check', label: 'Kontrola pred odoslaním', control: 'switch', default: true },
 ];
 
-/** W12 Nastavenia — Phase 1f sections 01–06, 09, 09b, 10–12. */
+/** W12 / M9 Nastavenia — Phase 1f sections; mobile index per SETTINGS_SPEC §M9. */
 export function ScreenW12() {
   const { t } = useTranslation();
-  const { section = 'preferences', sub } = useParams();
+  const navigate = useNavigate();
+  const { section, sub } = useParams();
+  const mobile = useMediaQuery(MOBILE_QUERY);
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const nav = useQuery({ queryKey: ['settings', 'nav'], queryFn: fetchSettingsNav });
+  const activeSection = section ?? (mobile ? '' : 'preferences');
   const title =
-    section === 'identity' && sub === 'profile'
+    activeSection === 'identity' && sub === 'profile'
       ? t('settings.profile.title')
-      : (SECTION_TITLES[section] ?? t('settings.title'));
+      : mobile && activeSection === 'preferences'
+        ? t('settings.mobile.prefs')
+        : activeSection
+          ? (SECTION_TITLES[activeSection] ?? t('settings.title'))
+          : t('settings.title');
+
+  if (mobile && !activeSection) {
+    return (
+      <AppShell section="settings">
+        <MobileSettingsIndex />
+      </AppShell>
+    );
+  }
+
+  if (mobile && activeSection) {
+    return (
+      <AppShell section="settings">
+        <div className="flex h-full min-h-0 flex-col bg-bg-canvas" data-testid="mobile-settings-section">
+          <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border-default px-1">
+            <button
+              type="button"
+              onClick={() => navigate('/settings')}
+              aria-label={t('system.back')}
+              className="flex size-11 items-center justify-center rounded-sm text-text-primary hover:bg-bg-subtle"
+            >
+              <ArrowLeft size={22} />
+            </button>
+            <h1 className="type-heading min-w-0 flex-1 truncate text-text-primary">{title}</h1>
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <SectionBody section={activeSection} sub={sub} meRole={me.data?.person?.role} />
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell section="settings">
@@ -145,14 +186,14 @@ export function ScreenW12() {
               <Link
                 to={`/settings/${s.path}${s.subs[0] ? `/${s.subs[0].path}` : ''}`}
                 className={`type-body block rounded-sm px-2 py-1.5 ${
-                  section === s.path
+                  activeSection === s.path
                     ? 'bg-brand-primary-50 text-brand-primary-700'
                     : 'text-text-primary hover:bg-bg-muted'
                 }`}
               >
                 {s.title}
               </Link>
-              {section === s.path && s.subs.length > 0 ? (
+              {activeSection === s.path && s.subs.length > 0 ? (
                 <ul className="ml-2 mt-0.5 border-l border-border-default pl-2">
                   {s.subs.map((subItem) => (
                     <li key={subItem.id}>
@@ -180,7 +221,7 @@ export function ScreenW12() {
             </h1>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
-            <SectionBody section={section} sub={sub} meRole={me.data?.person?.role} />
+            <SectionBody section={activeSection || 'preferences'} sub={sub} meRole={me.data?.person?.role} />
           </div>
         </main>
       </div>
@@ -243,6 +284,9 @@ function PreferencesPanel({ sub }: { sub?: string }) {
   });
 
   const which = sub ?? 'ui';
+  const mobile = useMediaQuery(MOBILE_QUERY);
+  // M9: Vzhľad page also exposes Oneskorenie odoslania (SETTINGS_SPEC §M9 / 01d).
+  const showMobileUndo = mobile && which === 'ui';
   const fields =
     which === 'mailbox-view' || which === 'list'
       ? PREF_FIELDS_LIST
@@ -255,6 +299,7 @@ function PreferencesPanel({ sub }: { sub?: string }) {
     else if (which === 'composing') setDraft({ ui, list, composing: value });
     else setDraft({ ui: value, list, composing });
   };
+  const undoField = PREF_FIELDS_COMPOSING.find((f) => f.id === 'undo_send_seconds');
 
   return (
     <div className="flex max-w-xl flex-col gap-4">
@@ -266,6 +311,14 @@ function PreferencesPanel({ sub }: { sub?: string }) {
           onChange={(value) => patch({ ...state, [field.id]: value })}
         />
       ))}
+      {showMobileUndo && undoField ? (
+        <SettingsFieldControl
+          key={undoField.id}
+          field={undoField}
+          value={composing[undoField.id]}
+          onChange={(value) => setDraft({ ui, list, composing: { ...composing, [undoField.id]: value } })}
+        />
+      ) : null}
       <Button type="button" onClick={() => save.mutate()} disabled={save.isPending}>
         {t('settings.save')}
       </Button>
