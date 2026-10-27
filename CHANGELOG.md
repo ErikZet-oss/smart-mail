@@ -2,6 +2,22 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2a: AI foundation (provider, schema, pipeline gates)
+
+- **D31 / ADR-011**: Claude API (`LLM_PROVIDER=anthropic`); Bedrock interface stub only. ADR records official
+  Anthropic data handling (processing location, retention, training, DPA) and cost per 1 000 mails for classify/draft.
+  Model ids only from env — never `latest`.
+- Pricing: exact model-id table (Haiku/Sonnet/Opus 5.5, Haiku 4.5); unknown → highest rate + warning; Haiku 4.5 ≠ 5.5.
+- Budget: Europe/Bratislava day; checked **before every** LLM call with that call’s estimate (batch stops at limit).
+- Unscanned attachment: process body text, skip file, note `attachment_unscanned` → `ai.notes.attachment_unscanned`.
+- Anthropic client: ~60 s timeout, max 2 retries, one client per process.
+- `LLMProvider` + `NullLLMProvider` (no key); `ai_runs` / `classifications` / `ai_suggestions` / `feature_flags`;
+  `mailboxes.ai_enabled_at`; AI off by default until enabled (sets `ai_enabled_at`).
+- Worker hook after sync gated by `ai_enabled_at`, D21 folders, Message-ID idempotency; daily budget; `ai_shadow_mode`
+  seeded. **No classify UI / suggestion cards** (2b+).
+- `deploy/install.sh` asks for `AI_DAILY_BUDGET_USD` (default 5) and Claude env; `tools/eval_label.py` + fictional
+  `fixtures/ai/eval_smoke/` only (no real mail in git).
+
 ## [Unreleased] — Phase 1h-e (PR 5): Roundcube import, vacation EN/DE, W9/W10 empty, axe
 
 - `tools/roundcube_import.py` — vCard + identities + Odpovede only (no filters); dry-run default; fixtures

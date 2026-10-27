@@ -43,6 +43,20 @@ async def sync_mailbox_job(ctx: dict[str, Any], mailbox_id: str, scope: Scope = 
         return await sync_mailbox(db, mailbox, settings, scope=scope, redis=ctx["redis"])
 
 
+async def process_mailbox_ai_job(ctx: dict[str, Any], mailbox_id: str) -> dict[str, int]:
+    """Phase 2a pipeline skeleton: eligibility + Message-ID idempotency; classify in 2b."""
+    from app.ai.service import process_mailbox_ai
+
+    settings: Settings = ctx["settings"]
+    async with ctx["sessionmaker"]() as db:
+        mailbox = await db.get(Mailbox, uuid.UUID(mailbox_id))
+        if mailbox is None:
+            return {"seen": 0}
+        stats = await process_mailbox_ai(db, mailbox, settings)
+        await db.commit()
+        return stats
+
+
 async def send_compose_draft(ctx: dict[str, Any], draft_id: str) -> str:
     """Finish a queued send after the undo window (Phase 1e)."""
     from app.mail.compose import execute_send
@@ -186,6 +200,7 @@ class WorkerSettings:
     functions: ClassVar[list[Any]] = [
         heartbeat,
         func(sync_mailbox_job, keep_result=0),
+        func(process_mailbox_ai_job, keep_result=0),
         func(send_compose_draft, keep_result=0),
         func(flush_scheduled_sends, keep_result=0),
         func(rescan_clamav_attachments, keep_result=0),

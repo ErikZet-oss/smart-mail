@@ -504,16 +504,33 @@ async def sync_mailbox(
         from app.mail.threads import link_unthreaded
 
         linked = await link_unthreaded(db, mailbox.id)
+        new_count = sum(len(d.new) for d in snapshot.folders)
         await db.commit()
         log.info(
             "mail.synced",
             mailbox_id=str(mailbox.id),
             scope=scope,
             folders=len(snapshot.folders),
-            new=sum(len(d.new) for d in snapshot.folders),
+            new=new_count,
             threaded=linked,
             ms=int((datetime.now(UTC) - started).total_seconds() * 1000),
         )
+        # Phase 2a: enqueue AI skeleton after sync (Arq worker only — API redis has no enqueue_job)
+        if (
+            redis is not None
+            and new_count
+            and mailbox.ai_enabled
+            and mailbox.ai_enabled_at is not None
+            and hasattr(redis, "enqueue_job")
+        ):
+            try:
+                await redis.enqueue_job(
+                    "process_mailbox_ai_job",
+                    str(mailbox.id),
+                    _job_id=f"mail-ai:{mailbox.id}",
+                )
+            except Exception as exc:  # mail sync must succeed even when the AI worker is busy
+                log.warning("ai.enqueue_failed", mailbox_id=str(mailbox.id), error=type(exc).__name__)
         return mailbox.sync_state
     finally:
         if lock is not None:

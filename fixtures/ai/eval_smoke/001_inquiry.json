@@ -1,0 +1,9 @@
+{
+  "id": "fictional-001",
+  "subject": "Dopyt na skrutky M8",
+  "from": "zakaznik@example.test",
+  "body_text": "Dobrý deň, potrebovali by sme cenovú ponuku na skrutky M8×20, 500 ks. Ďakujeme.",
+  "language": "sk",
+  "category": "inquiry",
+  "notes": "Fictional smoke fixture only — never replace with real mail."
+}

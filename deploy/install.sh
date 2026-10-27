@@ -28,6 +28,11 @@ else
     ADMIN_EMAILS="${ADMIN_EMAILS:-}"
     LOGIN_ALLOWLIST="${LOGIN_ALLOWLIST:-test@smartsro.sk}"
     MAIL_SEND_TEST_ALLOWLIST="${MAIL_SEND_TEST_ALLOWLIST:-test@smartsro.sk}"
+    AI_DAILY_BUDGET_USD="${AI_DAILY_BUDGET_USD:-5}"
+    LLM_PROVIDER="${LLM_PROVIDER:-anthropic}"
+    ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
+    LLM_MODEL_CLASSIFY="${LLM_MODEL_CLASSIFY:-}"
+    LLM_MODEL_DRAFT="${LLM_MODEL_DRAFT:-}"
     CLOUDFLARE_TUNNEL_TOKEN=""
   else
     prompt "Režim (vps = Caddy+HTTPS, tunnel = Cloudflare Tunnel)" "vps"
@@ -58,6 +63,21 @@ else
 
     prompt "MAIL_SEND_TEST_ALLOWLIST (kam smie testovací server posielať)" "test@smartsro.sk"
     MAIL_SEND_TEST_ALLOWLIST="$REPLY"
+
+    prompt "AI_DAILY_BUDGET_USD (denný limit nákladov AI; 0 = AI vypnuté)" "5"
+    AI_DAILY_BUDGET_USD="$REPLY"
+
+    prompt "LLM_PROVIDER (anthropic = Claude API; bedrock = zatiaľ stub)" "anthropic"
+    LLM_PROVIDER="$REPLY"
+
+    prompt "ANTHROPIC_API_KEY (prázdne = AI volania vypnuté, mail funguje)" ""
+    ANTHROPIC_API_KEY="$REPLY"
+
+    prompt "LLM_MODEL_CLASSIFY (konkrétne id modelu, nie latest)" ""
+    LLM_MODEL_CLASSIFY="$REPLY"
+
+    prompt "LLM_MODEL_DRAFT (konkrétne id modelu, nie latest)" ""
+    LLM_MODEL_DRAFT="$REPLY"
 
     APP_BASE_URL="https://${APP_HOSTNAME}"
   fi
@@ -101,6 +121,15 @@ MAIL_SEND_ALLOW_REAL_SERVER=true
 FEATURE_MONEY=false
 MONEY_BACKEND=mock
 MONEY_AGENDA_LABEL=TEST
+# Phase 2a (D31): Claude API; AI off until an admin enables a mailbox (ai_enabled_at).
+LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+LLM_MODEL_CLASSIFY=${LLM_MODEL_CLASSIFY:-}
+LLM_MODEL_DRAFT=${LLM_MODEL_DRAFT:-}
+LLM_MODEL_EXTRACT=
+LLM_MODEL_ASSISTANT=
+LLM_MODEL_EMBED=
+AI_DAILY_BUDGET_USD=${AI_DAILY_BUDGET_USD:-5}
 CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
 FORWARDED_ALLOW_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 LOG_LEVEL=INFO

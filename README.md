@@ -192,6 +192,9 @@ chatu.
 Pilot beží na prenajatom VPS (Hetzner CX33 alebo netcup VPS 1000, Ubuntu 24.04, 8 GB RAM). Firemný Hyper-V
 prichádza až pred produkciou. Podrobnosti: `docs/adr/010-vps-caddy-cloudflare-tunnel.md`.
 
+AI (fáza 2a): poskytovateľ je Claude API (D31); spracovanie dát a odhad ceny v `docs/adr/011-llm-provider.md`.
+Kľúč a `LLM_MODEL_*` len v env; AI na schránke je vypnuté, kým admin nenastaví `ai_enabled_at`.
+
 ### 1. Vytvorte server
 1. V konzole Hetzner / netcup založte VPS s **Ubuntu 24.04**, aspoň **8 GB RAM**.
 2. Poznačte si **verejnú IPv4** adresu.

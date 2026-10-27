@@ -41,7 +41,10 @@ class Mailbox(IdMixin, TimestampMixin, Base):
     sieve_host: Mapped[str | None] = mapped_column(String(253))
     sieve_port: Mapped[int | None] = mapped_column(Integer, default=4190, server_default="4190")
     provider_admin_url: Mapped[str | None] = mapped_column(String(500))
-    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # AI off until explicitly enabled (Phase 2a / plan D); processing also needs ai_enabled_at
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # null = AI never turned on for processing; pipeline only mail with received_at >= this instant
+    ai_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # the login whose stored mailbox password (DECISIONS D27) the background sync uses
     credential_account_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"))
     capabilities: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")

@@ -33,6 +33,7 @@ TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15")
 TABLES = (
     "compose_attachments, compose_drafts, responses, identities, "
     "contact_group_members, contact_groups, contacts, recent_recipients, address_books, "
+    "ai_suggestions, classifications, ai_runs, feature_flags, "
     "attachments, messages, threads, user_settings, sieve_script_backups, "
     "folders_meta, mailbox_access, mailboxes, "
     "device_person_memory, sessions, accounts, person_branches, persons, branches"

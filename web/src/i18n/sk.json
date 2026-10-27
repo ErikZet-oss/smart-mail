@@ -705,5 +705,11 @@
     "mailboxes": {
       "sieve": "ManageSieve (filtre, mimo kancelárie)"
     }
+  },
+  "ai": {
+    "notes": {
+      "attachment_unscanned": "príloha ešte nebola skontrolovaná",
+      "attachment_infected": "príloha obsahuje vírus a nebola spracovaná"
+    }
   }
 }
