@@ -182,9 +182,7 @@ async def test_d26_two_client_ips_have_separate_limits_and_audit_shows_ip(
     assert limited.status_code == 429
     # Different client IP still has its own budget (D26)
     assert (await client.login("b0@smartsro.sk", "zle", forwarded_for=ip_b)).status_code == 401
-    rows = list(
-        (await db.execute(select(AuditLog).where(AuditLog.action == "auth.login_rate_limited"))).scalars()
-    )
+    rows = list((await db.execute(select(AuditLog).where(AuditLog.action == "auth.login_rate_limited"))).scalars())
     assert any(row.ip == ip_a for row in rows)
 
 
