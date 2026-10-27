@@ -20,9 +20,7 @@ class AddressBook(IdMixin, TimestampMixin, Base):
 
     kind: Mapped[str] = mapped_column(String(16))  # personal | shared
     name: Mapped[str] = mapped_column(String(120))
-    owner_person_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("persons.id", ondelete="CASCADE"), index=True
-    )
+    owner_person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="CASCADE"), index=True)
 
 
 class ContactGroup(IdMixin, TimestampMixin, Base):

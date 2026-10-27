@@ -37,13 +37,7 @@ def _unfold(text: str) -> list[str]:
 
 
 def _unescape(value: str) -> str:
-    return (
-        value.replace("\\n", "\n")
-        .replace("\\N", "\n")
-        .replace("\\,", ",")
-        .replace("\\;", ";")
-        .replace("\\\\", "\\")
-    )
+    return value.replace("\\n", "\n").replace("\\N", "\n").replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\")
 
 
 def _escape(value: str) -> str:
@@ -77,9 +71,7 @@ def parse_vcards(text: str) -> list[ParsedContact]:
         if upper == "END:VCARD":
             if current is not None:
                 if not current.display_name and (current.first_name or current.last_name):
-                    current.display_name = " ".join(
-                        p for p in (current.first_name, current.last_name) if p
-                    ).strip()
+                    current.display_name = " ".join(p for p in (current.first_name, current.last_name) if p).strip()
                 if not current.display_name and current.emails:
                     current.display_name = str(current.emails[0].get("email") or "")
                 if current.display_name or current.emails:
@@ -108,9 +100,15 @@ def parse_vcards(text: str) -> list[ParsedContact]:
             primary = any("PREF" in p or p == "TYPE=PREF" for p in params) or not current.emails
             current.emails.append({"email": value.lower(), "label": label, "primary": primary})
         elif name == "TEL" and value:
-            label = "work" if any("WORK" in p for p in params) else "cell" if any(
-                "CELL" in p or "MOBILE" in p for p in params
-            ) else "home" if any("HOME" in p for p in params) else None
+            label = (
+                "work"
+                if any("WORK" in p for p in params)
+                else "cell"
+                if any("CELL" in p or "MOBILE" in p for p in params)
+                else "home"
+                if any("HOME" in p for p in params)
+                else None
+            )
             current.phones.append({"phone": value, "label": label})
     if not contacts:
         raise VCardError("no_vcards")

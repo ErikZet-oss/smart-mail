@@ -74,9 +74,7 @@ class FolderMeta(IdMixin, TimestampMixin, Base):
     selectable: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     private: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # SETTINGS 02, D21
     # When private=true, only this person may search/list the folder (ADR-009). Null + private → hidden from all.
-    owner_person_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("persons.id", ondelete="SET NULL"), index=True
-    )
+    owner_person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"), index=True)
     uidvalidity: Mapped[int | None] = mapped_column(BigInteger)
     uidnext: Mapped[int | None] = mapped_column(BigInteger)
     highestmodseq: Mapped[int | None] = mapped_column(BigInteger)

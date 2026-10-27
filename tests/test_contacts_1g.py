@@ -60,9 +60,7 @@ async def test_1g_contact_crud_and_group(client: Client, db: AsyncSession, mail_
 
 
 @pytest.mark.asyncio
-async def test_1g_vcard_import_skip_and_merge(
-    client: Client, db: AsyncSession, mail_server: FakeMailServer
-) -> None:
+async def test_1g_vcard_import_skip_and_merge(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
     await _signed_in(client, db, mail_server)
     books = (await client.get("/api/contacts/books")).json()
     personal = next(b for b in books if b["kind"] == "personal")

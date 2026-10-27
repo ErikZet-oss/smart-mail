@@ -197,9 +197,7 @@ async def test_1g_search_no_other_persons_private_folder(
     db.add(other)
     await db.flush()
     # shared-style: both persons could use same mailbox, but private folder belongs to Eva
-    private = await _folder(
-        db, mailbox, "Súkromné", private=True, owner_person_id=other.id
-    )
+    private = await _folder(db, mailbox, "Súkromné", private=True, owner_person_id=other.id)
     public = await _folder(db, mailbox, "INBOX", special_use="inbox")
     await _msg(db, mailbox, private, 1, subject="private-only-eva-abc")
     await _msg(db, mailbox, public, 1, subject="public-ok-abc")
@@ -212,9 +210,7 @@ async def test_1g_search_no_other_persons_private_folder(
 
     # owner can see their private folder
     assert acc.person_id is not None
-    own_private = await _folder(
-        db, mailbox, "Moje súkromné", private=True, owner_person_id=acc.person_id
-    )
+    own_private = await _folder(db, mailbox, "Moje súkromné", private=True, owner_person_id=acc.person_id)
     await _msg(db, mailbox, own_private, 1, subject="private-mine-xyz")
     await db.commit()
     mine = await client.get("/api/search", params={"q": "private-mine-xyz", "scope": "all"})
@@ -234,9 +230,7 @@ async def test_1g_search_field_body_vs_subject(client: Client, db: AsyncSession,
 
 
 @pytest.mark.asyncio
-async def test_1g_list_perf_around_10k_messages(
-    client: Client, db: AsyncSession, mail_server: FakeMailServer
-) -> None:
+async def test_1g_list_perf_around_10k_messages(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
     """Smoke: search over ~10k messages finishes in a few seconds (GIN + unaccent)."""
     _, mailbox = await _signed_in(client, db, mail_server)
     inbox = await _folder(db, mailbox, "INBOX", special_use="inbox")

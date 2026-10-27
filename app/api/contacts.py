@@ -163,9 +163,7 @@ async def get_contact(contact_id: uuid.UUID, ctx: Auth, person: ActivePerson, db
 
 
 @router.patch("/contacts/{contact_id}")
-async def patch_contact(
-    contact_id: uuid.UUID, body: ContactIn, ctx: Auth, person: ActivePerson, db: DB
-) -> ContactOut:
+async def patch_contact(contact_id: uuid.UUID, body: ContactIn, ctx: Auth, person: ActivePerson, db: DB) -> ContactOut:
     c = await db.get(Contact, contact_id)
     if c is None:
         raise _fail(404, "contact_not_found")
