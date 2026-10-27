@@ -157,12 +157,20 @@ class Client(httpx.AsyncClient):
         return await self.request(method, url, json=json, headers={"X-CSRF-Token": self.cookies["sm_csrf"]})
 
     async def login(
-        self, email: str, password: str, remember: bool = False, *, forwarded_for: str | None = None
+        self,
+        email: str,
+        password: str,
+        remember: bool = False,
+        *,
+        forwarded_for: str | None = None,
+        cf_connecting_ip: str | None = None,
     ) -> httpx.Response:
         await self.csrf()
         headers: dict[str, str] = {"X-CSRF-Token": self.cookies["sm_csrf"]}
         if forwarded_for is not None:
             headers["X-Forwarded-For"] = forwarded_for
+        if cf_connecting_ip is not None:
+            headers["CF-Connecting-IP"] = cf_connecting_ip
         return await self.request(
             "POST",
             "/api/auth/login",

@@ -31,10 +31,12 @@
 6. **Backups**: nightly dump of Postgres + object storage under `/var/backups/smartmail`, keep 7 days;
    also taken immediately before each update’s migrations.
 7. **Client IP (D26)**: nginx must not overwrite `X-Forwarded-For` with `$remote_addr` alone. Use
-   `$proxy_add_x_forwarded_for`, `real_ip` only from the Docker network, `X-Forwarded-Proto` from Caddy,
-   and `CF-Connecting-IP` in tunnel mode. `FORWARDED_ALLOW_IPS` is the Docker private ranges — never `*`.
+   `$proxy_add_x_forwarded_for`, `real_ip` only from the Docker network, `X-Forwarded-Proto` from Caddy.
+   **`CF-Connecting-IP` only in tunnel mode** (separate nginx conf). In vps mode Caddy strips it
+   (`header_up -CF-Connecting-IP`) so a client cannot spoof the login IP limit / audit.
+   `FORWARDED_ALLOW_IPS` is the Docker private ranges — never `*`.
 8. **Caddy** sets `Strict-Transport-Security "max-age=31536000"` and the usual security headers for the
-   whole site including `/api`.
+   whole site including `/api`, and strips `CF-Connecting-IP` toward nginx.
 9. **ufw** is enabled by `install.sh`: allow **22/80/443** in vps mode, **only 22** in tunnel mode.
 
 ## Consequences

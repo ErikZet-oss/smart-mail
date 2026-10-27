@@ -57,6 +57,9 @@ rollback() {
 
 trap 'rollback' ERR
 
+# Re-render nginx/Caddy from DEPLOY_MODE (vps strips CF-Connecting-IP; tunnel keeps it).
+render_edge_configs
+
 # Backup before migrations (alembic runs in the app container entrypoint).
 echo "Záloha pred migráciou…"
 "$DEPLOY_DIR/backup.sh"

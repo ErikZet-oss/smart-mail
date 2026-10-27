@@ -186,6 +186,32 @@ async def test_d26_two_client_ips_have_separate_limits_and_audit_shows_ip(
     assert any(row.ip == ip_a for row in rows)
 
 
+async def test_d26_vps_spoofed_cf_connecting_ip_ignored_audit_uses_real_client_ip(
+    client: Client, app: FastAPI, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    """VPS mode: CF-Connecting-IP is spoofable; app (and vps nginx) must use XFF / real client only."""
+    from sqlalchemy import select
+
+    from app.core.audit import AuditLog
+
+    app.state.settings.login_ip_max_failures = 3
+    real, spoof = "203.0.113.50", "198.51.100.99"
+    for i in range(3):
+        assert (
+            await client.login(f"v{i}@smartsro.sk", "zle", forwarded_for=real, cf_connecting_ip=spoof)
+        ).status_code == 401
+    limited = await client.login("locked-vps@smartsro.sk", "zle", forwarded_for=real, cf_connecting_ip=spoof)
+    assert limited.status_code == 429
+    rows = list((await db.execute(select(AuditLog).where(AuditLog.action == "auth.login_rate_limited"))).scalars())
+    assert any(row.ip == real for row in rows)
+    assert all(row.ip != spoof for row in rows)
+
+    # CF header alone must not become the audit IP (app never reads it; vps nginx must not map it into XFF).
+    assert (await client.login("cf-only@smartsro.sk", "zle", cf_connecting_ip=spoof)).status_code == 401
+    rows2 = list((await db.execute(select(AuditLog).order_by(AuditLog.created_at))).scalars())
+    assert all(row.ip != spoof for row in rows2)
+
+
 # --- D27: mailbox password stored encrypted (Fernet), overwritten on change, never logged -------------------------
 async def test_d27_mailbox_password_stored_encrypted(
     client: Client, app: FastAPI, db: AsyncSession, mail_server: FakeMailServer

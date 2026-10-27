@@ -110,11 +110,8 @@ fi
 
 export DEPLOY_MODE="${DEPLOY_MODE:-ci}"
 
-# Caddyfile for vps mode (safe to rewrite — no secrets)
-if [[ "${DEPLOY_MODE}" == "vps" ]]; then
-  HOST_FOR_CADDY="${APP_HOSTNAME:-localhost}"
-  sed "s/__APP_HOSTNAME__/${HOST_FOR_CADDY}/g" "$DEPLOY_DIR/Caddyfile.tpl" >"$DEPLOY_DIR/Caddyfile"
-fi
+# Nginx (vps vs tunnel) + Caddyfile; CF-Connecting-IP only in tunnel mode.
+render_edge_configs
 
 # ufw: only the edge ports (Docker bypasses ufw for published ports — still harden the host)
 if [[ -z "${SMARTMAIL_CI:-}" ]]; then

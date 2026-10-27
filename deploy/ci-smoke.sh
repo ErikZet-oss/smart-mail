@@ -21,6 +21,14 @@ code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/docs ||
 code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/openapi.json || true)"
 [[ "$code" == "404" ]] || { echo "api/openapi.json má byť 404 mimo dev (dostal $code)"; exit 1; }
 
+# CI/vps nginx must not map CF-Connecting-IP (spoofable); Caddy template must strip it.
+grep -q 'proxy_add_x_forwarded_for' "$ROOT/deploy/nginx-deploy.conf"
+if grep -q 'http_cf_connecting_ip' "$ROOT/deploy/nginx-deploy.conf"; then
+  echo "CI/vps nginx-deploy.conf nesmie používať CF-Connecting-IP"; exit 1
+fi
+grep -q 'header_up -CF-Connecting-IP' "$ROOT/deploy/Caddyfile.tpl" \
+  || { echo "Caddyfile.tpl musí stripovať CF-Connecting-IP"; exit 1; }
+
 # Second install must not wipe .env and must stay silent about prompts
 SUM1="$(sha256sum "$SMARTMAIL_ENV_FILE" | awk '{print $1}')"
 OUT_REINSTALL="$("$ROOT/deploy/install.sh" 2>&1)"

@@ -73,6 +73,27 @@ ensure_ufw_installed() {
   command -v ufw >/dev/null 2>&1
 }
 
+render_edge_configs() {
+  # Nginx: CF-Connecting-IP only in tunnel mode. VPS/CI ignore it (spoofable via Caddy).
+  # Caddy (vps): strip CF-Connecting-IP before proxying to web.
+  local mode="${DEPLOY_MODE:-ci}"
+  case "$mode" in
+    tunnel)
+      cp "$DEPLOY_DIR/nginx-deploy.tunnel.conf" "$DEPLOY_DIR/nginx-deploy.conf"
+      ;;
+    vps | ci)
+      cp "$DEPLOY_DIR/nginx-deploy.vps.conf" "$DEPLOY_DIR/nginx-deploy.conf"
+      ;;
+    *)
+      die "neznámy režim: $mode"
+      ;;
+  esac
+  if [[ "$mode" == "vps" ]]; then
+    local host_for_caddy="${APP_HOSTNAME:-localhost}"
+    sed "s/__APP_HOSTNAME__/${host_for_caddy}/g" "$DEPLOY_DIR/Caddyfile.tpl" >"$DEPLOY_DIR/Caddyfile"
+  fi
+}
+
 compose_up() {
   local profiles=()
   case "${DEPLOY_MODE:-ci}" in
@@ -81,6 +102,7 @@ compose_up() {
     ci) profiles=() ;;
     *) die "neznámy režim: ${DEPLOY_MODE:-}" ;;
   esac
+  render_edge_configs
   # ClamAV downloads signatures for minutes — skip in CI smoke.
   if [[ -z "${SMARTMAIL_CI:-}" ]]; then
     :

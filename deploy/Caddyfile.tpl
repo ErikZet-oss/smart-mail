@@ -8,5 +8,8 @@ __APP_HOSTNAME__ {
 		Referrer-Policy same-origin
 		X-Frame-Options DENY
 	}
-	reverse_proxy web:80
+	# Strip CF-Connecting-IP so a client cannot spoof it through Caddy → nginx (D26).
+	reverse_proxy web:80 {
+		header_up -CF-Connecting-IP
+	}
 }
