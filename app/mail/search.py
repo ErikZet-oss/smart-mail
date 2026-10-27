@@ -252,10 +252,12 @@ async def search_messages(
     )
     total = int(await db.scalar(select(func.count()).select_from(base.subquery())) or 0)
     rank_tsq = _tsquery_expr(q, weight=None)
-    if rank_tsq is None:
-        rank_tsq = func.to_tsquery("simple", literal(""))
     empty_vec = func.to_tsvector("simple", "")
-    rank = func.ts_rank_cd(func.coalesce(Message.search_vector, empty_vec), rank_tsq)
+    # Special-char-only queries may match via address LIKE with no FTS tokens — avoid empty to_tsquery.
+    if rank_tsq is None:
+        rank = literal(0.0)
+    else:
+        rank = func.ts_rank_cd(func.coalesce(Message.search_vector, empty_vec), rank_tsq)
     rows = (
         await db.execute(
             base.add_columns(rank).order_by(rank.desc(), Message.received_at.desc()).limit(limit).offset(offset)
@@ -276,3 +278,26 @@ async def search_messages(
         for m, r in rows
     ]
     return hits, total
+
+
+async def oldest_downloaded_at(
+    db: AsyncSession,
+    account: Account,
+    *,
+    person_id: uuid.UUID | None = None,
+) -> object | None:
+    """Earliest received_at among messages the account may search (downloaded corpus only)."""
+    mailboxes = await accessible_mailboxes(db, account.id)
+    mailbox_ids = [m.id for m in mailboxes]
+    if not mailbox_ids:
+        return None
+    visible = _visible_folder_filter(person_id)
+    return await db.scalar(
+        select(func.min(Message.received_at))
+        .join(FolderMeta, FolderMeta.id == Message.folder_id)
+        .where(
+            Message.mailbox_id.in_(mailbox_ids),
+            Message.deleted.is_(False),
+            visible,
+        )
+    )

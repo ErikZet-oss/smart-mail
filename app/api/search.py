@@ -10,7 +10,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from app.auth.deps import DB, Auth, SignedInPerson
-from app.mail.search import SearchScope, search_messages
+from app.mail.search import SearchScope, oldest_downloaded_at, search_messages
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -33,6 +33,7 @@ class SearchOut(BaseModel):
     fields: list[str]
     total: int
     messages: list[MessageHitOut]
+    oldest_downloaded_at: datetime | None = None
 
 
 @router.get("")
@@ -60,12 +61,14 @@ async def search(
         limit=limit,
         offset=offset,
     )
+    oldest = await oldest_downloaded_at(db, ctx.account, person_id=person.id)
     field_list = fields or ["full"]
     return SearchOut(
         q=q,
         scope=scope,
         fields=field_list,
         total=total,
+        oldest_downloaded_at=oldest if isinstance(oldest, datetime) else None,
         messages=[
             MessageHitOut(
                 id=str(h.id),

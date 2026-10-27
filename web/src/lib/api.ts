@@ -76,7 +76,12 @@ export async function api<T>(method: string, path: string, body?: unknown, optio
     const error = await toError(response.clone());
     if (error.detail.code === 'csrf') response = await send(await ensureCsrf(true));
   }
-  if (response.ok) return (await response.json()) as T;
+  if (response.ok) {
+    if (response.status === 204) return undefined as T;
+    const text = await response.text();
+    if (!text) return undefined as T;
+    return JSON.parse(text) as T;
+  }
 
   const error = await toError(response);
   const isMaintenance = error.status === 503 && error.detail.code === 'maintenance';

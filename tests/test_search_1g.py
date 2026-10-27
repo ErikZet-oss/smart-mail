@@ -162,6 +162,42 @@ async def test_1g_address_substring_firma_sk(client: Client, db: AsyncSession, m
 
 
 @pytest.mark.asyncio
+async def test_1g_full_field_finds_firma_sk_via_address_substring(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    """Celá správa: FTS strips the dot from firma.sk, so full must also use address LIKE."""
+    _, mailbox = await _signed_in(client, db, mail_server)
+    inbox = await _folder(db, mailbox, "INBOX", special_use="inbox")
+    await _msg(db, mailbox, inbox, 1, subject="Bez domény", from_email="jan@firma.sk", body="nič")
+    await _msg(db, mailbox, inbox, 2, subject="Iný", from_email="iny@smartmail.test", body="nič")
+    await db.commit()
+    r = await client.get("/api/search", params={"q": "firma.sk", "scope": "all", "fields": "full"})
+    assert r.status_code == 200, r.text
+    emails = {h["from_email"] for h in r.json()["messages"]}
+    assert "jan@firma.sk" in emails
+    assert "iny@smartmail.test" not in emails
+    assert r.json()["oldest_downloaded_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_1g_special_char_query_returns_200(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    """Query with &, (), !, :*, quotes, backslash must not crash (200)."""
+    _, mailbox = await _signed_in(client, db, mail_server)
+    inbox = await _folder(db, mailbox, "INBOX", special_use="inbox")
+    await _msg(db, mailbox, inbox, 1, subject="Bezpečný", body="ok")
+    await db.commit()
+    r = await client.get(
+        "/api/search",
+        params={"q": "a & (b, !, :*, ', \\", "scope": "all", "fields": "full"},
+    )
+    assert r.status_code == 200, r.text
+    assert "messages" in r.json()
+    assert isinstance(r.json()["total"], int)
+
+
+@pytest.mark.asyncio
 async def test_1g_prefix_trenc_matches_trencin(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
     _, mailbox = await _signed_in(client, db, mail_server)
     inbox = await _folder(db, mailbox, "INBOX", special_use="inbox")

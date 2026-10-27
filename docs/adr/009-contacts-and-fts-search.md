@@ -22,8 +22,9 @@
    - Extension **`pg_trgm`** + `immutable_unaccent()` expression GIN indexes on from/to/cc text for those LIKEs.
    - Scope: current / subfolders (`startswith(..., autoescape=True)`) / all; ACL via `mailbox_access` and private
      folders (`owner_person_id`).
-4. **Coverage**: search only sees messages already synced into Postgres (first sync downloads the mailbox history the
-   sync job fetches). UI (1g-b) must show „Hľadá sa v správach od …“ when the corpus is incomplete — not built in 1g-a.
+4. **Coverage**: search only sees messages already synced into Postgres. First sync downloads the **entire** history of
+   each subscribed folder (`IMAP SEARCH ALL` + fetch all UIDs — no date window). W10 shows
+   „Hľadá sa v správach od {oldest downloaded}“. If a future change caps history, treat incomplete search as a pilot risk.
 5. **W11**: UI ships a Phase-1 subset only (see `docs/plans/phase-1.md`); Firmy/Doklady/Asistent groups are absent
    until phases 3 and 5.
 

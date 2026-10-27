@@ -3,10 +3,12 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-do
 import { ScreenW1 } from '../features/auth/ScreenW1';
 import { ScreenW1a } from '../features/auth/ScreenW1a';
 import { ScreenW4 } from '../features/compose/ScreenW4';
+import { ScreenW9 } from '../features/contacts/ScreenW9';
 import { ScreenW2 } from '../features/mail/ScreenW2';
 import { ScreenW2m } from '../features/mail/ScreenW2m';
 import { ScreenW2n } from '../features/mail/ScreenW2n';
 import { ScreenW1b } from '../features/persons/ScreenW1b';
+import { ScreenW10 } from '../features/search/ScreenW10';
 import { ScreenW12 } from '../features/settings/ScreenW12';
 import { ScreenW16a, ScreenW16b, ScreenW16c } from '../features/system/ScreenW16';
 import { ScreenW17 } from '../features/system/ScreenW17';
@@ -25,6 +27,8 @@ export const routeObjects: RouteObject[] = [
   { id: ROUTES.W2n.id, path: ROUTES.W2n.path, element: <ScreenW2n /> },
   { id: ROUTES.W2c.id, path: ROUTES.W2c.path, element: <ScreenW2 /> },
   { id: ROUTES.W2.id, path: ROUTES.W2.path, element: <ScreenW2 /> },
+  { id: ROUTES.W9.id, path: '/contacts/:book/:contactId?', element: <ScreenW9 /> },
+  { id: ROUTES.W10.id, path: '/search', element: <ScreenW10 /> },
   { id: ROUTES.W12.id, path: ROUTES.W12.path, element: <ScreenW12 /> },
   { id: ROUTES.W16a.id, path: ROUTES.W16a.path, element: <ScreenW16a /> },
   { id: ROUTES.W16b.id, path: ROUTES.W16b.path, element: <ScreenW16b /> },

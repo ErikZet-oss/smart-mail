@@ -10,7 +10,7 @@ import { useTheme } from '../../features/prefs/ThemeProvider';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { Logo } from '../Logo';
 
-export type RailSection = 'mail' | 'settings';
+export type RailSection = 'mail' | 'contacts' | 'settings';
 
 /** Below 820 px height Tmavý režim and O systéme move into the PersonChip menu (G1). */
 export const LOW_RAIL_QUERY = '(max-height: 819.98px)';
@@ -93,7 +93,7 @@ function RailItem({
 type Props = { section: RailSection; mailbox: string; unread: number; onLogout: () => void };
 
 /** G1 rail (72 px, dark) in the Roundcube order; items of later phases are not shown yet (Dnes, Doklady, Asistent,
- * Notifikácie) or are visibly disabled until their milestone (Vytvoriť správu 1e, Kontakty 1g, O systéme 1h). */
+ * Notifikácie). O systéme stays disabled until 1h. */
 export function Rail({ section, mailbox, unread, onLogout }: Props) {
   const { t } = useTranslation();
   const low = useMediaQuery(LOW_RAIL_QUERY);
@@ -142,7 +142,12 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
         active={section === 'mail'}
         badge={unread}
       />
-      <RailItem icon={<Users size={20} />} label={t('rail.contacts')} />
+      <RailItem
+        icon={<Users size={20} />}
+        label={t('rail.contacts')}
+        to="/contacts/personal"
+        active={section === 'contacts'}
+      />
       <RailItem
         icon={<Settings size={20} />}
         label={t('rail.settings')}

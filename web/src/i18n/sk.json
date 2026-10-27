@@ -103,6 +103,94 @@
     "cancel": "Zrušiť",
     "comingSoon": "Pripravujeme"
   },
+  "contacts": {
+    "title": "Kontakty",
+    "books": "Adresáre",
+    "groups": "Skupiny",
+    "stubs": "Ďalšie",
+    "personal": "Osobné adresy",
+    "shared": "Zdieľané",
+    "moneyBook": "Money – adresár",
+    "recent": "Naposledy použité",
+    "searchPlaceholder": "Hľadať v kontaktoch…",
+    "new": "Nový kontakt",
+    "edit": "Upraviť",
+    "delete": "Vymazať",
+    "write": "Napísať",
+    "save": "Uložiť",
+    "saved": "Kontakt uložený",
+    "deleted": "Kontakt vymazaný",
+    "import": "Import",
+    "export": "Export",
+    "importHint": "Vyberte súbor vCard (.vcf) z Roundcube alebo iného klienta.",
+    "chooseFile": "Vybrať súbor",
+    "onDuplicate": "Pri duplicite e-mailu",
+    "skipDup": "Preskočiť",
+    "mergeDup": "Zlúčiť",
+    "importDone": "Import hotový: {{created}} nových, {{merged}} zlúčených, {{skipped}} preskočených",
+    "readOnly": "Prehliadač má zdieľaný adresár len na čítanie.",
+    "emptyTitle": "Zatiaľ žiadne kontakty",
+    "emptyHint": "Pridajte kontakt alebo importujte vCard z Roundcube.",
+    "pickOne": "Vyberte kontakt zo zoznamu.",
+    "fields": {
+      "name": "Meno",
+      "email": "E-mail",
+      "phone": "Telefón",
+      "org": "Firma",
+      "notes": "Poznámka"
+    },
+    "errors": {
+      "load": "Kontakty sa nepodarilo načítať.",
+      "save": "Kontakt sa nepodarilo uložiť.",
+      "delete": "Kontakt sa nepodarilo vymazať.",
+      "import": "Import sa nepodaril.",
+      "badVcard": "Súbor nie je platný vCard.",
+      "tooLarge": "Súbor vCard je príliš veľký (max. 5 MB / 5 000 kontaktov)."
+    }
+  },
+  "search": {
+    "title": "Hľadanie",
+    "placeholder": "Hľadať v správach…",
+    "typeHint": "Zadajte hľadaný výraz a stlačte Enter.",
+    "loading": "Hľadám…",
+    "emptyTitle": "Nič sme nenašli",
+    "emptyHint": "Skúste iný výraz, inú schránku alebo pole (Predmet, Od, Celá správa).",
+    "corpusFrom": "Hľadá sa v správach od {{date}}",
+    "scopeLabel": "Rozsah",
+    "fieldLabel": "Pole",
+    "emailsGroup": "E-maily ({{count}})",
+    "noSubject": "(bez predmetu)",
+    "scope": {
+      "current": "Aktuálny priečinok",
+      "subfolders": "Tento a podpriečinky",
+      "all": "Všetky priečinky"
+    },
+    "fields": {
+      "full": "Celá správa",
+      "subject": "Predmet",
+      "from": "Od",
+      "to": "Komu",
+      "cc": "Kópia",
+      "body": "Telo"
+    }
+  },
+  "palette": {
+    "title": "Paleta príkazov",
+    "placeholder": "Napíšte príkaz alebo hľadajte…",
+    "empty": "Žiadny príkaz nezodpovedá.",
+    "compose": "Vytvoriť správu",
+    "goFolder": "Prejsť na priečinok",
+    "switchPerson": "Prepnúť osobu",
+    "settings": "Nastavenia",
+    "inbox": "Doručená pošta",
+    "searchMail": "Hľadať v e-mailoch",
+    "contacts": "Kontakty",
+    "groups": {
+      "commands": "Príkazy",
+      "mail": "E-maily",
+      "contacts": "Kontakty"
+    }
+  },
   "rail": {
     "label": "Hlavná navigácia",
     "home": "Smart Mail – Doručená pošta",
