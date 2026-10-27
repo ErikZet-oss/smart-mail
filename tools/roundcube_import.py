@@ -199,9 +199,7 @@ def load_responses_from_roundcube_dsn(dsn: str, user_email: str) -> list[Respons
     )
     with engine.connect() as conn:
         rows = conn.execute(sql, {"username": user_email}).mappings().all()
-    mapped = [
-        {"name": r["name"], "data": r["data"] or "", "is_html": r["is_html"], "language": "sk"} for r in rows
-    ]
+    mapped = [{"name": r["name"], "data": r["data"] or "", "is_html": r["is_html"], "language": "sk"} for r in rows]
     return responses_from_dicts(mapped)
 
 
@@ -288,9 +286,7 @@ async def apply_import(
                 twins = list(
                     (
                         await db.execute(
-                            select(Identity).where(
-                                Identity.mailbox_id == mailbox.id, Identity.display_name == row.name
-                            )
+                            select(Identity).where(Identity.mailbox_id == mailbox.id, Identity.display_name == row.name)
                         )
                     ).scalars()
                 )
