@@ -11,6 +11,10 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   (SETTINGS 07 + list options); Klasické zobrazenie hides triage.
 - `SecurityBanner` for DMARC / SPF / display spoof / IBAN-change notes (no reply suggestion cards — that is 2c).
 - Slovak strings in `web/src/i18n/sk.json`; Playwright vs Figma `26:21256` / `26:21793`.
+- Review (PR #17): always record paid `AiRun` (ok / invalid_output / error) with real tokens/latency/cost;
+  Anthropic API errors leave mail unclassified (retry max 3); neutralize `</untrusted_email>` escapes in
+  prompts; classify via Anthropic tool use / JSON schema (regex last resort); display-spoof only vs
+  company / person names (no false positive for “Smart Electronics”).
 
 ## [Unreleased] — Phase 2a: AI foundation (provider, schema, pipeline gates)
 

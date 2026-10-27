@@ -30,6 +30,9 @@ class LLMRequest:
     model: str | None = None
     max_tokens: int = 1024
     temperature: float = 0
+    # Anthropic tool use / JSON schema (CLAUDE.md §2). When set, the tool input is preferred over text.
+    tools: tuple[dict[str, object], ...] | None = None
+    tool_choice: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +44,8 @@ class LLMResponse:
     cost_usd: Decimal
     latency_ms: int
     provider: str
+    # Raw tool-use input when the model called a tool (JSON object as dict).
+    tool_input: dict[str, object] | None = None
 
 
 class LLMProvider(Protocol):
@@ -115,17 +120,28 @@ class AnthropicLLMProvider:
         # temperature omitted: current Anthropic SDK Messages.create typing has no temperature kwarg
         _ = request.temperature
         user_msg = cast(MessageParam, {"role": "user", "content": request.user})
-        message = await client.messages.create(  # type: ignore[attr-defined]
-            model=model,
-            max_tokens=request.max_tokens,
-            system=request.system,
-            messages=[user_msg],
-        )
+        kwargs: dict[str, object] = {
+            "model": model,
+            "max_tokens": request.max_tokens,
+            "system": request.system,
+            "messages": [user_msg],
+        }
+        if request.tools:
+            kwargs["tools"] = list(request.tools)
+            if request.tool_choice is not None:
+                kwargs["tool_choice"] = request.tool_choice
+        message = await client.messages.create(**kwargs)  # type: ignore[attr-defined]
         latency_ms = int((time.perf_counter() - started) * 1000)
         text_parts: list[str] = []
+        tool_input: dict[str, object] | None = None
         for block in message.content:
-            if getattr(block, "type", None) == "text":
+            btype = getattr(block, "type", None)
+            if btype == "text":
                 text_parts.append(str(getattr(block, "text", "")))
+            elif btype == "tool_use" and tool_input is None:
+                raw_in = getattr(block, "input", None)
+                if isinstance(raw_in, dict):
+                    tool_input = cast(dict[str, object], raw_in)
         usage = message.usage
         in_tok = int(usage.input_tokens)
         out_tok = int(usage.output_tokens)
@@ -139,6 +155,7 @@ class AnthropicLLMProvider:
             output_tokens=out_tok,
             cost_usd=str(cost),
             latency_ms=latency_ms,
+            used_tool=tool_input is not None,
         )
         return LLMResponse(
             text="".join(text_parts),
@@ -148,6 +165,7 @@ class AnthropicLLMProvider:
             cost_usd=cost,
             latency_ms=latency_ms,
             provider="anthropic",
+            tool_input=tool_input,
         )
 
 

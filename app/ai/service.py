@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.budget import budget_allows_call, budget_day_start
-from app.ai.classify import classify_message
+from app.ai.classify import MAX_LLM_ATTEMPTS, classify_message
 from app.ai.models import AiRun, Classification, FeatureFlag
 from app.ai.pipeline import (
     folder_eligible_for_ai,
@@ -28,6 +28,9 @@ from app.mail.models import Attachment, FolderMeta, Mailbox, Message
 log = structlog.get_logger(__name__)
 
 SHADOW_FLAG = "ai_shadow_mode"
+
+# Statuses that count toward the daily spend (every paid call must be recorded).
+_PAID_RUN_STATUSES = ("ok", "invalid_output", "error")
 
 
 async def shadow_mode_enabled(db: AsyncSession, person_id: uuid.UUID | None = None) -> bool:
@@ -46,17 +49,34 @@ async def shadow_mode_enabled(db: AsyncSession, person_id: uuid.UUID | None = No
 async def daily_spend_usd(db: AsyncSession, day: datetime | None = None) -> Decimal:
     start = budget_day_start(day)
     total = await db.scalar(
-        select(func.coalesce(func.sum(AiRun.cost_usd), 0)).where(AiRun.created_at >= start, AiRun.status == "ok")
+        select(func.coalesce(func.sum(AiRun.cost_usd), 0)).where(
+            AiRun.created_at >= start, AiRun.status.in_(_PAID_RUN_STATUSES)
+        )
     )
     return Decimal(str(total or 0))
 
 
 async def classification_exists_for_header(db: AsyncSession, message_id_header: str | None) -> bool:
+    """True when another mailbox already finished classifying this Message-ID."""
     header = normalize_message_id_header(message_id_header)
     if not header:
         return False
-    found = await db.scalar(select(Classification.id).where(Classification.message_id_header == header).limit(1))
+    found = await db.scalar(
+        select(Classification.id)
+        .where(Classification.message_id_header == header, Classification.status == "done")
+        .limit(1)
+    )
     return found is not None
+
+
+def _llm_attempts(row: Classification | None) -> int:
+    if row is None:
+        return 0
+    payload = row.payload or {}
+    try:
+        return int(payload.get("llm_attempts") or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 async def process_mailbox_ai(
@@ -74,9 +94,12 @@ async def process_mailbox_ai(
         "skipped_folder": 0,
         "skipped_idempotent": 0,
         "skipped_budget": 0,
+        "skipped_max_attempts": 0,
         "classified": 0,
         "rules_only": 0,
         "llm": 0,
+        "llm_error": 0,
+        "llm_invalid": 0,
         "unscanned_attachment_notes": 0,
     }
     if not mailbox.ai_enabled or mailbox.ai_enabled_at is None:
@@ -110,25 +133,30 @@ async def process_mailbox_ai(
             stats["skipped_history"] += 1
             continue
         header = normalize_message_id_header(message.message_id)
-        existing_done = await db.scalar(
-            select(Classification.id)
-            .where(
-                Classification.message_id == message.id,
-                Classification.status == "done",
-            )
-            .limit(1)
-        )
-        if existing_done is not None or await classification_exists_for_header(db, header):
+        existing = await db.scalar(select(Classification).where(Classification.message_id == message.id).limit(1))
+        if existing is not None and existing.status == "done":
+            stats["skipped_idempotent"] += 1
+            continue
+        # Same Message-ID already classified in another mailbox / copy
+        if await classification_exists_for_header(db, header):
             stats["skipped_idempotent"] += 1
             continue
 
-        # Budget only when we may call the LLM (rules-only is free)
+        attempts = _llm_attempts(existing)
+        if attempts >= MAX_LLM_ATTEMPTS:
+            stats["skipped_max_attempts"] += 1
+            if existing is not None and existing.status == "pending":
+                existing.status = "skipped"
+                payload = dict(existing.payload or {})
+                payload["skip_reason"] = "max_llm_attempts"
+                existing.payload = payload
+            continue
+
         atts = list((await db.execute(select(Attachment).where(Attachment.message_id == message.id))).scalars())
         plan = plan_attachments_for_ai(atts)
         if plan.note_codes:
             stats["unscanned_attachment_notes"] += 1
 
-        # If the live Anthropic provider would be used, require budget before the call.
         live_llm = isinstance(provider, AnthropicLLMProvider) and bool(model)
         if live_llm and not budget_allows_call(spent_usd=spent, estimate_usd=estimate, budget_usd=budget):
             stats["skipped_budget"] += 1
@@ -136,82 +164,124 @@ async def process_mailbox_ai(
             break
 
         stats["eligible"] += 1
-        outcome = await classify_message(
-            provider=provider,
-            model=model,
-            from_email=message.from_email,
-            from_name=message.from_name,
-            subject=message.subject,
-            body_text=message.body_text or message.preview,
-            headers_text=None,
-            attachment_names=[a.filename for a in atts],
-            auth_results=message.auth_results,
-            internal_domains=settings.internal_domain_list,
-            extra_note_codes=list(plan.note_codes),
-        )
+        try:
+            outcome = await classify_message(
+                provider=provider,
+                model=model,
+                from_email=message.from_email,
+                from_name=message.from_name,
+                subject=message.subject,
+                body_text=message.body_text or message.preview,
+                headers_text=None,
+                attachment_names=[a.filename for a in atts],
+                auth_results=message.auth_results,
+                internal_domains=settings.internal_domain_list,
+                extra_note_codes=list(plan.note_codes),
+            )
+        except Exception as exc:  # never crash mail sync
+            log.warning(
+                "ai.classify_unexpected",
+                mailbox_id=str(mailbox.id),
+                message_id=str(message.id),
+                error=type(exc).__name__,
+            )
+            stats["llm_error"] += 1
+            continue
 
         ai_run_id = None
-        if outcome.source in {"llm", "rules+llm"} and outcome.model:
-            if not budget_allows_call(
-                spent_usd=spent, estimate_usd=outcome.ai_run_cost_usd or estimate, budget_usd=budget
-            ):
-                stats["skipped_budget"] += 1
-                log.info("ai.pipeline_budget_stop", mailbox_id=str(mailbox.id), spent_usd=str(spent))
-                break
+        recorded_paid = False
+        # Always record a paid LLM call (ok / invalid_output / error), even if the batch then stops.
+        if outcome.run_status in _PAID_RUN_STATUSES and outcome.model:
             run = AiRun(
                 purpose="classify",
                 provider="anthropic",
                 model=outcome.model,
-                input_tokens=0,
-                output_tokens=0,
+                input_tokens=outcome.input_tokens,
+                output_tokens=outcome.output_tokens,
                 cost_usd=outcome.ai_run_cost_usd,
-                latency_ms=0,
+                latency_ms=outcome.latency_ms,
                 mailbox_id=mailbox.id,
                 message_id=message.id,
-                status="ok",
+                status=outcome.run_status,
+                error_class=outcome.error_class,
             )
             db.add(run)
             await db.flush()
             ai_run_id = run.id
             spent += outcome.ai_run_cost_usd
-            stats["llm"] += 1
+            recorded_paid = True
+            if outcome.run_status == "ok":
+                stats["llm"] += 1
+            elif outcome.run_status == "invalid_output":
+                stats["llm_invalid"] += 1
+            else:
+                stats["llm_error"] += 1
         elif outcome.source == "rules":
             stats["rules_only"] += 1
 
-        payload: dict[str, Any] = {
-            "note_codes": outcome.note_codes,
-            "source": outcome.source,
-            "rule_id": outcome.rule.rule_id if outcome.rule else None,
-            "entities": outcome.result.entities.model_dump(),
-            "needs_reply": outcome.result.needs_reply,
-            "sentiment": outcome.result.sentiment,
-            "priority_reason": outcome.result.priority_reason,
-            "deadline": outcome.result.deadline,
-            "confidence": outcome.result.confidence,
-        }
-        # Upsert pending row or create new
-        existing = await db.scalar(select(Classification).where(Classification.message_id == message.id).limit(1))
-        if existing is None:
-            existing = Classification(
-                mailbox_id=mailbox.id,
-                message_id=message.id,
-                message_id_header=header,
-                shadow=shadow,
-            )
-            db.add(existing)
-        existing.category = outcome.result.category
-        existing.language = outcome.result.language
-        existing.priority = outcome.result.priority
-        existing.payload = payload
-        existing.status = "done"
-        existing.ai_run_id = ai_run_id
-        existing.shadow = shadow
-        # store summary in payload (column set is fixed in 2a)
-        payload["summary_sk"] = outcome.result.summary_sk
-        existing.payload = payload
-        stats["classified"] += 1
+        if outcome.source == "error" or outcome.result is None:
+            # Leave unclassified; bump attempt count for retry (max 3).
+            if existing is None:
+                existing = Classification(
+                    mailbox_id=mailbox.id,
+                    message_id=message.id,
+                    message_id_header=header,
+                    shadow=shadow,
+                    status="pending",
+                    payload={},
+                )
+                db.add(existing)
+            err_payload = dict(existing.payload or {})
+            err_payload["llm_attempts"] = attempts + 1
+            err_payload["last_error_class"] = outcome.error_class
+            existing.payload = err_payload
+            existing.status = "pending"
+            existing.shadow = shadow
+            if ai_run_id is not None:
+                existing.ai_run_id = ai_run_id
+        else:
+            payload_done: dict[str, Any] = {
+                "note_codes": outcome.note_codes,
+                "source": outcome.source,
+                "rule_id": outcome.rule.rule_id if outcome.rule else None,
+                "entities": outcome.result.entities.model_dump(),
+                "needs_reply": outcome.result.needs_reply,
+                "sentiment": outcome.result.sentiment,
+                "priority_reason": outcome.result.priority_reason,
+                "deadline": outcome.result.deadline,
+                "confidence": outcome.result.confidence,
+                "summary_sk": outcome.result.summary_sk,
+            }
+            if outcome.run_status == "invalid_output":
+                payload_done["llm_attempts"] = attempts + 1
+            if existing is None:
+                existing = Classification(
+                    mailbox_id=mailbox.id,
+                    message_id=message.id,
+                    message_id_header=header,
+                    shadow=shadow,
+                )
+                db.add(existing)
+            existing.category = outcome.result.category
+            existing.language = outcome.result.language
+            existing.priority = outcome.result.priority
+            existing.payload = payload_done
+            existing.status = "done"
+            existing.ai_run_id = ai_run_id
+            existing.shadow = shadow
+            stats["classified"] += 1
 
-    if stats["classified"]:
+        # Stop further LLM work once the next estimate would not fit (spend already recorded).
+        if (
+            live_llm
+            and recorded_paid
+            and not budget_allows_call(spent_usd=spent, estimate_usd=estimate, budget_usd=budget)
+        ):
+            stats["skipped_budget"] += 1
+            log.info("ai.pipeline_budget_stop", mailbox_id=str(mailbox.id), spent_usd=str(spent))
+            break
+
+    if stats["classified"] or stats["llm_error"] or stats["llm_invalid"]:
         await db.flush()
     log.info("ai.pipeline_classify", mailbox_id=str(mailbox.id), **stats)
     return stats
