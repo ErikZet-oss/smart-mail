@@ -220,18 +220,20 @@ Skript sa spýta (slovensky, s predvolenými hodnotami):
 - **LOGIN_ALLOWLIST** (predvolené `test@smartsro.sk`; prázdne = všetci z INTERNAL_DOMAINS),
 - **MAIL_SEND_TEST_ALLOWLIST** (kam smie testovací server posielať).
 
-Vygeneruje `.env` (chmod 600), nainštaluje Docker ak chýba, spustí compose a na konci vypíše:
-`Smart Mail beží: https://…`. Druhé spustenie **neprepisuje** `.env` ani dáta.
+Vygeneruje `.env` (chmod 600), nainštaluje Docker ak chýba, zapne **ufw** (vps: 22/80/443; tunnel: len 22),
+spustí compose a na konci vypíše: `Smart Mail beží: https://…`. Druhé spustenie **neprepisuje** `.env` ani
+dáta a vypíše `Nastavenia ponechávam z .env…` (bez otázok) — zmeny robte v `deploy/.env` a `./deploy/update.sh`.
 
 Testovací režim: `APP_ENV=test`, sync voči reálnemu IMAP, odosielanie len na allowlist. Bez Mailpit a bez
-`imap-test`. Money (mock bridge) v UI skryté.
+`imap-test`. Money (mock bridge) v UI skryté. `/api/docs` je vypnuté (len pri `APP_ENV=dev`).
 
 ### 5. Bežná správa
 ```bash
 ./deploy/status.sh    # stav služieb, disk, posledný sync (bez tajomstiev a tiel správ)
-./deploy/update.sh    # git pull + rebuild + migrácie; pri chybe obnoví predchádzajúcu verziu
+./deploy/update.sh    # git pull + záloha + rebuild + migrácie; pri chybe reset --hard na vetve
 ./deploy/backup.sh    # ručná záloha (cron o 02:15 ukladá do /var/backups/smartmail, 7 dní)
 ```
+Migrácie sa pri zlyhaní update **samy nevracajú** — skript vypíše postup `pg_restore` zo zálohy.
 
 **Nikdy** nepoužívajte live schránky eshop@ / info@ / pobočky na pilot — len `test@smartsro.sk` (alebo
 LOGIN_ALLOWLIST).

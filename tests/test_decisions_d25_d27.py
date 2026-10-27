@@ -166,6 +166,28 @@ async def test_d26_company_ip_still_has_the_per_account_limit(
     assert (await client.login("jana@smartsro.sk", PASSWORD)).status_code == 429
 
 
+async def test_d26_two_client_ips_have_separate_limits_and_audit_shows_ip(
+    client: Client, app: FastAPI, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    """X-Forwarded-For from a trusted proxy (nginx) is the login limit key and the audit IP."""
+    from sqlalchemy import select
+
+    from app.core.audit import AuditLog
+
+    app.state.settings.login_ip_max_failures = 3
+    ip_a, ip_b = "203.0.113.10", "198.51.100.20"
+    for i in range(3):
+        assert (await client.login(f"a{i}@smartsro.sk", "zle", forwarded_for=ip_a)).status_code == 401
+    limited = await client.login("locked-a@smartsro.sk", "zle", forwarded_for=ip_a)
+    assert limited.status_code == 429
+    # Different client IP still has its own budget (D26)
+    assert (await client.login("b0@smartsro.sk", "zle", forwarded_for=ip_b)).status_code == 401
+    rows = list(
+        (await db.execute(select(AuditLog).where(AuditLog.action == "auth.login_rate_limited"))).scalars()
+    )
+    assert any(row.ip == ip_a for row in rows)
+
+
 # --- D27: mailbox password stored encrypted (Fernet), overwritten on change, never logged -------------------------
 async def test_d27_mailbox_password_stored_encrypted(
     client: Client, app: FastAPI, db: AsyncSession, mail_server: FakeMailServer

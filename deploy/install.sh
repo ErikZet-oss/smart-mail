@@ -12,62 +12,58 @@ need_cmd curl
 
 echo "=== Smart Mail — inštalácia ==="
 
-if [[ -n "${SMARTMAIL_CI:-}" ]]; then
-  DEPLOY_MODE=ci
-  APP_HOSTNAME="${APP_HOSTNAME:-localhost}"
-  APP_BASE_URL="${APP_BASE_URL:-http://127.0.0.1:8080}"
-  IMAP_HOST="${IMAP_HOST:-mail2.nameserver.sk}"
-  INTERNAL_DOMAINS="${INTERNAL_DOMAINS:-smartsro.sk}"
-  ADMIN_EMAILS="${ADMIN_EMAILS:-}"
-  LOGIN_ALLOWLIST="${LOGIN_ALLOWLIST:-test@smartsro.sk}"
-  MAIL_SEND_TEST_ALLOWLIST="${MAIL_SEND_TEST_ALLOWLIST:-test@smartsro.sk}"
-  CLOUDFLARE_TUNNEL_TOKEN=""
-else
-  prompt "Režim (vps = Caddy+HTTPS, tunnel = Cloudflare Tunnel)" "vps"
-  DEPLOY_MODE="$REPLY"
-  [[ "$DEPLOY_MODE" == "vps" || "$DEPLOY_MODE" == "tunnel" ]] || die "zvoľte vps alebo tunnel"
-
-  prompt "Adresa aplikácie (hostname)" "test-posta.smartsro.sk"
-  APP_HOSTNAME="$REPLY"
-
-  CLOUDFLARE_TUNNEL_TOKEN=""
-  if [[ "$DEPLOY_MODE" == "tunnel" ]]; then
-    prompt_secret "Cloudflare Tunnel token (skrytý vstup)"
-    CLOUDFLARE_TUNNEL_TOKEN="$REPLY"
-    [[ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]] || die "token je povinný pre režim tunnel"
-  fi
-
-  prompt "IMAP/SMTP server" "mail2.nameserver.sk"
-  IMAP_HOST="$REPLY"
-
-  prompt "INTERNAL_DOMAINS (čiarkou)" "smartsro.sk"
-  INTERNAL_DOMAINS="$REPLY"
-
-  prompt "ADMIN_EMAILS (čiarkou, môže byť prázdne)" ""
-  ADMIN_EMAILS="$REPLY"
-
-  prompt "LOGIN_ALLOWLIST (kto sa smie prihlásiť; prázdne = celá INTERNAL_DOMAINS)" "test@smartsro.sk"
-  LOGIN_ALLOWLIST="$REPLY"
-
-  prompt "MAIL_SEND_TEST_ALLOWLIST (kam smie testovací server posielať)" "test@smartsro.sk"
-  MAIL_SEND_TEST_ALLOWLIST="$REPLY"
-
-  if [[ "$DEPLOY_MODE" == "vps" ]]; then
-    APP_BASE_URL="https://${APP_HOSTNAME}"
-  else
-    APP_BASE_URL="https://${APP_HOSTNAME}"
-  fi
-fi
-
-export DEPLOY_MODE
-
-# --- .env: create once, never overwrite secrets on re-run
+# --- .env: if it already exists, keep settings and skip prompts (never overwrite secrets)
 if [[ -f "$ENV_FILE" ]]; then
-  echo "Existujúci .env ponechávam ($ENV_FILE) — dáta sa nemažú."
+  echo "Nastavenia ponechávam z .env, na zmenu upravte deploy/.env a spustite update.sh"
   # shellcheck disable=SC1090
   set -a && source "$ENV_FILE" && set +a
   DEPLOY_MODE="${DEPLOY_MODE:-ci}"
 else
+  if [[ -n "${SMARTMAIL_CI:-}" ]]; then
+    DEPLOY_MODE=ci
+    APP_HOSTNAME="${APP_HOSTNAME:-localhost}"
+    APP_BASE_URL="${APP_BASE_URL:-http://127.0.0.1:8080}"
+    IMAP_HOST="${IMAP_HOST:-mail2.nameserver.sk}"
+    INTERNAL_DOMAINS="${INTERNAL_DOMAINS:-smartsro.sk}"
+    ADMIN_EMAILS="${ADMIN_EMAILS:-}"
+    LOGIN_ALLOWLIST="${LOGIN_ALLOWLIST:-test@smartsro.sk}"
+    MAIL_SEND_TEST_ALLOWLIST="${MAIL_SEND_TEST_ALLOWLIST:-test@smartsro.sk}"
+    CLOUDFLARE_TUNNEL_TOKEN=""
+  else
+    prompt "Režim (vps = Caddy+HTTPS, tunnel = Cloudflare Tunnel)" "vps"
+    DEPLOY_MODE="$REPLY"
+    [[ "$DEPLOY_MODE" == "vps" || "$DEPLOY_MODE" == "tunnel" ]] || die "zvoľte vps alebo tunnel"
+
+    prompt "Adresa aplikácie (hostname)" "test-posta.smartsro.sk"
+    APP_HOSTNAME="$REPLY"
+
+    CLOUDFLARE_TUNNEL_TOKEN=""
+    if [[ "$DEPLOY_MODE" == "tunnel" ]]; then
+      prompt_secret "Cloudflare Tunnel token (skrytý vstup)"
+      CLOUDFLARE_TUNNEL_TOKEN="$REPLY"
+      [[ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]] || die "token je povinný pre režim tunnel"
+    fi
+
+    prompt "IMAP/SMTP server" "mail2.nameserver.sk"
+    IMAP_HOST="$REPLY"
+
+    prompt "INTERNAL_DOMAINS (čiarkou)" "smartsro.sk"
+    INTERNAL_DOMAINS="$REPLY"
+
+    prompt "ADMIN_EMAILS (čiarkou, môže byť prázdne)" ""
+    ADMIN_EMAILS="$REPLY"
+
+    prompt "LOGIN_ALLOWLIST (kto sa smie prihlásiť; prázdne = celá INTERNAL_DOMAINS)" "test@smartsro.sk"
+    LOGIN_ALLOWLIST="$REPLY"
+
+    prompt "MAIL_SEND_TEST_ALLOWLIST (kam smie testovací server posielať)" "test@smartsro.sk"
+    MAIL_SEND_TEST_ALLOWLIST="$REPLY"
+
+    APP_BASE_URL="https://${APP_HOSTNAME}"
+  fi
+
+  export DEPLOY_MODE
+
   echo "Generujem .env (chmod 600)…"
   POSTGRES_PASSWORD="$(rand_hex 24)"
   S3_ACCESS_KEY="smartmail"
@@ -106,15 +102,38 @@ FEATURE_MONEY=false
 MONEY_BACKEND=mock
 MONEY_AGENDA_LABEL=TEST
 CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+FORWARDED_ALLOW_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 LOG_LEVEL=INFO
 EOF
   chmod 600 "$ENV_FILE"
 fi
 
+export DEPLOY_MODE="${DEPLOY_MODE:-ci}"
+
 # Caddyfile for vps mode (safe to rewrite — no secrets)
 if [[ "${DEPLOY_MODE}" == "vps" ]]; then
   HOST_FOR_CADDY="${APP_HOSTNAME:-localhost}"
   sed "s/__APP_HOSTNAME__/${HOST_FOR_CADDY}/g" "$DEPLOY_DIR/Caddyfile.tpl" >"$DEPLOY_DIR/Caddyfile"
+fi
+
+# ufw: only the edge ports (Docker bypasses ufw for published ports — still harden the host)
+if [[ -z "${SMARTMAIL_CI:-}" ]]; then
+  if command -v ufw >/dev/null 2>&1 || ensure_ufw_installed; then
+    echo "Nastavujem ufw…"
+    ufw --force reset >/dev/null 2>&1 || true
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow 22/tcp comment "ssh"
+    if [[ "${DEPLOY_MODE}" == "vps" ]]; then
+      ufw allow 80/tcp comment "http"
+      ufw allow 443/tcp comment "https"
+    fi
+    # tunnel mode: only 22 (cloudflared is outbound)
+    ufw --force enable
+    ufw status numbered || true
+  else
+    echo "Upozornenie: ufw nie je dostupný — otvorte len 22 (a pri vps 80/443) ručne."
+  fi
 fi
 
 # Nightly backup cron (skip in CI)

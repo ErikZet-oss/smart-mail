@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     mfa_trust_days: int = Field(default=30, ge=1)
     # Hide Money / Doklady UI until the real bridge is enabled (pilot deploy keeps mock + FEATURE_MONEY=false)
     feature_money: bool = False
+    # Proxies whose X-Forwarded-For / X-Forwarded-Proto are trusted (uvicorn + ProxyHeadersMiddleware).
+    # Deploy: Docker networks only — never "*" (spoofable client IPs would break D26 login limits).
+    forwarded_allow_ips: str = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
     # --- auth (optional providers)
     oidc_ms_client_id: str | None = None
@@ -87,7 +90,8 @@ class Settings(BaseSettings):
     oidc_google_client_secret: SecretStr | None = None
     vapid_public_key: str | None = None
     vapid_private_key: SecretStr | None = None
-    internal_domains: str = "smartsro.sk"
+    # smartmail.test = fictional compose imap-test domain (ADR-005); company domain is smartsro.sk
+    internal_domains: str = "smartsro.sk,smartmail.test"
 
     # --- AI (AI_ASSISTANT.md)
     llm_provider: Literal["anthropic", "bedrock"] = "anthropic"

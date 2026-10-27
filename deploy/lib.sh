@@ -60,6 +60,19 @@ ensure_docker() {
   docker compose version >/dev/null 2>&1 || die "Docker Compose plugin nie je dostupný"
 }
 
+ensure_ufw_installed() {
+  # Returns 0 when ufw is available (installs via apt on Ubuntu/Debian when missing).
+  if command -v ufw >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v apt-get >/dev/null 2>&1; then
+    echo "Inštalujem ufw…"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ufw
+  fi
+  command -v ufw >/dev/null 2>&1
+}
+
 compose_up() {
   local profiles=()
   case "${DEPLOY_MODE:-ci}" in

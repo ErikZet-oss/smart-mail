@@ -15,15 +15,48 @@ echo "=== CI smoke: install ==="
 curl -fsS http://127.0.0.1:8080/readyz
 curl -fsS http://127.0.0.1:8080/healthz
 curl -fsS http://127.0.0.1:8080/ | grep -q 'id="root"'
-# Second install must not wipe .env
+# Docs must be off outside APP_ENV=dev (deploy uses APP_ENV=test)
+code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/docs || true)"
+[[ "$code" == "404" ]] || { echo "api/docs má byť 404 mimo dev (dostal $code)"; exit 1; }
+code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/openapi.json || true)"
+[[ "$code" == "404" ]] || { echo "api/openapi.json má byť 404 mimo dev (dostal $code)"; exit 1; }
+
+# Second install must not wipe .env and must stay silent about prompts
 SUM1="$(sha256sum "$SMARTMAIL_ENV_FILE" | awk '{print $1}')"
-"$ROOT/deploy/install.sh"
+OUT_REINSTALL="$("$ROOT/deploy/install.sh" 2>&1)"
+echo "$OUT_REINSTALL" | grep -Fq 'Nastavenia ponechávam z .env' \
+  || { echo "druhé install.sh nevypísalo ponechanie .env"; exit 1; }
 SUM2="$(sha256sum "$SMARTMAIL_ENV_FILE" | awk '{print $1}')"
 [[ "$SUM1" == "$SUM2" ]] || { echo "install.sh prepísal .env"; exit 1; }
 
 echo "=== CI smoke: update ==="
 "$ROOT/deploy/update.sh"
 curl -fsS http://127.0.0.1:8080/readyz
+GOOD_SHA="$(cat "$SMARTMAIL_STATE_DIR/last_good_sha")"
+BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
+[[ "$BRANCH" != "HEAD" ]] || { echo "po update sme v detached HEAD"; exit 1; }
+
+echo "=== CI smoke: update → simulated failure → rollback → next update ==="
+set +e
+SMARTMAIL_UPDATE_FAIL=1 "$ROOT/deploy/update.sh"
+FAIL_RC=$?
+set -e
+[[ "$FAIL_RC" -ne 0 ]] || { echo "očakávané zlyhanie update.sh nenastalo"; exit 1; }
+AFTER_ROLLBACK="$(git -C "$ROOT" rev-parse HEAD)"
+[[ "$AFTER_ROLLBACK" == "$GOOD_SHA" ]] || {
+  echo "rollback neobnovil SHA ($AFTER_ROLLBACK != $GOOD_SHA)"; exit 1
+}
+BRANCH_AFTER="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
+[[ "$BRANCH_AFTER" != "HEAD" ]] || { echo "po rollback sme v detached HEAD"; exit 1; }
+[[ "$BRANCH_AFTER" == "$BRANCH" ]] || {
+  echo "po rollback iná vetva ($BRANCH_AFTER != $BRANCH)"; exit 1
+}
+# Next update must succeed (still on the branch)
+"$ROOT/deploy/update.sh"
+curl -fsS http://127.0.0.1:8080/readyz
+[[ "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)" != "HEAD" ]] || {
+  echo "po druhom update sme v detached HEAD"; exit 1
+}
 
 echo "=== CI smoke: status (no secrets) ==="
 "$ROOT/deploy/status.sh" | tee /tmp/smartmail-status.txt

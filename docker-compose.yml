@@ -31,8 +31,8 @@ x-app-env: &app-env
   ADMIN_EMAILS: ${ADMIN_EMAILS:-}
   ADMIN_CONTACT_EMAIL: ${ADMIN_CONTACT_EMAIL:-}
   LOGIN_IP_ALLOWLIST: ${LOGIN_IP_ALLOWLIST:-}
-  # uvicorn --proxy-headers: trust X-Forwarded-For from the web container (real client IP for the login rate limit)
-  FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
+  # uvicorn --proxy-headers: trust X-Forwarded-For from the web container (real client IP for D26)
+  FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
   MAIL_SYNC_ENABLED: ${MAIL_SYNC_ENABLED:-true}
   MAIL_POLL_SECONDS: ${MAIL_POLL_SECONDS:-120}
   MAIL_IDLE_RENEW_SECONDS: ${MAIL_IDLE_RENEW_SECONDS:-1500}

@@ -8,6 +8,12 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - Compose stack without Mailpit / imap-test; edge Caddy (Let’s Encrypt) or cloudflared; other ports on 127.0.0.1.
 - `LOGIN_ALLOWLIST`, `FEATURE_MONEY=false` (Money UI hidden; mock bridge only). ADR-010.
 - CI job runs `deploy/ci-smoke.sh` (no certificate, no tunnel). README „Nasadenie“ (SK).
+- Real client IP: nginx `$proxy_add_x_forwarded_for` + Docker `real_ip`, proto from Caddy, tunnel
+  `CF-Connecting-IP`; `FORWARDED_ALLOW_IPS` = Docker networks (never `*`). D26 test: two IPs + audit IP.
+- Caddy HSTS `max-age=31536000` + security headers for `/api`; pinned `caddy:2.11.7-alpine`,
+  `cloudflared:2026.10.4`. `update.sh`: backup before migrate, `git reset --hard` on branch (not detached),
+  restore hint on failure. `install.sh`: ufw 22/80/443 (tunnel: 22); keep `.env` without prompts.
+- `/api/docs` + `/api/openapi.json` off outside `APP_ENV=dev`. Deploy CI smoke independent of backend job.
 
 ## [Unreleased] — Phase 1h-c: W13 tour, W14/M16, W15, W15b, classic
 

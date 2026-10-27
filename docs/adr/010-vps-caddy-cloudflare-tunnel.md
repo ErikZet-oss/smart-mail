@@ -15,19 +15,33 @@
      No inbound ports required on the VPS.
 2. **Caddy and cloudflared are approved new services** for this deployment path (they are not part of the
    local Phase 0 compose). They are never required for `docker compose` developer workflows.
+   Images are **pinned** to current 2026 versions (`caddy:2.11.7-alpine`, `cloudflare/cloudflared:2026.10.4`) —
+   never `:latest`.
 3. **Test / pilot stack** (`APP_ENV=test`): real IMAP/SMTP (`MAIL_SYNC_ALLOW_REAL_SERVER=true`,
    `MAIL_SEND_ALLOW_REAL_SERVER=true`) with `MAIL_SEND_TEST_ALLOWLIST` and `LOGIN_ALLOWLIST`. No Mailpit,
    no `imap-test`. Money bridge stays **mock**; UI Money surfaces stay hidden (`FEATURE_MONEY=false`).
+   `/api/docs` and `/api/openapi.json` are disabled outside `APP_ENV=dev`.
 4. **Secrets** are generated into `.env` (`chmod 600`) on first install. A second `install.sh` run never
-   overwrites an existing `.env` or volumes.
-5. **Updates** via `deploy/update.sh`: `git pull`, rebuild, migrate (app entrypoint), health check; on failure
-   check out the previous git SHA and restart.
-6. **Backups**: nightly dump of Postgres + object storage under `/var/backups/smartmail`, keep 7 days.
+   overwrites an existing `.env` or volumes and prints
+   `Nastavenia ponechávam z .env, na zmenu upravte deploy/.env a spustite update.sh` (no prompts).
+5. **Updates** via `deploy/update.sh`: `git pull`, **`backup.sh` before migrations**, rebuild, migrate
+   (app entrypoint), health check. On failure: `git checkout <branch> && git reset --hard <prev-sha>`
+   (stay on the branch — never a detached HEAD) and restart. Migrations are **not** rolled back
+   automatically; the script prints how to `pg_restore` from the backup.
+6. **Backups**: nightly dump of Postgres + object storage under `/var/backups/smartmail`, keep 7 days;
+   also taken immediately before each update’s migrations.
+7. **Client IP (D26)**: nginx must not overwrite `X-Forwarded-For` with `$remote_addr` alone. Use
+   `$proxy_add_x_forwarded_for`, `real_ip` only from the Docker network, `X-Forwarded-Proto` from Caddy,
+   and `CF-Connecting-IP` in tunnel mode. `FORWARDED_ALLOW_IPS` is the Docker private ranges — never `*`.
+8. **Caddy** sets `Strict-Transport-Security "max-age=31536000"` and the usual security headers for the
+   whole site including `/api`.
+9. **ufw** is enabled by `install.sh`: allow **22/80/443** in vps mode, **only 22** in tunnel mode.
 
 ## Consequences
 
 - Pilot operators need a DNS A record (vps) or a Cloudflare Tunnel token (tunnel), plus a GitHub deploy key
   for `git pull` on the VPS.
 - Production Hyper-V later can reuse the same scripts; only mode / hostname / secrets change.
-- CI exercises `install.sh` / `update.sh` in a clean Ubuntu container without certificates or a tunnel
-  (`SMARTMAIL_CI=1`).
+- CI exercises `install.sh` / `update.sh` in a clean Ubuntu runner without certificates or a tunnel
+  (`SMARTMAIL_CI=1`), including update → simulated failure → rollback → next update succeeds.
+  The deploy smoke job does **not** depend on the backend/web unit jobs so it always runs.

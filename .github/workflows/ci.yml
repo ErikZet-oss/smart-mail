@@ -188,7 +188,7 @@ jobs:
   deploy:
     name: Deploy scripts (install + update smoke, no cert / tunnel)
     runs-on: ubuntu-24.04
-    needs: [backend, bridge, web]
+    # Independent of unit/e2e jobs so a backend failure cannot skip the deploy smoke.
     steps:
       - uses: actions/checkout@v4
       - name: install.sh + update.sh (SMARTMAIL_CI=1)
