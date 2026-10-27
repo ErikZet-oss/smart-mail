@@ -77,7 +77,11 @@ export function ScreenW15({ onClose }: Props) {
       onClose={onClose}
       footer={
         <>
-          <Link to="/settings/preferences" onClick={onClose} className="type-small text-brand-primary-700 hover:underline">
+          <Link
+            to="/settings/preferences"
+            onClick={onClose}
+            className="type-small text-brand-primary-700 hover:underline"
+          >
             {t('shortcuts.toSettings')}
           </Link>
           <Button type="button" variant="secondary" onClick={onClose}>

@@ -5,22 +5,20 @@ const SIGNED_IN = { 'GET /api/auth/me': { body: ME }, 'GET /api/auth/persons': {
 const NOTIFS = {
   items: [
     {
-      id: 'sync:mb-1',
+      id: 'sync:mb-1:1761552000',
       kind: 'sync_failed',
-      title: 'Synchronizácia zlyhala',
-      body: 'pilot@smartmail.test: auth_failed',
       created_at: '2026-10-27T08:00:00Z',
       unread: true,
-      href: '/mail/default/inbox',
+      href: '/mail/mb-1/inbox',
+      params: { mailbox_email: 'pilot@smartmail.test', error_code: 'auth_failed' },
     },
     {
-      id: 'assign:t-1',
+      id: 'assign:t-1:1761501600',
       kind: 'assigned',
-      title: 'Pridelené vám',
-      body: 'Objednávka PO-1',
       created_at: '2026-10-26T18:00:00Z',
       unread: true,
-      href: '/mail/default/inbox',
+      href: '/mail/mb-1/inbox/t-1',
+      params: { subject: 'Objednávka PO-1' },
     },
   ],
   unread_count: 2,
@@ -35,7 +33,12 @@ async function shell(page: import('@playwright/test').Page, extra: Record<string
     'POST /api/notifications/dismiss': { body: { ok: true } },
     'GET /api/mail/mailboxes/default/folders': { body: foldersView() },
     'GET /api/settings/mailboxes/default/provider': {
-      body: { email: ME.email, imap_host: 'mail.test', imap_port: 993, provider_admin_url: 'https://provider.test/admin' },
+      body: {
+        email: ME.email,
+        imap_host: 'mail.test',
+        imap_port: 993,
+        provider_admin_url: 'https://provider.test/admin',
+      },
     },
     ...extra,
   });
@@ -49,7 +52,10 @@ test.describe('Phase 1h-c: W13–W15b / M16 / classic', () => {
     await page.getByRole('button', { name: /Notifikácie/ }).click();
     await expect(page.getByTestId('screen-w14')).toBeVisible();
     await expect(page.getByText('Synchronizácia zlyhala')).toBeVisible();
+    await expect(page.getByText('Nesprávne heslo pre pilot@smartmail.test.')).toBeVisible();
     await expect(page.getByText('Pridelené vám')).toBeVisible();
+    await expect(page.getByText('Objednávka PO-1')).toBeVisible();
+    await expect(page.getByText('auth_failed')).toHaveCount(0);
     await expect(page.getByText('Na schválenie')).toHaveCount(0);
     await shot(page, 'phase1hc-W14-notifs');
   });
@@ -71,6 +77,7 @@ test.describe('Phase 1h-c: W13–W15b / M16 / classic', () => {
     await page.getByRole('button', { name: 'Notifikácie' }).click();
     await expect(page.getByTestId('screen-m16')).toBeVisible();
     await expect(page.getByText('Synchronizácia zlyhala')).toBeVisible();
+    await expect(page.getByText('Nesprávne heslo pre pilot@smartmail.test.')).toBeVisible();
     await shot(page, 'phase1hc-M16-notifs');
   });
 

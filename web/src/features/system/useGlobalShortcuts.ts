@@ -26,11 +26,7 @@ export function useGlobalShortcuts() {
       if (e.altKey || e.metaKey) return;
 
       // `?` or Shift+/ (layouts where key stays `/` with shift)
-      if (
-        !e.ctrlKey &&
-        !editable(e.target) &&
-        (e.key === '?' || (e.key === '/' && e.shiftKey))
-      ) {
+      if (!e.ctrlKey && !editable(e.target) && (e.key === '?' || (e.key === '/' && e.shiftKey))) {
         e.preventDefault();
         open('shortcuts');
         return;

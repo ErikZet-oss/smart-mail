@@ -641,6 +641,12 @@ async def assign(
     if thread is None or thread.mailbox_id != mailbox.id:
         raise fail(404, "thread_not_found")
     thread.assignee_id = body.person_id
+    if body.person_id is None:
+        thread.assigned_by_id = None
+        thread.assigned_at = None
+    else:
+        thread.assigned_by_id = person.id
+        thread.assigned_at = datetime.now(UTC)
     audit(
         db,
         "mail.thread_assigned",

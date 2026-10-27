@@ -216,7 +216,17 @@
     "settingsLater": "Nastavenia notifikácií (push) pribudnú neskôr.",
     "toSettings": "Otvoriť nastavenia",
     "tab": { "all": "Všetky", "open": "Nevybavené" },
-    "group": { "today": "Dnes", "yesterday": "Včera", "older": "Staršie" }
+    "group": { "today": "Dnes", "yesterday": "Včera", "older": "Staršie" },
+    "kinds": {
+      "sync_failed": { "title": "Synchronizácia zlyhala" },
+      "assigned": { "title": "Pridelené vám", "body": "{{subject}}" }
+    },
+    "syncErrors": {
+      "auth_failed": "Nesprávne heslo pre {{email}}.",
+      "unavailable": "Server nedostupný ({{email}}).",
+      "host_not_allowed": "Mailový server nie je povolený ({{email}}).",
+      "no_credentials": "Chýbajú prihlasovacie údaje pre {{email}}."
+    }
   },
   "shortcuts": {
     "title": "Klávesové skratky",

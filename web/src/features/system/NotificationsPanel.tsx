@@ -9,8 +9,21 @@ import {
   dismissNotifications,
   fetchNotifications,
   NOTIFS_KEY,
+  syncErrorKey,
   type NotificationItem,
 } from './notificationsApi';
+
+function notifTitle(item: NotificationItem, t: (k: string) => string): string {
+  return t(`notifs.kinds.${item.kind}.title`);
+}
+
+function notifBody(item: NotificationItem, t: (k: string, o?: Record<string, string>) => string): string {
+  if (item.kind === 'sync_failed') {
+    const code = syncErrorKey(item.params.error_code);
+    return t(`notifs.syncErrors.${code}`, { email: item.params.mailbox_email ?? '' });
+  }
+  return t('notifs.kinds.assigned.body', { subject: item.params.subject ?? '' });
+}
 
 type Tab = 'all' | 'open';
 
@@ -143,12 +156,12 @@ export function NotificationsPanel({ onClose }: Props) {
                       <KindIcon kind={item.kind} />
                       <span className="min-w-0 flex-1">
                         <span className="type-small flex items-center gap-2 font-medium text-text-primary">
-                          {item.title}
+                          {notifTitle(item, t)}
                           {item.unread ? (
                             <span className="size-2 shrink-0 rounded-full bg-brand-primary-600" aria-hidden="true" />
                           ) : null}
                         </span>
-                        <span className="type-caption line-clamp-2 text-text-secondary">{item.body}</span>
+                        <span className="type-caption line-clamp-2 text-text-secondary">{notifBody(item, t)}</span>
                       </span>
                       <span className="type-caption shrink-0 text-text-tertiary">{timeLabel(item.created_at)}</span>
                     </button>
