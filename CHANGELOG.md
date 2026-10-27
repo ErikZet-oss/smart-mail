@@ -12,6 +12,10 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   Schema: `settings_schema.json` + `web/src/features/settings/schema.ts`. HTML signature editor (D22).
 - Migration `0008` mailbox SMTP/Sieve/provider URL + person profile fields. Test against local `imap-test`;
   `REAL_IMAP_*` still skipped. ClamAV still deferred to 1h.
+- Filtre / Mimo kancelárie: Roundcube `# rule:[Name]` parse via sievelib; load→save keeps conditions (Od →
+  fileinto); unsupported rules stay raw („Pravidlo z Roundcube (len na čítanie)“); vacation writes into the
+  **same active script** (never activates another set); Od–do + SK/EN/DE; script backup + „Obnoviť predchádzajúcu
+  verziu“ (migration `0009`). Fixture `fixtures/sieve/roundcube_filters.sieve`.
 
 ## [Unreleased] — Phase 1e: compose
 

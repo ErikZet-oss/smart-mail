@@ -386,14 +386,28 @@
       "delete": "Vymazať"
     },
     "filtersHelp": "Filtre fungujú na serveri – aj keď je aplikácia zatvorená, aj v Roundcube.",
+    "sieveRestore": "Obnoviť predchádzajúcu verziu",
+    "sieveRestored": "Predchádzajúca verzia filtrov bola obnovená.",
     "filters": {
       "enabled": "Zapnutý",
-      "add": "Pridať filter"
+      "add": "Pridať filter",
+      "newName": "Nový filter (Od → priečinok)",
+      "from": "Od (adresa alebo doména odosielateľa)",
+      "fileinto": "Presunúť do priečinka",
+      "mailboxScope": "Filter platí pre celú schránku – osobnú aj pobočkovú.",
+      "notDefaults": "Filtre nie sú predvolené. Každá schránka má vlastné pravidlá (rovnaké ako v Roundcube).",
+      "roundcubeReadonly": "Pravidlo z Roundcube (len na čítanie)",
+      "scopeKind": "Typ schránky"
     },
     "vacation": {
       "enabled": "Automatická odpoveď",
       "subject": "Predmet",
-      "body": "Text odpovede"
+      "body": "Text odpovede",
+      "start": "Od",
+      "end": "Do",
+      "days": "Odpovedať tomu istému odosielateľovi najviac raz za (dni)",
+      "branchHelp": "Na pobočkovej schránke odpovedá za celú pobočku. Ukladá sa do toho istého aktívneho Sieve skriptu ako filtre.",
+      "rangeHelp": "Bez dátumu do platí, kým ju nevypnete."
     },
     "provider": {
       "mailbox": "E-mailová schránka",

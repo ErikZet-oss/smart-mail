@@ -1,21 +1,40 @@
-"""ManageSieve client for Filtre (05) and Mimo kancelárie (06). Roundcube-compatible script names."""
+"""ManageSieve for Filtre (05) and Mimo kancelárie (06).
+
+Roundcube-compatible scripts use ``# rule:[Name]`` markers (ManageSieve plugin).
+Filters and vacation live in the **same active script** — never activate another set.
+What we cannot edit stays as raw Sieve and is shown read-only in the UI.
+"""
 
 from __future__ import annotations
 
 import re
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from sievelib import commands
 from sievelib.managesieve import Client as ManageSieveClient
+from sievelib.parser import Parser
 
 from app.core.config import Settings
 from app.mail.models import Mailbox
 
-# Roundcube ManageSieve plugin historically activates a script named "roundcube".
-FILTER_SCRIPT = "roundcube"
-VACATION_SCRIPT = "vacation"
+# Historical Roundcube ManageSieve plugin name; we keep it when it is already active.
+DEFAULT_SCRIPT_NAME = "roundcube"
+VACATION_RULE_NAME = "Mimo kancelárie"
+VACATION_MARKER = "# smartmail:vacation"
 
 _TEST_SIEVE_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "imap-test"})
+
+# Back-compat aliases used by older imports / ADR text
+FILTER_SCRIPT = DEFAULT_SCRIPT_NAME
+VACATION_SCRIPT = DEFAULT_SCRIPT_NAME
+
+_RULE_SPLIT = re.compile(r"(?m)^(# rule:\[)")
+_RULE_NAME = re.compile(r"^# rule:\[([^\]]*)\]\s*\n?", re.M)
+_EDITABLE_FIELDS = frozenset({"from", "to", "cc", "subject", "size", "header", "body"})
+_EDITABLE_OPS = frozenset({"contains", "notcontains", "is", "isnot", "startswith", "endswith", "gt", "lt"})
+_EDITABLE_ACTIONS = frozenset({"fileinto", "redirect", "reject", "discard", "addflag", "seen", "stop", "keep"})
 
 
 class SieveError(Exception):
@@ -34,7 +53,7 @@ class FilterCondition:
 
 @dataclass
 class FilterAction:
-    type: str  # fileinto|redirect|reject|discard|addflag|stop|keep
+    type: str  # fileinto|redirect|reject|discard|addflag|seen|stop|keep
     value: str = ""
 
 
@@ -43,9 +62,12 @@ class FilterRule:
     id: str
     name: str
     enabled: bool = True
-    match: str = "allof"  # all|anyof|allof
+    match: str = "allof"  # allof|anyof|all
     conditions: list[FilterCondition] = field(default_factory=list)
     actions: list[FilterAction] = field(default_factory=list)
+    editable: bool = True
+    raw: str | None = None
+    kind: str = "filter"  # filter | vacation
 
 
 @dataclass
@@ -58,6 +80,16 @@ class VacationSettings:
     days: int = 7
     start: str | None = None  # ISO date-time
     end: str | None = None
+
+
+@dataclass
+class ParsedScript:
+    """Structured view of one Roundcube ManageSieve script."""
+
+    preamble: str  # require […] plus any leading comments
+    rules: list[FilterRule]
+    vacation: VacationSettings
+    script_name: str = DEFAULT_SCRIPT_NAME
 
 
 def sieve_host_allowed(settings: Settings, host: str) -> bool:
@@ -76,115 +108,597 @@ def _escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def compile_filters(rules: list[FilterRule]) -> str:
-    """Compile structured filter rules to a Sieve script (fileinto + basic tests)."""
-    lines = ['require ["fileinto", "imap4flags", "reject"];', ""]
-    for rule in rules:
-        if not rule.enabled:
+def _unescape(value: str) -> str:
+    return value.replace('\\"', '"').replace("\\\\", "\\")
+
+
+def _strip_quotes(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        return _unescape(value[1:-1])
+    return value
+
+
+def _uncomment_disabled_body(body: str) -> str:
+    """Turn Roundcube ``# disabled`` commented rule body back into live Sieve."""
+    lines_out: list[str] = []
+    for line in body.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("# rule:["):
+            lines_out.append(stripped)
             continue
-        conds: list[str] = []
-        for c in rule.conditions:
-            val = _escape(c.value)
-            header = {
-                "subject": "Subject",
-                "from": "From",
-                "to": "To",
-                "cc": "Cc",
-                "header": "Subject",
-            }.get(c.field, "Subject")
-            if c.field == "body":
-                # body tests need the body extension; fall back to subject contains for Phase 1f
-                conds.append(f'header :contains "Subject" "{val}"')
-            elif c.field == "size":
-                try:
-                    kb = int(c.value)
-                except ValueError:
-                    continue
-                op = ":over" if c.op in {"gt", "contains"} else ":under"
-                conds.append(f"size {op} {kb * 1024}")
-            elif c.op == "contains":
-                conds.append(f'header :contains "{header}" "{val}"')
-            elif c.op == "notcontains":
-                conds.append(f'not header :contains "{header}" "{val}"')
-            elif c.op == "is":
-                conds.append(f'header :is "{header}" "{val}"')
-            elif c.op == "isnot":
-                conds.append(f'not header :is "{header}" "{val}"')
-            elif c.op == "startswith":
-                conds.append(f'header :matches "{header}" "{val}*"')
-            elif c.op == "endswith":
-                conds.append(f'header :matches "{header}" "*{val}"')
-            else:
-                conds.append(f'header :contains "{header}" "{val}"')
-        match = "anyof" if rule.match in {"any", "anyof"} else "allof"
-        if not conds:
-            test = "true"
-        elif len(conds) == 1:
-            test = conds[0]
+        if stripped.startswith("# disabled"):
+            continue
+        if stripped.startswith("#"):
+            # "# if …" / "#\tfileinto …" — drop one leading # and optional space
+            rest = stripped[1:]
+            if rest.startswith(" ") or rest.startswith("\t"):
+                rest = rest[1:]
+            lines_out.append(rest)
         else:
-            test = f"{match} ({', '.join(conds)})"
-        lines.append(f"# rule:{rule.id} name:{_escape(rule.name)}")
-        lines.append(f"if {test} {{")
-        for action in rule.actions:
-            if action.type == "fileinto" and action.value:
-                lines.append(f'  fileinto "{_escape(action.value)}";')
-            elif action.type == "redirect" and action.value:
-                lines.append(f'  redirect "{_escape(action.value)}";')
-            elif action.type == "reject" and action.value:
-                lines.append(f'  reject "{_escape(action.value)}";')
-            elif action.type == "discard":
-                lines.append("  discard;")
-            elif action.type == "addflag":
-                lines.append('  addflag "\\\\Flagged";')
-            elif action.type == "seen":
-                lines.append('  addflag "\\\\Seen";')
-            elif action.type == "stop":
-                lines.append("  stop;")
-            elif action.type == "keep":
-                lines.append("  keep;")
-        lines.append("}")
-        lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
+            lines_out.append(line)
+    joined = "\n".join(lines_out).strip()
+    return joined + ("\n" if joined else "")
 
 
-def compile_vacation(v: VacationSettings) -> str:
-    if not v.enabled:
-        return 'require ["vacation"];\n'
-    subject = _escape(v.subject.replace("{predmet}", "%s"))
-    body = _escape(v.body_sk)
-    lines = [
-        'require ["vacation"];',
-        f'vacation :days {int(v.days)} :subject "{subject}"',
-        f'"{body}";',
-        "",
-    ]
-    return "\n".join(lines)
+def _comment_out_rule_body(live: str) -> str:
+    lines = ["# disabled"]
+    for line in live.splitlines():
+        if not line.strip():
+            lines.append("#")
+            continue
+        lines.append(f"# {line}" if not line.startswith("#") else f"#{line}")
+    return "\n".join(lines) + "\n"
+
+
+def _op_from_tag(tag: str) -> tuple[str, bool]:
+    """Map Sieve match-type tag → (op, negated)."""
+    tag = tag.lstrip(":")
+    negated = False
+    if tag.startswith("not"):
+        negated = True
+        tag = tag[3:]
+    mapping = {
+        "contains": "contains",
+        "is": "is",
+        "matches": "startswith",  # refined with value shape below
+        "over": "gt",
+        "under": "lt",
+    }
+    return mapping.get(tag, "contains"), negated
+
+
+def _field_from_header_name(name: str) -> str:
+    low = name.strip('"').lower()
+    if low == "from":
+        return "from"
+    if low == "to":
+        return "to"
+    if low == "cc":
+        return "cc"
+    if low == "subject":
+        return "subject"
+    return "header"
+
+
+def _extract_test(test: commands.Command) -> tuple[str, list[FilterCondition], bool]:
+    """Return (match, conditions, fully_editable)."""
+    if isinstance(test, commands.TrueCommand):
+        return "all", [], True
+    if isinstance(test, (commands.AllofCommand, commands.AnyofCommand)):
+        match = "allof" if isinstance(test, commands.AllofCommand) else "anyof"
+        conditions: list[FilterCondition] = []
+        editable = True
+        for child in test["tests"]:
+            _m, conds, ok = _extract_test(child)
+            conditions.extend(conds)
+            editable = editable and ok and len(conds) == 1
+        return match, conditions, editable and bool(conditions)
+    if isinstance(test, commands.NotCommand):
+        # not header :contains → notcontains when single child
+        inner = test["test"]
+        match, conds, ok = _extract_test(inner)
+        if len(conds) == 1 and ok:
+            c = conds[0]
+            flip = {
+                "contains": "notcontains",
+                "notcontains": "contains",
+                "is": "isnot",
+                "isnot": "is",
+            }
+            c.op = flip.get(c.op, c.op)
+            return match, [c], True
+        return match, conds, False
+    if isinstance(test, commands.AddressCommand):
+        return _extract_address_or_header(test, address=True)
+    if isinstance(test, commands.HeaderCommand):
+        return _extract_address_or_header(test, address=False)
+    if isinstance(test, commands.SizeCommand):
+        args = test.arguments
+        size_tag = str(args.get("comparator") or args.get("tag") or ":over")
+        limit = args.get("limit") or args.get("number") or 0
+        try:
+            number = int(limit)
+        except (TypeError, ValueError):
+            number = 0
+        op = "gt" if size_tag == ":over" else "lt"
+        kb = max(1, number // 1024) if number >= 1024 else number
+        return "allof", [FilterCondition("size", op, str(kb))], True
+    # regex / body / envelope / unknown → not editable as structured form
+    return "allof", [], False
+
+
+def _as_str_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [_strip_quotes(str(x)) for x in value]
+    if isinstance(value, str):
+        return [_strip_quotes(value)]
+    return []
+
+
+def _extract_address_or_header(test: commands.Command, *, address: bool) -> tuple[str, list[FilterCondition], bool]:
+    args = test.arguments
+    match_type = str(args.get("match-type") or args.get("match_type") or ":contains")
+    if match_type == ":regex":
+        return "allof", [], False
+    header_list = args.get("header-list") or args.get("header-names") or args.get("headers")
+    key_list = args.get("key-list") or args.get("keylist") or args.get("keys")
+    headers = _as_str_list(header_list)
+    keys = _as_str_list(key_list)
+    if not headers or not keys:
+        return "allof", [], False
+    op, _neg = _op_from_tag(match_type)
+    header0 = headers[0]
+    if address or header0.lower() in {"from", "to", "cc", "subject"}:
+        field = _field_from_header_name(header0)
+    else:
+        field = "header"
+    conditions = [FilterCondition(field, op, k) for k in keys]
+    if match_type == ":matches" and len(keys) == 1:
+        k = keys[0]
+        if k.endswith("*") and not k.startswith("*"):
+            conditions[0].op = "startswith"
+            conditions[0].value = k[:-1]
+        elif k.startswith("*") and not k.endswith("*"):
+            conditions[0].op = "endswith"
+            conditions[0].value = k[1:]
+    return "allof", conditions, True
+
+
+def _extract_actions(if_cmd: commands.Command) -> tuple[list[FilterAction], bool]:
+    actions: list[FilterAction] = []
+    editable = True
+    for child in if_cmd.children:
+        name = child.name
+        if name == "fileinto":
+            mailbox = child.arguments.get("mailbox") or child.arguments.get("filename")
+            if isinstance(mailbox, list):
+                mailbox = mailbox[0] if mailbox else ""
+            actions.append(FilterAction("fileinto", _strip_quotes(str(mailbox or ""))))
+        elif name == "redirect":
+            addr = child.arguments.get("address") or child.arguments.get("string")
+            if isinstance(addr, list):
+                addr = addr[0] if addr else ""
+            actions.append(FilterAction("redirect", _strip_quotes(str(addr or ""))))
+        elif name == "reject":
+            reason = child.arguments.get("reason") or child.arguments.get("string") or ""
+            if isinstance(reason, list):
+                reason = reason[0] if reason else ""
+            actions.append(FilterAction("reject", _strip_quotes(str(reason))))
+        elif name == "discard":
+            actions.append(FilterAction("discard"))
+        elif name == "stop":
+            actions.append(FilterAction("stop"))
+        elif name == "keep":
+            actions.append(FilterAction("keep"))
+        elif name in {"addflag", "setflag"}:
+            flags = child.arguments.get("flag-list") or child.arguments.get("flags") or []
+            flag_s = " ".join(_strip_quotes(str(f)) for f in flags) if isinstance(flags, list) else str(flags)
+            if "\\Seen" in flag_s or "Seen" in flag_s:
+                actions.append(FilterAction("seen"))
+            else:
+                actions.append(FilterAction("addflag"))
+        elif name == "vacation":
+            actions.append(FilterAction("vacation", ""))
+            editable = False
+        else:
+            editable = False
+    return actions, editable and all(a.type in _EDITABLE_ACTIONS or a.type == "vacation" for a in actions)
+
+
+def _parse_rule_block(name: str, block: str, *, index: int) -> FilterRule:
+    """Parse one ``# rule:[Name]…`` block into a FilterRule (raw preserved)."""
+    raw = block if block.endswith("\n") else block + "\n"
+    disabled = bool(re.search(r"(?m)^#\s*disabled\b", block)) or (
+        "\n# if " in block or block.lstrip().startswith("# if ")
+    )
+    # Vacation marker
+    is_vacation = VACATION_MARKER in block or name.strip() == VACATION_RULE_NAME
+    live = _uncomment_disabled_body(block) if disabled else block
+    # drop the # rule:[…] line for parsing
+    live_body = _RULE_NAME.sub("", live, count=1).strip()
+    if is_vacation:
+        vac = _vacation_from_sieve_body(live_body)
+        return FilterRule(
+            id=f"vacation-{index}",
+            name=VACATION_RULE_NAME,
+            enabled=not disabled and vac.enabled,
+            match="all",
+            conditions=[],
+            actions=[FilterAction("vacation")],
+            editable=True,
+            raw=raw,
+            kind="vacation",
+        )
+
+    require = (
+        'require ["fileinto","reject","vacation","imap4flags",'
+        '"regex","body","envelope","date","relational"];'
+    )
+    mini = f"{require}\n{live_body}\n"
+    parser = Parser()
+    ok = parser.parse(mini)
+    if not ok or not parser.result:
+        return FilterRule(
+            id=f"rc-{index}-{uuid.uuid4().hex[:6]}",
+            name=name,
+            enabled=not disabled,
+            editable=False,
+            raw=raw,
+            conditions=[],
+            actions=[FilterAction("keep")],
+        )
+
+    if_cmd = next((c for c in parser.result if isinstance(c, commands.IfCommand)), None)
+    if if_cmd is None:
+        return FilterRule(
+            id=f"rc-{index}-{uuid.uuid4().hex[:6]}",
+            name=name,
+            enabled=not disabled,
+            editable=False,
+            raw=raw,
+            conditions=[],
+            actions=[FilterAction("keep")],
+        )
+
+    match, conditions, cond_ok = _extract_test(if_cmd["test"])
+    actions, act_ok = _extract_actions(if_cmd)
+    # vacation action inside a normal-looking rule
+    if any(a.type == "vacation" for a in actions):
+        return FilterRule(
+            id=f"vacation-{index}",
+            name=name or VACATION_RULE_NAME,
+            enabled=not disabled,
+            match="all",
+            conditions=[],
+            actions=actions,
+            editable=True,
+            raw=raw,
+            kind="vacation",
+        )
+
+    editable = cond_ok and act_ok and bool(actions)
+    if editable:
+        for c in conditions:
+            if c.field not in _EDITABLE_FIELDS or c.op not in _EDITABLE_OPS:
+                editable = False
+                break
+        for a in actions:
+            if a.type not in _EDITABLE_ACTIONS:
+                editable = False
+                break
+    # regex in raw → not editable even if we guessed wrong
+    if re.search(r":regex\b", live_body):
+        editable = False
+
+    return FilterRule(
+        id=f"f{index}-{uuid.uuid4().hex[:8]}" if editable else f"rc-{index}-{uuid.uuid4().hex[:6]}",
+        name=name,
+        enabled=not disabled,
+        match=match if match != "all" else "allof",
+        conditions=conditions or ([FilterCondition("from", "contains", "")] if editable else []),
+        actions=actions or [FilterAction("keep")],
+        editable=editable,
+        raw=raw,
+        kind="filter",
+    )
+
+
+def _vacation_from_sieve_body(body: str) -> VacationSettings:
+    """Best-effort vacation fields from a Sieve vacation command."""
+    enabled = "vacation" in body
+    subject = "Mimo kancelárie: {predmet}"
+    body_sk = VacationSettings().body_sk
+    days = 7
+    start = end = None
+    if m := re.search(r':subject\s+"([^"]*)"', body):
+        subject = m.group(1).replace("%s", "{predmet}")
+    if m := re.search(r":days\s+(\d+)", body):
+        days = int(m.group(1))
+    # text: … .  or quoted string
+    if m := re.search(r'vacation[^;]*\n?"([^"]*)"\s*;', body, re.S):
+        body_sk = m.group(1)
+    elif m := re.search(r"text:\s*\n(.*?)\n\.\s*;", body, re.S):
+        body_sk = m.group(1)
+    if m := re.search(r'currentdate[^"]*"ge"[^"]*"([^"]+)"', body):
+        start = m.group(1)
+    if m := re.search(r'currentdate[^"]*"le"[^"]*"([^"]+)"', body):
+        end = m.group(1)
+    return VacationSettings(
+        enabled=enabled,
+        subject=subject,
+        body_sk=body_sk,
+        days=days,
+        start=start,
+        end=end,
+    )
+
+
+def parse_roundcube_script(script: str, *, script_name: str = DEFAULT_SCRIPT_NAME) -> ParsedScript:
+    """Split a Roundcube ManageSieve script into editable / read-only rules + vacation."""
+    if not script or not script.strip():
+        return ParsedScript(
+            preamble='require ["fileinto","reject","vacation","date","relational","imap4flags"];\n',
+            rules=[],
+            vacation=VacationSettings(),
+            script_name=script_name,
+        )
+
+    parts = _RULE_SPLIT.split(script)
+    preamble = parts[0]
+    rules: list[FilterRule] = []
+    vacation = VacationSettings()
+    # parts: [preamble, '# rule:[', 'Name]\nbody', '# rule:[', ...]
+    i = 1
+    index = 0
+    while i < len(parts):
+        if parts[i] == "# rule:[" and i + 1 < len(parts):
+            rest = parts[i + 1]
+            name, _, after = rest.partition("]")
+            block = f"# rule:[{name}]{after}"
+            # trim trailing whitespace but keep final newline for stable round-trip
+            if i + 2 < len(parts):
+                # next marker starts next rule; after already ends before next split piece
+                pass
+            rule = _parse_rule_block(name, block.rstrip() + "\n", index=index)
+            index += 1
+            if rule.kind == "vacation":
+                vac_body = _uncomment_disabled_body(block) if not rule.enabled else block
+                vac_body = _RULE_NAME.sub("", vac_body, count=1)
+                vacation = _vacation_from_sieve_body(vac_body)
+                vacation.enabled = rule.enabled
+                rules.append(rule)
+            else:
+                rules.append(rule)
+            i += 2
+        else:
+            i += 1
+
+    # Scripts without # rule:[ markers — try sievelib FiltersSet-style parse of whole file
+    if not rules and script.strip():
+        parser = Parser()
+        if parser.parse(script):
+            # treat whole as one readonly blob so we never destroy it on save
+            rules.append(
+                FilterRule(
+                    id=f"rc-whole-{uuid.uuid4().hex[:6]}",
+                    name="Pravidlá schránky",
+                    enabled=True,
+                    editable=False,
+                    raw=script if script.endswith("\n") else script + "\n",
+                    conditions=[],
+                    actions=[FilterAction("keep")],
+                )
+            )
+            preamble = ""
+
+    return ParsedScript(preamble=preamble, rules=rules, vacation=vacation, script_name=script_name)
 
 
 def parse_filters_from_script(script: str) -> list[FilterRule]:
-    """Best-effort parse of scripts we wrote (rule: comments). Unknown scripts → one opaque rule."""
-    rules: list[FilterRule] = []
-    for match in re.finditer(r"# rule:(\S+) name:(.+)\nif (.+?) \{\n(.*?)\n\}", script, re.S):
-        rid, name, _test, body = match.groups()
-        actions: list[FilterAction] = []
-        if m := re.search(r'fileinto "([^"]+)"', body):
-            actions.append(FilterAction("fileinto", m.group(1)))
-        if m := re.search(r'redirect "([^"]+)"', body):
-            actions.append(FilterAction("redirect", m.group(1)))
-        if "discard;" in body:
-            actions.append(FilterAction("discard"))
-        if "stop;" in body:
-            actions.append(FilterAction("stop"))
-        rules.append(
-            FilterRule(
-                id=rid,
-                name=name.replace('\\"', '"'),
-                enabled=True,
-                conditions=[FilterCondition("subject", "contains", "")],
-                actions=actions or [FilterAction("keep")],
-            )
+    """Public helper: filter rules only (vacation excluded)."""
+    parsed = parse_roundcube_script(script)
+    return [r for r in parsed.rules if r.kind != "vacation"]
+
+
+def compile_condition(c: FilterCondition) -> str:
+    val = _escape(c.value)
+    if c.field == "size":
+        try:
+            kb = int(c.value)
+        except ValueError:
+            return 'header :contains "Subject" ""'
+        op = ":over" if c.op in {"gt", "contains"} else ":under"
+        return f"size {op} {kb * 1024}"
+    if c.field == "from":
+        header, use_address = "From", True
+    elif c.field == "to":
+        header, use_address = "To", True
+    elif c.field == "cc":
+        header, use_address = "Cc", True
+    else:
+        # subject / body / header → Subject header test
+        header, use_address = "Subject", False
+    test = "address" if use_address else "header"
+    if c.op == "contains":
+        return f'{test} :contains "{header}" "{val}"'
+    if c.op == "notcontains":
+        return f'not {test} :contains "{header}" "{val}"'
+    if c.op == "is":
+        return f'{test} :is "{header}" "{val}"'
+    if c.op == "isnot":
+        return f'not {test} :is "{header}" "{val}"'
+    if c.op == "startswith":
+        return f'{test} :matches "{header}" "{val}*"'
+    if c.op == "endswith":
+        return f'{test} :matches "{header}" "*{val}"'
+    return f'{test} :contains "{header}" "{val}"'
+
+
+def compile_rule_from_structured(rule: FilterRule) -> str:
+    """Emit one Roundcube ``# rule:[…]`` block from structured editable fields."""
+    lines: list[str] = [f"# rule:[{rule.name}]"]
+    conds = [compile_condition(c) for c in rule.conditions if c.value or c.field == "size"]
+    match = "anyof" if rule.match in {"any", "anyof"} else "allof"
+    if rule.match == "all" or not conds:
+        test = "true"
+    elif len(conds) == 1:
+        test = conds[0]
+    else:
+        test = f"{match} ({', '.join(conds)})"
+    body_lines = [f"if {test} {{"]
+    for action in rule.actions:
+        if action.type == "fileinto" and action.value:
+            body_lines.append(f'\tfileinto "{_escape(action.value)}";')
+        elif action.type == "redirect" and action.value:
+            body_lines.append(f'\tredirect "{_escape(action.value)}";')
+        elif action.type == "reject" and action.value:
+            body_lines.append(f'\treject "{_escape(action.value)}";')
+        elif action.type == "discard":
+            body_lines.append("\tdiscard;")
+        elif action.type == "addflag":
+            body_lines.append('\taddflag "\\\\Flagged";')
+        elif action.type == "seen":
+            body_lines.append('\taddflag "\\\\Seen";')
+        elif action.type == "stop":
+            body_lines.append("\tstop;")
+        elif action.type == "keep":
+            body_lines.append("\tkeep;")
+    body_lines.append("}")
+    live = "\n".join(body_lines) + "\n"
+    if not rule.enabled:
+        lines.append(_comment_out_rule_body(live).rstrip("\n"))
+        return "\n".join(lines) + "\n"
+    lines.append(live.rstrip("\n"))
+    return "\n".join(lines) + "\n"
+
+
+def compile_vacation_rule(v: VacationSettings) -> str:
+    """Vacation as one Roundcube rule inside the active filter script."""
+    lines = [f"# rule:[{VACATION_RULE_NAME}]", VACATION_MARKER]
+    if not v.enabled:
+        stub = 'if true {\n\tvacation :days 7 :subject "off" "";\n}\n'
+        lines.append(_comment_out_rule_body(stub).rstrip("\n"))
+        return "\n".join(lines) + "\n"
+
+    subject = _escape(v.subject.replace("{predmet}", "%s"))
+    # SK is required (SETTINGS_SPEC); EN/DE stored in DB — sieve body uses SK (RFC 5230 single reason).
+    body = _escape(v.body_sk)
+    tests: list[str] = []
+    if v.start:
+        tests.append(f'currentdate :value "ge" "iso8601" "{_escape(v.start)}"')
+    if v.end:
+        tests.append(f'currentdate :value "le" "iso8601" "{_escape(v.end)}"')
+    if tests:
+        test = tests[0] if len(tests) == 1 else f"allof ({', '.join(tests)})"
+    else:
+        test = "true"
+    lines.append(f"if {test} {{")
+    lines.append(f'\tvacation :days {int(v.days)} :subject "{subject}"')
+    lines.append(f'\t"{body}";')
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def _ensure_requires(preamble: str, *, vacation: bool) -> str:
+    needed = ["fileinto", "reject", "imap4flags", "vacation", "date", "relational"]
+    if "require" not in preamble:
+        caps = ", ".join(f'"{n}"' for n in needed)
+        return f"require [{caps}];\n"
+    # leave existing require as-is for round-trip stability when vacation already covered
+    if vacation and "vacation" not in preamble:
+        # inject vacation into first require list
+        def add_vac(m: re.Match[str]) -> str:
+            inner = m.group(1)
+            if "vacation" in inner:
+                return m.group(0)
+            return f'require [{inner.rstrip()}, "vacation"];'
+
+        return re.sub(r"require\s*\[([^\]]*)\]\s*;", add_vac, preamble, count=1)
+    return preamble
+
+
+def compile_script(
+    parsed: ParsedScript,
+    *,
+    vacation: VacationSettings | None = None,
+    rules: list[FilterRule] | None = None,
+    include_vacation: bool | None = None,
+) -> str:
+    """Rebuild script. Prefer each rule's ``raw`` when present (load→save identical)."""
+    vac = vacation if vacation is not None else parsed.vacation
+    rule_list = rules if rules is not None else [r for r in parsed.rules if r.kind != "vacation"]
+    had_vacation = any(r.kind == "vacation" for r in parsed.rules)
+    write_vacation = include_vacation if include_vacation is not None else (vac.enabled or had_vacation)
+
+    preamble = _ensure_requires(parsed.preamble or "", vacation=write_vacation)
+    if not preamble.endswith("\n"):
+        preamble += "\n"
+
+    chunks: list[str] = [preamble.rstrip("\n") + "\n"]
+    for rule in rule_list:
+        if rule.kind == "vacation":
+            continue
+        if rule.raw:
+            chunks.append(rule.raw if rule.raw.endswith("\n") else rule.raw + "\n")
+        else:
+            chunks.append(compile_rule_from_structured(rule))
+
+    if write_vacation:
+        chunks.append(compile_vacation_rule(vac))
+
+    text = "".join(chunks)
+    if not text.endswith("\n"):
+        text += "\n"
+    return text
+
+
+def apply_vacation_to_script(
+    script: str, vacation: VacationSettings, *, script_name: str = DEFAULT_SCRIPT_NAME
+) -> str:
+    """Replace only the vacation rule; filter rules keep their raw text."""
+    parsed = parse_roundcube_script(script, script_name=script_name)
+    filters = [r for r in parsed.rules if r.kind != "vacation"]
+    rebuilt = ParsedScript(
+        preamble=parsed.preamble,
+        rules=filters,
+        vacation=vacation,
+        script_name=script_name,
+    )
+    return compile_script(rebuilt, vacation=vacation, rules=filters)
+
+
+def compile_filters(rules: list[FilterRule]) -> str:
+    """Compile structured filters (no vacation) — used when creating new Od→folder rules."""
+    parsed = ParsedScript(
+        preamble='require ["fileinto","reject","vacation","date","relational","imap4flags"];\n',
+        rules=rules,
+        vacation=VacationSettings(enabled=False),
+    )
+    # Force structured compile (clear raw)
+    cleaned = [
+        FilterRule(
+            id=r.id,
+            name=r.name,
+            enabled=r.enabled,
+            match=r.match,
+            conditions=r.conditions,
+            actions=r.actions,
+            editable=True,
+            raw=None,
+            kind="filter",
         )
-    return rules
+        for r in rules
+        if r.kind != "vacation"
+    ]
+    return compile_script(parsed, vacation=VacationSettings(enabled=False), rules=cleaned)
+
+
+def compile_vacation(v: VacationSettings) -> str:
+    """Deprecated standalone vacation script — kept for unit tests; prefer apply_vacation_to_script."""
+    if not v.enabled:
+        return 'require ["vacation"];\n'
+    return 'require ["vacation","date","relational"];\n' + compile_vacation_rule(v)
 
 
 def connect_sieve(
@@ -201,19 +715,19 @@ def connect_sieve(
         raise SieveError("sieve_host_not_allowed", host)
     client = ManageSieveClient(host, port)
     if not client.connect(username, password, starttls=True, authmech="LOGIN"):
-        # local dovecot often has no STARTTLS on 4190
         client = ManageSieveClient(host, port)
         if not client.connect(username, password, starttls=False, authmech="LOGIN"):
             raise SieveError("sieve_auth_failed")
     return client
 
 
-def put_script(client: ManageSieveClient, name: str, content: str, *, activate: bool = True) -> None:
-    ok = client.putscript(name, content)
-    if not ok:
-        raise SieveError("sieve_put_failed", getattr(client, "errmsg", None) or str(client))
-    if activate:
-        client.setactive(name)
+def active_script_name(client: ManageSieveClient) -> str:
+    """Return the active ManageSieve script name (only one may be active)."""
+    result = client.listscripts()
+    if not result:
+        return DEFAULT_SCRIPT_NAME
+    active, _scripts = result
+    return active or DEFAULT_SCRIPT_NAME
 
 
 def get_script(client: ManageSieveClient, name: str) -> str:
@@ -221,6 +735,19 @@ def get_script(client: ManageSieveClient, name: str) -> str:
     if content is None:
         return ""
     return content if isinstance(content, str) else content.decode("utf-8", errors="replace")
+
+
+def put_script(client: ManageSieveClient, name: str, content: str, *, activate: bool = True) -> None:
+    """Upload script. ``activate`` may only keep/set this same name — never switch sets for vacation."""
+    ok = client.putscript(name, content)
+    if not ok:
+        raise SieveError("sieve_put_failed", getattr(client, "errmsg", None) or str(client))
+    if activate:
+        # Ensure this script stays the active set (do not activate a different name).
+        current = active_script_name(client)
+        if current != name:
+            if not client.setactive(name):
+                raise SieveError("sieve_setactive_failed", name)
 
 
 def filters_to_dicts(rules: list[FilterRule]) -> list[dict[str, Any]]:
@@ -231,19 +758,21 @@ def filters_to_dicts(rules: list[FilterRule]) -> list[dict[str, Any]]:
             "enabled": r.enabled,
             "match": r.match,
             "conditions": [{"field": c.field, "op": c.op, "value": c.value} for c in r.conditions],
-            "actions": [{"type": a.type, "value": a.value} for a in a_list(r.actions)],
+            "actions": [{"type": a.type, "value": a.value} for a in r.actions],
+            "editable": r.editable,
+            "raw": r.raw,
+            "kind": r.kind,
+            "readonly_label": None if r.editable else "Pravidlo z Roundcube (len na čítanie)",
         }
         for r in rules
     ]
 
 
-def a_list(actions: list[FilterAction]) -> list[FilterAction]:
-    return actions
-
-
 def dicts_to_filters(raw: list[dict[str, Any]]) -> list[FilterRule]:
     out: list[FilterRule] = []
     for item in raw:
+        editable = bool(item.get("editable", True))
+        raw_block = item.get("raw")
         out.append(
             FilterRule(
                 id=str(item.get("id") or ""),
@@ -252,16 +781,19 @@ def dicts_to_filters(raw: list[dict[str, Any]]) -> list[FilterRule]:
                 match=str(item.get("match") or "allof"),
                 conditions=[
                     FilterCondition(
-                        field=str(c.get("field") or "subject"),
+                        field=str(c.get("field") or "from"),
                         op=str(c.get("op") or "contains"),
                         value=str(c.get("value") or ""),
                     )
                     for c in (item.get("conditions") or [])
                 ],
                 actions=[
-                    FilterAction(type=str(a.get("type") or "keep"), value=str(a.get("value") or ""))
+                    FilterAction(type=str(a.get("type") or "fileinto"), value=str(a.get("value") or ""))
                     for a in (item.get("actions") or [])
                 ],
+                editable=editable,
+                raw=str(raw_block) if raw_block else None,
+                kind=str(item.get("kind") or "filter"),
             )
         )
     return out

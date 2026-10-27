@@ -27,6 +27,7 @@ import {
   fetchSessions,
   fetchSettingsNav,
   fetchVacation,
+  restoreSieve,
   revokeSession,
   saveBranch,
   saveFilters,
@@ -36,6 +37,19 @@ import {
   saveProfile,
   saveVacation,
 } from './settingsApi';
+
+type FilterRuleDraft = {
+  id?: string;
+  name?: string;
+  enabled?: boolean;
+  match?: string;
+  conditions?: { field: string; op: string; value: string }[];
+  actions?: { type: string; value: string }[];
+  editable?: boolean;
+  raw?: string | null;
+  kind?: string;
+  readonly_label?: string | null;
+};
 
 const PREF_FIELDS_UI: SettingsField[] = [
   {
@@ -415,42 +429,107 @@ function ResponsesPanel() {
 function FiltersPanel() {
   const { t } = useTranslation();
   const toasts = useToasts();
+  const qc = useQueryClient();
   const data = useQuery({ queryKey: ['settings', 'filters'], queryFn: () => fetchFilters() });
-  const [draft, setDraft] = useState<Record<string, unknown>[] | null>(null);
-  const rules = draft ?? data.data?.rules ?? [];
+  const [draft, setDraft] = useState<FilterRuleDraft[] | null>(null);
+  const rules = (draft ?? (data.data?.rules as FilterRuleDraft[] | undefined) ?? []) as FilterRuleDraft[];
+  const patchRule = (index: number, patch: Partial<FilterRuleDraft>) => {
+    const next = [...rules];
+    const current = next[index] ?? {};
+    // clearing raw forces recompile from conditions/actions on save
+    next[index] = { ...current, ...patch, raw: patch.raw === undefined ? null : patch.raw };
+    setDraft(next);
+  };
   const save = useMutation({
     mutationFn: () => saveFilters('default', rules),
-    onSuccess: () => toasts.success(t('settings.saved')),
+    onSuccess: () => {
+      toasts.success(t('settings.saved'));
+      void qc.invalidateQueries({ queryKey: ['settings', 'filters'] });
+      setDraft(null);
+    },
     onError: () => toasts.error(t('settings.sieveError')),
   });
+  const restore = useMutation({
+    mutationFn: () => restoreSieve('default'),
+    onSuccess: () => {
+      toasts.success(t('settings.sieveRestored'));
+      void qc.invalidateQueries({ queryKey: ['settings', 'filters'] });
+      void qc.invalidateQueries({ queryKey: ['settings', 'vacation'] });
+      setDraft(null);
+    },
+    onError: () => toasts.error(t('settings.sieveError')),
+  });
+  const scope = data.data?.mailbox_scope;
   return (
     <div className="flex max-w-2xl flex-col gap-4">
+      <Banner kind="info" message={t('settings.filters.mailboxScope')} />
       <p className="type-small text-text-secondary">{t('settings.filtersHelp')}</p>
-      {rules.map((rule, index) => (
-        <div key={String(rule.id ?? index)} className="rounded-sm border border-border-default p-3">
-          <input
-            className="type-body mb-2 h-9 w-full rounded-sm border border-border-default px-3"
-            value={String(rule.name ?? '')}
-            onChange={(event) => {
-              const next = [...rules];
-              next[index] = { ...rule, name: event.target.value };
-              setDraft(next);
-            }}
-          />
-          <label className="flex items-center gap-2 type-small">
+      <p className="type-small text-text-secondary">{t('settings.filters.notDefaults')}</p>
+      {rules.map((rule, index) => {
+        const editable = rule.editable !== false;
+        const cond = rule.conditions?.[0] ?? { field: 'from', op: 'contains', value: '' };
+        const action = rule.actions?.find((a) => a.type === 'fileinto') ?? rule.actions?.[0];
+        return (
+          <div key={String(rule.id ?? index)} className="rounded-sm border border-border-default p-3">
+            {!editable ? (
+              <p className="type-label mb-2 text-text-tertiary">{t('settings.filters.roundcubeReadonly')}</p>
+            ) : null}
             <input
-              type="checkbox"
-              checked={Boolean(rule.enabled)}
-              onChange={(event) => {
-                const next = [...rules];
-                next[index] = { ...rule, enabled: event.target.checked };
-                setDraft(next);
-              }}
+              className="type-body mb-2 h-9 w-full rounded-sm border border-border-default px-3"
+              value={String(rule.name ?? '')}
+              disabled={!editable}
+              onChange={(event) => patchRule(index, { name: event.target.value })}
             />
-            {t('settings.filters.enabled')}
-          </label>
-        </div>
-      ))}
+            <label className="mb-2 flex items-center gap-2 type-small">
+              <input
+                type="checkbox"
+                checked={Boolean(rule.enabled)}
+                disabled={!editable}
+                onChange={(event) => patchRule(index, { enabled: event.target.checked })}
+              />
+              {t('settings.filters.enabled')}
+            </label>
+            {editable ? (
+              <div className="flex flex-col gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="type-label text-text-secondary">{t('settings.filters.from')}</span>
+                  <input
+                    className="type-body h-9 rounded-sm border border-border-default px-3"
+                    value={cond.field === 'from' ? cond.value : String(cond.value ?? '')}
+                    placeholder="@dodavatel.test"
+                    onChange={(event) =>
+                      patchRule(index, {
+                        conditions: [{ field: 'from', op: cond.op || 'contains', value: event.target.value }],
+                        match: rule.match || 'anyof',
+                      })
+                    }
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="type-label text-text-secondary">{t('settings.filters.fileinto')}</span>
+                  <input
+                    className="type-body h-9 rounded-sm border border-border-default px-3"
+                    value={action?.type === 'fileinto' ? String(action.value ?? '') : ''}
+                    placeholder="Dodávatelia"
+                    onChange={(event) =>
+                      patchRule(index, {
+                        actions: [
+                          { type: 'fileinto', value: event.target.value },
+                          { type: 'stop', value: '' },
+                        ],
+                      })
+                    }
+                  />
+                </label>
+              </div>
+            ) : (
+              <pre className="type-mono max-h-40 overflow-auto rounded-sm bg-bg-subtle p-2 text-text-secondary">
+                {String(rule.raw ?? '')}
+              </pre>
+            )}
+          </div>
+        );
+      })}
       <Button
         type="button"
         variant="secondary"
@@ -459,20 +538,37 @@ function FiltersPanel() {
             ...rules,
             {
               id: `new-${Date.now()}`,
-              name: 'Nový filter',
+              name: t('settings.filters.newName'),
               enabled: true,
               match: 'allof',
               conditions: [{ field: 'from', op: 'contains', value: '' }],
-              actions: [{ type: 'fileinto', value: 'INBOX' }],
+              actions: [
+                { type: 'fileinto', value: 'Dodávatelia' },
+                { type: 'stop', value: '' },
+              ],
+              editable: true,
+              raw: null,
             },
           ])
         }
       >
         {t('settings.filters.add')}
       </Button>
-      <Button type="button" onClick={() => save.mutate()} disabled={save.isPending}>
-        {t('settings.save')}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" onClick={() => save.mutate()} disabled={save.isPending}>
+          {t('settings.save')}
+        </Button>
+        {data.data?.has_backup ? (
+          <Button type="button" variant="secondary" onClick={() => restore.mutate()} disabled={restore.isPending}>
+            {t('settings.sieveRestore')}
+          </Button>
+        ) : null}
+      </div>
+      {scope ? (
+        <p className="type-caption text-text-tertiary">
+          {t('settings.filters.scopeKind')}: {scope}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -480,16 +576,34 @@ function FiltersPanel() {
 function VacationPanel() {
   const { t } = useTranslation();
   const toasts = useToasts();
+  const qc = useQueryClient();
   const data = useQuery({ queryKey: ['settings', 'vacation'], queryFn: () => fetchVacation() });
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
+  const [lang, setLang] = useState<'sk' | 'en' | 'de'>('sk');
   const form = draft ?? data.data ?? {};
+  const bodyKey = lang === 'sk' ? 'body_sk' : lang === 'en' ? 'body_en' : 'body_de';
   const save = useMutation({
     mutationFn: () => saveVacation('default', form),
-    onSuccess: () => toasts.success(t('settings.saved')),
+    onSuccess: () => {
+      toasts.success(t('settings.saved'));
+      void qc.invalidateQueries({ queryKey: ['settings', 'vacation'] });
+      void qc.invalidateQueries({ queryKey: ['settings', 'filters'] });
+    },
+    onError: () => toasts.error(t('settings.sieveError')),
+  });
+  const restore = useMutation({
+    mutationFn: () => restoreSieve('default'),
+    onSuccess: () => {
+      toasts.success(t('settings.sieveRestored'));
+      void qc.invalidateQueries({ queryKey: ['settings', 'vacation'] });
+      void qc.invalidateQueries({ queryKey: ['settings', 'filters'] });
+      setDraft(null);
+    },
     onError: () => toasts.error(t('settings.sieveError')),
   });
   return (
     <div className="flex max-w-xl flex-col gap-4">
+      <p className="type-small text-text-secondary">{t('settings.vacation.branchHelp')}</p>
       <label className="flex items-center gap-2">
         <input
           type="checkbox"
@@ -498,25 +612,81 @@ function VacationPanel() {
         />
         <span className="type-body">{t('settings.vacation.enabled')}</span>
       </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="type-label text-text-secondary">{t('settings.vacation.start')}</span>
+          <input
+            type="datetime-local"
+            className="type-body h-9 rounded-sm border border-border-default px-3"
+            value={String(form.start ?? '').slice(0, 16)}
+            onChange={(event) => setDraft({ ...form, start: event.target.value || null })}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="type-label text-text-secondary">{t('settings.vacation.end')}</span>
+          <input
+            type="datetime-local"
+            className="type-body h-9 rounded-sm border border-border-default px-3"
+            value={String(form.end ?? '').slice(0, 16)}
+            onChange={(event) => setDraft({ ...form, end: event.target.value || null })}
+          />
+        </label>
+      </div>
+      <p className="type-caption text-text-tertiary">{t('settings.vacation.rangeHelp')}</p>
       <label className="flex flex-col gap-1">
         <span className="type-label text-text-secondary">{t('settings.vacation.subject')}</span>
         <input
           className="type-body h-9 rounded-sm border border-border-default px-3"
           value={String(form.subject ?? '')}
+          maxLength={120}
           onChange={(event) => setDraft({ ...form, subject: event.target.value })}
         />
       </label>
+      <div className="flex gap-2">
+        {(['sk', 'en', 'de'] as const).map((code) => (
+          <Button
+            key={code}
+            type="button"
+            variant={lang === code ? 'primary' : 'secondary'}
+            size="md"
+            onClick={() => setLang(code)}
+          >
+            {code.toUpperCase()}
+          </Button>
+        ))}
+      </div>
       <label className="flex flex-col gap-1">
         <span className="type-label text-text-secondary">{t('settings.vacation.body')}</span>
         <textarea
           className="type-body min-h-[120px] rounded-sm border border-border-default px-3 py-2"
-          value={String(form.body_sk ?? '')}
-          onChange={(event) => setDraft({ ...form, body_sk: event.target.value })}
+          value={String(form[bodyKey] ?? '')}
+          onChange={(event) => setDraft({ ...form, [bodyKey]: event.target.value })}
         />
       </label>
-      <Button type="button" onClick={() => save.mutate()} disabled={save.isPending}>
-        {t('settings.save')}
-      </Button>
+      <label className="flex flex-col gap-1">
+        <span className="type-label text-text-secondary">{t('settings.vacation.days')}</span>
+        <select
+          className="type-body h-9 rounded-sm border border-border-default px-3"
+          value={String(form.days ?? 7)}
+          onChange={(event) => setDraft({ ...form, days: Number(event.target.value) })}
+        >
+          {[1, 3, 7].map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" onClick={() => save.mutate()} disabled={save.isPending}>
+          {t('settings.save')}
+        </Button>
+        {data.data?.has_backup ? (
+          <Button type="button" variant="secondary" onClick={() => restore.mutate()} disabled={restore.isPending}>
+            {t('settings.sieveRestore')}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

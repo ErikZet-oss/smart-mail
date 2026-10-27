@@ -36,7 +36,13 @@ export const saveResponse = (id: string, body: Record<string, unknown>) =>
 export const deleteResponse = (id: string) => api('DELETE', `/api/settings/responses/${id}`);
 
 export const fetchFilters = (mailbox = 'default') =>
-  api<{ rules: Record<string, unknown>[] }>('GET', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/filters`);
+  api<{
+    rules: Record<string, unknown>[];
+    script_name?: string;
+    has_backup?: boolean;
+    help?: string;
+    mailbox_scope?: string;
+  }>('GET', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/filters`);
 export const saveFilters = (mailbox: string, rules: unknown[]) =>
   api('PUT', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/filters`, { rules });
 
@@ -44,6 +50,9 @@ export const fetchVacation = (mailbox = 'default') =>
   api<Record<string, unknown>>('GET', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/vacation`);
 export const saveVacation = (mailbox: string, body: Record<string, unknown>) =>
   api('PUT', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/vacation`, body);
+
+export const restoreSieve = (mailbox = 'default') =>
+  api<Record<string, unknown>>('POST', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/sieve/restore`);
 
 export const fetchProvider = (mailbox = 'default') =>
   api<Record<string, unknown>>('GET', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/provider`);

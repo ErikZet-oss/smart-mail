@@ -15,20 +15,22 @@ from app.auth.models import Account, AccountKind, Branch, Person, Role
 from app.auth.security import decrypt
 from app.core.audit import audit
 from app.mail.compose_models import CannedResponse, Identity
-from app.mail.models import Mailbox, MailboxAccess
+from app.mail.models import Mailbox, MailboxAccess, SieveScriptBackup
 from app.mail.prefs import get_list_prefs, get_ui_prefs, save_section
 from app.mail.sanitize import sanitize_html
 from app.mail.sieve import (
-    FILTER_SCRIPT,
-    VACATION_SCRIPT,
+    DEFAULT_SCRIPT_NAME,
+    ParsedScript,
     SieveError,
     VacationSettings,
-    compile_filters,
-    compile_vacation,
+    active_script_name,
+    apply_vacation_to_script,
+    compile_script,
     connect_sieve,
     dicts_to_filters,
     filters_to_dicts,
     get_script,
+    parse_roundcube_script,
     put_script,
 )
 from app.mail.signature import default_branch_template, render_signature
@@ -363,7 +365,7 @@ async def delete_response(
     return {"ok": True}
 
 
-# ----- filters 05 + vacation 06 -----
+# ----- filters 05 + vacation 06 (same active ManageSieve script) -----
 
 
 class FiltersIn(BaseModel):
@@ -374,8 +376,8 @@ class VacationIn(BaseModel):
     enabled: bool = False
     subject: str = "Mimo kancelárie: {predmet}"
     body_sk: str = "Ďakujem za správu. Momentálne som mimo kancelárie."
-    body_en: str = ""
-    body_de: str = ""
+    body_en: str = "Thank you for your message. I am currently out of office."
+    body_de: str = "Danke für Ihre Nachricht. Ich bin derzeit außer Haus."
     days: int = 7
     start: str | None = None
     end: str | None = None
@@ -390,25 +392,80 @@ async def _mailbox_creds(db: DB, settings: SettingsDep, ctx: Auth, mailbox: Mail
     return mailbox.email, decrypt(settings, account.mailbox_password_enc)
 
 
+async def _latest_backup(db: DB, mailbox_id: uuid.UUID) -> SieveScriptBackup | None:
+    result = await db.execute(
+        select(SieveScriptBackup)
+        .where(SieveScriptBackup.mailbox_id == mailbox_id)
+        .order_by(SieveScriptBackup.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _backup_script(
+    db: DB,
+    *,
+    mailbox: Mailbox,
+    script_name: str,
+    content: str,
+    reason: str,
+    person_id: uuid.UUID,
+) -> None:
+    if not content.strip():
+        return
+    db.add(
+        SieveScriptBackup(
+            mailbox_id=mailbox.id,
+            script_name=script_name,
+            content=content,
+            reason=reason,
+            person_id=person_id,
+        )
+    )
+
+
+def _vacation_payload(vac: VacationSettings) -> dict[str, Any]:
+    return {
+        "enabled": vac.enabled,
+        "subject": vac.subject,
+        "body_sk": vac.body_sk,
+        "body_en": vac.body_en,
+        "body_de": vac.body_de,
+        "days": vac.days,
+        "start": vac.start,
+        "end": vac.end,
+    }
+
+
 @router.get("/mailboxes/{mailbox_ref}/filters")
 async def get_filters(
     mailbox_ref: str, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
 ) -> dict[str, Any]:
     mailbox = await _mailbox(db, ctx, mailbox_ref)
+    script_name = DEFAULT_SCRIPT_NAME
     try:
         user, password = await _mailbox_creds(db, settings, ctx, mailbox)
         client = connect_sieve(settings, mailbox, username=user, password=password)
-        script = get_script(client, FILTER_SCRIPT)
+        script_name = active_script_name(client)
+        script = get_script(client, script_name)
         client.logout()
     except SieveError as exc:
-        # local / missing script: return empty list so the UI still works
         if exc.code in {"sieve_auth_failed", "sieve_host_not_allowed", "sieve_disabled"}:
             raise fail(409, exc.code) from exc
         script = ""
-    from app.mail.sieve import parse_filters_from_script
-
-    rules = parse_filters_from_script(script)
-    return {"rules": filters_to_dicts(rules), "script_name": FILTER_SCRIPT}
+    parsed = parse_roundcube_script(script, script_name=script_name)
+    rules = [r for r in parsed.rules if r.kind != "vacation"]
+    backup = await _latest_backup(db, mailbox.id)
+    return {
+        "rules": filters_to_dicts(rules),
+        "script_name": script_name,
+        "mailbox_scope": mailbox.kind,
+        "has_backup": backup is not None,
+        "help": (
+            "Filter platí pre celú schránku (osobnú aj pobočkovú). "
+            "Filtre nie sú predvolené – každá schránka má vlastné."
+        ),
+    }
 
 
 @router.put("/mailboxes/{mailbox_ref}/filters")
@@ -420,11 +477,31 @@ async def put_filters(
     for i, rule in enumerate(rules):
         if not rule.id:
             rule.id = f"f{i + 1}-{uuid.uuid4().hex[:8]}"
-    script = compile_filters(rules)
+        # UI edit clears raw so we recompile from conditions
+        if rule.editable and rule.raw is None:
+            pass
     try:
         user, password = await _mailbox_creds(db, settings, ctx, mailbox)
         client = connect_sieve(settings, mailbox, username=user, password=password)
-        put_script(client, FILTER_SCRIPT, script, activate=True)
+        script_name = active_script_name(client)
+        current = get_script(client, script_name)
+        await _backup_script(
+            db, mailbox=mailbox, script_name=script_name, content=current, reason="filters_save", person_id=person.id
+        )
+        parsed = parse_roundcube_script(current, script_name=script_name)
+        # Keep vacation from the live script; replace only filter rules
+        new_script = compile_script(
+            ParsedScript(
+                preamble=parsed.preamble,
+                rules=rules,
+                vacation=parsed.vacation,
+                script_name=script_name,
+            ),
+            vacation=parsed.vacation,
+            rules=rules,
+            include_vacation=parsed.vacation.enabled or any(r.kind == "vacation" for r in parsed.rules),
+        )
+        put_script(client, script_name, new_script, activate=True)
         client.logout()
     except SieveError as exc:
         raise fail(409, exc.code, detail=exc.detail) from exc
@@ -436,9 +513,15 @@ async def put_filters(
         object_type="mailbox",
         object_id=str(mailbox.id),
         ip=client_ip(request),
+        details={"script_name": script_name, "backup": True},
     )
     await db.commit()
-    return {"rules": filters_to_dicts(rules), "script_name": FILTER_SCRIPT}
+    out = parse_roundcube_script(new_script, script_name=script_name)
+    return {
+        "rules": filters_to_dicts([r for r in out.rules if r.kind != "vacation"]),
+        "script_name": script_name,
+        "has_backup": True,
+    }
 
 
 @router.get("/mailboxes/{mailbox_ref}/vacation")
@@ -447,9 +530,29 @@ async def get_vacation(
 ) -> dict[str, Any]:
     mailbox = await _mailbox(db, ctx, mailbox_ref)
     stored = await _section(db, person.id, f"vacation.{mailbox.id}")
-    if stored:
-        return stored
-    return VacationSettings().__dict__
+    try:
+        user, password = await _mailbox_creds(db, settings, ctx, mailbox)
+        client = connect_sieve(settings, mailbox, username=user, password=password)
+        script_name = active_script_name(client)
+        script = get_script(client, script_name)
+        client.logout()
+        parsed = parse_roundcube_script(script, script_name=script_name)
+        data = _vacation_payload(parsed.vacation)
+        if stored:
+            # EN/DE live in DB (Sieve has one body — SK)
+            data["body_en"] = stored.get("body_en") or data["body_en"]
+            data["body_de"] = stored.get("body_de") or data["body_de"]
+            if stored.get("subject"):
+                data["subject"] = stored["subject"]
+        data["script_name"] = script_name
+        data["has_backup"] = (await _latest_backup(db, mailbox.id)) is not None
+        return data
+    except SieveError as exc:
+        if exc.code in {"sieve_auth_failed", "sieve_host_not_allowed", "sieve_disabled"}:
+            raise fail(409, exc.code) from exc
+        if stored:
+            return stored
+        return _vacation_payload(VacationSettings())
 
 
 @router.put("/mailboxes/{mailbox_ref}/vacation")
@@ -457,6 +560,8 @@ async def put_vacation(
     mailbox_ref: str, body: VacationIn, request: Request, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
 ) -> dict[str, Any]:
     mailbox = await _mailbox(db, ctx, mailbox_ref)
+    if body.end and body.start and body.end < body.start:
+        raise fail(422, "vacation_range_invalid")
     vac = VacationSettings(
         enabled=body.enabled,
         subject=body.subject[:120],
@@ -467,24 +572,22 @@ async def put_vacation(
         start=body.start,
         end=body.end,
     )
-    script = compile_vacation(vac)
     try:
         user, password = await _mailbox_creds(db, settings, ctx, mailbox)
         client = connect_sieve(settings, mailbox, username=user, password=password)
-        put_script(client, VACATION_SCRIPT, script, activate=body.enabled)
+        script_name = active_script_name(client)
+        current = get_script(client, script_name)
+        await _backup_script(
+            db, mailbox=mailbox, script_name=script_name, content=current, reason="vacation_save", person_id=person.id
+        )
+        # Same active script — never activate another set for vacation
+        new_script = apply_vacation_to_script(current, vac, script_name=script_name)
+        put_script(client, script_name, new_script, activate=True)
         client.logout()
     except SieveError as exc:
         raise fail(409, exc.code, detail=exc.detail) from exc
-    data = {
-        "enabled": vac.enabled,
-        "subject": vac.subject,
-        "body_sk": vac.body_sk,
-        "body_en": vac.body_en,
-        "body_de": vac.body_de,
-        "days": vac.days,
-        "start": vac.start,
-        "end": vac.end,
-    }
+    data = _vacation_payload(vac)
+    data["script_name"] = script_name
     await save_section(db, person.id, f"vacation.{mailbox.id}", data)
     audit(
         db,
@@ -494,9 +597,52 @@ async def put_vacation(
         object_type="mailbox",
         object_id=str(mailbox.id),
         ip=client_ip(request),
+        details={"script_name": script_name, "enabled": vac.enabled, "backup": True},
     )
     await db.commit()
+    data["has_backup"] = True
     return data
+
+
+@router.post("/mailboxes/{mailbox_ref}/sieve/restore")
+async def restore_sieve(
+    mailbox_ref: str, request: Request, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
+) -> dict[str, Any]:
+    """Obnoviť predchádzajúcu verziu of the active ManageSieve script."""
+    mailbox = await _mailbox(db, ctx, mailbox_ref)
+    backup = await _latest_backup(db, mailbox.id)
+    if backup is None:
+        raise fail(404, "sieve_backup_missing")
+    try:
+        user, password = await _mailbox_creds(db, settings, ctx, mailbox)
+        client = connect_sieve(settings, mailbox, username=user, password=password)
+        script_name = active_script_name(client)
+        current = get_script(client, script_name)
+        await _backup_script(
+            db, mailbox=mailbox, script_name=script_name, content=current, reason="restore", person_id=person.id
+        )
+        put_script(client, backup.script_name or script_name, backup.content, activate=True)
+        client.logout()
+    except SieveError as exc:
+        raise fail(409, exc.code, detail=exc.detail) from exc
+    audit(
+        db,
+        "settings.sieve_restored",
+        account_id=ctx.account.id,
+        person_id=person.id,
+        object_type="mailbox",
+        object_id=str(mailbox.id),
+        ip=client_ip(request),
+        details={"script_name": backup.script_name, "backup_id": str(backup.id)},
+    )
+    await db.commit()
+    parsed = parse_roundcube_script(backup.content, script_name=backup.script_name)
+    return {
+        "ok": True,
+        "script_name": backup.script_name,
+        "rules": filters_to_dicts([r for r in parsed.rules if r.kind != "vacation"]),
+        "vacation": _vacation_payload(parsed.vacation),
+    }
 
 
 # ----- 09b provider -----

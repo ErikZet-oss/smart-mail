@@ -157,3 +157,15 @@ class UserSettings(IdMixin, TimestampMixin, Base):
     person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("persons.id", ondelete="CASCADE"), index=True)
     section: Mapped[str] = mapped_column(String(64))  # e.g. prefs.list, prefs.ui
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+
+
+class SieveScriptBackup(IdMixin, TimestampMixin, Base):
+    """Previous ManageSieve script content before each write (Filtre / Mimo kancelárie)."""
+
+    __tablename__ = "sieve_script_backups"
+
+    mailbox_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("mailboxes.id", ondelete="CASCADE"), index=True)
+    script_name: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(String(64))  # filters_save | vacation_save | restore
+    person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"))
