@@ -361,6 +361,14 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
             onSearch={() => navigate('/search')}
           />
         ) : null}
+        {classic ? (
+          <p
+            className="type-caption border-b border-border-default bg-bg-subtle px-3 py-1.5 text-text-secondary"
+            data-testid="classic-banner"
+          >
+            {t('classic.banner')}
+          </p>
+        ) : null}
         {selectedIds.size > 0 ? (
           <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-2">
             <span className="type-small mr-2 text-text-primary">

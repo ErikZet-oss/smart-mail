@@ -14,10 +14,12 @@ type ThemeCtx = {
 
 const Ctx = createContext<ThemeCtx | null>(null);
 
-function applyTheme(theme: UiPrefs['theme']) {
+function applyTheme(theme: UiPrefs['theme'], classic: boolean) {
   const root = document.documentElement;
   if (theme === 'system') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', theme);
+  if (classic) root.setAttribute('data-classic', '1');
+  else root.removeAttribute('data-classic');
 }
 
 /** Loads prefs.ui and applies `data-theme` (tokens.css light/dark). Classic hides AI chrome until Phase 2. */
@@ -37,7 +39,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const ui = prefs.data?.ui;
   useEffect(() => {
-    if (ui) applyTheme(ui.theme);
+    applyTheme(ui?.theme ?? 'system', ui?.classic ?? false);
   }, [ui]);
 
   const value = useMemo<ThemeCtx>(() => {

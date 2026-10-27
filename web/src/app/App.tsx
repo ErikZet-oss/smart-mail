@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 
 import { ToastProvider } from '../components/Toasts';
 import { ThemeProvider } from '../features/prefs/ThemeProvider';
+import { SystemUiProvider } from '../features/system/systemUi';
 import { onGlobalError } from '../lib/api';
 import { createRouter, handleGlobalError } from './router';
 
@@ -26,9 +27,11 @@ export function App({ router: given }: { router?: Router }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <ToastProvider>
-          <RouterProvider router={router} future={{ v7_startTransition: true }} />
-        </ToastProvider>
+        <SystemUiProvider>
+          <ToastProvider>
+            <RouterProvider router={router} future={{ v7_startTransition: true }} />
+          </ToastProvider>
+        </SystemUiProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

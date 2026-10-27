@@ -204,8 +204,108 @@
     "darkMode": "Tmavý režim",
     "classic": "Klasické zobrazenie",
     "about": "O systéme",
+    "notifications": "Notifikácie",
     "logout": "Odhlásiť",
     "withUnread": "{{label}}, neprečítané: {{count}}"
+  },
+  "notifs": {
+    "title": "Notifikácie",
+    "markAll": "Označiť všetky ako prečítané",
+    "emptyTitle": "Žiadne notifikácie",
+    "emptyHint": "Keď zlyhá synchronizácia alebo vám pridelia vlákno, uvidíte to tu.",
+    "settingsLater": "Nastavenia notifikácií (push) pribudnú neskôr.",
+    "toSettings": "Otvoriť nastavenia",
+    "tab": { "all": "Všetky", "open": "Nevybavené" },
+    "group": { "today": "Dnes", "yesterday": "Včera", "older": "Staršie" }
+  },
+  "shortcuts": {
+    "title": "Klávesové skratky",
+    "search": "Hľadať skratku…",
+    "toSettings": "Nastavenia skratiek",
+    "groups": {
+      "list": "Zoznam",
+      "message": "Správa",
+      "compose": "Písanie",
+      "nav": "Navigácia"
+    },
+    "actions": {
+      "move": "Posunúť výber",
+      "open": "Otvoriť",
+      "delete": "Vymazať",
+      "purge": "Vymazať natrvalo",
+      "selectAll": "Vybrať všetko",
+      "unread": "Neprečítané",
+      "done": "Vybavené",
+      "junk": "Nevyžiadané",
+      "reply": "Odpovedať",
+      "replyAll": "Odpovedať všetkým",
+      "forward": "Poslať ďalej",
+      "assign": "Prideliť",
+      "moveTo": "Presunúť do…",
+      "compose": "Nová správa",
+      "send": "Odoslať",
+      "search": "Hľadanie",
+      "palette": "Paleta príkazov",
+      "switchPerson": "Prepnúť osobu",
+      "gotoInbox": "Doručená pošta",
+      "toggleFolders": "Skryť/zobraziť priečinky",
+      "help": "Táto nápoveda"
+    }
+  },
+  "about": {
+    "title": "O systéme",
+    "product": "Smart Mail",
+    "version": "Verzia {{version}}",
+    "shortcuts": "Klávesové skratky",
+    "changelog": "Zoznam zmien",
+    "restartTour": "Spustiť úvodnú prehliadku",
+    "providerAdmin": "Správa schránky u poskytovateľa",
+    "providerMissing": "Odkaz na správu schránky ešte nie je nastavený."
+  },
+  "tour": {
+    "progress": "Krok {{n}} z {{total}}",
+    "next": "Ďalej",
+    "skip": "Preskočiť",
+    "done": "Hotovo",
+    "d1": {
+      "title": "Všetko je tam, kde ste zvyknutí",
+      "body": "Panel nástrojov a priečinky majú rovnaké poradie a názvy ako v Roundcube."
+    },
+    "d2": {
+      "title": "Priečinky a schránky",
+      "body": "Ľavý stĺpec ukazuje priečinky schránky, kvótu a stav synchronizácie."
+    },
+    "d3": {
+      "title": "Hľadanie",
+      "body": "Do poľa Vyhľadať… napíšte výraz a Enter – alebo otvorte celú stránku Hľadanie."
+    },
+    "d4": {
+      "title": "Klasické zobrazenie",
+      "body": "V PersonChip alebo v Nastaveniach zapnete režim bez AI filtrov – vyzerá ako Roundcube."
+    },
+    "d5": {
+      "title": "Nastavenia a profil",
+      "body": "Identita, odpovede, mimo kancelárie a bezpečnosť nájdete v Nastaveniach."
+    },
+    "d6": {
+      "title": "Prepnite osobu",
+      "body": "Kliknite na PersonChip a vyberte, kto práve pracuje – podpis sa zmení sám."
+    },
+    "m1": {
+      "title": "Pošta v mobile",
+      "body": "Spodná lišta: E-mail, Kontakty a Viac. Potiahnutím doľava označíte správu ako Vybavené."
+    },
+    "m2": {
+      "title": "Priečinky a písanie",
+      "body": "Ikona menu otvorí priečinky. Tlačidlo Vytvoriť spustí novú správu."
+    },
+    "m3": {
+      "title": "Viac a nastavenia",
+      "body": "Viac obsahuje profil, nastavenia, notifikácie a O systéme."
+    }
+  },
+  "classic": {
+    "banner": "Klasické zobrazenie – AI filtre a zhrnutia sú skryté."
   },
   "shell": {
     "offline": "Ste offline – zobrazujeme uložené správy, odoslanie počká.",
