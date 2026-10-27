@@ -49,6 +49,16 @@ class FilterCondition:
     field: str  # subject|from|to|cc|body|size|header
     op: str  # contains|notcontains|is|isnot|startswith|endswith|gt|lt
     value: str
+    header_name: str | None = None  # custom header when field == "header"
+
+
+class FilterValidationError(Exception):
+    """Structured filter validation for API 422 (Slovak message for the UI)."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(code)
+        self.code = code
+        self.message = message
 
 
 @dataclass
@@ -224,7 +234,17 @@ def _extract_test(test: commands.Command) -> tuple[str, list[FilterCondition], b
         op = "gt" if size_tag == ":over" else "lt"
         kb = max(1, number // 1024) if number >= 1024 else number
         return "allof", [FilterCondition("size", op, str(kb))], True
-    # regex / body / envelope / unknown → not editable as structured form
+    if test.name == "body":
+        args = test.arguments
+        match_type = str(args.get("match-type") or ":contains")
+        if match_type == ":regex":
+            return "allof", [], False
+        keys = _as_str_list(args.get("key-list") or args.get("keys") or args.get("string"))
+        if not keys:
+            return "allof", [], False
+        op, _neg = _op_from_tag(match_type)
+        return "allof", [FilterCondition("body", op, keys[0])], True
+    # regex / envelope / unknown → not editable as structured form
     return "allof", [], False
 
 
@@ -251,9 +271,11 @@ def _extract_address_or_header(test: commands.Command, *, address: bool) -> tupl
     header0 = headers[0]
     if address or header0.lower() in {"from", "to", "cc", "subject"}:
         field = _field_from_header_name(header0)
+        header_name = None
     else:
         field = "header"
-    conditions = [FilterCondition(field, op, k) for k in keys]
+        header_name = header0
+    conditions = [FilterCondition(field, op, k, header_name=header_name) for k in keys]
     if match_type == ":matches" and len(keys) == 1:
         k = keys[0]
         if k.endswith("*") and not k.startswith("*"):
@@ -498,24 +520,99 @@ def parse_filters_from_script(script: str) -> list[FilterRule]:
     return [r for r in parsed.rules if r.kind != "vacation"]
 
 
-def compile_condition(c: FilterCondition) -> str:
-    val = _escape(c.value)
+def validate_condition(c: FilterCondition) -> None:
+    """Raise FilterValidationError when a condition would match-all or is invalid."""
     if c.field == "size":
         try:
-            kb = int(c.value)
-        except ValueError:
-            return 'header :contains "Subject" ""'
+            kb = int(str(c.value).strip())
+        except ValueError as exc:
+            raise FilterValidationError(
+                "filter_size_invalid",
+                "Veľkosť musí byť kladné celé číslo (kB).",
+            ) from exc
+        if kb <= 0:
+            raise FilterValidationError(
+                "filter_size_invalid",
+                "Veľkosť musí byť kladné celé číslo (kB).",
+            )
+        return
+    if c.field == "header":
+        if not (c.header_name or "").strip():
+            raise FilterValidationError(
+                "filter_header_required",
+                "Hlavička musí mať názov (napr. X-Priority).",
+            )
+        if not str(c.value).strip():
+            raise FilterValidationError(
+                "filter_condition_required",
+                "Filter musí mať aspoň jednu podmienku s vyplnenou hodnotou.",
+            )
+        return
+    if not str(c.value).strip():
+        raise FilterValidationError(
+            "filter_condition_required",
+            "Filter musí mať aspoň jednu podmienku s vyplnenou hodnotou.",
+        )
+
+
+def validate_editable_rules(rules: list[FilterRule]) -> None:
+    """Every editable rule needs ≥ 1 non-empty condition (unless match=all / všetky správy)."""
+    for rule in rules:
+        if not rule.editable or rule.kind == "vacation":
+            continue
+        if rule.match == "all":
+            continue
+        usable = [c for c in rule.conditions if str(c.value).strip() or c.field == "size"]
+        if not usable:
+            raise FilterValidationError(
+                "filter_condition_required",
+                "Filter musí mať aspoň jednu podmienku s vyplnenou hodnotou.",
+            )
+        for cond in usable:
+            validate_condition(cond)
+
+
+def compile_condition(c: FilterCondition) -> str:
+    """Compile one test. Never emits a match-all test (empty contains / bad size)."""
+    validate_condition(c)
+    val = _escape(c.value.strip())
+    if c.field == "size":
+        kb = int(str(c.value).strip())
         op = ":over" if c.op in {"gt", "contains"} else ":under"
         return f"size {op} {kb * 1024}"
-    if c.field == "from":
+    if c.field == "body":
+        # RFC 5173 body extension — never silently become a Subject test
+        tag = {
+            "contains": ":contains",
+            "notcontains": ":contains",
+            "is": ":is",
+            "isnot": ":is",
+            "startswith": ":matches",
+            "endswith": ":matches",
+        }.get(c.op, ":contains")
+        if c.op == "startswith":
+            body = f'body {tag} "{val}*"'
+        elif c.op == "endswith":
+            body = f'body {tag} "*{val}"'
+        else:
+            body = f'body {tag} "{val}"'
+        return f"not {body}" if c.op in {"notcontains", "isnot"} else body
+    if c.field == "header":
+        header = _escape((c.header_name or "").strip())
+        use_address = False
+    elif c.field == "from":
         header, use_address = "From", True
     elif c.field == "to":
         header, use_address = "To", True
     elif c.field == "cc":
         header, use_address = "Cc", True
-    else:
-        # subject / body / header → Subject header test
+    elif c.field == "subject":
         header, use_address = "Subject", False
+    else:
+        raise FilterValidationError(
+            "filter_field_unsupported",
+            f"Nepodporované pole podmienky: {c.field}.",
+        )
     test = "address" if use_address else "header"
     if c.op == "contains":
         return f'{test} :contains "{header}" "{val}"'
@@ -532,13 +629,59 @@ def compile_condition(c: FilterCondition) -> str:
     return f'{test} :contains "{header}" "{val}"'
 
 
+def apply_live_raw_to_readonly(client_rules: list[FilterRule], live_rules: list[FilterRule]) -> list[FilterRule]:
+    """On save, readonly rules take ``raw`` from the live script (by id, else order) — never from the client."""
+    live_readonly = [r for r in live_rules if not r.editable and r.kind != "vacation"]
+    by_id = {r.id: r for r in live_readonly}
+    used: set[str] = set()
+    order_i = 0
+    out: list[FilterRule] = []
+    for rule in client_rules:
+        if rule.editable or rule.kind == "vacation":
+            out.append(rule)
+            continue
+        live = by_id.get(rule.id) if rule.id and rule.id not in used else None
+        if live is None:
+            while order_i < len(live_readonly) and live_readonly[order_i].id in used:
+                order_i += 1
+            if order_i < len(live_readonly):
+                live = live_readonly[order_i]
+                order_i += 1
+        if live is not None:
+            used.add(live.id)
+            out.append(
+                FilterRule(
+                    id=live.id,
+                    name=live.name,
+                    enabled=live.enabled,
+                    match=live.match,
+                    conditions=list(live.conditions),
+                    actions=list(live.actions),
+                    editable=False,
+                    raw=live.raw,
+                    kind=live.kind,
+                )
+            )
+        # drop client-only readonly noise that has no live counterpart
+    # append any live readonly the client omitted (preserve script)
+    for live in live_readonly:
+        if live.id not in used:
+            out.append(live)
+    return out
+
+
 def compile_rule_from_structured(rule: FilterRule) -> str:
     """Emit one Roundcube ``# rule:[…]`` block from structured editable fields."""
     lines: list[str] = [f"# rule:[{rule.name}]"]
-    conds = [compile_condition(c) for c in rule.conditions if c.value or c.field == "size"]
+    conds = [compile_condition(c) for c in rule.conditions if str(c.value).strip() or c.field == "size"]
     match = "anyof" if rule.match in {"any", "anyof"} else "allof"
-    if rule.match == "all" or not conds:
+    if rule.match == "all":
         test = "true"
+    elif not conds:
+        raise FilterValidationError(
+            "filter_condition_required",
+            "Filter musí mať aspoň jednu podmienku s vyplnenou hodnotou.",
+        )
     elif len(conds) == 1:
         test = conds[0]
     else:
@@ -597,22 +740,30 @@ def compile_vacation_rule(v: VacationSettings) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _ensure_requires(preamble: str, *, vacation: bool) -> str:
+def _ensure_requires(preamble: str, *, vacation: bool, body: bool = False) -> str:
     needed = ["fileinto", "reject", "imap4flags", "vacation", "date", "relational"]
+    if body:
+        needed.append("body")
     if "require" not in preamble:
         caps = ", ".join(f'"{n}"' for n in needed)
         return f"require [{caps}];\n"
-    # leave existing require as-is for round-trip stability when vacation already covered
-    if vacation and "vacation" not in preamble:
-        # inject vacation into first require list
-        def add_vac(m: re.Match[str]) -> str:
-            inner = m.group(1)
-            if "vacation" in inner:
-                return m.group(0)
-            return f'require [{inner.rstrip()}, "vacation"];'
 
-        return re.sub(r"require\s*\[([^\]]*)\]\s*;", add_vac, preamble, count=1)
-    return preamble
+    def inject(cap: str, text: str) -> str:
+        if f'"{cap}"' in text or f"'{cap}'" in text:
+            return text
+
+        def add(m: re.Match[str]) -> str:
+            inner = m.group(1)
+            return f'require [{inner.rstrip()}, "{cap}"];'
+
+        return re.sub(r"require\s*\[([^\]]*)\]\s*;", add, text, count=1)
+
+    out = preamble
+    if vacation:
+        out = inject("vacation", out)
+    if body:
+        out = inject("body", out)
+    return out
 
 
 def compile_script(
@@ -627,8 +778,9 @@ def compile_script(
     rule_list = rules if rules is not None else [r for r in parsed.rules if r.kind != "vacation"]
     had_vacation = any(r.kind == "vacation" for r in parsed.rules)
     write_vacation = include_vacation if include_vacation is not None else (vac.enabled or had_vacation)
+    needs_body = any(c.field == "body" for rule in rule_list if rule.editable for c in rule.conditions)
 
-    preamble = _ensure_requires(parsed.preamble or "", vacation=write_vacation)
+    preamble = _ensure_requires(parsed.preamble or "", vacation=write_vacation, body=needs_body)
     if not preamble.endswith("\n"):
         preamble += "\n"
 
@@ -752,7 +904,15 @@ def filters_to_dicts(rules: list[FilterRule]) -> list[dict[str, Any]]:
             "name": r.name,
             "enabled": r.enabled,
             "match": r.match,
-            "conditions": [{"field": c.field, "op": c.op, "value": c.value} for c in r.conditions],
+            "conditions": [
+                {
+                    "field": c.field,
+                    "op": c.op,
+                    "value": c.value,
+                    **({"header_name": c.header_name} if c.header_name else {}),
+                }
+                for c in r.conditions
+            ],
             "actions": [{"type": a.type, "value": a.value} for a in r.actions],
             "editable": r.editable,
             "raw": r.raw,
@@ -779,6 +939,7 @@ def dicts_to_filters(raw: list[dict[str, Any]]) -> list[FilterRule]:
                         field=str(c.get("field") or "from"),
                         op=str(c.get("op") or "contains"),
                         value=str(c.get("value") or ""),
+                        header_name=(str(c["header_name"]) if c.get("header_name") else None),
                     )
                     for c in (item.get("conditions") or [])
                 ],

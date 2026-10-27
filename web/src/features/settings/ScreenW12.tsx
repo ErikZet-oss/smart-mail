@@ -7,6 +7,7 @@ import { Button } from '../../components/Button';
 import { Banner } from '../../components/Banner';
 import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
+import { ApiError } from '../../lib/api';
 import { fetchMe } from '../auth/authApi';
 import { SettingsFieldControl } from './Field';
 import { HtmlSignatureEditor } from './HtmlSignatureEditor';
@@ -43,7 +44,7 @@ type FilterRuleDraft = {
   name?: string;
   enabled?: boolean;
   match?: string;
-  conditions?: { field: string; op: string; value: string }[];
+  conditions?: { field: string; op: string; value: string; header_name?: string }[];
   actions?: { type: string; value: string }[];
   editable?: boolean;
   raw?: string | null;
@@ -440,6 +441,18 @@ function FiltersPanel() {
     next[index] = { ...current, ...patch, raw: patch.raw === undefined ? null : patch.raw };
     setDraft(next);
   };
+  const sieveErrorMessage = (error: unknown) => {
+    if (error instanceof ApiError && typeof error.detail.message === 'string') {
+      return error.detail.message;
+    }
+    if (error instanceof ApiError && error.detail.code === 'read_only') {
+      return t('settings.filters.readOnly');
+    }
+    if (error instanceof ApiError && error.detail.code === 'mailbox_send_forbidden') {
+      return t('settings.filters.noSend');
+    }
+    return t('settings.sieveError');
+  };
   const save = useMutation({
     mutationFn: () => saveFilters('default', rules),
     onSuccess: () => {
@@ -447,7 +460,7 @@ function FiltersPanel() {
       void qc.invalidateQueries({ queryKey: ['settings', 'filters'] });
       setDraft(null);
     },
-    onError: () => toasts.error(t('settings.sieveError')),
+    onError: (error) => toasts.error(sieveErrorMessage(error)),
   });
   const restore = useMutation({
     mutationFn: () => restoreSieve('default'),
@@ -457,9 +470,18 @@ function FiltersPanel() {
       void qc.invalidateQueries({ queryKey: ['settings', 'vacation'] });
       setDraft(null);
     },
-    onError: () => toasts.error(t('settings.sieveError')),
+    onError: (error) => toasts.error(sieveErrorMessage(error)),
   });
   const scope = data.data?.mailbox_scope;
+  const fieldOptions = [
+    { value: 'from', label: t('settings.filters.fields.from') },
+    { value: 'to', label: t('settings.filters.fields.to') },
+    { value: 'cc', label: t('settings.filters.fields.cc') },
+    { value: 'subject', label: t('settings.filters.fields.subject') },
+    { value: 'body', label: t('settings.filters.fields.body') },
+    { value: 'header', label: t('settings.filters.fields.header') },
+    { value: 'size', label: t('settings.filters.fields.size') },
+  ];
   return (
     <div className="flex max-w-2xl flex-col gap-4">
       <Banner kind="info" message={t('settings.filters.mailboxScope')} />
@@ -492,14 +514,75 @@ function FiltersPanel() {
             {editable ? (
               <div className="flex flex-col gap-2">
                 <label className="flex flex-col gap-1">
-                  <span className="type-label text-text-secondary">{t('settings.filters.from')}</span>
-                  <input
+                  <span className="type-label text-text-secondary">{t('settings.filters.conditionField')}</span>
+                  <select
                     className="type-body h-9 rounded-sm border border-border-default px-3"
-                    value={cond.field === 'from' ? cond.value : String(cond.value ?? '')}
-                    placeholder="@dodavatel.test"
+                    value={cond.field || 'from'}
                     onChange={(event) =>
                       patchRule(index, {
-                        conditions: [{ field: 'from', op: cond.op || 'contains', value: event.target.value }],
+                        conditions: [
+                          {
+                            field: event.target.value,
+                            op: cond.op || 'contains',
+                            value: cond.value || '',
+                            header_name: event.target.value === 'header' ? (cond.header_name ?? '') : undefined,
+                          },
+                        ],
+                        match: rule.match || 'anyof',
+                      })
+                    }
+                  >
+                    {fieldOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {cond.field === 'header' ? (
+                  <label className="flex flex-col gap-1">
+                    <span className="type-label text-text-secondary">{t('settings.filters.headerName')}</span>
+                    <input
+                      className="type-body h-9 rounded-sm border border-border-default px-3"
+                      value={String(cond.header_name ?? '')}
+                      placeholder="X-Priority"
+                      onChange={(event) =>
+                        patchRule(index, {
+                          conditions: [
+                            {
+                              field: 'header',
+                              op: cond.op || 'contains',
+                              value: cond.value || '',
+                              header_name: event.target.value,
+                            },
+                          ],
+                        })
+                      }
+                    />
+                  </label>
+                ) : null}
+                <label className="flex flex-col gap-1">
+                  <span className="type-label text-text-secondary">
+                    {cond.field === 'from'
+                      ? t('settings.filters.from')
+                      : cond.field === 'size'
+                        ? t('settings.filters.sizeKb')
+                        : t('settings.filters.conditionValue')}
+                  </span>
+                  <input
+                    className="type-body h-9 rounded-sm border border-border-default px-3"
+                    value={String(cond.value ?? '')}
+                    placeholder={cond.field === 'from' ? '@dodavatel.test' : ''}
+                    onChange={(event) =>
+                      patchRule(index, {
+                        conditions: [
+                          {
+                            field: cond.field || 'from',
+                            op: cond.op || 'contains',
+                            value: event.target.value,
+                            header_name: cond.header_name,
+                          },
+                        ],
                         match: rule.match || 'anyof',
                       })
                     }
@@ -582,6 +665,18 @@ function VacationPanel() {
   const [lang, setLang] = useState<'sk' | 'en' | 'de'>('sk');
   const form = draft ?? data.data ?? {};
   const bodyKey = lang === 'sk' ? 'body_sk' : lang === 'en' ? 'body_en' : 'body_de';
+  const sieveErrorMessage = (error: unknown) => {
+    if (error instanceof ApiError && typeof error.detail.message === 'string') {
+      return error.detail.message;
+    }
+    if (error instanceof ApiError && error.detail.code === 'read_only') {
+      return t('settings.filters.readOnly');
+    }
+    if (error instanceof ApiError && error.detail.code === 'mailbox_send_forbidden') {
+      return t('settings.filters.noSend');
+    }
+    return t('settings.sieveError');
+  };
   const save = useMutation({
     mutationFn: () => saveVacation('default', form),
     onSuccess: () => {
@@ -589,7 +684,7 @@ function VacationPanel() {
       void qc.invalidateQueries({ queryKey: ['settings', 'vacation'] });
       void qc.invalidateQueries({ queryKey: ['settings', 'filters'] });
     },
-    onError: () => toasts.error(t('settings.sieveError')),
+    onError: (error) => toasts.error(sieveErrorMessage(error)),
   });
   const restore = useMutation({
     mutationFn: () => restoreSieve('default'),
@@ -599,11 +694,23 @@ function VacationPanel() {
       void qc.invalidateQueries({ queryKey: ['settings', 'filters'] });
       setDraft(null);
     },
-    onError: () => toasts.error(t('settings.sieveError')),
+    onError: (error) => toasts.error(sieveErrorMessage(error)),
   });
+  const last = form.last_changed as
+    { person_name?: string | null; at?: string | null; enabled?: boolean } | null | undefined;
   return (
     <div className="flex max-w-xl flex-col gap-4">
+      <Banner kind="info" message={t('settings.vacation.mailboxScope')} />
       <p className="type-small text-text-secondary">{t('settings.vacation.branchHelp')}</p>
+      {last?.at ? (
+        <p className="type-small text-text-secondary">
+          {t('settings.vacation.lastChanged', {
+            who: last.person_name || t('settings.vacation.unknownPerson'),
+            when: new Date(last.at).toLocaleString('sk-SK'),
+            state: last.enabled ? t('settings.vacation.stateOn') : t('settings.vacation.stateOff'),
+          })}
+        </p>
+      ) : null}
       <label className="flex items-center gap-2">
         <input
           type="checkbox"

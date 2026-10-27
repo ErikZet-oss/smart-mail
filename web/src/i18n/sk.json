@@ -397,7 +397,22 @@
       "mailboxScope": "Filter platí pre celú schránku – osobnú aj pobočkovú.",
       "notDefaults": "Filtre nie sú predvolené. Každá schránka má vlastné pravidlá (rovnaké ako v Roundcube).",
       "roundcubeReadonly": "Pravidlo z Roundcube (len na čítanie)",
-      "scopeKind": "Typ schránky"
+      "scopeKind": "Typ schránky",
+      "conditionField": "Pole",
+      "conditionValue": "Hodnota",
+      "headerName": "Názov hlavičky",
+      "sizeKb": "Veľkosť (kB)",
+      "readOnly": "Túto akciu môže vykonať len osoba s právom odosielať (nie divák).",
+      "noSend": "Na tejto schránke nemáte právo odosielať – filtre a mimo kancelárie nemôžete meniť.",
+      "fields": {
+        "from": "Od",
+        "to": "Komu",
+        "cc": "Kópia",
+        "subject": "Predmet",
+        "body": "Telo",
+        "header": "Hlavička",
+        "size": "Veľkosť"
+      }
     },
     "vacation": {
       "enabled": "Automatická odpoveď",
@@ -407,7 +422,12 @@
       "end": "Do",
       "days": "Odpovedať tomu istému odosielateľovi najviac raz za (dni)",
       "branchHelp": "Na pobočkovej schránke odpovedá za celú pobočku. Ukladá sa do toho istého aktívneho Sieve skriptu ako filtre.",
-      "rangeHelp": "Bez dátumu do platí, kým ju nevypnete."
+      "rangeHelp": "Bez dátumu do platí, kým ju nevypnete.",
+      "mailboxScope": "Platí pre celú schránku",
+      "lastChanged": "Naposledy {{state}}: {{who}}, {{when}}",
+      "stateOn": "zapnuté",
+      "stateOff": "vypnuté",
+      "unknownPerson": "neznáma osoba"
     },
     "provider": {
       "mailbox": "E-mailová schránka",
