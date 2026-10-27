@@ -254,6 +254,7 @@ async def search_messages(
     rank_tsq = _tsquery_expr(q, weight=None)
     empty_vec = func.to_tsvector("simple", "")
     # Special-char-only queries may match via address LIKE with no FTS tokens — avoid empty to_tsquery.
+    rank: ColumnElement[object]
     if rank_tsq is None:
         rank = literal(0.0)
     else:
