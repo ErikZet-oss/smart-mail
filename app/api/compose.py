@@ -268,7 +268,7 @@ async def patch_draft(
         draft.request_dsn = body.request_dsn
     if body.save_sent is not None:
         draft.save_sent = body.save_sent
-    if body.scheduled_at is not None:
+    if "scheduled_at" in body.model_fields_set:
         draft.scheduled_at = body.scheduled_at
         draft.status = "scheduled" if body.scheduled_at else "editing"
     draft.updated_at = datetime.now(UTC)
@@ -304,6 +304,11 @@ async def upload_attachment(
     data = await file.read()
     if len(data) > MAX_ATTACH_BYTES:
         raise fail(413, "attachment_too_large")
+    from app.mail.clamav import scan_bytes
+
+    av = await scan_bytes(settings, data)
+    if av == "infected":
+        raise fail(422, "attachment_infected")
     key, digest = storage.put_bytes(settings, data, prefix=f"mail/{draft.mailbox_id}/compose")
     db.add(
         ComposeAttachment(
@@ -313,7 +318,7 @@ async def upload_attachment(
             size=len(data),
             storage_key=key,
             sha256=digest,
-            av_status="skipped",
+            av_status=av,
         )
     )
     await db.commit()

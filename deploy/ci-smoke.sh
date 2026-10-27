@@ -21,13 +21,17 @@ code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/docs ||
 code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/openapi.json || true)"
 [[ "$code" == "404" ]] || { echo "api/openapi.json má byť 404 mimo dev (dostal $code)"; exit 1; }
 
-# CI/vps nginx must not map CF-Connecting-IP (spoofable); Caddy template must strip it.
-grep -q 'proxy_add_x_forwarded_for' "$ROOT/deploy/nginx-deploy.conf"
-if grep -q 'http_cf_connecting_ip' "$ROOT/deploy/nginx-deploy.conf"; then
-  echo "CI/vps nginx-deploy.conf nesmie používať CF-Connecting-IP"; exit 1
+# Active nginx (gitignored) must not map CF-Connecting-IP; Caddy template must strip it.
+test -f "$ROOT/deploy/nginx-active.conf"
+grep -q 'proxy_add_x_forwarded_for' "$ROOT/deploy/nginx-active.conf"
+if grep -q 'http_cf_connecting_ip' "$ROOT/deploy/nginx-active.conf"; then
+  echo "CI/vps nginx-active.conf nesmie používať CF-Connecting-IP"; exit 1
 fi
 grep -q 'header_up -CF-Connecting-IP' "$ROOT/deploy/Caddyfile.tpl" \
   || { echo "Caddyfile.tpl musí stripovať CF-Connecting-IP"; exit 1; }
+# install must not overwrite the git-tracked vps template
+VPS_SUM="$(sha256sum "$ROOT/deploy/nginx-deploy.vps.conf" | awk '{print $1}')"
+[[ "$VPS_SUM" == "$(sha256sum "$ROOT/deploy/nginx-deploy.vps.conf" | awk '{print $1}')" ]]
 
 # Second install must not wipe .env and must stay silent about prompts
 SUM1="$(sha256sum "$SMARTMAIL_ENV_FILE" | awk '{print $1}')"
@@ -72,5 +76,19 @@ echo "=== CI smoke: status (no secrets) ==="
 if grep -EEiq 'APP_SECRET_KEY|APP_ENCRYPTION_KEY|POSTGRES_PASSWORD|BEGIN PRIVATE|eyJ' /tmp/smartmail-status.txt; then
   echo "status.sh vyzradil tajomstvo"; exit 1
 fi
+
+echo "=== CI smoke: change nginx template → update regenerates nginx-active ==="
+# Simulate a follow-up commit that edits the tracked template; update must succeed and
+# rewrite nginx-active.conf without touching git history oddly.
+BEFORE_ACTIVE="$(sha256sum "$ROOT/deploy/nginx-active.conf" | awk '{print $1}')"
+printf '\n# ci-smoke marker %s\n' "$(date -u +%s)" >>"$ROOT/deploy/nginx-deploy.vps.conf"
+git -C "$ROOT" add deploy/nginx-deploy.vps.conf
+git -C "$ROOT" -c user.email=ci@smartmail.test -c user.name=ci commit -m "ci: touch nginx vps template" --quiet
+"$ROOT/deploy/update.sh"
+curl -fsS http://127.0.0.1:8080/readyz
+grep -q 'ci-smoke marker' "$ROOT/deploy/nginx-active.conf" \
+  || { echo "update.sh neprepísal nginx-active.conf z šablóny"; exit 1; }
+AFTER_ACTIVE="$(sha256sum "$ROOT/deploy/nginx-active.conf" | awk '{print $1}')"
+[[ "$BEFORE_ACTIVE" != "$AFTER_ACTIVE" ]] || { echo "nginx-active.conf sa nezmenil"; exit 1; }
 
 echo "CI smoke OK"

@@ -151,7 +151,7 @@ class Attachment(IdMixin, TimestampMixin, Base):
     sha256: Mapped[str] = mapped_column(String(64))
     av_status: Mapped[str] = mapped_column(
         String(16), default="skipped", server_default="skipped"
-    )  # clean|infected|skipped
+    )  # clean|infected|skipped|error
 
 
 class UserSettings(IdMixin, TimestampMixin, Base):

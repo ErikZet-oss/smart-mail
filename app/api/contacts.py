@@ -16,6 +16,7 @@ from app.contacts import service
 from app.contacts.models import AddressBook, Contact, ContactGroup, ContactGroupMember
 from app.contacts.vcard import MAX_VCARD_BYTES, MAX_VCARD_CONTACTS, VCardError, VCardTooLarge
 from app.core.audit import audit
+from app.core.content_disposition import content_disposition_attachment
 
 router = APIRouter(prefix="/api/contacts", tags=["contacts"])
 
@@ -344,7 +345,7 @@ async def export_vcard(book_id: uuid.UUID, ctx: Auth, person: SignedInPerson, db
     return PlainTextResponse(
         text,
         media_type="text/vcard; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="contacts.vcf"'},
+        headers={"Content-Disposition": content_disposition_attachment("contacts.vcf")},
     )
 
 

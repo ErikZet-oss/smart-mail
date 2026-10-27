@@ -429,25 +429,45 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
             <ul className="mb-4 flex flex-wrap gap-2">
               {msg.attachments
                 .filter((a) => !a.is_inline)
-                .map((a) => (
-                  <li key={a.id}>
-                    <a
-                      href={attachmentUrl(mailbox, a.id)}
-                      className={`type-small inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 ${
-                        a.av_status === 'infected'
-                          ? 'cursor-not-allowed border-danger-600 text-danger-600'
-                          : 'border-border-default text-text-primary hover:bg-bg-subtle'
-                      }`}
-                      onClick={(event) => {
-                        if (a.av_status === 'infected') event.preventDefault();
-                      }}
-                      download={a.av_status === 'infected' ? undefined : a.filename}
-                    >
-                      <Paperclip size={14} aria-hidden="true" />
-                      {a.filename} <span className="text-text-secondary">{formatSize(a.size)}</span>
-                    </a>
-                  </li>
-                ))}
+                .map((a) => {
+                  const unscanned = a.av_status === 'skipped' || a.av_status === 'error';
+                  const infected = a.av_status === 'infected';
+                  return (
+                    <li key={a.id}>
+                      <a
+                        href={attachmentUrl(mailbox, a.id)}
+                        className={`type-small inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 ${
+                          infected
+                            ? 'cursor-not-allowed border-danger-600 text-danger-600'
+                            : 'border-border-default text-text-primary hover:bg-bg-subtle'
+                        }`}
+                        title={
+                          infected
+                            ? t('mail.attachmentInfected')
+                            : unscanned
+                              ? t('mail.attachmentUnscanned')
+                              : undefined
+                        }
+                        onClick={(event) => {
+                          if (infected) {
+                            event.preventDefault();
+                            return;
+                          }
+                          if (unscanned && !window.confirm(t('mail.attachmentUnscannedConfirm'))) {
+                            event.preventDefault();
+                          }
+                        }}
+                        download={infected ? undefined : a.filename}
+                      >
+                        <Paperclip size={14} aria-hidden="true" />
+                        {a.filename} <span className="text-text-secondary">{formatSize(a.size)}</span>
+                        {unscanned ? (
+                          <span className="text-text-tertiary">({t('mail.attachmentUnscanned')})</span>
+                        ) : null}
+                      </a>
+                    </li>
+                  );
+                })}
             </ul>
           ) : null}
 

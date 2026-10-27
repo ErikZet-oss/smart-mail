@@ -70,8 +70,11 @@ async def ensure_body(
     message.has_attachments = bool(parsed.attachments)
     message.body_fetched_at = datetime.now(UTC)
 
+    from app.mail.clamav import scan_bytes
+
     await db.execute(delete(Attachment).where(Attachment.message_id == message.id))
     for part in parsed.attachments:
+        av = await scan_bytes(settings, part.payload)
         akey, digest = storage.put_bytes(settings, part.payload, prefix=f"mail/{mailbox.id}/att")
         db.add(
             Attachment(
@@ -83,7 +86,7 @@ async def ensure_body(
                 is_inline=part.is_inline,
                 storage_key=akey,
                 sha256=digest,
-                av_status="skipped",
+                av_status=av,
             )
         )
     await db.flush()

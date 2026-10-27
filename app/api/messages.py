@@ -15,6 +15,7 @@ from app.api.mail import _folder, _mailbox, _sync, fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep, client_ip
 from app.core.audit import audit
 from app.core.config import Settings
+from app.core.content_disposition import content_disposition_attachment
 from app.mail import storage
 from app.mail.actions import MsgAction, MsgTarget, run_msg_action_async
 from app.mail.body import ensure_body, load_attachments
@@ -691,7 +692,7 @@ async def download_attachment(ref: str, attachment_id: uuid.UUID, ctx: Auth, db:
     data = storage.get_bytes(settings, att.storage_key)
     if data is None:
         raise fail(404, "attachment_not_found")
-    headers = {"Content-Disposition": f'attachment; filename="{att.filename}"'}
+    headers = {"Content-Disposition": content_disposition_attachment(att.filename)}
     return Response(content=data, media_type=att.content_type, headers=headers)
 
 
