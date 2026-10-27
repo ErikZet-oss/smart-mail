@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Protocol
 
@@ -10,6 +10,10 @@ from app.mail.models import Attachment, FolderMeta, Mailbox, Message
 
 # SPECIAL-USE folders excluded from the AI pipeline (DECISIONS D21 / AI_ASSISTANT §2).
 _EXCLUDED_SPECIAL = frozenset({"drafts", "sent", "trash", "junk"})
+
+# Stable codes for suggestion/UI notes (Slovak copy lives in web/src/i18n/sk.json).
+NOTE_ATTACHMENT_UNSCANNED = "attachment_unscanned"
+NOTE_ATTACHMENT_INFECTED = "attachment_infected"
 
 
 class RecordingLLM:
@@ -32,6 +36,16 @@ class BackfillEstimate:
     summary_sk: str
 
 
+@dataclass(frozen=True, slots=True)
+class AttachmentAiPlan:
+    """Unscanned attachments must not drop the whole e-mail — process body text, skip those files."""
+
+    process_body_text: bool
+    attachments_for_ai: list[Attachment] = field(default_factory=list)
+    skipped_attachments: list[Attachment] = field(default_factory=list)
+    note_codes: list[str] = field(default_factory=list)
+
+
 def folder_eligible_for_ai(folder: FolderMeta) -> bool:
     if not folder.subscribed or not folder.selectable:
         return False
@@ -50,19 +64,43 @@ def message_eligible_for_ai(mailbox: Mailbox, folder: FolderMeta, message: Messa
     received = message.received_at
     if received is None:
         return False
-    # timezone-aware compare; treat naive as already UTC only in tests that set tzinfo
     enabled_at = mailbox.ai_enabled_at
     if received.tzinfo is None and enabled_at.tzinfo is not None:
         return False
     return received >= enabled_at
 
 
-def attachments_eligible_for_ai(attachments: list[Attachment]) -> bool:
-    """AI may touch an attachment only when av_status=clean (AI_ASSISTANT §2 Phase 2 rule)."""
+def plan_attachments_for_ai(attachments: list[Attachment]) -> AttachmentAiPlan:
+    """Body text always proceeds; only clean attachments are fed to the model."""
+    allowed: list[Attachment] = []
+    skipped: list[Attachment] = []
+    notes: list[str] = []
     for att in attachments:
-        if att.av_status != "clean":
-            return False
-    return True
+        if att.av_status == "clean":
+            allowed.append(att)
+        elif att.av_status == "infected":
+            skipped.append(att)
+            if NOTE_ATTACHMENT_INFECTED not in notes:
+                notes.append(NOTE_ATTACHMENT_INFECTED)
+        else:
+            # skipped | error | anything else = unscanned
+            skipped.append(att)
+            if NOTE_ATTACHMENT_UNSCANNED not in notes:
+                notes.append(NOTE_ATTACHMENT_UNSCANNED)
+    return AttachmentAiPlan(
+        process_body_text=True,
+        attachments_for_ai=allowed,
+        skipped_attachments=skipped,
+        note_codes=notes,
+    )
+
+
+def attachments_eligible_for_ai(attachments: list[Attachment]) -> bool:
+    """Deprecated for gating the whole message — use plan_attachments_for_ai.
+
+    Returns True only when every attachment is clean (or there are none).
+    """
+    return plan_attachments_for_ai(attachments).note_codes == []
 
 
 def select_new_messages_for_ai(mailbox: Mailbox, folder: FolderMeta, messages: list[Message]) -> list[Message]:

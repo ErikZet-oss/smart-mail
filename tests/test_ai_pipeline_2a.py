@@ -65,8 +65,8 @@ def _message(**kwargs: Any) -> Message:
     return Message(**defaults)
 
 
-def test_2a_attachments_require_av_clean() -> None:
-    from app.ai.pipeline import attachments_eligible_for_ai
+def test_2a_unscanned_attachment_does_not_drop_email() -> None:
+    from app.ai.pipeline import NOTE_ATTACHMENT_UNSCANNED, plan_attachments_for_ai
     from app.mail.models import Attachment
 
     clean = Attachment(
@@ -83,8 +83,11 @@ def test_2a_attachments_require_av_clean() -> None:
         sha256="1" * 64,
         av_status="skipped",
     )
-    assert attachments_eligible_for_ai([clean]) is True
-    assert attachments_eligible_for_ai([clean, skipped]) is False
+    plan = plan_attachments_for_ai([clean, skipped])
+    assert plan.process_body_text is True
+    assert plan.attachments_for_ai == [clean]
+    assert plan.skipped_attachments == [skipped]
+    assert plan.note_codes == [NOTE_ATTACHMENT_UNSCANNED]
 
 
 def test_2a_folder_excludes_d21_special_and_private() -> None:

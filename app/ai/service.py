@@ -10,13 +10,15 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.budget import budget_allows_call, budget_day_start
 from app.ai.models import AiRun, Classification, FeatureFlag
 from app.ai.pipeline import (
-    attachments_eligible_for_ai,
     folder_eligible_for_ai,
     message_eligible_for_ai,
     normalize_message_id_header,
+    plan_attachments_for_ai,
 )
+from app.ai.pricing import estimate_purpose_cost_usd
 from app.core.config import Settings
 from app.mail.models import Attachment, FolderMeta, Mailbox, Message
 
@@ -39,19 +41,19 @@ async def shadow_mode_enabled(db: AsyncSession, person_id: uuid.UUID | None = No
 
 
 async def daily_spend_usd(db: AsyncSession, day: datetime | None = None) -> Decimal:
-    now = day or datetime.now(UTC)
-    start = now.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    """Sum of ok ai_runs cost since the start of the Europe/Bratislava calendar day."""
+    start = budget_day_start(day)
     total = await db.scalar(
         select(func.coalesce(func.sum(AiRun.cost_usd), 0)).where(AiRun.created_at >= start, AiRun.status == "ok")
     )
     return Decimal(str(total or 0))
 
 
-async def budget_allows(db: AsyncSession, settings: Settings) -> bool:
-    if settings.ai_daily_budget_usd <= 0:
-        return False
+async def budget_allows(db: AsyncSession, settings: Settings, *, estimate_usd: Decimal) -> bool:
+    """Check before a specific LLM call (estimate of that call)."""
+    budget = Decimal(str(settings.ai_daily_budget_usd))
     spent = await daily_spend_usd(db)
-    return spent < Decimal(str(settings.ai_daily_budget_usd))
+    return budget_allows_call(spent_usd=spent, estimate_usd=estimate_usd, budget_usd=budget)
 
 
 async def classification_exists_for_header(db: AsyncSession, message_id_header: str | None) -> bool:
@@ -69,14 +71,30 @@ async def process_mailbox_ai(
     *,
     message_ids: list[uuid.UUID] | None = None,
 ) -> dict[str, int]:
-    """Select eligible new messages and record skip/idempotent markers. Classify lands in 2b."""
-    stats = {"seen": 0, "eligible": 0, "skipped_history": 0, "skipped_folder": 0, "skipped_idempotent": 0, "queued": 0}
+    """Select eligible new messages and record skip/idempotent markers. Classify lands in 2b.
+
+    Budget is re-checked before each would-be LLM call (using a classify cost estimate), not once
+    at the start of the batch. Unscanned attachments do not drop the message — body text proceeds
+    with note code ``attachment_unscanned``.
+    """
+    stats = {
+        "seen": 0,
+        "eligible": 0,
+        "skipped_history": 0,
+        "skipped_folder": 0,
+        "skipped_idempotent": 0,
+        "skipped_budget": 0,
+        "queued": 0,
+        "unscanned_attachment_notes": 0,
+    }
     if not mailbox.ai_enabled or mailbox.ai_enabled_at is None:
         log.info("ai.pipeline_skipped", mailbox_id=str(mailbox.id), reason="ai_disabled")
         return stats
-    if not await budget_allows(db, settings):
-        log.info("ai.pipeline_skipped", mailbox_id=str(mailbox.id), reason="daily_budget")
-        return stats
+
+    model = (settings.llm_model_classify or "").strip() or "unknown"
+    estimate = estimate_purpose_cost_usd(model, "classify")
+    budget = Decimal(str(settings.ai_daily_budget_usd))
+    spent = await daily_spend_usd(db)
 
     q = (
         select(Message, FolderMeta)
@@ -86,7 +104,6 @@ async def process_mailbox_ai(
     if message_ids:
         q = q.where(Message.id.in_(message_ids))
     else:
-        # Only mail at/after enablement — never a first-sync history sweep
         q = q.where(Message.received_at.is_not(None), Message.received_at >= mailbox.ai_enabled_at)
     rows = (await db.execute(q)).all()
     shadow = await shadow_mode_enabled(db)
@@ -106,10 +123,25 @@ async def process_mailbox_ai(
         if existing_msg is not None or await classification_exists_for_header(db, header):
             stats["skipped_idempotent"] += 1
             continue
+
+        # Per-call budget check (Bratislava day) before we would hit the LLM
+        if not budget_allows_call(spent_usd=spent, estimate_usd=estimate, budget_usd=budget):
+            stats["skipped_budget"] += 1
+            log.info(
+                "ai.pipeline_budget_stop",
+                mailbox_id=str(mailbox.id),
+                spent_usd=str(spent),
+                estimate_usd=str(estimate),
+                budget_usd=str(budget),
+            )
+            break
+
         atts = list((await db.execute(select(Attachment).where(Attachment.message_id == message.id))).scalars())
-        # Attachments that are not clean block extract paths later; classify of body text may still proceed
-        # once 2b lands. 2a only records a pending classification row for idempotency.
-        _ = attachments_eligible_for_ai(atts)
+        plan = plan_attachments_for_ai(atts)
+        payload: dict[str, object] = {"note_codes": list(plan.note_codes)}
+        if plan.note_codes:
+            stats["unscanned_attachment_notes"] += 1
+
         stats["eligible"] += 1
         db.add(
             Classification(
@@ -117,11 +149,12 @@ async def process_mailbox_ai(
                 message_id=message.id,
                 message_id_header=header,
                 status="pending",
-                payload={},
+                payload=payload,
                 shadow=shadow,
             )
         )
         stats["queued"] += 1
+        spent += estimate  # provisional — real cost lands in ai_runs when 2b calls the LLM
 
     if stats["queued"]:
         await db.flush()
@@ -147,4 +180,3 @@ def enable_ai_on_mailbox(mailbox: Mailbox, *, now: datetime | None = None) -> No
 
 def disable_ai_on_mailbox(mailbox: Mailbox) -> None:
     mailbox.ai_enabled = False
-    # keep ai_enabled_at so re-enable can choose to continue from the original instant or reset in admin UI

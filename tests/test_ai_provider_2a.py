@@ -12,8 +12,10 @@ from app.ai.provider import (
     BedrockLLMProvider,
     LLMRequest,
     NullLLMProvider,
+    _shared_anthropic_client,
     estimate_cost_usd,
     get_llm_provider,
+    reset_provider_for_tests,
     resolve_model,
 )
 from app.core.config import Settings
@@ -73,6 +75,15 @@ def test_2a_estimate_cost_haiku_classify_ballpark() -> None:
 
 
 def test_2a_anthropic_key_selects_live_provider_class() -> None:
+    reset_provider_for_tests()
     settings = _settings(anthropic_api_key=SecretStr("sk-test"))
     provider = get_llm_provider(settings)
     assert isinstance(provider, AnthropicLLMProvider)
+
+
+def test_2a_anthropic_client_is_shared_per_process() -> None:
+    reset_provider_for_tests()
+    a = _shared_anthropic_client("sk-shared-test")
+    b = _shared_anthropic_client("sk-shared-test")
+    assert a is b
+    assert getattr(a, "max_retries", None) == 2

@@ -4,23 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
 import structlog
 
+from app.ai.pricing import estimate_cost_usd
 from app.core.config import Settings
 
 log = structlog.get_logger(__name__)
 
 Purpose = Literal["classify", "draft", "extract", "assistant", "embed"]
 
-# Rough list-price fallbacks (USD / MTok) for cost logging when the SDK omits usage pricing.
-# Real spend still comes from token counts × these rates; never use for money/document math.
-_DEFAULT_RATES: dict[str, tuple[Decimal, Decimal]] = {
-    "haiku": (Decimal("0.10"), Decimal("0.50")),
-    "sonnet": (Decimal("2"), Decimal("10")),
-    "opus": (Decimal("5"), Decimal("25")),
-}
+# One Anthropic client per process (timeout ~60 s, limited retries).
+_anthropic_client: object | None = None
+_anthropic_client_key: str | None = None
+_ANTHROPIC_TIMEOUT_S = 60.0
+_ANTHROPIC_MAX_RETRIES = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,18 +64,27 @@ def resolve_model(settings: Settings, purpose: Purpose, explicit: str | None) ->
     return model
 
 
-def estimate_cost_usd(model: str, input_tokens: int, output_tokens: int) -> Decimal:
-    """Order-of-magnitude USD from published Anthropic list rates (ADR-011)."""
-    lower = model.lower()
-    in_rate, out_rate = Decimal("1"), Decimal("5")  # Haiku 4.5-ish fallback
-    for key, rates in _DEFAULT_RATES.items():
-        if key in lower:
-            in_rate, out_rate = rates
-            break
-    cost = (Decimal(input_tokens) / Decimal(1_000_000)) * in_rate + (
-        Decimal(output_tokens) / Decimal(1_000_000)
-    ) * out_rate
-    return cost.quantize(Decimal("0.000001"))
+def _shared_anthropic_client(api_key: str) -> object:
+    """Reuse one AsyncAnthropic client for the process lifetime."""
+    global _anthropic_client, _anthropic_client_key
+    if _anthropic_client is not None and _anthropic_client_key == api_key:
+        return _anthropic_client
+    from anthropic import AsyncAnthropic
+
+    _anthropic_client = AsyncAnthropic(
+        api_key=api_key,
+        timeout=_ANTHROPIC_TIMEOUT_S,
+        max_retries=_ANTHROPIC_MAX_RETRIES,
+    )
+    _anthropic_client_key = api_key
+    return _anthropic_client
+
+
+def reset_anthropic_client_for_tests() -> None:
+    """Test helper — drop the process-wide client."""
+    global _anthropic_client, _anthropic_client_key
+    _anthropic_client = None
+    _anthropic_client_key = None
 
 
 class NullLLMProvider:
@@ -86,7 +94,6 @@ class NullLLMProvider:
         self._settings = settings
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
-        # Still enforce model id rules so misconfiguration fails in test the same way as prod.
         model = resolve_model(self._settings, request.purpose, request.model)
         raise RuntimeError(f"NullLLMProvider cannot complete (model={model}); set ANTHROPIC_API_KEY")
 
@@ -95,21 +102,20 @@ class AnthropicLLMProvider:
     def __init__(self, api_key: str, settings: Settings) -> None:
         self._api_key = api_key
         self._settings = settings
+        self._client = _shared_anthropic_client(api_key)
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
         import time
-        from typing import cast
 
-        from anthropic import AsyncAnthropic
         from anthropic.types import MessageParam
 
         model = resolve_model(self._settings, request.purpose, request.model)
-        client = AsyncAnthropic(api_key=self._api_key)
+        client = self._client
         started = time.perf_counter()
         # temperature omitted: current Anthropic SDK Messages.create typing has no temperature kwarg
         _ = request.temperature
         user_msg = cast(MessageParam, {"role": "user", "content": request.user})
-        message = await client.messages.create(
+        message = await client.messages.create(  # type: ignore[attr-defined]
             model=model,
             max_tokens=request.max_tokens,
             system=request.system,
@@ -159,13 +165,34 @@ class BedrockLLMProvider:
         )
 
 
+_provider_singleton: LLMProvider | None = None
+_provider_settings_id: int | None = None
+
+
 def get_llm_provider(settings: Settings) -> LLMProvider:
+    """Return a process-scoped provider (one Anthropic client, not per call)."""
+    global _provider_singleton, _provider_settings_id
+    sid = id(settings)
+    if _provider_singleton is not None and _provider_settings_id == sid:
+        return _provider_singleton
     if settings.llm_provider == "bedrock":
-        return BedrockLLMProvider(settings)
-    key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
-    if not key:
-        return NullLLMProvider(settings)
-    return AnthropicLLMProvider(key, settings)
+        provider: LLMProvider = BedrockLLMProvider(settings)
+    else:
+        key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
+        if not key:
+            provider = NullLLMProvider(settings)
+        else:
+            provider = AnthropicLLMProvider(key, settings)
+    _provider_singleton = provider
+    _provider_settings_id = sid
+    return provider
+
+
+def reset_provider_for_tests() -> None:
+    global _provider_singleton, _provider_settings_id
+    _provider_singleton = None
+    _provider_settings_id = None
+    reset_anthropic_client_for_tests()
 
 
 def model_for_purpose(settings: Settings, purpose: Purpose) -> str | None:
@@ -179,7 +206,6 @@ def model_for_purpose(settings: Settings, purpose: Purpose) -> str | None:
     return mapping[purpose]
 
 
-# Keep Any import used by Protocol consumers / mypy re-exports.
 __all__ = [
     "AnthropicLLMProvider",
     "BedrockLLMProvider",
@@ -191,5 +217,6 @@ __all__ = [
     "estimate_cost_usd",
     "get_llm_provider",
     "model_for_purpose",
+    "reset_provider_for_tests",
     "resolve_model",
 ]

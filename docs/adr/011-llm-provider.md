@@ -60,13 +60,26 @@ records the published position at acceptance, not a legal opinion.
 ### Smart Mail hard rules (unchanged)
 
 AI never sends outside the company and never writes to Money on its own; only mail received after `ai_enabled_at` is
-processed; only AV-clean attachments; daily cap `AI_DAILY_BUDGET_USD`. Application logs must not contain mail bodies
-or full model prompts/payloads — only tokens, cost, latency, ids (`draft_id` / message UUID / purpose).
+processed; daily cap `AI_DAILY_BUDGET_USD`. Only AV-clean attachments are sent to the model; unscanned attachments do
+not drop the e-mail — body text is still processed and the suggestion carries note code `attachment_unscanned`
+(UI: `ai.notes.attachment_unscanned`). Application logs must not contain mail bodies or full model prompts/payloads —
+only tokens, cost, latency, ids (`draft_id` / message UUID / purpose).
 
 ## Cost estimate (per 1 000 e-mails)
 
 List prices from Anthropic’s pricing page (USD per million tokens), checked 27 October 2026:
 [Pricing](https://platform.claude.com/docs/en/about-claude/pricing).
+
+Code looks up rates by **exact model id** (`app/ai/pricing.py` → `MODEL_RATES`). Substring matching
+(`"haiku" in model`) is forbidden — Haiku 4.5 must not be billed as Haiku 5.5. Unknown ids use the **highest**
+rate in the table and log a warning (never under-estimate the budget).
+
+| Exact API id (examples) | Input / MTok | Output / MTok | Notes |
+|---|---|---|---|
+| `claude-haiku-5-5` | **$0.10** (≤100K) / **$0.50** (>100K) | **$0.50** / **$2.50** | high-context tier on input size |
+| `claude-sonnet-5-5` | **$2** | **$10** | |
+| `claude-opus-5-5` | **$4** | **$20** | also the unknown-model fallback |
+| `claude-haiku-4-5` / `claude-haiku-4-5-20251001` | **$1** | **$5** | distinct from Haiku 5.5 |
 
 Assumptions for Smart Mail (order of magnitude for budgeting; real spend is logged per `ai_runs` row):
 
@@ -75,10 +88,13 @@ Assumptions for Smart Mail (order of magnitude for budgeting; real spend is logg
 | Classify | `LLM_MODEL_CLASSIFY` | Claude Haiku 5.5: **$0.10** in / **$0.50** out per MTok | ~1 500 in + ~200 out | **~$0.25** |
 | Reply draft | `LLM_MODEL_DRAFT` | Claude Sonnet 5.5: **$2** in / **$10** out per MTok | ~3 000 in + ~500 out | **~$11** |
 
-Calculation (classify):  
+Calculation (classify on Haiku 5.5):  
 `(1500/1e6)×0.10 + (200/1e6)×0.50 = $0.00025` per mail → **$0.25 / 1 000**.
 
-Calculation (draft):  
+Same tokens on Haiku 4.5:  
+`(1500/1e6)×1 + (200/1e6)×5 = $0.0025` per mail → **$2.50 / 1 000** (must not equal the Haiku 5.5 figure).
+
+Calculation (draft on Sonnet 5.5):  
 `(3000/1e6)×2 + (500/1e6)×10 = $0.011` per mail → **$11 / 1 000**.
 
 Notes:
@@ -87,8 +103,9 @@ Notes:
 - US-only inference (`inference_geo=us`) is listed at **1.1×** those rates on the same pricing page.
 - Batch API is 50 % off list; prompt-cache reads are cheaper — Smart Mail may use caching later; estimates above ignore
   those discounts.
-- Install default budget: **`AI_DAILY_BUDGET_USD=5`** (enough for thousands of classifies or a few hundred drafts per
-  day under the assumptions above).
+- Daily budget day boundary is **Europe/Bratislava**; the budget is checked **before every LLM call** with an estimate
+  of that call (a batch of N messages stops when the next estimate would exceed the cap).
+- Install default budget: **`AI_DAILY_BUDGET_USD=5`**.
 
 **Model ids are not pinned in this ADR.** Operators set dated / concrete API ids in `.env` (examples only in
 `.env.example`). Code refuses empty model ids and the literal `latest`.
