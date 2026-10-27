@@ -8,6 +8,7 @@
 | light | `text/tertiary` #6E7787 | `bg/canvas` #FFFFFF | 4.51 | 4.5 | ✓ | hints |
 | light | `text/on-rail` #C9D2E0 | `bg/rail` #1F2937 | 9.63 | 4.5 | ✓ | rail labels |
 | light | `text/on-rail-active` #FFFFFF | `bg/rail-active` #2B3A50 | 11.51 | 4.5 | ✓ | active rail label |
+| light | `text/on-rail-danger` #FF6B6B | `bg/rail` #1F2937 | 5.29 | 4.5 | ✓ | logout rail label |
 | light | `brand/primary-600` #0F75BC | `bg/canvas` #FFFFFF | 4.89 | 4.5 | ✓ | links |
 | light | `text/on-primary` #FFFFFF | `brand/primary-600` #0F75BC | 4.89 | 4.5 | ✓ | primary button label |
 | light | `text/on-primary` #FFFFFF | `brand/primary-700` #0B5E98 | 6.84 | 4.5 | ✓ | primary button hover |
@@ -27,6 +28,7 @@
 | dark | `text/tertiary` #8590A2 | `bg/canvas` #0F141B | 5.73 | 4.5 | ✓ | hints |
 | dark | `text/on-rail` #A7B1C2 | `bg/rail` #0B0F15 | 8.88 | 4.5 | ✓ | rail labels |
 | dark | `text/on-rail-active` #FFFFFF | `bg/rail-active` #1A2433 | 15.62 | 4.5 | ✓ | active rail label |
+| dark | `text/on-rail-danger` #FF6B6B | `bg/rail` #0B0F15 | 6.92 | 4.5 | ✓ | logout rail label |
 | dark | `brand/primary-600` #4AA3F0 | `bg/canvas` #0F141B | 6.85 | 4.5 | ✓ | links |
 | dark | `text/on-primary` #0B1220 | `brand/primary-600` #4AA3F0 | 6.94 | 4.5 | ✓ | primary button label |
 | dark | `text/on-primary` #0B1220 | `brand/primary-700` #7DBEF5 | 9.41 | 4.5 | ✓ | primary button hover |

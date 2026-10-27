@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { Button } from '../../components/Button';
 import { AppShell } from '../../components/shell/AppShell';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { runSearch, searchKey, type SearchField, type SearchScope } from './searchApi';
@@ -202,8 +203,20 @@ export function ScreenW10() {
             </p>
           ) : empty ? (
             <div className="flex flex-col items-center gap-3 px-6 py-20 text-center" data-testid="search-empty">
+              <span
+                className="flex size-20 items-center justify-center rounded-full bg-bg-muted text-text-tertiary"
+                aria-hidden="true"
+              >
+                <Search size={36} strokeWidth={1.5} />
+              </span>
               <p className="type-heading text-text-primary">{t('search.emptyTitle')}</p>
               <p className="type-small max-w-md text-text-secondary">{t('search.emptyHint')}</p>
+              <p className="type-caption max-w-md text-text-tertiary">{t('search.emptyTips')}</p>
+              {scope !== 'all' ? (
+                <Button type="button" onClick={() => setScope('all')}>
+                  {t('search.searchAllMailboxes')}
+                </Button>
+              ) : null}
             </div>
           ) : (
             <ul className="divide-y divide-border-subtle">

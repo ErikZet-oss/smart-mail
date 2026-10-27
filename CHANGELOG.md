@@ -2,6 +2,17 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 1h-e (PR 5): Roundcube import, vacation EN/DE, W9/W10 empty, axe
+
+- `tools/roundcube_import.py` — vCard + identities + Odpovede only (no filters); dry-run default; fixtures
+  `@smartmail.test` only; optional read-only Roundcube DSN (SELECT).
+- Vacation EN/DE: extra `Accept-Language` rules in the **same** active ManageSieve script (+ `stop`), SK fallback.
+- W9: viewer hides Upraviť / Zmazať / Import; empty / pick illustration per Figma.
+- W10: empty tips + illustration + „Hľadať vo všetkých schránkach“.
+- Playwright axe: no serious/critical on mail, contacts, search, settings.
+- Deploy default mail host `mail.nameserver.sk` (IMAP 993/SSL, SMTP 465/SSL or 587/STARTTLS); `install.sh`
+  probes 993/465/4190 with Slovak messages and **never fails** when 4190 is down.
+
 ## [Unreleased] — Phase 1h-d (PR 4): W4c schedule, W4f popup, ClamAV
 
 - **W4c** Naplánovať odoslanie: send-menu presets (Zajtra 8:00 / Pondelok 8:00 / Vlastný čas), chip + cancel;

@@ -13,6 +13,7 @@
   --text-tertiary: #6E7787;
   --text-on-rail: #C9D2E0;
   --text-on-rail-active: #FFFFFF;
+  --text-on-rail-danger: #FF6B6B;
   --text-on-primary: #FFFFFF;
   --brand-logo: #0F75BC;
   --brand-primary-700: #0B5E98;
@@ -146,6 +147,7 @@
   --text-tertiary: #8590A2;
   --text-on-rail: #A7B1C2;
   --text-on-rail-active: #FFFFFF;
+  --text-on-rail-danger: #FF6B6B;
   --text-on-primary: #0B1220;
   --brand-logo: #0F75BC;
   --brand-primary-700: #7DBEF5;
@@ -194,6 +196,7 @@
     --text-tertiary: #8590A2;
     --text-on-rail: #A7B1C2;
     --text-on-rail-active: #FFFFFF;
+    --text-on-rail-danger: #FF6B6B;
     --text-on-primary: #0B1220;
     --brand-logo: #0F75BC;
     --brand-primary-700: #7DBEF5;

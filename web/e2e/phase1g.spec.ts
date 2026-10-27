@@ -112,6 +112,7 @@ test.describe('Phase 1g — contacts, search, palette', () => {
     });
     await page.goto('/search?q=xyzzy');
     await expect(page.getByTestId('search-empty')).toContainText('Nič sme nenašli');
+    await expect(page.getByTestId('search-empty')).toContainText('Nerez = A2/A4');
     await shot(page, 'phase1g-W10-empty');
   });
 

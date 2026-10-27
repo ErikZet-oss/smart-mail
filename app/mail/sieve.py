@@ -22,7 +22,11 @@ from app.mail.models import Mailbox
 # Historical Roundcube ManageSieve plugin name; we keep it when it is already active.
 DEFAULT_SCRIPT_NAME = "roundcube"
 VACATION_RULE_NAME = "Mimo kancelárie"
+VACATION_RULE_NAME_EN = "Mimo kancelárie EN"
+VACATION_RULE_NAME_DE = "Mimo kancelárie DE"
 VACATION_MARKER = "# smartmail:vacation"
+VACATION_MARKER_EN = "# smartmail:vacation:en"
+VACATION_MARKER_DE = "# smartmail:vacation:de"
 
 _TEST_SIEVE_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "imap-test"})
 
@@ -334,16 +338,28 @@ def _parse_rule_block(name: str, block: str, *, index: int) -> FilterRule:
     disabled = bool(re.search(r"(?m)^#\s*disabled\b", block)) or (
         "\n# if " in block or block.lstrip().startswith("# if ")
     )
-    # Vacation marker
-    is_vacation = VACATION_MARKER in block or name.strip() == VACATION_RULE_NAME
+    # Vacation markers (SK default + optional EN/DE language rules in the same script)
+    name_s = name.strip()
+    is_vacation = (
+        VACATION_MARKER in block
+        or VACATION_MARKER_EN in block
+        or VACATION_MARKER_DE in block
+        or name_s in {VACATION_RULE_NAME, VACATION_RULE_NAME_EN, VACATION_RULE_NAME_DE}
+        or name_s.startswith(VACATION_RULE_NAME)
+    )
     live = _uncomment_disabled_body(block) if disabled else block
     # drop the # rule:[…] line for parsing
     live_body = _RULE_NAME.sub("", live, count=1).strip()
     if is_vacation:
         vac = _vacation_from_sieve_body(live_body)
+        rule_name = VACATION_RULE_NAME
+        if VACATION_MARKER_EN in block or name_s == VACATION_RULE_NAME_EN:
+            rule_name = VACATION_RULE_NAME_EN
+        elif VACATION_MARKER_DE in block or name_s == VACATION_RULE_NAME_DE:
+            rule_name = VACATION_RULE_NAME_DE
         return FilterRule(
             id=f"vacation-{index}",
-            name=VACATION_RULE_NAME,
+            name=rule_name,
             enabled=not disabled and vac.enabled,
             match="all",
             conditions=[],
@@ -484,8 +500,18 @@ def parse_roundcube_script(script: str, *, script_name: str = DEFAULT_SCRIPT_NAM
             if rule.kind == "vacation":
                 vac_body = _uncomment_disabled_body(block) if not rule.enabled else block
                 vac_body = _RULE_NAME.sub("", vac_body, count=1)
-                vacation = _vacation_from_sieve_body(vac_body)
-                vacation.enabled = rule.enabled
+                extracted = _vacation_from_sieve_body(vac_body)
+                if rule.name == VACATION_RULE_NAME_EN:
+                    vacation.body_en = extracted.body_sk
+                elif rule.name == VACATION_RULE_NAME_DE:
+                    vacation.body_de = extracted.body_sk
+                else:
+                    vacation.subject = extracted.subject
+                    vacation.body_sk = extracted.body_sk
+                    vacation.days = extracted.days
+                    vacation.start = extracted.start
+                    vacation.end = extracted.end
+                vacation.enabled = vacation.enabled or rule.enabled
                 rules.append(rule)
             else:
                 rules.append(rule)
@@ -713,31 +739,99 @@ def compile_rule_from_structured(rule: FilterRule) -> str:
     return "\n".join(lines) + "\n"
 
 
-def compile_vacation_rule(v: VacationSettings) -> str:
-    """Vacation as one Roundcube rule inside the active filter script."""
-    lines = [f"# rule:[{VACATION_RULE_NAME}]", VACATION_MARKER]
-    if not v.enabled:
-        stub = 'if true {\n\tvacation :days 7 :subject "off" "";\n}\n'
-        lines.append(_comment_out_rule_body(stub).rstrip("\n"))
-        return "\n".join(lines) + "\n"
-
-    subject = _escape(v.subject.replace("{predmet}", "%s"))
-    # SK is required (SETTINGS_SPEC); EN/DE stored in DB — sieve body uses SK (RFC 5230 single reason).
-    body = _escape(v.body_sk)
+def _vacation_date_tests(v: VacationSettings) -> list[str]:
     tests: list[str] = []
     if v.start:
         tests.append(f'currentdate :value "ge" "iso8601" "{_escape(v.start)}"')
     if v.end:
         tests.append(f'currentdate :value "le" "iso8601" "{_escape(v.end)}"')
+    return tests
+
+
+def _compile_one_vacation_rule(
+    *,
+    name: str,
+    marker: str,
+    body: str,
+    subject: str,
+    days: int,
+    date_tests: list[str],
+    lang_tag: str | None,
+    stop: bool,
+) -> str:
+    """One vacation rule; optional Accept-Language gate + stop (EN/DE before SK fallback)."""
+    lines = [f"# rule:[{name}]", marker]
+    tests = list(date_tests)
+    if lang_tag:
+        # Match BCP 47 tags like en, en-US, en-GB inside Accept-Language.
+        tests.append(f'header :comparator "i;ascii-casemap" :matches "Accept-Language" "*{lang_tag}*"')
     if tests:
         test = tests[0] if len(tests) == 1 else f"allof ({', '.join(tests)})"
     else:
         test = "true"
     lines.append(f"if {test} {{")
-    lines.append(f'\tvacation :days {int(v.days)} :subject "{subject}"')
-    lines.append(f'\t"{body}";')
+    lines.append(f'\tvacation :days {int(days)} :subject "{subject}"')
+    lines.append(f'\t"{_escape(body)}";')
+    if stop:
+        lines.append("\tstop;")
     lines.append("}")
     return "\n".join(lines) + "\n"
+
+
+def compile_vacation_rule(v: VacationSettings) -> str:
+    """Vacation rules in the same active script: optional EN/DE then SK fallback (Phase 1h-e).
+
+    RFC 5230 allows one reason per ``vacation`` action; language variants are extra rules
+    gated by ``Accept-Language``, each ending with ``stop`` so only one reply is sent.
+    """
+    if not v.enabled:
+        lines = [f"# rule:[{VACATION_RULE_NAME}]", VACATION_MARKER]
+        stub = 'if true {\n\tvacation :days 7 :subject "off" "";\n}\n'
+        lines.append(_comment_out_rule_body(stub).rstrip("\n"))
+        return "\n".join(lines) + "\n"
+
+    subject = _escape(v.subject.replace("{predmet}", "%s"))
+    date_tests = _vacation_date_tests(v)
+    chunks: list[str] = []
+    if (v.body_en or "").strip():
+        chunks.append(
+            _compile_one_vacation_rule(
+                name=VACATION_RULE_NAME_EN,
+                marker=VACATION_MARKER_EN,
+                body=v.body_en.strip(),
+                subject=subject,
+                days=v.days,
+                date_tests=date_tests,
+                lang_tag="en",
+                stop=True,
+            )
+        )
+    if (v.body_de or "").strip():
+        chunks.append(
+            _compile_one_vacation_rule(
+                name=VACATION_RULE_NAME_DE,
+                marker=VACATION_MARKER_DE,
+                body=v.body_de.strip(),
+                subject=subject,
+                days=v.days,
+                date_tests=date_tests,
+                lang_tag="de",
+                stop=True,
+            )
+        )
+    chunks.append(
+        _compile_one_vacation_rule(
+            name=VACATION_RULE_NAME,
+            marker=VACATION_MARKER,
+            body=v.body_sk,
+            subject=subject,
+            days=v.days,
+            date_tests=date_tests,
+            lang_tag=None,
+            stop=False,
+        )
+    )
+    return "".join(chunks)
 
 
 def _ensure_requires(preamble: str, *, vacation: bool, body: bool = False) -> str:

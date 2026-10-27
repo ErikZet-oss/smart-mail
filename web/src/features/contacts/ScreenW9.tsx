@@ -10,6 +10,7 @@ import {
   Search,
   Trash2,
   Upload,
+  User,
   UserPlus,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -23,6 +24,7 @@ import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
+import { fetchMe } from '../auth/authApi';
 import {
   booksKey,
   contactsKey,
@@ -84,6 +86,9 @@ export function ScreenW9() {
   const [onDuplicate, setOnDuplicate] = useState<'merge' | 'skip'>('skip');
   const [importError, setImportError] = useState<string | null>(null);
 
+  const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
+  /** API 403 for viewers on every book; hide Upraviť / Zmazať / Import (shared-book debt). */
+  const canWrite = me.data?.person?.role !== 'viewer';
   const books = useQuery({ queryKey: booksKey, queryFn: fetchBooks });
   const activeBook = useMemo(() => {
     if (!books.data?.length) return null;
@@ -275,17 +280,19 @@ export function ScreenW9() {
                   ? t('contacts.shared')
                   : t('contacts.personal')}
             </h2>
-            <button
-              type="button"
-              aria-label={t('contacts.new')}
-              className="rounded-sm p-1.5 text-text-secondary hover:bg-bg-subtle"
-              onClick={() => {
-                setForm(emptyForm());
-                setEditor('create');
-              }}
-            >
-              <UserPlus size={18} />
-            </button>
+            {canWrite ? (
+              <button
+                type="button"
+                aria-label={t('contacts.new')}
+                className="rounded-sm p-1.5 text-text-secondary hover:bg-bg-subtle"
+                onClick={() => {
+                  setForm(emptyForm());
+                  setEditor('create');
+                }}
+              >
+                <UserPlus size={18} />
+              </button>
+            ) : null}
             {!mobile ? (
               <>
                 <button
@@ -298,17 +305,19 @@ export function ScreenW9() {
                 >
                   <Download size={18} />
                 </button>
-                <button
-                  type="button"
-                  aria-label={t('contacts.import')}
-                  className="rounded-sm p-1.5 text-text-secondary hover:bg-bg-subtle"
-                  onClick={() => {
-                    setImportError(null);
-                    setImportOpen(true);
-                  }}
-                >
-                  <Upload size={18} />
-                </button>
+                {canWrite ? (
+                  <button
+                    type="button"
+                    aria-label={t('contacts.import')}
+                    className="rounded-sm p-1.5 text-text-secondary hover:bg-bg-subtle"
+                    onClick={() => {
+                      setImportError(null);
+                      setImportOpen(true);
+                    }}
+                  >
+                    <Upload size={18} />
+                  </button>
+                ) : null}
                 <span className="rounded-sm p-1.5 text-text-tertiary" aria-hidden="true">
                   <MoreHorizontal size={18} />
                 </span>
@@ -359,18 +368,26 @@ export function ScreenW9() {
           </div>
           <ul className="min-h-0 flex-1 overflow-y-auto">
             {empty ? (
-              <li className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+              <li className="flex flex-col items-center gap-3 px-6 py-16 text-center" data-testid="contacts-empty">
+                <span
+                  className="flex size-20 items-center justify-center rounded-full bg-bg-muted text-text-tertiary"
+                  aria-hidden="true"
+                >
+                  <User size={36} strokeWidth={1.5} />
+                </span>
                 <p className="type-body text-text-secondary">{t('contacts.emptyTitle')}</p>
                 <p className="type-small text-text-tertiary">{t('contacts.emptyHint')}</p>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setForm(emptyForm());
-                    setEditor('create');
-                  }}
-                >
-                  <Plus size={16} /> {t('contacts.new')}
-                </Button>
+                {canWrite ? (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setForm(emptyForm());
+                      setEditor('create');
+                    }}
+                  >
+                    <Plus size={16} /> {t('contacts.new')}
+                  </Button>
+                ) : null}
               </li>
             ) : (
               contacts.data?.map((c) => {
@@ -456,19 +473,28 @@ export function ScreenW9() {
                   >
                     {t('contacts.write')}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setForm(toForm(selected));
-                      setEditor('edit');
-                    }}
-                  >
-                    <Pencil size={14} /> {t('contacts.edit')}
-                  </Button>
-                  <Button type="button" variant="secondary" onClick={() => remove.mutate()} disabled={remove.isPending}>
-                    <Trash2 size={14} /> {t('contacts.delete')}
-                  </Button>
+                  {canWrite ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          setForm(toForm(selected));
+                          setEditor('edit');
+                        }}
+                      >
+                        <Pencil size={14} /> {t('contacts.edit')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => remove.mutate()}
+                        disabled={remove.isPending}
+                      >
+                        <Trash2 size={14} /> {t('contacts.delete')}
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
               </header>
               <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
@@ -525,8 +551,29 @@ export function ScreenW9() {
               </div>
             </>
           ) : (
-            <div className="flex flex-1 items-center justify-center p-8">
-              <p className="type-body text-text-tertiary">{t('contacts.pickOne')}</p>
+            <div
+              className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center"
+              data-testid="contacts-pick"
+            >
+              <span
+                className="flex size-20 items-center justify-center rounded-full bg-bg-muted text-text-tertiary"
+                aria-hidden="true"
+              >
+                <User size={36} strokeWidth={1.5} />
+              </span>
+              <p className="type-heading text-text-primary">{t('contacts.pickOneTitle')}</p>
+              <p className="type-small max-w-sm text-text-secondary">{t('contacts.pickOne')}</p>
+              {canWrite ? (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setForm(emptyForm());
+                    setEditor('create');
+                  }}
+                >
+                  <Plus size={16} /> {t('contacts.new')}
+                </Button>
+              ) : null}
             </div>
           )}
         </section>

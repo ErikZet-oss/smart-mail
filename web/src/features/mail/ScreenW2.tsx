@@ -12,7 +12,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -516,7 +516,11 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
           </div>
         ) : null}
 
-        <div role="listbox" aria-label={label} className="min-h-0 flex-1 overflow-y-auto">
+        <div
+          role={rows.length > 0 && !list.isLoading ? 'listbox' : undefined}
+          aria-label={label}
+          className="min-h-0 flex-1 overflow-y-auto"
+        >
           {folder && folder.total === 0 ? (
             folder.special_use === 'inbox' ? (
               <EmptyState icon={<CircleCheck size={20} />} title={t('mail.allDone')} text={t('mail.allDoneText')} />
@@ -575,7 +579,8 @@ function ScreenW2Body({ mailboxRef, folderParam }: { mailboxRef: string; folderP
                 />
               );
               const key = item.kind === 'message' ? item.data.id : item.data.id;
-              if (!mobile) return <div key={key}>{row}</div>;
+              // Keep role="option" as a direct listbox child (no wrapper div).
+              if (!mobile) return <Fragment key={key}>{row}</Fragment>;
               return (
                 <SwipeRow key={key} onDone={() => bulk.mutate({ action: 'done', ids: [id] })}>
                   {row}
