@@ -728,7 +728,10 @@
       "complaint": { "label": "Reklamácie", "description": "reklamácie tovaru alebo služieb" },
       "shipping": { "label": "Doprava", "description": "zásielky, tracking, kuriér" },
       "payment": { "label": "Platby", "description": "platby, upomienky, potvrdenia úhrad" },
-      "document_request": { "label": "Žiadosti o dokument", "description": "atesty, certifikáty, technické listy, VOP" },
+      "document_request": {
+        "label": "Žiadosti o dokument",
+        "description": "atesty, certifikáty, technické listy, VOP"
+      },
       "supplier_info": { "label": "Dodávatelia – info", "description": "cenníky, výpadky, zmeny cien" },
       "newsletter": { "label": "Feed", "description": "newslettre a hromadné správy" },
       "notification": { "label": "Notifikácie", "description": "systémové a automatické oznámenia" },

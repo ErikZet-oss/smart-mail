@@ -299,9 +299,7 @@ function ScreenW2Body({
         return;
       }
       const folderForThread =
-        aiView && list.data?.messages.find((m) => m.id === messageId)?.folder_id
-          ? 'inbox'
-          : folderParam;
+        aiView && list.data?.messages.find((m) => m.id === messageId)?.folder_id ? 'inbox' : folderParam;
       const path = `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderForThread)}/${encodeURIComponent(tid)}`;
       if (full) navigate(path);
       else navigate(path, { replace: true });

@@ -17,10 +17,7 @@ const ORDER: SecurityNoteCode[] = [
   'attachment_unscanned',
 ];
 
-const META: Record<
-  SecurityNoteCode,
-  { icon: typeof ShieldAlert; kind: 'danger' | 'warning' }
-> = {
+const META: Record<SecurityNoteCode, { icon: typeof ShieldAlert; kind: 'danger' | 'warning' }> = {
   security_iban_change: { icon: Landmark, kind: 'danger' },
   security_display_spoof: { icon: ShieldAlert, kind: 'danger' },
   security_dmarc_fail: { icon: MailWarning, kind: 'danger' },

@@ -335,7 +335,10 @@ export function FolderColumn({
                         active ? 'bg-brand-primary-50 text-text-primary' : 'text-text-secondary hover:bg-bg-muted'
                       }`}
                     >
-                      <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${categoryDotClass(cat.color_token)}`} />
+                      <span
+                        aria-hidden="true"
+                        className={`size-2 shrink-0 rounded-full ${categoryDotClass(cat.color_token)}`}
+                      />
                       <span className="type-small min-w-0 flex-1 truncate">{cat.label_sk}</span>
                       {cat.count > 0 ? (
                         <span className="type-caption tabular-nums text-text-tertiary">{formatCount(cat.count)}</span>
