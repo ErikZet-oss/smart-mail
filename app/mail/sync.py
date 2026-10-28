@@ -222,11 +222,31 @@ def _quota(client: IMAPClient) -> tuple[int | None, int | None]:
     return None, None
 
 
+def folder_selected(
+    *,
+    name: str,
+    is_inbox: bool,
+    subscribed: set[str],
+    scope: Scope,
+    only_names: frozenset[str] | None,
+) -> bool:
+    """Whether this LIST entry is fetched. An explicit name skips the subscription filter (GitHub #23)."""
+    if only_names is not None:
+        return name in only_names
+    if not is_inbox and name not in subscribed:
+        return False
+    if (scope == "inbox" and not is_inbox) or (scope == "others" and is_inbox):
+        return False
+    return True
+
+
 def collect(
     client: IMAPClient,
     known: dict[str, KnownFolder],
     scope: Scope,
     batch: int,
+    *,
+    only_names: frozenset[str] | None = None,
 ) -> MailboxSnapshot:
     capabilities = [_flag(c).upper() for c in client.capabilities()]
     condstore = "CONDSTORE" in capabilities
@@ -246,9 +266,13 @@ def collect(
         if "\\noselect" in {f.lower() for f in folder.flags} or "\\nonexistent" in {f.lower() for f in folder.flags}:
             continue
         is_inbox = special.get(folder.name) == "inbox"
-        if not is_inbox and folder.name not in subscribed:
-            continue
-        if (scope == "inbox" and not is_inbox) or (scope == "others" and is_inbox):
+        if not folder_selected(
+            name=folder.name,
+            is_inbox=is_inbox,
+            subscribed=subscribed,
+            scope=scope,
+            only_names=only_names,
+        ):
             continue
         deltas.append(_collect_folder(client, folder.name, known.get(folder.name), condstore, batch))
     return MailboxSnapshot(capabilities, listed, subscribed, special, used, limit, deltas)
@@ -321,6 +345,15 @@ def _flag_columns(flags: Sequence[str]) -> dict[str, bool]:
 
 def _stored_flags(flags: Sequence[str]) -> list[str]:
     return sorted(f for f in flags if f.lower() != "\\recent")
+
+
+async def special_folder_name(db: AsyncSession, mailbox_id: uuid.UUID, use: str) -> str | None:
+    """IMAP name of the folder the folder list already maps to ``use`` (sent, drafts, …)."""
+    return (
+        await db.execute(
+            select(FolderMeta.name).where(FolderMeta.mailbox_id == mailbox_id, FolderMeta.special_use == use).limit(1)
+        )
+    ).scalar_one_or_none()
 
 
 async def known_state(db: AsyncSession, mailbox_id: uuid.UUID) -> dict[str, KnownFolder]:
@@ -456,6 +489,7 @@ async def sync_mailbox(
     redis: Redis | None = None,
     ssl_context: ssl.SSLContext | None = None,
     now: datetime | None = None,
+    only_names: frozenset[str] | None = None,
 ) -> str:
     """One sync run. Returns the resulting `sync_state`. Never raises for server problems: the state says it."""
     if not settings.sync_host_allowed(mailbox.imap_host):
@@ -481,7 +515,7 @@ async def sync_mailbox(
         def work() -> MailboxSnapshot:
             client = connect(server, creds, ssl_context)
             try:
-                return collect(client, known, scope, settings.mail_sync_batch)
+                return collect(client, known, scope, settings.mail_sync_batch, only_names=only_names)
             except (OSError, IMAPClientError) as exc:
                 raise SyncUnavailable(type(exc).__name__) from exc
             finally:
@@ -509,7 +543,7 @@ async def sync_mailbox(
         log.info(
             "mail.synced",
             mailbox_id=str(mailbox.id),
-            scope=scope,
+            scope="folder" if only_names else scope,
             folders=len(snapshot.folders),
             new=new_count,
             threaded=linked,

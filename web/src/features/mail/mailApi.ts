@@ -94,6 +94,7 @@ export type MessageListItem = {
   seen: boolean;
   flagged: boolean;
   answered: boolean;
+  forwarded?: boolean;
   has_attachments: boolean;
   thread_count: number;
   ai_category?: string | null;

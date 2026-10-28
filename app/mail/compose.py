@@ -17,18 +17,23 @@ from app.auth.models import Branch, Person
 from app.core.audit import audit
 from app.core.config import Settings
 from app.mail import storage
+from app.mail.actions import add_flag_async
 from app.mail.compose_models import ComposeAttachment, ComposeDraft, Identity
+from app.mail.flags import ANSWERED_FLAG, FORWARDED_FLAG, apply_local_flag
 from app.mail.imap_append import append_to_sent_async, delete_draft_uid_async, save_draft_replace_async
-from app.mail.models import Mailbox, Message
+from app.mail.models import FolderMeta, Mailbox, Message
 from app.mail.sanitize import sanitize_html
 from app.mail.signature import html_to_text, render_signature
 from app.mail.smtp import SmtpError, send_message, smtp_endpoint
 from app.mail.sync import (
+    Credentials,
     SyncAuthError,
     SyncUnavailable,
     credentials_for,
     mark_auth_failed,
     server_of,
+    special_folder_name,
+    sync_mailbox,
 )
 
 log = structlog.get_logger(__name__)
@@ -292,6 +297,35 @@ async def sync_draft_to_imap(db: AsyncSession, settings: Settings, draft: Compos
         log.warning("compose.draft_imap_unavailable", draft_id=str(draft.id), error=str(exc))
 
 
+async def mark_reply_or_forward(
+    db: AsyncSession,
+    settings: Settings,
+    draft: ComposeDraft,
+    mailbox: Mailbox,
+    creds: Credentials,
+) -> None:
+    """After SMTP: ``\\Answered`` on a reply, ``$Forwarded`` on a forward (IMAP + local list)."""
+    if draft.mode not in {"reply", "reply_all", "forward"} or draft.in_reply_to_message_id is None:
+        return
+    source = await db.get(Message, draft.in_reply_to_message_id)
+    if source is None:
+        return
+    folder = await db.get(FolderMeta, source.folder_id)
+    if folder is None:
+        return
+    flag = FORWARDED_FLAG if draft.mode == "forward" else ANSWERED_FLAG
+    try:
+        await add_flag_async(server_of(mailbox, settings), creds, folder.name, int(source.uid), flag)
+    except SyncAuthError:
+        log.warning("compose.flag_auth_failed", draft_id=str(draft.id))
+        return
+    except SyncUnavailable as exc:
+        log.warning("compose.flag_failed", draft_id=str(draft.id), error=str(exc))
+        return
+    apply_local_flag(source, flag)
+    await db.commit()
+
+
 async def execute_send(db: AsyncSession, settings: Settings, draft_id: uuid.UUID) -> str:
     """SMTP with mailbox AUTH, then APPEND to \\Sent. APPEND failure never re-sends (GitHub #20)."""
     draft = await db.get(ComposeDraft, draft_id)
@@ -357,14 +391,24 @@ async def execute_send(db: AsyncSession, settings: Settings, draft_id: uuid.UUID
     )
     await db.commit()
 
+    await mark_reply_or_forward(db, settings, draft, mailbox, creds)
+
     if draft.save_sent and mime is not None:
         try:
-            await append_to_sent_async(server_of(mailbox, settings), creds, mime)
+            known = await special_folder_name(db, mailbox.id, "sent")
+            appended = await append_to_sent_async(server_of(mailbox, settings), creds, mime, known_folder=known)
+            try:
+                await sync_mailbox(db, mailbox, settings, only_names=frozenset({appended.folder}))
+            except Exception as exc:
+                log.warning("compose.sent_sync_failed", draft_id=str(draft.id), error=type(exc).__name__)
         except SyncAuthError:
+            draft.send_error = "append_failed"
             await mark_auth_failed(db, mailbox, now=datetime.now(UTC))
             await db.commit()
             log.warning("compose.sent_append_auth_failed", draft_id=str(draft.id))
         except SyncUnavailable as exc:
+            draft.send_error = "append_failed"
+            await db.commit()
             log.warning("compose.sent_append_failed", draft_id=str(draft.id), error=str(exc))
 
     if draft.imap_draft_uid is not None:

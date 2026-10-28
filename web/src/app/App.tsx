@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ToastProvider } from '../components/Toasts';
+import { SendTracker } from '../features/compose/SendTracker';
 import { ThemeProvider } from '../features/prefs/ThemeProvider';
 import { SystemUiProvider } from '../features/system/systemUi';
 import { onGlobalError } from '../lib/api';
@@ -31,6 +32,7 @@ export function App({ router: given }: { router?: Router }) {
         <ThemeProvider>
           <SystemUiProvider>
             <ToastProvider>
+              <SendTracker router={router} />
               <RouterProvider router={router} future={{ v7_startTransition: true }} />
             </ToastProvider>
           </SystemUiProvider>

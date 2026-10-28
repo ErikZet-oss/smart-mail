@@ -2,7 +2,14 @@ import { createContext, useContext, useMemo } from 'react';
 
 export type ToastKind = 'info' | 'success' | 'error';
 export type ToastAction = { label: string; onClick: () => void };
-export type ToastInput = { kind?: ToastKind; message: string; action?: ToastAction; durationMs?: number };
+export type ToastInput = {
+  kind?: ToastKind;
+  message: string;
+  action?: ToastAction;
+  durationMs?: number;
+  /** Click on the message itself (sent confirmation opens the message in Odoslané). */
+  onActivate?: () => void;
+};
 
 export const ToastContext = createContext<(toast: ToastInput) => void>(() => undefined);
 

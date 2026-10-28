@@ -2,6 +2,18 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #23: send confirmation, answered/forwarded, immediate Sent sync
+
+- After Send, toast „Odosiela sa… Späť“ for the undo window; Späť cancels the send. The toast
+  stays after compose closes (poll up to 60 s, W4 and M4).
+- After SMTP, toast „Správa bola odoslaná.“ Click opens that message in Odoslané.
+- On failure, the existing Slovak reason plus „Otvoriť koncept“. If APPEND fails, toast
+  „Správa bola odoslaná, ale nepodarilo sa ju uložiť do Odoslané.“ and do not resend.
+- Reply stores `\\Answered` (IMAP + list icon); forward stores `$Forwarded`.
+- Sent APPEND uses the folder sync already knows (`special_use=sent`). A mailbox is created
+  only when none exists, with the NAMESPACE prefix (`Sent` or `INBOX.Sent`). That folder is
+  synced immediately.
+
 ## [Unreleased] — Pilot #18 (before 2c): ManageSieve, shell errors, AI gate, readyz
 
 - **B1**: ManageSieve via `asyncio.to_thread` (connect 5 s, overall 10 s); Redis cache „Sieve unavailable“ 10 min;
