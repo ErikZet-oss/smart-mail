@@ -1,17 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  Clock,
   Download,
+  Folder,
   Mail,
   MoreHorizontal,
   Pencil,
   Phone,
   Plus,
   Search,
+  SquarePen,
   Trash2,
   Upload,
   User,
   UserPlus,
+  Users,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -197,7 +201,7 @@ export function ScreenW9() {
     return (
       <AppShell section="contacts">
         <div className="flex flex-1 items-center justify-center p-8">
-          <p className="type-body text-danger-700">{t('contacts.errors.load')}</p>
+          <p className="type-body text-danger-600">{t('contacts.errors.load')}</p>
         </div>
       </AppShell>
     );
@@ -224,12 +228,12 @@ export function ScreenW9() {
         data-testid={mobile ? (mobileDetail ? 'screen-m15-detail' : 'screen-m15') : undefined}
       >
         {/* Left: address books + groups (desktop) */}
-        <aside className="hidden w-60 shrink-0 flex-col border-r border-border-default bg-bg-canvas sm:flex">
-          <header className="flex h-12 items-center justify-between border-b border-border-default px-3">
-            <h1 className="type-heading text-text-primary">{t('contacts.title')}</h1>
+        <aside className="hidden w-[var(--layout-folders)] shrink-0 flex-col border-r border-border-default bg-bg-subtle sm:flex">
+          <header className="flex h-14 items-center justify-between border-b border-border-default px-4">
+            <h1 className="type-body-strong text-text-primary">{t('contacts.title')}</h1>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            <p className="type-caption px-2 py-1 text-text-tertiary">{t('contacts.books')}</p>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+            <p className="type-caption px-2 pb-1.5 text-text-secondary">{t('contacts.books')}</p>
             {books.data.map((b) => {
               const slug = b.kind === 'shared' ? 'shared' : 'personal';
               const active = activeBook.id === b.id;
@@ -238,27 +242,38 @@ export function ScreenW9() {
                   key={b.id}
                   type="button"
                   onClick={() => navigate(`/contacts/${slug}`)}
-                  className={`type-small flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left ${
-                    active ? 'bg-brand-primary-50 text-brand-primary-800' : 'text-text-primary hover:bg-bg-subtle'
+                  className={`type-small flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left ${
+                    active
+                      ? 'bg-brand-primary-50 font-semibold text-brand-primary-700'
+                      : 'text-text-primary hover:bg-bg-muted'
                   }`}
                 >
+                  {b.kind === 'shared' ? (
+                    <Users size={16} aria-hidden="true" className="shrink-0" />
+                  ) : (
+                    <User size={16} aria-hidden="true" className="shrink-0" />
+                  )}
                   <span className="truncate">
                     {b.kind === 'shared' ? t('contacts.shared') : t('contacts.personal')}
                   </span>
                 </button>
               );
             })}
-            <p className="type-caption mt-3 px-2 py-1 text-text-tertiary">{t('contacts.stubs')}</p>
             {/* Money address book stays hidden until FEATURE_MONEY (Phase 3+). */}
-            <div className="type-small px-2 py-1.5 text-text-tertiary" title={t('common.comingSoon')}>
+            <div
+              className="type-small flex h-8 items-center gap-2.5 px-2 text-text-secondary"
+              title={t('common.comingSoon')}
+            >
+              <Clock size={16} aria-hidden="true" className="shrink-0" />
               {t('contacts.recent')}
             </div>
             {(groups.data?.length ?? 0) > 0 ? (
               <>
-                <p className="type-caption mt-3 px-2 py-1 text-text-tertiary">{t('contacts.groups')}</p>
+                <p className="type-caption mt-4 px-2 pb-1.5 text-text-secondary">{t('contacts.groups')}</p>
                 {groups.data?.map((g) => (
-                  <div key={g.id} className="type-small truncate px-2 py-1.5 text-text-secondary">
-                    {g.name}
+                  <div key={g.id} className="type-small flex h-8 items-center gap-2.5 px-2 text-text-primary">
+                    <Folder size={16} aria-hidden="true" className="shrink-0" />
+                    <span className="truncate">{g.name}</span>
                   </div>
                 ))}
               </>
@@ -268,12 +283,12 @@ export function ScreenW9() {
 
         {/* Middle: contact list — full width on mobile when no detail */}
         <section
-          className={`flex min-h-0 flex-col border-r border-border-default bg-bg-canvas sm:w-80 sm:shrink-0 ${
+          className={`flex min-h-0 flex-col border-r border-border-default bg-bg-canvas sm:w-[340px] sm:flex-none sm:shrink-0 ${
             mobileDetail ? 'hidden' : 'w-full flex-1'
           }`}
         >
-          <header className="flex h-12 items-center gap-1 border-b border-border-default px-2">
-            <h2 className="type-heading min-w-0 flex-1 truncate text-text-primary">
+          <header className="flex h-12 items-center gap-1 border-b border-border-default px-3">
+            <h2 className="type-body-strong min-w-0 flex-1 truncate text-text-primary">
               {mobile
                 ? t('contacts.title')
                 : activeBook.kind === 'shared'
@@ -324,15 +339,15 @@ export function ScreenW9() {
               </>
             ) : null}
           </header>
-          <div className="border-b border-border-default p-2">
+          <div className="p-2.5">
             <label className="relative block">
-              <Search size={14} className="pointer-events-none absolute left-2.5 top-2.5 text-text-tertiary" />
+              <Search size={16} className="pointer-events-none absolute left-3 top-2.5 text-text-secondary" />
               <input
                 type="search"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder={t('contacts.searchPlaceholder')}
-                className="type-small h-9 w-full rounded-sm border border-border-default bg-bg-canvas pl-8 pr-3 text-text-primary placeholder:text-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand-primary-500"
+                className="type-body h-9 w-full rounded-md border border-transparent bg-bg-muted pl-9 pr-3 text-text-primary placeholder:text-text-tertiary focus:border-brand-primary-500 focus:bg-bg-canvas focus-visible:outline-none"
               />
             </label>
             {mobile ? (
@@ -398,19 +413,24 @@ export function ScreenW9() {
                     <button
                       type="button"
                       onClick={() => navigate(`/contacts/${bookSlug}/${c.id}`)}
-                      className={`flex w-full items-start gap-2.5 border-b border-border-subtle px-3 py-2.5 text-left ${
+                      className={`flex w-full items-center gap-2.5 border-b border-border-default px-3 py-2 text-left ${
                         active ? 'bg-brand-primary-50' : 'hover:bg-bg-subtle'
                       }`}
                     >
                       <Avatar initials={initialsOf(c.display_name)} seed={c.id} size={32} />
                       <span className="min-w-0 flex-1">
-                        <span className="type-small block truncate font-medium text-text-primary">
+                        <span
+                          className={`type-small block truncate ${
+                            active ? 'font-semibold text-brand-primary-700' : 'text-text-primary'
+                          }`}
+                        >
                           {c.display_name}
                         </span>
-                        {c.organization ? (
-                          <span className="type-caption block truncate text-text-secondary">{c.organization}</span>
+                        {c.organization || email ? (
+                          <span className="type-caption block truncate font-normal text-text-secondary">
+                            {[c.organization, email].filter(Boolean).join(' · ')}
+                          </span>
                         ) : null}
-                        {email ? <span className="type-caption block truncate text-text-tertiary">{email}</span> : null}
                       </span>
                     </button>
                   </li>
@@ -462,7 +482,7 @@ export function ScreenW9() {
                     <Phone size={20} />
                   </a>
                 ) : null}
-                <div className="hidden items-center gap-2 sm:flex">
+                <div className="hidden flex-1 items-center gap-2 sm:flex">
                   <Button
                     type="button"
                     variant="secondary"
@@ -471,7 +491,7 @@ export function ScreenW9() {
                       if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
                     }}
                   >
-                    {t('contacts.write')}
+                    <SquarePen size={14} /> {t('contacts.write')}
                   </Button>
                   {canWrite ? (
                     <>
@@ -485,14 +505,14 @@ export function ScreenW9() {
                       >
                         <Pencil size={14} /> {t('contacts.edit')}
                       </Button>
-                      <Button
+                      <button
                         type="button"
-                        variant="secondary"
+                        className="type-label ml-auto inline-flex h-8 items-center gap-1.5 rounded-sm px-2 text-brand-primary-600 hover:bg-bg-subtle disabled:opacity-60"
                         onClick={() => remove.mutate()}
                         disabled={remove.isPending}
                       >
                         <Trash2 size={14} /> {t('contacts.delete')}
-                      </Button>
+                      </button>
                     </>
                   ) : null}
                 </div>
@@ -505,19 +525,19 @@ export function ScreenW9() {
                     {selected.organization ? (
                       <p className="type-small text-text-secondary">{selected.organization}</p>
                     ) : null}
-                    <span className="type-caption mt-1 inline-block rounded-sm bg-bg-muted px-2 py-0.5 text-text-secondary">
+                    <span className="type-caption mt-1 inline-block rounded-full bg-bg-muted px-2 py-0.5 text-text-secondary">
                       {activeBook.kind === 'shared' ? t('contacts.shared') : t('contacts.personal')}
                     </span>
                   </div>
                 </div>
-                <dl className="grid max-w-xl gap-3">
+                <dl className="grid max-w-[560px] grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-2.5">
                   {selected.emails.map((e, i) => (
-                    <div key={`${e.email}-${i}`}>
-                      <dt className="type-caption text-text-tertiary">{t('contacts.fields.email')}</dt>
-                      <dd className="type-body text-text-primary">
+                    <div key={`${e.email}-${i}`} className="contents">
+                      <dt className="type-small text-text-secondary">{t('contacts.fields.email')}</dt>
+                      <dd className="type-small min-w-0 text-text-primary">
                         <button
                           type="button"
-                          className="text-left text-brand-primary-700 underline"
+                          className="text-left text-brand-primary-600 hover:underline"
                           onClick={() => navigate(`/compose?to=${encodeURIComponent(e.email)}`)}
                         >
                           {e.email}
@@ -526,25 +546,25 @@ export function ScreenW9() {
                     </div>
                   ))}
                   {selected.phones.map((p, i) => (
-                    <div key={`${p.number}-${i}`}>
-                      <dt className="type-caption text-text-tertiary">{t('contacts.fields.phone')}</dt>
-                      <dd className="type-body text-text-primary">
-                        <a className="text-brand-primary-700 underline" href={`tel:${p.number}`}>
+                    <div key={`${p.number}-${i}`} className="contents">
+                      <dt className="type-small text-text-secondary">{t('contacts.fields.phone')}</dt>
+                      <dd className="type-small min-w-0 text-text-primary">
+                        <a className="text-text-primary hover:underline" href={`tel:${p.number}`}>
                           {p.number}
                         </a>
                       </dd>
                     </div>
                   ))}
                   {selected.organization ? (
-                    <div>
-                      <dt className="type-caption text-text-tertiary">{t('contacts.fields.org')}</dt>
-                      <dd className="type-body text-text-primary">{selected.organization}</dd>
+                    <div className="contents">
+                      <dt className="type-small text-text-secondary">{t('contacts.fields.org')}</dt>
+                      <dd className="type-small min-w-0 text-text-primary">{selected.organization}</dd>
                     </div>
                   ) : null}
                   {selected.notes ? (
-                    <div>
-                      <dt className="type-caption text-text-tertiary">{t('contacts.fields.notes')}</dt>
-                      <dd className="type-body whitespace-pre-wrap text-text-primary">{selected.notes}</dd>
+                    <div className="contents">
+                      <dt className="type-small text-text-secondary">{t('contacts.fields.notes')}</dt>
+                      <dd className="type-small min-w-0 whitespace-pre-wrap text-text-primary">{selected.notes}</dd>
                     </div>
                   ) : null}
                 </dl>
@@ -681,7 +701,7 @@ export function ScreenW9() {
               {t('contacts.mergeDup')}
             </label>
           </fieldset>
-          {importError ? <p className="type-small text-danger-700">{importError}</p> : null}
+          {importError ? <p className="type-small text-danger-600">{importError}</p> : null}
           <input
             ref={fileRef}
             type="file"
