@@ -113,6 +113,10 @@ _SIG_OPEN = re.compile(
     r"""<div\b[^>]*\bdata-sm-signature\s*=\s*(?P<q>["'])1(?P=q)[^>]*>""",
     re.IGNORECASE,
 )
+_QUOTE_OPEN = re.compile(
+    r"""<blockquote\b[^>]*\bdata-sm-quote\s*=\s*(?P<q>["'])1(?P=q)[^>]*>""",
+    re.IGNORECASE,
+)
 
 
 def _settings_of(settings: Settings | None) -> Settings:
@@ -211,29 +215,41 @@ def _drop_disallowed_signature_src(html: str) -> str:
     return _IMG_TAG.sub(repl, html)
 
 
-def _signature_span(html: str) -> tuple[str, str, str] | None:
-    """Split ``<div data-sm-signature="1">…</div>``, including nested divs."""
-    opened = _SIG_OPEN.search(html)
+def _tagged_span(html: str, opener: re.Pattern[str], open_tag: str, close_tag: str) -> tuple[str, str, str] | None:
+    """Split one element, counting nested copies of the same tag."""
+    opened = opener.search(html)
     if opened is None:
         return None
     depth = 1
     index = opened.end()
     lower = html.lower()
+    open_l = open_tag.lower()
+    close_l = close_tag.lower()
     while index < len(html) and depth:
-        next_open = lower.find("<div", index)
-        next_close = lower.find("</div>", index)
+        next_open = lower.find(open_l, index)
+        next_close = lower.find(close_l, index)
         if next_close < 0:
             return None
         if next_open != -1 and next_open < next_close:
             depth += 1
-            index = next_open + 4
+            index = next_open + len(open_l)
             continue
         depth -= 1
         if depth == 0:
             inner = html[opened.end() : next_close]
-            return html[: opened.start()], inner, html[next_close + len("</div>") :]
-        index = next_close + len("</div>")
+            return html[: opened.start()], inner, html[next_close + len(close_tag) :]
+        index = next_close + len(close_l)
     return None
+
+
+def signature_span(html: str) -> tuple[str, str, str] | None:
+    """Split ``<div data-sm-signature="1">…</div>``, including nested divs."""
+    return _tagged_span(html, _SIG_OPEN, "<div", "</div>")
+
+
+def quote_span(html: str) -> tuple[str, str, str] | None:
+    """Split ``<blockquote data-sm-quote="1">…</blockquote>``, including nested quotes."""
+    return _tagged_span(html, _QUOTE_OPEN, "<blockquote", "</blockquote>")
 
 
 def signature_stripped_parts(original: str, cleaned: str) -> list[str]:
@@ -272,6 +288,28 @@ def sanitize_signature_html(html: str, settings: Settings | None = None) -> tupl
     return cleaned, signature_stripped_parts(html, cleaned)
 
 
+def sanitize_quote_html(html: str, *, max_bytes: int = _MAX_DEFAULT) -> str:
+    """Safe HTML for a reply or forward quote. Remote http(s) URLs stay, as in Roundcube.
+
+    Display sanitizing (``sanitize_html``) replaces those URLs with a placeholder for our
+    reading pane. The recipient needs the original URL. Scripts and event handlers are still removed.
+    """
+    if not html:
+        return ""
+    cleaned = nh3.clean(
+        html,
+        tags=_TAGS,
+        attributes=_MESSAGE_ATTRS,
+        url_schemes=_URL_SCHEMES,
+        link_rel="noopener noreferrer",
+    )
+    raw = cleaned.encode("utf-8")
+    if len(raw) <= max_bytes:
+        return cleaned
+    cut = raw[:max_bytes].decode("utf-8", errors="ignore")
+    return cut + "…"
+
+
 def sanitize_html(html: str, *, max_bytes: int = _MAX_DEFAULT, settings: Settings | None = None) -> str:
     """Return safe HTML. Empty input stays empty. Oversized bodies are truncated after sanitizing.
 
@@ -307,13 +345,22 @@ def sanitize_compose_body(html: str, settings: Settings | None = None) -> str:
     """
     if not html:
         return ""
-    span = _signature_span(html)
+    span = signature_span(html)
     if span is None:
-        return sanitize_html(html, settings=settings)
-    before, inner, after = span
+        before, inner, after = html, None, ""
+    else:
+        before, inner, after = span
+    quoted = quote_span(before)
+    if quoted is None:
+        before_clean = sanitize_html(before, settings=settings)
+    else:
+        pre, quote_inner, mid = quoted
+        before_clean = (
+            sanitize_html(pre, settings=settings)
+            + f'<blockquote data-sm-quote="1">{sanitize_html(quote_inner, settings=settings)}</blockquote>'
+            + sanitize_html(mid, settings=settings)
+        )
+    if inner is None:
+        return before_clean + sanitize_html(after, settings=settings)
     signature, _gone = sanitize_signature_html(inner, settings=settings)
-    return (
-        sanitize_html(before, settings=settings)
-        + f'<div data-sm-signature="1">{signature}</div>'
-        + sanitize_html(after, settings=settings)
-    )
+    return before_clean + f'<div data-sm-signature="1">{signature}</div>' + sanitize_html(after, settings=settings)

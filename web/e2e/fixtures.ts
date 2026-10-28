@@ -161,6 +161,13 @@ export const SETTINGS_DEFAULTS: Record<string, Reply> = {
       signature_preview_html: '<p>Jana</p>',
     },
   },
+  // Branch signature (11c) loads presets on open. An unmocked 401 logs the shell out.
+  'GET /api/settings/signature-presets': {
+    body: {
+      karta: { sk: '<p>{meno}</p>', cs: '<p>{meno}</p>', en: '<p>{meno}</p>', de: '<p>{meno}</p>' },
+      text: { sk: '<p>S pozdravom</p>', cs: '<p>{meno}</p>', en: '<p>{meno}</p>', de: '<p>{meno}</p>' },
+    },
+  },
 };
 
 const FOLDER_MESSAGES = /^GET \/api\/mail\/mailboxes\/[^/]+\/folders\/[^/]+\/messages$/;

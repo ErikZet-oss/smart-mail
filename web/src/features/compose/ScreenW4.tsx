@@ -1,14 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
 import {
-  Bold,
   ChevronDown,
   Clock,
   Download,
   FileText,
-  Italic,
-  List,
   Maximize2,
   MessageSquare,
   Minimize2,
@@ -17,7 +13,6 @@ import {
   Send,
   Signature,
   SquareArrowOutUpRight,
-  Underline as UnderlineIcon,
   X,
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -40,6 +35,8 @@ import {
   uploadAttachment,
   type ComposeMode,
 } from './composeApi';
+import { ComposeToolbar } from './ComposeToolbar';
+import { composeExtensions, signatureHtmlOf } from './composeExtensions';
 import { sendErrorMessage } from './sendCopy';
 import { watchSend } from './sendWatch';
 import { PreSendDialog } from './PreSendDialog';
@@ -173,12 +170,13 @@ export function ScreenW4() {
   });
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: composeExtensions,
     content: '',
+    immediatelyRender: true,
     onUpdate: () => setDirty(true),
     editorProps: {
       attributes: {
-        class: 'type-body min-h-[280px] px-4 py-3 focus:outline-none text-text-primary',
+        class: 'compose-editor type-body min-h-[280px] focus:outline-none text-text-primary',
         'aria-label': t('compose.editor'),
       },
     },
@@ -192,7 +190,10 @@ export function ScreenW4() {
     setSubject(d.subject);
     setPriority(d.priority);
     setMdn(d.request_mdn);
-    editor?.commands.setContent(d.body_html || '<p></p>');
+    const html = d.include_signature
+      ? d.body_html || '<p></p>'
+      : (d.body_html || '<p></p>').replace(/<div data-sm-signature="1">[\s\S]*<\/div>\s*$/i, '');
+    editor?.commands.setContent(html, { emitUpdate: false });
     setDirty(Boolean(seedTo && !draftTo));
   }
 
@@ -568,32 +569,30 @@ export function ScreenW4() {
                 mobile ? '' : 'mx-6 mb-3 rounded-md border border-border-default'
               }`}
             >
-              <div className="flex items-center gap-0.5 border-b border-border-default bg-bg-subtle px-2 py-1 text-text-primary">
-                <button
-                  type="button"
-                  className="rounded-sm p-2 hover:bg-bg-subtle"
-                  onClick={() => editor?.chain().focus().toggleBold().run()}
-                >
-                  <Bold size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="rounded-sm p-2 hover:bg-bg-subtle"
-                  onClick={() => editor?.chain().focus().toggleItalic().run()}
-                >
-                  <Italic size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="rounded-sm p-2 hover:bg-bg-subtle"
-                  onClick={() => editor?.chain().focus().toggleBulletList().run()}
-                >
-                  <List size={16} />
-                </button>
-                <span className="type-caption ml-2 text-text-tertiary" title={t('common.comingSoon')}>
-                  <UnderlineIcon size={16} className="inline opacity-40" />
-                </span>
-              </div>
+              <ComposeToolbar
+                editor={editor}
+                onInlineImage={(file) => {
+                  if (!localId || !editor) return;
+                  const known = new Set((draftQuery.data?.attachments ?? []).map((item) => item.id));
+                  void uploadAttachment(localId, file, true)
+                    .then((next) => {
+                      void qc.setQueryData(['compose', localId], next);
+                      const added = next.attachments.find((item) => !known.has(item.id) && item.content_id);
+                      if (!added?.content_id) return;
+                      editor
+                        .chain()
+                        .focus()
+                        .setImage({ src: `cid:${added.content_id}`, alt: file.name })
+                        .run();
+                      setDirty(true);
+                    })
+                    .catch((error: unknown) => {
+                      if (error instanceof ApiError && error.detail.code === 'image_type') {
+                        toasts.error(t('compose.inlineImageType'));
+                      }
+                    });
+                }}
+              />
 
               <div className="type-body-lg min-h-0 flex-1 overflow-y-auto">
                 <EditorContent editor={editor} />
@@ -709,18 +708,20 @@ export function ScreenW4() {
                 }}
               />
             </label>
-            {(draft?.attachments ?? []).length > 0 ? (
+            {(draft?.attachments ?? []).some((a) => !a.is_inline) ? (
               <ul aria-label={t('compose.attachments')} className="mb-3 flex flex-col gap-1.5">
-                {(draft?.attachments ?? []).map((a) => (
-                  <li
-                    key={a.id}
-                    className="type-small flex h-8 items-center gap-2 rounded-sm border border-border-default px-2.5 text-text-primary"
-                  >
-                    <FileText size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
-                    <span className="min-w-0 flex-1 truncate">{a.filename}</span>
-                    <span className="type-caption shrink-0 text-text-secondary">{Math.round(a.size / 1024)} kB</span>
-                  </li>
-                ))}
+                {(draft?.attachments ?? [])
+                  .filter((a) => !a.is_inline)
+                  .map((a) => (
+                    <li
+                      key={a.id}
+                      className="type-small flex h-8 items-center gap-2 rounded-sm border border-border-default px-2.5 text-text-primary"
+                    >
+                      <FileText size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
+                      <span className="min-w-0 flex-1 truncate">{a.filename}</span>
+                      <span className="type-caption shrink-0 text-text-secondary">{Math.round(a.size / 1024)} kB</span>
+                    </li>
+                  ))}
               </ul>
             ) : null}
             <div className="flex flex-col gap-3 border-t border-border-default pt-4">
@@ -802,20 +803,21 @@ export function ScreenW4() {
       ) : null}
       {signatureOpen && localId ? (
         <SignatureEditDialog
-          initialHtml={
-            draft?.signature_html_override ??
-            editor?.getHTML().match(/<div data-sm-signature="1">([\s\S]*?)<\/div>/)?.[1] ??
-            ''
-          }
+          initialHtml={draft?.signature_html_override || signatureHtmlOf(editor)}
           busy={save.isPending}
           onClose={() => setSignatureOpen(false)}
           onSave={(html) => {
-            void patchDraft(localId, { signature_html_override: html, include_signature: true }).then((d) => {
+            void patchDraft(localId, {
+              signature_html_override: html,
+              include_signature: true,
+              body_html: editor?.getHTML() ?? '',
+              to_addrs: parseAddrs(to),
+              cc_addrs: parseAddrs(cc),
+              subject,
+            }).then((d) => {
               void qc.setQueryData(['compose', localId], d);
-              const signature = d.signature_html_override || html;
-              const without = (editor?.getHTML() ?? '').replace(/<div data-sm-signature="1">[\s\S]*?<\/div>/, '');
-              editor?.commands.setContent(`${without}<div data-sm-signature="1">${signature}</div>`);
-              setDirty(true);
+              editor?.commands.setContent(d.body_html || '<p></p>', { emitUpdate: false });
+              setDirty(false);
               setSignatureOpen(false);
               toasts.success(t('compose.signatureSaved'));
             });

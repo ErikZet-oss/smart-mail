@@ -10,6 +10,8 @@ export type ComposeAttachment = {
   content_type: string;
   size: number;
   av_status: string;
+  is_inline?: boolean;
+  content_id?: string | null;
 };
 
 export type ComposeCheck = { code: string; blocking: boolean; message: string };
@@ -106,9 +108,10 @@ export const listIdentities = (mailbox: string) => api<Identity[]>('GET', `${bas
 
 export const listResponses = () => api<CannedResponse[]>('GET', '/api/mail/responses');
 
-export async function uploadAttachment(draftId: string, file: File): Promise<ComposeDraft> {
+export async function uploadAttachment(draftId: string, file: File, inline = false): Promise<ComposeDraft> {
   const form = new FormData();
   form.append('file', file);
+  if (inline) form.append('inline', 'true');
   const csrf = document.cookie
     .split('; ')
     .find((c) => c.startsWith('sm_csrf='))
