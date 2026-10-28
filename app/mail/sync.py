@@ -37,6 +37,9 @@ log = structlog.get_logger(__name__)
 
 STATUS_ITEMS = [b"MESSAGES", b"UNSEEN", b"UIDNEXT", b"UIDVALIDITY", b"HIGHESTMODSEQ"]
 REFS_FIELD = b"BODY[HEADER.FIELDS (REFERENCES)]"
+# Bind-parameter budget per statement (asyncpg/PostgreSQL limit 32767): 500 rows x ~20 columns, 10000 UIDs.
+INSERT_CHUNK = 500
+DELETE_CHUNK = 10_000
 FETCH_ITEMS = ["UID", "FLAGS", "ENVELOPE", "INTERNALDATE", "RFC822.SIZE", "BODY.PEEK[HEADER.FIELDS (REFERENCES)]"]
 LOCK_TIMEOUT_S = 300
 
@@ -416,7 +419,12 @@ async def apply_snapshot(db: AsyncSession, mailbox: Mailbox, snapshot: MailboxSn
                 }
                 for e in delta.new
             ]
-            await db.execute(insert(Message).values(rows).on_conflict_do_nothing(index_elements=["folder_id", "uid"]))
+            # asyncpg allows at most 32767 bind parameters per statement; one row has ~20 columns.
+            for start in range(0, len(rows), INSERT_CHUNK):
+                chunk = rows[start : start + INSERT_CHUNK]
+                await db.execute(
+                    insert(Message).values(chunk).on_conflict_do_nothing(index_elements=["folder_id", "uid"])
+                )
         for uid, (flags, modseq) in delta.flags.items():
             await db.execute(
                 update(Message)
@@ -426,8 +434,10 @@ async def apply_snapshot(db: AsyncSession, mailbox: Mailbox, snapshot: MailboxSn
         if delta.present_uids is not None and not delta.reset:
             local = set((await db.execute(select(Message.uid).where(Message.folder_id == meta.id))).scalars())
             expunged = local - delta.present_uids
-            if expunged:
-                await db.execute(delete(Message).where(Message.folder_id == meta.id, Message.uid.in_(expunged)))
+            gone_uids = sorted(expunged)
+            for start in range(0, len(gone_uids), DELETE_CHUNK):
+                chunk_uids = gone_uids[start : start + DELETE_CHUNK]
+                await db.execute(delete(Message).where(Message.folder_id == meta.id, Message.uid.in_(chunk_uids)))
         meta.uidvalidity = delta.uidvalidity
         meta.uidnext = delta.uidnext
         meta.highestmodseq = delta.highestmodseq
