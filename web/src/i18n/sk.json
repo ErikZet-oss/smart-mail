@@ -464,6 +464,8 @@
     "attachments": "Prílohy",
     "attachmentInfected": "Príloha obsahuje vírus a nebola priložená.",
     "aiLater": "AI panel príde v ďalšej fáze.",
+    "maxSize": "Maximálna povolená veľkosť súboru je 25 MB",
+    "attachFile": "Priložiť súbor",
     "saved": "Koncept uložený.",
     "sendingUndo": "Správa sa odosiela… Späť",
     "undo": "Späť",

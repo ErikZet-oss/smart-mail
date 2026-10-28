@@ -5,15 +5,18 @@ import {
   Bold,
   ChevronDown,
   Clock,
+  Download,
+  FileText,
   Italic,
   List,
   Maximize2,
+  MessageSquare,
   Minimize2,
   Paperclip,
-  PenLine,
-  Reply,
   Save,
   Send,
+  Signature,
+  SquareArrowOutUpRight,
   Underline as UnderlineIcon,
   X,
 } from 'lucide-react';
@@ -440,16 +443,17 @@ export function ScreenW4() {
         <header
           className={`flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-3 ${mobile ? 'overflow-x-auto' : ''}`}
         >
+          {mobile ? null : <div className="flex-1" />}
           <button
             type="button"
-            className="flex h-14 w-20 flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle"
+            className="flex h-14 w-[72px] flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle"
             onClick={() => save.mutate()}
             disabled={save.isPending}
           >
             <Save size={18} />
             <span className="type-micro">{t('compose.save')}</span>
           </button>
-          <label className="flex h-14 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle">
+          <label className="flex h-14 w-[72px] cursor-pointer flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle">
             <Paperclip size={18} />
             <span className="type-micro">{t('compose.attach')}</span>
             <input
@@ -463,19 +467,19 @@ export function ScreenW4() {
           </label>
           <button
             type="button"
-            className="flex h-14 w-20 flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle"
+            className="flex h-14 w-[72px] flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle"
             onClick={() => setSignatureOpen(true)}
             disabled={!localId}
           >
-            <PenLine size={18} />
+            <Signature size={18} />
             <span className="type-micro">{t('compose.signature')}</span>
           </button>
           <button
             type="button"
-            className="flex h-14 w-20 flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle"
+            className="flex h-14 w-[72px] flex-col items-center justify-center gap-1 rounded-sm text-text-primary hover:bg-bg-subtle"
             onClick={() => setResponsesOpen(true)}
           >
-            <Reply size={18} />
+            <MessageSquare size={18} />
             <span className="type-micro">{t('compose.responses')}</span>
           </button>
           <div className="flex-1" />
@@ -521,17 +525,17 @@ export function ScreenW4() {
                 <Banner kind="danger" message={sendErrorMessage(t, draft?.send_error)} />
               </div>
             ) : null}
-            <div className="grid grid-cols-[88px_1fr] items-center gap-y-2 border-b border-border-default px-4 py-3">
-              <span className="type-small text-text-secondary">{t('compose.from')}</span>
-              <div className="type-body text-text-primary">
-                {identity ? `${identity.display_name} <${identity.email}>` : '…'}
+            <div className="grid grid-cols-[minmax(72px,172px)_1fr] items-center gap-y-2.5 px-6 pb-3 pt-4">
+              <span className="type-body text-text-primary">{t('compose.from')}</span>
+              <div className="type-small flex min-h-9 min-w-0 flex-wrap items-center gap-x-3 rounded-sm border border-border-default px-2 py-1.5 text-text-primary">
+                <span className="truncate">{identity ? `${identity.display_name} <${identity.email}>` : '…'}</span>
                 {personName ? (
-                  <span className="type-small ml-3 text-text-secondary">
+                  <span className="type-caption inline-flex items-center rounded-full bg-brand-primary-50 px-2.5 py-0.5 text-brand-primary-700">
                     {t('compose.replier', { name: personName })}
                   </span>
                 ) : null}
               </div>
-              <span className="type-small text-text-secondary">{t('compose.to')}</span>
+              <span className="type-body text-text-primary">{t('compose.to')}</span>
               <div className="flex gap-2">
                 <input
                   value={to}
@@ -542,13 +546,17 @@ export function ScreenW4() {
                   className="type-body h-9 flex-1 rounded-sm border border-border-default px-3"
                   aria-label={t('compose.to')}
                 />
-                <button type="button" className="type-caption text-brand-primary-600" onClick={() => setShowCc(true)}>
+                <button
+                  type="button"
+                  className="type-small h-9 shrink-0 rounded-sm border border-border-default px-3 text-text-primary hover:bg-bg-subtle"
+                  onClick={() => setShowCc(true)}
+                >
                   + {t('compose.cc')}
                 </button>
               </div>
               {showCc ? (
                 <>
-                  <span className="type-small text-text-secondary">{t('compose.cc')}</span>
+                  <span className="type-body text-text-primary">{t('compose.cc')}</span>
                   <input
                     value={cc}
                     onChange={(event) => {
@@ -560,7 +568,7 @@ export function ScreenW4() {
                   />
                 </>
               ) : null}
-              <span className="type-small text-text-secondary">{t('compose.subject')}</span>
+              <span className="type-body text-text-primary">{t('compose.subject')}</span>
               <input
                 value={subject}
                 onChange={(event) => {
@@ -572,38 +580,40 @@ export function ScreenW4() {
               />
             </div>
 
-            <div className="flex items-center gap-1 border-b border-border-default px-2 py-1">
-              <button
-                type="button"
-                className="rounded-sm p-2 hover:bg-bg-subtle"
-                onClick={() => editor?.chain().focus().toggleBold().run()}
-              >
-                <Bold size={16} />
-              </button>
-              <button
-                type="button"
-                className="rounded-sm p-2 hover:bg-bg-subtle"
-                onClick={() => editor?.chain().focus().toggleItalic().run()}
-              >
-                <Italic size={16} />
-              </button>
-              <button
-                type="button"
-                className="rounded-sm p-2 hover:bg-bg-subtle"
-                onClick={() => editor?.chain().focus().toggleBulletList().run()}
-              >
-                <List size={16} />
-              </button>
-              <span className="type-caption ml-2 text-text-tertiary" title={t('common.comingSoon')}>
-                <UnderlineIcon size={16} className="inline opacity-40" />
-              </span>
+            <div className="mx-6 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border-default">
+              <div className="flex items-center gap-0.5 border-b border-border-default bg-bg-subtle px-2 py-1 text-text-primary">
+                <button
+                  type="button"
+                  className="rounded-sm p-2 hover:bg-bg-subtle"
+                  onClick={() => editor?.chain().focus().toggleBold().run()}
+                >
+                  <Bold size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="rounded-sm p-2 hover:bg-bg-subtle"
+                  onClick={() => editor?.chain().focus().toggleItalic().run()}
+                >
+                  <Italic size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="rounded-sm p-2 hover:bg-bg-subtle"
+                  onClick={() => editor?.chain().focus().toggleBulletList().run()}
+                >
+                  <List size={16} />
+                </button>
+                <span className="type-caption ml-2 text-text-tertiary" title={t('common.comingSoon')}>
+                  <UnderlineIcon size={16} className="inline opacity-40" />
+                </span>
+              </div>
+
+              <div className="type-body-lg min-h-0 flex-1 overflow-y-auto">
+                <EditorContent editor={editor} />
+              </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <EditorContent editor={editor} />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 border-t border-border-default px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3 px-6 pb-3">
               <div className="relative flex">
                 <Button
                   type="button"
@@ -675,9 +685,10 @@ export function ScreenW4() {
               {isPopup || mobile ? null : (
                 <button
                   type="button"
-                  className="type-caption ml-auto text-brand-primary-600 underline"
+                  className="type-label ml-auto inline-flex items-center gap-1.5 text-brand-primary-600 hover:underline"
                   onClick={openPopupWindow}
                 >
+                  <SquareArrowOutUpRight size={16} aria-hidden="true" />
                   {t('compose.openPopup')}
                 </button>
               )}
@@ -686,46 +697,91 @@ export function ScreenW4() {
 
           <aside
             aria-label={t('compose.options')}
-            className="hidden w-[320px] shrink-0 flex-col border-l border-border-default bg-bg-subtle p-4 lg:flex"
+            className="hidden w-[380px] shrink-0 flex-col overflow-y-auto border-l border-border-default bg-bg-canvas px-4 lg:flex"
           >
-            <h2 className="type-heading mb-3 text-text-primary">{t('compose.options')}</h2>
-            <label className="mb-3 block type-small text-text-secondary">
-              {t('compose.priority')}
-              <select
-                value={priority}
-                onChange={(event) => {
-                  setPriority(event.target.value as typeof priority);
-                  setDirty(true);
-                }}
-                className="type-body mt-1 h-9 w-full rounded-sm border border-border-default bg-bg-canvas px-2"
-              >
-                <option value="low">{t('compose.priorityLow')}</option>
-                <option value="normal">{t('compose.priorityNormal')}</option>
-                <option value="high">{t('compose.priorityHigh')}</option>
-              </select>
-            </label>
-            <label className="mb-3 flex items-center gap-2 type-small text-text-primary">
+            <div className="mb-4 flex h-[var(--size-tab)] shrink-0 items-end gap-6 border-b border-border-default">
+              <h2 className="type-label -mb-px border-b-2 border-brand-primary-600 pb-2 text-brand-primary-700">
+                {t('compose.options')}
+              </h2>
+            </div>
+            <label className="mb-3 flex cursor-pointer flex-col items-center gap-3 rounded-md border border-dashed border-border-strong px-4 py-5 text-center">
+              <span className="type-small text-text-secondary">{t('compose.maxSize')}</span>
+              <span className="type-body-strong inline-flex h-8 items-center gap-2 rounded-sm border border-border-strong bg-bg-canvas px-3 text-text-primary hover:bg-bg-muted">
+                <Paperclip size={16} aria-hidden="true" />
+                {t('compose.attachFile')}
+              </span>
+              <Download size={24} aria-hidden="true" className="text-text-tertiary" />
               <input
-                type="checkbox"
-                checked={mdn}
+                type="file"
+                className="sr-only"
                 onChange={(event) => {
-                  setMdn(event.target.checked);
-                  setDirty(true);
+                  const file = event.target.files?.[0];
+                  if (file) attach.mutate(file);
                 }}
               />
-              {t('compose.mdn')}
             </label>
-            <div className="mt-4">
-              <p className="type-label mb-2 text-text-secondary">{t('compose.attachments')}</p>
-              <ul className="flex flex-col gap-1">
+            {(draft?.attachments ?? []).length > 0 ? (
+              <ul aria-label={t('compose.attachments')} className="mb-3 flex flex-col gap-1.5">
                 {(draft?.attachments ?? []).map((a) => (
-                  <li key={a.id} className="type-small text-text-primary">
-                    {a.filename} ({Math.round(a.size / 1024)} kB)
+                  <li
+                    key={a.id}
+                    className="type-small flex h-8 items-center gap-2 rounded-sm border border-border-default px-2.5 text-text-primary"
+                  >
+                    <FileText size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
+                    <span className="min-w-0 flex-1 truncate">{a.filename}</span>
+                    <span className="type-caption shrink-0 text-text-secondary">{Math.round(a.size / 1024)} kB</span>
                   </li>
                 ))}
               </ul>
+            ) : null}
+            <div className="flex flex-col gap-3 border-t border-border-default pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <span id="compose-mdn-label" className="type-small text-text-primary">
+                  {t('compose.mdn')}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={mdn}
+                  aria-labelledby="compose-mdn-label"
+                  onClick={() => {
+                    setMdn(!mdn);
+                    setDirty(true);
+                  }}
+                  className={`relative h-[18px] w-8 shrink-0 rounded-full transition-colors duration-[var(--motion-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary-500 ${
+                    mdn ? 'bg-brand-primary-600' : 'bg-border-strong'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 size-3.5 rounded-full bg-bg-canvas transition-[left] duration-[var(--motion-hover)] ${
+                      mdn ? 'left-4' : 'left-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+              <label className="flex items-center justify-between gap-3">
+                <span className="type-small text-text-primary">{t('compose.priority')}</span>
+                <span className="relative w-[180px]">
+                  <select
+                    value={priority}
+                    onChange={(event) => {
+                      setPriority(event.target.value as typeof priority);
+                      setDirty(true);
+                    }}
+                    className="type-body h-9 w-full appearance-none rounded-sm border border-border-default bg-bg-canvas pl-3 pr-8 text-text-primary"
+                  >
+                    <option value="low">{t('compose.priorityLow')}</option>
+                    <option value="normal">{t('compose.priorityNormal')}</option>
+                    <option value="high">{t('compose.priorityHigh')}</option>
+                  </select>
+                  <ChevronDown
+                    size={16}
+                    aria-hidden="true"
+                    className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary"
+                  />
+                </span>
+              </label>
             </div>
-            <p className="type-caption mt-auto pt-6 text-text-tertiary">{t('compose.aiLater')}</p>
           </aside>
         </div>
       </div>
