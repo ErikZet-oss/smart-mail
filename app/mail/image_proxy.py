@@ -118,7 +118,9 @@ def assert_public_http_url(url: str) -> tuple[str, str, int]:
     # Rebuild without fragment; keep query
     path = parsed.path or "/"
     query = f"?{parsed.query}" if parsed.query else ""
-    normalized = f"{parsed.scheme}://{host}:{port}{path}{query}" if parsed.port else f"{parsed.scheme}://{host}{path}{query}"
+    normalized = (
+        f"{parsed.scheme}://{host}:{port}{path}{query}" if parsed.port else f"{parsed.scheme}://{host}{path}{query}"
+    )
     return normalized, host, port
 
 

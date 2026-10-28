@@ -135,12 +135,8 @@ def test_b6_ssrf_literal_private_ips_blocked(url: str) -> None:
 
 
 def test_b6_remote_images_modes() -> None:
-    assert not should_offer_remote_images(
-        "never", from_email="a@b.example", contact_emails=set(), internal_domains=[]
-    )
-    assert should_offer_remote_images(
-        "always", from_email="a@b.example", contact_emails=set(), internal_domains=[]
-    )
+    assert not should_offer_remote_images("never", from_email="a@b.example", contact_emails=set(), internal_domains=[])
+    assert should_offer_remote_images("always", from_email="a@b.example", contact_emails=set(), internal_domains=[])
     assert should_offer_remote_images(
         "known",
         from_email="partner@firma.example",

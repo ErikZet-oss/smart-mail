@@ -39,9 +39,7 @@ def should_offer_remote_images(
         return False
     if mode == "always":
         return True
-    return sender_is_known(
-        from_email=from_email, contact_emails=contact_emails, internal_domains=internal_domains
-    )
+    return sender_is_known(from_email=from_email, contact_emails=contact_emails, internal_domains=internal_domains)
 
 
 def sign_remote_image_attrs(html: str, settings: Settings) -> str:
