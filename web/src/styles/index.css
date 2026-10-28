@@ -27,6 +27,9 @@ body {
   .type-heading {
     font: var(--type-heading);
   }
+  .type-body-lg {
+    font: var(--type-body-lg);
+  }
   .type-body {
     font: var(--type-body);
   }

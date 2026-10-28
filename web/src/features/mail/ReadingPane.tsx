@@ -14,6 +14,7 @@ import {
   Printer,
   Reply,
   ReplyAll,
+  SquareArrowOutUpRight,
   Tag,
   Trash2,
   UserPlus,
@@ -379,7 +380,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
               title={t('mail.openFull')}
               aria-label={t('mail.openFull')}
             >
-              ↗
+              <SquareArrowOutUpRight size={18} aria-hidden="true" />
             </Link>
           </div>
           <div className="mb-6 flex gap-3">
@@ -391,18 +392,20 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
             </div>
             <div className="min-w-0 flex-1">
               <p className="type-body text-text-primary">
-                {t('mail.from')} {msg.from_name || msg.from_email}
+                <span className="text-text-secondary">{t('mail.from')}</span>{' '}
+                <span className="font-semibold">{msg.from_name || msg.from_email}</span>
                 {msg.from_email ? <span className="text-text-secondary"> &lt;{msg.from_email}&gt;</span> : null}
               </p>
-              <p className="type-small text-text-secondary">
-                {t('mail.to')}{' '}
+              <p className="type-small text-text-primary">
+                <span className="text-text-secondary">{t('mail.to')}</span>{' '}
                 {msg.to
                   .map((a) => a.name || a.email)
                   .filter(Boolean)
                   .join(', ') || '—'}
               </p>
-              <p className="type-small text-text-secondary">
-                {t('mail.date')} {formatMailDate(msg.received_at || msg.sent_at)}
+              <p className="type-small text-text-primary">
+                <span className="text-text-secondary">{t('mail.date')}</span>{' '}
+                {formatMailDate(msg.received_at || msg.sent_at)}
               </p>
               <div className="mt-1 flex gap-4">
                 <button
@@ -476,10 +479,12 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           ) : null}
 
           {plain || !bodyHtml ? (
-            <pre className="type-body whitespace-pre-wrap break-words text-text-primary">{msg.body_text || ''}</pre>
+            <pre className="type-body-lg whitespace-pre-wrap break-words font-ui text-text-primary">
+              {msg.body_text || ''}
+            </pre>
           ) : (
             <div
-              className="type-body max-w-none text-text-primary [&_a]:text-brand-primary-600 [&_img]:max-w-full"
+              className="type-body-lg max-w-none text-text-primary [&_a]:text-brand-primary-600 [&_img]:max-w-full"
               // sanitized on the server (nh3); remote images stay blocked until the user opts in
               dangerouslySetInnerHTML={{ __html: bodyHtml }}
             />
