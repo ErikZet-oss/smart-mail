@@ -2,7 +2,7 @@
 
 The editor may show a signature and a quoted message, but those blocks are not
 trusted. Send always rebuilds the signature with ``render_signature`` and the
-quote from the stored original message.
+quote from the original message HTML (remote image URLs kept).
 """
 
 from __future__ import annotations
@@ -10,7 +10,9 @@ from __future__ import annotations
 import re
 
 from app.core.config import Settings
-from app.mail.sanitize import quote_span, sanitize_html, signature_span
+from app.mail.sanitize import REMOTE_PLACEHOLDER, quote_span, sanitize_html, sanitize_quote_html, signature_span
+
+_DISPLAY_IMG = re.compile(rf"{re.escape(REMOTE_PLACEHOLDER)}|/api/mail/image-proxy", re.IGNORECASE)
 
 _FORWARD_NOTE = "---------- Preposlaná správa ----------"
 
@@ -31,6 +33,17 @@ def strip_protected(html: str) -> str:
     return current
 
 
+def _without_display_images(html: str) -> str:
+    """Drop reading-pane placeholders. An outgoing quote must not carry them."""
+
+    def repl(match: re.Match[str]) -> str:
+        if _DISPLAY_IMG.search(match.group(0)):
+            return ""
+        return match.group(0)
+
+    return re.sub(r"<img\b[^>]*>", repl, html, flags=re.IGNORECASE)
+
+
 def assemble_outgoing_html(
     *,
     user_html: str,
@@ -45,10 +58,11 @@ def assemble_outgoing_html(
     if user:
         parts.append(user)
     if quote_html:
-        inner = quote_html
-        if mode == "forward":
-            inner = f"<p>{_FORWARD_NOTE}</p>{quote_html}"
-        parts.append(f'<blockquote data-sm-quote="1">{inner}</blockquote>')
+        inner = _without_display_images(sanitize_quote_html(quote_html)).strip()
+        if mode == "forward" and inner:
+            inner = f"<p>{_FORWARD_NOTE}</p>{inner}"
+        if inner:
+            parts.append(f'<blockquote data-sm-quote="1">{inner}</blockquote>')
     if signature_html:
         parts.append(f'<div data-sm-signature="1">{signature_html}</div>')
     return "".join(parts)

@@ -288,6 +288,28 @@ def sanitize_signature_html(html: str, settings: Settings | None = None) -> tupl
     return cleaned, signature_stripped_parts(html, cleaned)
 
 
+def sanitize_quote_html(html: str, *, max_bytes: int = _MAX_DEFAULT) -> str:
+    """Safe HTML for a reply or forward quote. Remote http(s) URLs stay, as in Roundcube.
+
+    Display sanitizing (``sanitize_html``) replaces those URLs with a placeholder for our
+    reading pane. The recipient needs the original URL. Scripts and event handlers are still removed.
+    """
+    if not html:
+        return ""
+    cleaned = nh3.clean(
+        html,
+        tags=_TAGS,
+        attributes=_MESSAGE_ATTRS,
+        url_schemes=_URL_SCHEMES,
+        link_rel="noopener noreferrer",
+    )
+    raw = cleaned.encode("utf-8")
+    if len(raw) <= max_bytes:
+        return cleaned
+    cut = raw[:max_bytes].decode("utf-8", errors="ignore")
+    return cut + "…"
+
+
 def sanitize_html(html: str, *, max_bytes: int = _MAX_DEFAULT, settings: Settings | None = None) -> str:
     """Return safe HTML. Empty input stays empty. Oversized bodies are truncated after sanitizing.
 

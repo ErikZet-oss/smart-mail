@@ -13,6 +13,10 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   from the stored message. Signature or quote HTML from the browser is ignored.
 - The user's own text uses Underline, colour, highlight, alignment, link, table
   and inline CID images, so that formatting is not rewritten on save.
+- A reply or forward quote is taken from the stored raw message and sanitized
+  without rewriting remote images, so `https://` URLs stay. `cid:` images from
+  that message are attached as related parts. W4 has no „Preposlať s prílohami“
+  control, so ordinary attachments are not copied.
 
 ## [Unreleased] — Pilot #24: Roundcube signature editor (D22, SETTINGS 03a / 11c)
 

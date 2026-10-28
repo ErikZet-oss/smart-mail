@@ -39,6 +39,8 @@ class ParsedMessage:
     preview: str | None
     attachments: list[ParsedAttachment] = field(default_factory=list)
     auth_results: dict[str, str] | None = None
+    # HTML body before display sanitizing. Outgoing quotes use this, not the placeholder copy.
+    body_html: str | None = None
 
 
 def _decode_part(part: Message) -> bytes:
@@ -255,6 +257,7 @@ def parse_rfc822(raw: bytes, settings: Settings | None = None) -> ParsedMessage:
         preview=_preview_from(text, sanitized),
         attachments=attachments,
         auth_results=_auth_results(msg),
+        body_html=html,
     )
 
 
