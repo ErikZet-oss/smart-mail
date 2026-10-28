@@ -14,27 +14,13 @@ import hashlib
 import html
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from urllib.parse import parse_qs, urlparse
 
 from app.mail.signature import LOGO_CID
 from app.mail.signature_images import MAX_SIGNATURE_IMAGE_BYTES
 
-_IMG = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
-_TAG = re.compile(r"<[a-zA-Z][^>]*>")
-# ``src`` is a whole attribute name. ``\b`` is true between ``-`` and ``s``, so
-# ``data-sm-keep-src`` and ``data-src`` must not count. ``srcset`` is not ``src``.
-_SRC = re.compile(
-    r"""(?<![\w-])src(?![\w-])(?:\s*=\s*(?:(?P<q>["'])(?P<url>[^"']*)(?P=q)|(?P<bare>[^\s>"']*)))?""",
-    re.IGNORECASE,
-)
-_INTERNAL_ATTR = re.compile(
-    r"""\s+(?:data-sm-[\w-]*|data-cid)\b(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]*))?""",
-    re.IGNORECASE,
-)
-_SRCSET = re.compile(
-    r"""\s+srcset\b(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]*))?""",
-    re.IGNORECASE,
-)
+_WS = " \t\r\n"
 _DATA = re.compile(
     r"^data:image/(?P<kind>png|jpe?g|gif|webp)(?:;[^,]*)?;base64,(?P<b64>[a-z0-9+/=\s]+)$",
     re.IGNORECASE,
@@ -101,27 +87,171 @@ class _Parts:
         return True
 
 
-def _replace_src(tag: str, match: re.Match[str], url: str) -> str:
-    quote = match.group("q")
-    safe = html.escape(url, quote=True)
-    return tag[: match.start()] + f"src={quote}{safe}{quote}" + tag[match.end() :]
+@dataclass(frozen=True)
+class _Attr:
+    """One attribute. ``source`` is the original text, including the leading space."""
+
+    name: str
+    leading: str
+    had_equals: bool
+    quoted: bool
+    quote: str
+    value: str
+    source: str
 
 
-def _blank_src(tag: str, match: re.Match[str]) -> str:
-    quote = match.group("q") or '"'
-    return tag[: match.start()] + f"src={quote}{quote}" + tag[match.end() :]
+def _is_internal(name: str, *, img: bool) -> bool:
+    lower = name.lower()
+    if lower == "data-cid" or lower.startswith("data-sm-"):
+        return True
+    return img and lower == "srcset"
 
 
-def _strip_internal(html_body: str) -> str:
-    """Drop stamps and ``srcset`` from the MIME copy. The HMAC must not leave."""
+def _parse_tag(text: str, start: int) -> tuple[str, list[_Attr], str, int] | None:
+    """Tokenize one start tag. ``None`` when the attribute list is not clean.
 
-    def repl(match: re.Match[str]) -> str:
-        tag = _INTERNAL_ATTR.sub("", match.group(0))
-        if tag.lower().startswith("<img"):
-            tag = _SRCSET.sub("", tag)
-        return tag
+    Attributes are read left to right. A value is only the quoted or unquoted
+    token after ``=``, never a later attribute and never text inside another value.
+    """
+    if start >= len(text) or text[start] != "<":
+        return None
+    i = start + 1
+    if i >= len(text) or not text[i].isalpha():
+        return None
+    j = i + 1
+    while j < len(text) and text[j] not in _WS and text[j] not in "/>":
+        j += 1
+    name = text[i:j]
+    i = j
+    attrs: list[_Attr] = []
+    while i < len(text):
+        k = i
+        while i < len(text) and text[i] in _WS:
+            i += 1
+        if i >= len(text):
+            return None
+        if text[i] == ">":
+            return name, attrs, text[k : i + 1], i + 1
+        if text[i] == "/" and i + 1 < len(text) and text[i + 1] == ">":
+            return name, attrs, text[k : i + 2], i + 2
+        if not text[k:i]:
+            return None
+        leading = text[k:i]
+        name_at = i
+        while i < len(text) and text[i] not in _WS and text[i] not in "=/>":
+            i += 1
+        if i == name_at:
+            return None
+        attr_name = text[name_at:i]
+        m = i
+        while i < len(text) and text[i] in _WS:
+            i += 1
+        had_equals = i < len(text) and text[i] == "="
+        quoted = False
+        quote = ""
+        value = ""
+        if had_equals:
+            i += 1
+            while i < len(text) and text[i] in _WS:
+                i += 1
+            if i >= len(text):
+                return None
+            if text[i] in "\"'":
+                quote = text[i]
+                i += 1
+                vstart = i
+                while i < len(text) and text[i] != quote:
+                    i += 1
+                if i >= len(text):
+                    return None
+                value = text[vstart:i]
+                quoted = True
+                i += 1
+            else:
+                vstart = i
+                while i < len(text) and text[i] not in _WS and text[i] != ">":
+                    if text[i] == "/" and i + 1 < len(text) and text[i + 1] == ">":
+                        break
+                    i += 1
+                value = text[vstart:i]
+        else:
+            i = m
+        attrs.append(
+            _Attr(
+                name=attr_name,
+                leading=leading,
+                had_equals=had_equals,
+                quoted=quoted,
+                quote=quote,
+                value=value,
+                source=text[k:i],
+            )
+        )
+    return None
 
-    return _TAG.sub(repl, html_body)
+
+def _render_tag(name: str, attrs: list[_Attr], closer: str) -> str:
+    return f"<{name}" + "".join(attr.source for attr in attrs) + closer
+
+
+def _src_source(attr: _Attr, url: str) -> str:
+    """Quoted ``src`` keeps its quote. Anything else is cleared and not interpreted."""
+    if attr.quoted:
+        safe = html.escape(url, quote=True)
+        return f"{attr.leading}{attr.name}={attr.quote}{safe}{attr.quote}"
+    return f'{attr.leading}src=""'
+
+
+def _img_open(text: str, start: int) -> bool:
+    if text[start : start + 4].lower() != "<img":
+        return False
+    end = start + 4
+    return end == len(text) or text[end] in _WS or text[end] in "/>"
+
+
+def _fallback_end(text: str, start: int) -> int | None:
+    i = start + 1
+    quote = ""
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in "\"'":
+            quote = ch
+            i += 1
+            continue
+        if ch == ">":
+            return i + 1
+        i += 1
+    return None
+
+
+def _rewrite_attrs(name: str, attrs: list[_Attr], parts: _Parts) -> list[_Attr]:
+    img = name.lower() == "img"
+    rewritten: list[_Attr] = []
+    for attr in attrs:
+        if img and attr.name.lower() == "src":
+            if not attr.had_equals or not attr.quoted:
+                parts.stripped += 1
+                rewritten.append(_Attr("src", attr.leading, True, True, '"', "", f'{attr.leading}src=""'))
+                continue
+            action = _decide(html.unescape(attr.value).strip(), parts)
+            if action is None:
+                rewritten.append(attr)
+                continue
+            if action == "":
+                parts.stripped += 1
+            rewritten.append(
+                _Attr(attr.name, attr.leading, True, True, attr.quote or '"', action, _src_source(attr, action))
+            )
+            continue
+        if _is_internal(attr.name, img=img):
+            continue
+        rewritten.append(attr)
+    return rewritten
 
 
 def _cid_of(raw: str) -> str:
@@ -202,25 +332,32 @@ def normalize_outgoing_images(
     were cleared (``http://``, empty src, SVG, or any other src we will not send).
     """
     parts = _Parts(logo_png, images_by_id or {})
-
-    def repl(match: re.Match[str]) -> str:
-        tag = match.group(0)
-        src = _SRC.search(tag)
-        if src is None:
-            return tag
-        # Unquoted ``src=value``, ``src=`` and a bare ``src`` are cleared.
-        # The value is not read, so a relative path or ``data:`` cannot leave.
-        if src.group("q") is None:
-            parts.stripped += 1
-            return _blank_src(tag, src)
-        raw = html.unescape(src.group("url") or "").strip()
-        action = _decide(raw, parts)
-        if action is None:
-            return tag
-        if action == "":
-            parts.stripped += 1
-            return _blank_src(tag, src)
-        return _replace_src(tag, src, action)
-
-    rewritten = _IMG.sub(repl, html_body or "")
-    return _strip_internal(rewritten), parts.blobs, parts.stripped
+    body = html_body or ""
+    out: list[str] = []
+    i = 0
+    while i < len(body):
+        if body[i] == "<" and i + 1 < len(body) and body[i + 1].isalpha():
+            parsed = _parse_tag(body, i)
+            if parsed is None:
+                if _img_open(body, i):
+                    end = _fallback_end(body, i)
+                    out.append('<img src="">')
+                    parts.stripped += 1
+                    if end is None:
+                        break
+                    i = end
+                    continue
+                out.append(body[i])
+                i += 1
+                continue
+            name, attrs, closer, end = parsed
+            changed = name.lower() == "img" or any(_is_internal(attr.name, img=False) for attr in attrs)
+            if changed:
+                out.append(_render_tag(name, _rewrite_attrs(name, attrs, parts), closer))
+            else:
+                out.append(body[i:end])
+            i = end
+            continue
+        out.append(body[i])
+        i += 1
+    return "".join(out), parts.blobs, parts.stripped

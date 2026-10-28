@@ -13,9 +13,12 @@ import json
 import re
 import uuid
 from email.message import EmailMessage
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -169,6 +172,93 @@ def test_issue31_keep_src_attribute_before_src() -> None:
     assert out.count('data-src="x"') == 3
     assert "data-sm-" not in out
     assert [(cid, data) for cid, data, _ctype in blobs] == [(LOGO_CID, logo), (_ICON_CID, _PNG)]
+
+
+class _ImgTags(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.tags: list[list[tuple[str, str | None]]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "img":
+            self.tags.append(attrs)
+
+
+def _img_tags(doc: str) -> list[list[tuple[str, str | None]]]:
+    parser = _ImgTags()
+    parser.feed(doc)
+    return parser.tags
+
+
+def test_issue31_src_word_in_alt_title_is_not_an_attribute() -> None:
+    """``src`` inside alt or title is user text, not the image URL."""
+    cleared, blobs, stripped = normalize_outgoing_images(
+        '<img alt="logo src" src="/logo-smart.svg">',
+        logo_png=None,
+    )
+    assert blobs == []
+    assert stripped == 1
+    assert cleared == '<img alt="logo src" src="">'
+
+    logo = _logo_png()
+    data_uri = f"data:image/png;base64,{_PNG_B64}"
+    proxy = "/api/mail/image-proxy?u=https%3A%2F%2Fcdn.example%2Fjana-testova.png"
+    html = (
+        '<img alt="logo src" title="x-src y" src="/logo-smart.svg">'
+        f'<img alt="logo src" title="x-src y" src="{data_uri}">'
+        f'<img alt="data-sm-keep-src=1" title="x-src y" src="{proxy}">'
+    )
+    out, parts, stripped = normalize_outgoing_images(html, logo_png=logo)
+    assert stripped == 0
+    assert out.count('alt="logo src"') == 2
+    assert 'alt="data-sm-keep-src=1"' in out
+    assert out.count('title="x-src y"') == 3
+    assert 'src="cid:logo@smartmail"' in out
+    assert f'src="cid:{_ICON_CID}"' in out
+    assert 'src="https://cdn.example/jana-testova.png"' in out
+    assert "/logo-smart.svg" not in out
+    assert "data:image" not in out
+    assert "image-proxy" not in out
+    before = _img_tags(html)
+    after = _img_tags(out)
+    assert [len(tag) for tag in before] == [len(tag) for tag in after] == [3, 3, 3]
+    assert [(cid, data) for cid, data, _ctype in parts] == [(LOGO_CID, logo), (_ICON_CID, _PNG)]
+
+
+_ALT_TEXT = st.text(
+    alphabet=st.characters(blacklist_categories=("Cs",), blacklist_characters='"\x00'),
+    max_size=40,
+)
+_SRC_KINDS = st.sampled_from(
+    (
+        "/logo-smart.svg",
+        "/logo-smart.png",
+        f"data:image/png;base64,{_PNG_B64}",
+        "/api/mail/image-proxy?u=https%3A%2F%2Fcdn.example%2Fjana-testova.png",
+        "https://cdn.example/jana-testova.png",
+        "http://tajne.example/icon.png",
+        "about:blank",
+        "",
+        "cid:logo@smartmail",
+        "data:image/svg+xml;base64,PHN2Zy8+",
+    )
+)
+
+
+@given(_ALT_TEXT, _SRC_KINDS)
+def test_issue31_random_alt_never_supplies_src(alt: str, src: str) -> None:
+    """Alt text stays put. The sent src is never a relative, data or about URL."""
+    html = f'<img alt="{alt}" title="x-src y" src="{src}">'
+    out, _blobs, _stripped = normalize_outgoing_images(html, logo_png=_logo_png())
+    assert f'alt="{alt}"' in out
+    assert 'title="x-src y"' in out
+    tags = _img_tags(out)
+    assert len(tags) == 1
+    found = dict(tags[0]).get("src") or ""
+    lowered = found.lower()
+    assert not found.startswith("/")
+    assert not lowered.startswith("data:")
+    assert not lowered.startswith("about:")
 
 
 def test_issue31_mime_drops_internal_attributes_and_srcset() -> None:
