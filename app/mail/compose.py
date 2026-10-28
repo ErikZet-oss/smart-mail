@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import Branch, Person
@@ -136,6 +136,8 @@ async def create_draft(
     )
     db.add(draft)
     await db.flush()
+    if source is not None and mode == "forward":
+        await copy_forward_attachments(db, draft, source)
     audit(
         db,
         action="mail.compose_created",
@@ -144,6 +146,45 @@ async def create_draft(
         details={"draft_id": str(draft.id), "mode": mode},
     )
     return draft
+
+
+async def copy_forward_attachments(db: AsyncSession, draft: ComposeDraft, source: Message) -> None:
+    """Point the draft at the original files. The bytes stay where they are.
+
+    Infected files are left behind. ``skipped`` and ``error`` are copied with that
+    status so the compose chip can show the same antivírus label as the reading pane.
+    Inline images stay in the quote as related parts, not as a second file chip.
+    """
+    rows = list((await db.execute(select(Attachment).where(Attachment.message_id == source.id))).scalars())
+    for row in rows:
+        if row.is_inline or row.av_status == "infected" or not row.storage_key:
+            continue
+        db.add(
+            ComposeAttachment(
+                draft_id=draft.id,
+                filename=row.filename,
+                content_type=row.content_type,
+                size=row.size,
+                storage_key=row.storage_key,
+                sha256=row.sha256,
+                av_status=row.av_status or "skipped",
+                is_inline=False,
+            )
+        )
+
+
+async def release_compose_storage(db: AsyncSession, settings: Settings, att: ComposeAttachment) -> None:
+    """Delete blob bytes only when no message and no other draft still points at the key."""
+    shared_message = await db.scalar(
+        select(func.count()).select_from(Attachment).where(Attachment.storage_key == att.storage_key)
+    )
+    shared_draft = await db.scalar(
+        select(func.count())
+        .select_from(ComposeAttachment)
+        .where(ComposeAttachment.storage_key == att.storage_key, ComposeAttachment.id != att.id)
+    )
+    if not shared_message and not shared_draft:
+        storage.delete_key(settings, att.storage_key)
 
 
 def pre_send_checks(draft: ComposeDraft, settings: Settings) -> list[dict[str, Any]]:
@@ -390,7 +431,7 @@ async def build_mime(
         blobs.append((cid, data, ctype))
         seen.add(cid.lower())
     if draft.in_reply_to_message_id is not None:
-        # W4 has no „Preposlať s prílohami“ control, so ordinary attachments are not copied.
+        # A forward already copied ordinary files onto the draft. A reply does not.
         # cid: images referenced by the quote are related parts, on reply and on forward.
         source_atts = list(
             (

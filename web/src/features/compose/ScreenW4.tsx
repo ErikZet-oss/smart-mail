@@ -28,6 +28,7 @@ import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
 import {
   createDraft,
+  deleteAttachment,
   fetchDraft,
   listIdentities,
   patchDraft,
@@ -297,6 +298,14 @@ export function ScreenW4() {
     mutationFn: async (file: File) => {
       if (!localId) throw new Error('no draft');
       return uploadAttachment(localId, file);
+    },
+    onSuccess: (d) => void qc.setQueryData(['compose', localId], d),
+  });
+
+  const removeAtt = useMutation({
+    mutationFn: async (id: string) => {
+      if (!localId) throw new Error('no draft');
+      return deleteAttachment(localId, id);
     },
     onSuccess: (d) => void qc.setQueryData(['compose', localId], d),
   });
@@ -712,16 +721,34 @@ export function ScreenW4() {
               <ul aria-label={t('compose.attachments')} className="mb-3 flex flex-col gap-1.5">
                 {(draft?.attachments ?? [])
                   .filter((a) => !a.is_inline)
-                  .map((a) => (
-                    <li
-                      key={a.id}
-                      className="type-small flex h-8 items-center gap-2 rounded-sm border border-border-default px-2.5 text-text-primary"
-                    >
-                      <FileText size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
-                      <span className="min-w-0 flex-1 truncate">{a.filename}</span>
-                      <span className="type-caption shrink-0 text-text-secondary">{Math.round(a.size / 1024)} kB</span>
-                    </li>
-                  ))}
+                  .map((a) => {
+                    const unscanned = a.av_status === 'skipped' || a.av_status === 'error';
+                    return (
+                      <li
+                        key={a.id}
+                        className="type-small flex h-8 items-center gap-2 rounded-sm border border-border-default px-2.5 text-text-primary"
+                      >
+                        <FileText size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
+                        <span className="min-w-0 flex-1 truncate">{a.filename}</span>
+                        {unscanned ? (
+                          <span className="type-caption shrink-0 text-text-tertiary">
+                            ({t('mail.attachmentUnscanned')})
+                          </span>
+                        ) : null}
+                        <span className="type-caption shrink-0 text-text-secondary">
+                          {Math.round(a.size / 1024)} kB
+                        </span>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-xs text-text-secondary hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary-500"
+                          aria-label={`${t('compose.removeAttachment')} ${a.filename}`}
+                          onClick={() => removeAtt.mutate(a.id)}
+                        >
+                          <X size={14} aria-hidden="true" />
+                        </button>
+                      </li>
+                    );
+                  })}
               </ul>
             ) : null}
             <div className="flex flex-col gap-3 border-t border-border-default pt-4">

@@ -469,6 +469,7 @@
     "priorityHigh": "Vysoká",
     "mdn": "Potvrdenie o doručení",
     "attachments": "Prílohy",
+    "removeAttachment": "Odstrániť prílohu",
     "attachmentInfected": "Príloha obsahuje vírus a nebola priložená.",
     "aiLater": "AI panel príde v ďalšej fáze.",
     "maxSize": "Maximálna povolená veľkosť súboru je 25 MB",

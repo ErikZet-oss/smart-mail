@@ -22,6 +22,7 @@ from app.mail.compose import (
     pre_send_checks,
     queue_send,
     rehydrate_draft_html,
+    release_compose_storage,
     sync_draft_to_imap,
 )
 from app.mail.compose_models import CannedResponse, ComposeAttachment, ComposeDraft, Identity
@@ -290,7 +291,7 @@ async def post_compose(
         source=source,
     )
     await db.commit()
-    return await _draft_out(db, draft, [], settings)
+    return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
 
 
 @router.get("/compose/{draft_id}")
@@ -357,7 +358,7 @@ async def delete_draft(
 ) -> dict[str, bool]:
     draft = await _get_draft(db, ctx, draft_id)
     for att in await _load_atts(db, draft.id):
-        storage.delete_key(settings, att.storage_key)
+        await release_compose_storage(db, settings, att)
     await db.delete(draft)
     await db.commit()
     return {"ok": True}
@@ -405,6 +406,27 @@ async def upload_attachment(
             content_id=content_id,
         )
     )
+    await db.commit()
+    return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
+
+
+@router.delete("/compose/{draft_id}/attachments/{att_id}")
+async def delete_attachment(
+    draft_id: uuid.UUID,
+    att_id: uuid.UUID,
+    ctx: Auth,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+) -> DraftOut:
+    draft = await _get_draft(db, ctx, draft_id)
+    if draft.status not in {"editing", "failed", "scheduled"}:
+        raise fail(409, "draft_not_editable")
+    att = await db.get(ComposeAttachment, att_id)
+    if att is None or att.draft_id != draft.id:
+        raise fail(404, "attachment_not_found")
+    await release_compose_storage(db, settings, att)
+    await db.delete(att)
     await db.commit()
     return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
 

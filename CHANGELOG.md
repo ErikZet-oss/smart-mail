@@ -2,6 +2,13 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #30: forward keeps the original attachments
+
+- Poslať ďalej copies the original message's ordinary attachments onto the draft
+  (same stored file, not a second copy). Infected files are left behind. Files not
+  yet scanned (`skipped` / `error`) stay, with the same antivírus label as in the
+  reading pane. The user can remove a chip before send.
+
 ## [Unreleased] — Pilot #31: signature images survive in Gmail
 
 - Sending a message rewrites images in the whole HTML. `data:` PNG/JPEG/GIF/WebP

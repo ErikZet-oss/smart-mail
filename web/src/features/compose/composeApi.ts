@@ -76,6 +76,9 @@ const base = (mailbox: string) => `/api/mail/mailboxes/${encodeURIComponent(mail
 export const createDraft = (mailbox: string, body: { mode: ComposeMode; message_id?: string }) =>
   api<ComposeDraft>('POST', `${base(mailbox)}/compose`, body);
 
+export const deleteAttachment = (draftId: string, attachmentId: string) =>
+  api<ComposeDraft>('DELETE', `/api/mail/compose/${draftId}/attachments/${attachmentId}`);
+
 export const fetchDraft = (draftId: string) => api<ComposeDraft>('GET', `/api/mail/compose/${draftId}`);
 
 export const patchDraft = (
