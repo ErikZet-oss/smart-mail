@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Check } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -14,6 +14,8 @@ import { fetchMe } from '../auth/authApi';
 import { SettingsFieldControl } from './Field';
 import { HtmlSignatureEditor } from './HtmlSignatureEditor';
 import { MobileSettingsIndex } from './MobileSettingsIndex';
+import { SettingsBreadcrumb, SettingsNav, SettingsSubList, SettingsSubTabs } from './SettingsNav';
+import { buildNavItems, isItemActive, TABBED_SECTIONS } from './settingsNavModel';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
   addPersonAdmin,
@@ -189,54 +191,40 @@ export function ScreenW12() {
     );
   }
 
+  const sections = nav.data?.sections ?? [];
+  const current = sections.find((s) => s.path === activeSection);
+  const navItems = buildNavItems(sections);
+  const activeItem = navItems.find((i) => isItemActive(i, activeSection, sub));
+  const subItem = current?.subs.find((s) => s.path === sub) ?? (sub ? undefined : current?.subs[0]);
+  const showSubList =
+    Boolean(current && current.subs.length > 1 && current.path !== 'identity') && !TABBED_SECTIONS.has(activeSection);
+  const showTabs = Boolean(current && current.subs.length > 1 && TABBED_SECTIONS.has(activeSection));
+  const crumbs = [
+    activeItem?.admin ? t('settings.adminCrumb') : t('settings.title'),
+    activeItem?.title ?? title,
+    ...(subItem && current?.path !== 'identity' ? [subItem.title] : []),
+  ];
+  const pageTitle =
+    activeSection === 'identity' || showTabs
+      ? (activeItem?.title ?? title)
+      : (subItem?.title ?? activeItem?.title ?? title);
+
   return (
     <AppShell section="settings">
       <div className="flex h-full min-w-0 flex-1">
-        <nav
-          aria-label={t('settings.nav')}
-          className="flex w-[220px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border-default bg-bg-subtle p-3"
-        >
-          <p className="type-label mb-2 px-2 text-text-tertiary">{t('settings.title')}</p>
-          {(nav.data?.sections ?? []).map((s) => (
-            <div key={s.id} className="mb-1">
-              <Link
-                to={`/settings/${s.path}${s.subs[0] ? `/${s.subs[0].path}` : ''}`}
-                className={`type-body block rounded-sm px-2 py-1.5 ${
-                  activeSection === s.path
-                    ? 'bg-brand-primary-50 text-brand-primary-700'
-                    : 'text-text-primary hover:bg-bg-muted'
-                }`}
-              >
-                {s.title}
-              </Link>
-              {activeSection === s.path && s.subs.length > 0 ? (
-                <ul className="ml-2 mt-0.5 border-l border-border-default pl-2">
-                  {s.subs.map((subItem) => (
-                    <li key={subItem.id}>
-                      <Link
-                        to={`/settings/${s.path}/${subItem.path}`}
-                        className={`type-small block rounded-sm px-2 py-1 ${
-                          sub === subItem.path
-                            ? 'text-brand-primary-700'
-                            : 'text-text-secondary hover:text-text-primary'
-                        }`}
-                      >
-                        {subItem.title}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ))}
-        </nav>
+        <SettingsNav sections={sections} activeSection={activeSection} sub={sub} />
+        {showSubList && current ? <SettingsSubList section={current} sub={sub} /> : null}
         <main className="flex min-w-0 flex-1 flex-col bg-bg-canvas">
-          <header className="flex h-14 shrink-0 items-center border-b border-border-default px-6">
-            <h1 className="type-heading text-text-primary">
-              {t('settings.title')} › {title}
-            </h1>
+          <header className="flex h-[var(--layout-topbar)] shrink-0 items-center border-b border-border-default bg-bg-subtle px-6">
+            <SettingsBreadcrumb parts={crumbs} />
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+            <h1 className="type-title mb-6 text-text-primary">{pageTitle}</h1>
+            {showTabs && current ? (
+              <div className="mb-6">
+                <SettingsSubTabs section={current} sub={sub} />
+              </div>
+            ) : null}
             <SectionBody section={activeSection || 'preferences'} sub={sub} meRole={me.data?.person?.role} />
           </div>
         </main>
@@ -290,7 +278,7 @@ function AiPanel() {
     },
   });
   return (
-    <div className="flex max-w-xl flex-col gap-4" data-testid="settings-ai">
+    <div className="flex max-w-[var(--layout-settings-form-max)] flex-col gap-3.5" data-testid="settings-ai">
       <h2 className="type-heading text-text-primary">{t('settingsAi.title')}</h2>
       {AI_FIELDS.map((field) => (
         <SettingsFieldControl
@@ -364,7 +352,7 @@ function PreferencesPanel({ sub }: { sub?: string }) {
   const undoField = PREF_FIELDS_COMPOSING.find((f) => f.id === 'undo_send_seconds');
 
   return (
-    <div className="flex max-w-xl flex-col gap-4">
+    <div className="flex max-w-[var(--layout-settings-form-max)] flex-col gap-3.5">
       {fields.map((field) => (
         <SettingsFieldControl
           key={field.id}
@@ -381,7 +369,13 @@ function PreferencesPanel({ sub }: { sub?: string }) {
           onChange={(value) => setDraft({ ui, list, composing: { ...composing, [undoField.id]: value } })}
         />
       ) : null}
-      <Button type="button" onClick={() => save.mutate()} disabled={save.isPending}>
+      <Button
+        type="button"
+        className="mt-4 self-start"
+        icon={<Check size={16} aria-hidden />}
+        onClick={() => save.mutate()}
+        disabled={save.isPending}
+      >
         {t('settings.save')}
       </Button>
     </div>

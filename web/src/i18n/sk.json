@@ -609,6 +609,13 @@
   "settings": {
     "title": "Nastavenia",
     "nav": "Sekcie nastavení",
+    "search": "Hľadať v nastaveniach",
+    "searchClear": "Vymazať hľadanie",
+    "searchResults": "Výsledky hľadania v nastaveniach",
+    "searchEmpty": "Nič sme nenašli.",
+    "adminGroup": "Správa",
+    "adminCrumb": "Správa",
+    "breadcrumb": "Umiestnenie v nastaveniach",
     "later": "Úpravy nastavení pripravujeme.",
     "save": "Uložiť",
     "saved": "Nastavenia uložené.",
