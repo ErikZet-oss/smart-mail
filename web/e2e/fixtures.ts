@@ -137,6 +137,15 @@ export const SETTINGS_DEFAULTS: Record<string, Reply> = {
       ],
     },
   },
+  'GET /api/settings/mailboxes/default/signature-context': {
+    body: {
+      mailbox_kind: 'personal',
+      account_kind: 'personal',
+      branch_managed: false,
+      preview_html: '',
+      branch_id: null,
+    },
+  },
   'GET /api/settings/profile': {
     body: {
       id: ME.person.id,
@@ -172,7 +181,15 @@ export async function mockApi(page: Page, given: Record<string, Reply | ((body: 
       return;
     }
     const entry = replies[key];
-    let reply: Reply | undefined = typeof entry === 'function' ? entry(request.postDataJSON() as unknown) : entry;
+    let payload: unknown = null;
+    if (typeof entry === 'function' && request.method() !== 'GET' && request.method() !== 'HEAD') {
+      try {
+        payload = request.postDataJSON();
+      } catch {
+        payload = null;
+      }
+    }
+    let reply: Reply | undefined = typeof entry === 'function' ? entry(payload) : entry;
     // Phase 1d: list/detail prefs must not 401 a signed-in shell when a test only stubs folders
     if (!reply && FOLDER_MESSAGES.test(key)) {
       reply = { body: emptyMessagesList() };

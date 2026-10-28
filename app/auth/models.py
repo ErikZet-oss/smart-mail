@@ -52,7 +52,8 @@ class Branch(IdMixin, TimestampMixin, Base):
     idle_ask_minutes: Mapped[int | None] = mapped_column(Integer)
     remember_days: Mapped[int] = mapped_column(Integer, default=30, server_default="30")
     signature_template_html: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict, server_default="{}")
-    signature_images: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+    # [{id, cid, storage_key, content_type, size, filename}] — legacy string entries are ignored
+    signature_images: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default="[]")
     folder_ids: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
     money_centre_id: Mapped[str | None] = mapped_column(String(64))
     money_price_list_id: Mapped[str | None] = mapped_column(String(64))

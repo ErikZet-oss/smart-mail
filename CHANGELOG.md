@@ -2,6 +2,19 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #24: Roundcube signature editor (D22, SETTINGS 03a / 11c)
+
+- Identity signature (03a) and the per-message signature (W4e) use the TipTap editor:
+  bold, italic, underline, alignment, font, size, colours, link, table, image,
+  horizontal rule, special characters, and a „Zdrojový kód“ dialog (Vložiť / Zrušiť).
+- Uploaded PNG/JPG/GIF (SVG converted to PNG), at most 5 images and 200 kB each, are stored
+  outside the HTML and sent as inline CID. https image URLs stay links and are not rewritten
+  to the remote-image placeholder inside a signature.
+- Branch template (11c): language tabs SK / CZ / EN / DE, variable chips, presets „Karta“ and
+  „Text“, live preview. A shared branch mailbox in 03a shows only the preview and a link to
+  section 11. Slovak is required. Unknown variables are rejected. Saving reports what nh3 stripped.
+- Colours in the default „Karta“ come from `design/tokens.css`.
+
 ## [Unreleased] — Pilot #23: send confirmation, answered/forwarded, immediate Sent sync
 
 - After Send, toast „Odosiela sa… Späť“ for the undo window; Späť cancels the send. The toast

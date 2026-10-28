@@ -25,6 +25,8 @@ class Identity(IdMixin, TimestampMixin, Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # personal mailbox HTML signatures per language; branch mailboxes leave empty and use Branch.signature_template_html
     signature_html: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict, server_default="{}")
+    # uploaded signature images (D22): [{id, cid, storage_key, content_type, size, filename}]
+    signature_images: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default="[]")
 
 
 class CannedResponse(IdMixin, TimestampMixin, Base):

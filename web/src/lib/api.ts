@@ -89,6 +89,39 @@ export async function api<T>(method: string, path: string, body?: unknown, optio
   throw error;
 }
 
+/** Multipart upload. Does not set Content-Type — the browser adds the boundary. */
+export async function apiForm<T>(
+  method: string,
+  path: string,
+  body: FormData,
+  options: RequestOptions = {},
+): Promise<T> {
+  const send = async (csrf: string | undefined): Promise<Response> =>
+    fetch(path, {
+      method,
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+      },
+      body,
+    });
+
+  let response = await send(await ensureCsrf());
+  if (response.status === 403) {
+    const error = await toError(response.clone());
+    if (error.detail.code === 'csrf') response = await send(await ensureCsrf(true));
+  }
+  if (response.ok) {
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as T;
+  }
+  const error = await toError(response);
+  const isMaintenance = error.status === 503 && error.detail.code === 'maintenance';
+  if (globalHandler && (isMaintenance || options.global !== false)) globalHandler(error);
+  throw error;
+}
+
 /** "7F3A21C9" → "7F3A-21C9" (W16c). */
 export function formatRef(ref: string): string {
   const clean = ref.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
