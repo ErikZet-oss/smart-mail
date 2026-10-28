@@ -20,8 +20,19 @@ from app.mail.signature import LOGO_CID
 from app.mail.signature_images import MAX_SIGNATURE_IMAGE_BYTES
 
 _IMG = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
+_TAG = re.compile(r"<[a-zA-Z][^>]*>")
+# ``src`` is a whole attribute name. ``\b`` is true between ``-`` and ``s``, so
+# ``data-sm-keep-src`` and ``data-src`` must not count. ``srcset`` is not ``src``.
 _SRC = re.compile(
-    r"""\bsrc\s*=\s*(?P<q>["'])(?P<url>[^"']*)(?P=q)""",
+    r"""(?<![\w-])src(?![\w-])(?:\s*=\s*(?:(?P<q>["'])(?P<url>[^"']*)(?P=q)|(?P<bare>[^\s>"']*)))?""",
+    re.IGNORECASE,
+)
+_INTERNAL_ATTR = re.compile(
+    r"""\s+(?:data-sm-[\w-]*|data-cid)\b(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]*))?""",
+    re.IGNORECASE,
+)
+_SRCSET = re.compile(
+    r"""\s+srcset\b(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]*))?""",
     re.IGNORECASE,
 )
 _DATA = re.compile(
@@ -97,8 +108,20 @@ def _replace_src(tag: str, match: re.Match[str], url: str) -> str:
 
 
 def _blank_src(tag: str, match: re.Match[str]) -> str:
-    quote = match.group("q")
+    quote = match.group("q") or '"'
     return tag[: match.start()] + f"src={quote}{quote}" + tag[match.end() :]
+
+
+def _strip_internal(html_body: str) -> str:
+    """Drop stamps and ``srcset`` from the MIME copy. The HMAC must not leave."""
+
+    def repl(match: re.Match[str]) -> str:
+        tag = _INTERNAL_ATTR.sub("", match.group(0))
+        if tag.lower().startswith("<img"):
+            tag = _SRCSET.sub("", tag)
+        return tag
+
+    return _TAG.sub(repl, html_body)
 
 
 def _cid_of(raw: str) -> str:
@@ -185,7 +208,12 @@ def normalize_outgoing_images(
         src = _SRC.search(tag)
         if src is None:
             return tag
-        raw = html.unescape(src.group("url")).strip()
+        # Unquoted ``src=value``, ``src=`` and a bare ``src`` are cleared.
+        # The value is not read, so a relative path or ``data:`` cannot leave.
+        if src.group("q") is None:
+            parts.stripped += 1
+            return _blank_src(tag, src)
+        raw = html.unescape(src.group("url") or "").strip()
         action = _decide(raw, parts)
         if action is None:
             return tag
@@ -194,4 +222,5 @@ def normalize_outgoing_images(
             return _blank_src(tag, src)
         return _replace_src(tag, src, action)
 
-    return _IMG.sub(repl, html_body or ""), parts.blobs, parts.stripped
+    rewritten = _IMG.sub(repl, html_body or "")
+    return _strip_internal(rewritten), parts.blobs, parts.stripped

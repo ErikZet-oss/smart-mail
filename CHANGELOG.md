@@ -9,6 +9,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   `/logo-smart.png` become the SMART logo as PNG (never SVG). An image-proxy
   URL becomes the original `https://` address. `https://` stays. `http://` and
   any other src are removed; the log records how many, not the address.
+- `src` is matched only as a whole attribute, so a `data-sm-keep-src` stamp
+  before it is not rewritten. The sent HTML drops `data-sm-*`, `data-cid` and
+  `srcset`. An unquoted or empty `src` is cleared and counted.
 
 ## [Unreleased] — Pilot #28: signature and quote stay formatted in Napísať
 

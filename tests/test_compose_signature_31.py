@@ -21,13 +21,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.logging import configure_logging
 from app.mail import storage
 from app.mail.compose import build_mime, log_stripped_images
 from app.mail.compose_html import assemble_outgoing_html
 from app.mail.compose_models import ComposeDraft, Identity
 from app.mail.models import Mailbox
 from app.mail.outgoing_images import normalize_outgoing_images
-from app.mail.sanitize import sanitize_signature_html, signature_span
+from app.mail.sanitize import sanitize_signature_html
 from app.mail.signature import LOGO_CID
 from app.mail.signature_images import add_related_images
 from tests.conftest import Client, FakeMailServer, make_personal
@@ -78,10 +79,6 @@ def _upload_png() -> bytes:
     return out.getvalue()
 
 
-def _unstamp(html: str) -> str:
-    return re.sub(r'\s*data-sm-keep-src="[0-9a-f]+"', "", html)
-
-
 def _related(message: EmailMessage) -> list[tuple[str, str, bytes]]:
     found: list[tuple[str, str, bytes]] = []
     for part in message.walk():
@@ -116,10 +113,10 @@ def test_issue31_karta_snapshot_has_three_related_parts_and_one_https() -> None:
         images_by_id={_UPLOAD_ID: (_UPLOAD_CID, upload, "image/png")},
     )
     assert stripped == 0
-    span = signature_span(html)
-    assert span is not None
     expected = _FIXTURE.read_text(encoding="utf-8").strip()
-    assert span[1] == expected
+    assert expected in html
+    assert "data-sm-" not in html
+    assert "data-cid" not in html
     assert _HTTPS in html
     assert _BAD_SRC.search(html) is None
     assert "http://" not in html
@@ -149,6 +146,64 @@ def test_issue31_karta_snapshot_has_three_related_parts_and_one_https() -> None:
     assert b"image/svg" not in raw
     assert b"<svg" not in raw
     assert b"data:image" not in raw
+
+
+def test_issue31_keep_src_attribute_before_src() -> None:
+    """``data-sm-keep-src`` and ``data-src`` before ``src`` are not the image URL."""
+    logo = _logo_png()
+    data_uri = f"data:image/png;base64,{_PNG_B64}"
+    proxy = "/api/mail/image-proxy?u=https%3A%2F%2Fcdn.example%2Fjana-testova.png"
+    html = (
+        '<img data-sm-keep-src="not-the-src" data-src="x" src="/logo-smart.svg" alt="SMART">'
+        f'<img data-sm-keep-src="not-the-src" data-src="x" src="{data_uri}" alt="">'
+        f'<img data-sm-keep-src="not-the-src" data-src="x" src="{proxy}" alt="">'
+    )
+    out, blobs, stripped = normalize_outgoing_images(html, logo_png=logo)
+    assert stripped == 0
+    assert 'src="cid:logo@smartmail"' in out
+    assert f'src="cid:{_ICON_CID}"' in out
+    assert 'src="https://cdn.example/jana-testova.png"' in out
+    assert "/logo-smart" not in out
+    assert "data:image" not in out
+    assert "image-proxy" not in out
+    assert "not-the-src" not in out
+    assert out.count('data-src="x"') == 3
+    assert "data-sm-" not in out
+    assert [(cid, data) for cid, data, _ctype in blobs] == [(LOGO_CID, logo), (_ICON_CID, _PNG)]
+
+
+def test_issue31_mime_drops_internal_attributes_and_srcset() -> None:
+    token = "38daf9db0b3964af75a401243133d3a5ceee295a700c8df552e35c619843799b"
+    html = (
+        '<div data-sm-signature="1" data-cid="wrap">'
+        f'<img src="{_HTTPS}" alt="Jana Testová" data-sm-keep-src="{token}" '
+        'data-cid="sig-1@smartmail" data-sm-extra="1" '
+        f'srcset="/logo-smart.svg 1x, data:image/png;base64,{_PNG_B64} 2x">'
+        "</div>"
+        '<blockquote data-sm-quote="1"><p>Ahoj</p></blockquote>'
+    )
+    out, blobs, stripped = normalize_outgoing_images(html, logo_png=_logo_png())
+    assert stripped == 0
+    assert blobs == []
+    assert f'src="{_HTTPS}"' in out
+    assert "data-sm-" not in out
+    assert "data-cid" not in out
+    assert "srcset" not in out.lower()
+    assert token not in out
+    assert "/logo-smart" not in out
+    assert "data:" not in out
+    assert "<div>" in out
+    assert "Ahoj" in out
+
+
+def test_issue31_unquoted_or_bare_src_is_cleared() -> None:
+    html = '<img src=/logo-smart.svg alt="SMART"><img src alt=""><img src= alt=""><img src="" alt="">'
+    out, blobs, stripped = normalize_outgoing_images(html, logo_png=_logo_png())
+    assert stripped == 4
+    assert blobs == []
+    assert out.count('src=""') == 4
+    assert "/logo-smart" not in out
+    assert "data:" not in out
 
 
 def test_issue31_logo_svg_path_is_sent_as_png() -> None:
@@ -184,10 +239,16 @@ def test_issue31_proxy_url_becomes_https_and_junk_is_counted_not_logged() -> Non
     assert "about:" not in out
     assert "data:" not in out
     assert _BAD_SRC.search(out) is None
+    # A second configure replaces the processor list. A logger cached on first use
+    # keeps the old JSON chain and capture_logs stays empty.
+    configure_logging("INFO")
+    log_stripped_images("warmup", 1)
+    configure_logging("INFO")
     with structlog.testing.capture_logs() as logs:
         log_stripped_images("draft-1", stripped)
     assert logs == [{"count": 4, "draft_id": "draft-1", "event": "compose.images_stripped", "log_level": "info"}]
     assert "tajne.example" not in repr(logs)
+    assert "http" not in repr(logs)
 
 
 @pytest.mark.parametrize(
@@ -241,9 +302,9 @@ def test_issue31_assemble_then_normalize_matches_the_snapshot() -> None:
     )
     assert stripped == 0
     assert "Ďakujeme." in out
-    span = signature_span(out)
-    assert span is not None
-    assert span[1] == _FIXTURE.read_text(encoding="utf-8").strip()
+    assert _FIXTURE.read_text(encoding="utf-8").strip() in out
+    assert "data-sm-" not in out
+    assert "data-cid" not in out
     assert len(blobs) == 3
 
 
@@ -286,9 +347,9 @@ async def test_issue31_build_mime_sends_the_karta_images(
     assert body is not None
     html = body.get_content()
     assert isinstance(html, str)
-    span = signature_span(html)
-    assert span is not None
-    assert _unstamp(span[1]) == _unstamp(_FIXTURE.read_text(encoding="utf-8").strip())
+    assert _FIXTURE.read_text(encoding="utf-8").strip() in html
+    assert "data-sm-" not in html
+    assert "data-cid" not in html
     assert _HTTPS in html
     assert _BAD_SRC.search(html) is None
     assert "data:image" not in html
