@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
 
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ToastProvider } from '../components/Toasts';
 import { ThemeProvider } from '../features/prefs/ThemeProvider';
 import { SystemUiProvider } from '../features/system/systemUi';
@@ -26,13 +27,15 @@ export function App({ router: given }: { router?: Router }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <SystemUiProvider>
-          <ToastProvider>
-            <RouterProvider router={router} future={{ v7_startTransition: true }} />
-          </ToastProvider>
-        </SystemUiProvider>
-      </ThemeProvider>
+      <ErrorBoundary>
+        <ThemeProvider>
+          <SystemUiProvider>
+            <ToastProvider>
+              <RouterProvider router={router} future={{ v7_startTransition: true }} />
+            </ToastProvider>
+          </SystemUiProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
     </QueryClientProvider>
   );
 }

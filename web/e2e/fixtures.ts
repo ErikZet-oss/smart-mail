@@ -50,7 +50,14 @@ export function foldersView(
 ) {
   seq = 0;
   return {
-    mailbox: { id: 'mb-1', email, unread: 12, sync_state: 'ok' },
+    mailbox: {
+      id: 'mb-1',
+      email,
+      unread: 12,
+      sync_state: 'ok',
+      ai_enabled: false,
+      ai_available: false,
+    },
     folders: [
       folder('INBOX', 'inbox', 12, 40),
       folder('Drafts', 'drafts', 0, 2),

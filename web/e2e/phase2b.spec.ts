@@ -104,6 +104,8 @@ const INQUIRY_MSG = {
 
 function mailShell() {
   const view = foldersView();
+  view.mailbox.ai_enabled = true;
+  view.mailbox.ai_available = true;
   const folderId = view.folders[0]?.id ?? 'f-1';
   return {
     ...SIGNED_IN,

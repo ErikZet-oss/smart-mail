@@ -176,10 +176,11 @@ function ScreenW2Body({
   const mode = listPrefs?.mode ?? 'list';
 
   const folderId = folder?.id;
+  const aiOn = Boolean(view?.mailbox.ai_available ?? view?.mailbox.ai_enabled);
   const aiCats = useQuery({
     queryKey: aiCategoriesKey(mailboxRef),
     queryFn: () => fetchAiCategories(mailboxRef),
-    enabled: !classic,
+    enabled: !classic && aiOn,
     refetchInterval: FOLDERS_REFETCH_MS,
   });
   const list = useQuery({
@@ -329,7 +330,7 @@ function ScreenW2Body({
     return <Navigate to={ROUTES.W16b.path} replace />;
   }
   if (view && !folder && !aiView) return <Navigate to={ROUTES.W16b.path} replace />;
-  if (classic && category) {
+  if ((classic || (view && !aiOn)) && category) {
     return <Navigate to={`/mail/${encodeURIComponent(mailboxRef)}/inbox`} replace />;
   }
 
@@ -402,7 +403,7 @@ function ScreenW2Body({
           activeRef={folder ? (folder.special_use ?? folder.id) : folderParam}
           readOnly={me.data?.read_only ?? true}
           classic={classic}
-          aiCategories={aiCats.data?.categories ?? []}
+          aiCategories={aiOn ? (aiCats.data?.categories ?? []) : []}
           activeCategory={aiView ? category : null}
         />
       ) : (
@@ -418,7 +419,7 @@ function ScreenW2Body({
           activeRef={folder ? (folder.special_use ?? folder.id) : folderParam}
           readOnly={me.data?.read_only ?? true}
           classic={classic}
-          aiCategories={aiCats.data?.categories ?? []}
+          aiCategories={aiOn ? (aiCats.data?.categories ?? []) : []}
           activeCategory={aiView ? category : null}
         />
       ) : null}

@@ -91,6 +91,14 @@
       "copy": "Kopírovať kód",
       "copied": "Skopírované"
     },
+    "loading": {
+      "title": "Načítava sa…",
+      "text": "Čakáme na odpoveď servera."
+    },
+    "loadFailed": {
+      "title": "Nepodarilo sa načítať Smart Mail",
+      "text": "Server neodpovedal alebo vrátil chybu. Skontrolujte pripojenie a skúste to znova."
+    },
     "maintenance": {
       "title": "Prebieha plánovaná údržba",
       "untilToday": "Smart Mail bude opäť dostupný dnes približne o {{time}}.",
@@ -601,6 +609,7 @@
     "adminOnly": "Túto sekciu môže upravovať len správca.",
     "foldersHint": "Priečinky spravujete aj v ľavom stĺpci pošty (Vytvoriť, Premenovať, Vyprázdniť). Tu nastavíte odber a súkromné priečinky.",
     "sieveError": "ManageSieve server neodpovedal – skontrolujte pripojenie schránky.",
+    "sieveUnavailable": "Filtre a Mimo kancelárie nie sú na tomto serveri dostupné (ManageSieve, port 4190). Pošta funguje normálne.",
     "mobile": {
       "prefs": "Vzhľad",
       "prefsHint": "Svetlý / tmavý / podľa systému, Klasické zobrazenie",

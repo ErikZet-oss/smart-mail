@@ -588,6 +588,7 @@ function FiltersPanel() {
     onError: (error) => toasts.error(sieveErrorMessage(error)),
   });
   const scope = data.data?.mailbox_scope;
+  const sieveUnavailable = Boolean(data.data?.sieve_unavailable);
   const fieldOptions = [
     { value: 'from', label: t('settings.filters.fields.from') },
     { value: 'to', label: t('settings.filters.fields.to') },
@@ -599,7 +600,16 @@ function FiltersPanel() {
   ];
   return (
     <div className="flex max-w-2xl flex-col gap-4">
-      <Banner kind="info" message={t('settings.filters.mailboxScope')} />
+      {sieveUnavailable ? (
+        <Banner
+          kind="warning"
+          message={
+            (typeof data.data?.sieve_message === 'string' && data.data.sieve_message) || t('settings.sieveUnavailable')
+          }
+        />
+      ) : (
+        <Banner kind="info" message={t('settings.filters.mailboxScope')} />
+      )}
       <p className="type-small text-text-secondary">{t('settings.filtersHelp')}</p>
       <p className="type-small text-text-secondary">{t('settings.filters.notDefaults')}</p>
       {rules.map((rule, index) => {
@@ -813,9 +823,17 @@ function VacationPanel() {
   });
   const last = form.last_changed as
     { person_name?: string | null; at?: string | null; enabled?: boolean } | null | undefined;
+  const sieveUnavailable = Boolean(form.sieve_unavailable);
   return (
     <div className="flex max-w-xl flex-col gap-4">
-      <Banner kind="info" message={t('settings.vacation.mailboxScope')} />
+      {sieveUnavailable ? (
+        <Banner
+          kind="warning"
+          message={(typeof form.sieve_message === 'string' && form.sieve_message) || t('settings.sieveUnavailable')}
+        />
+      ) : (
+        <Banner kind="info" message={t('settings.vacation.mailboxScope')} />
+      )}
       <p className="type-small text-text-secondary">{t('settings.vacation.branchHelp')}</p>
       {last?.at ? (
         <p className="type-small text-text-secondary">

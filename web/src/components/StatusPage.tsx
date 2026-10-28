@@ -9,6 +9,7 @@ type Props = {
   actions?: ReactNode;
   top?: ReactNode;
   textWidth?: number;
+  'data-testid'?: string;
 };
 
 const CIRCLE = {
@@ -18,9 +19,22 @@ const CIRCLE = {
 };
 
 /** Layout of the system pages W16a–c and W17: centred icon circle, code, title, text, actions (Figma W16). */
-export function StatusPage({ icon, tone = 'neutral', code, title, text, actions, top, textWidth = 520 }: Props) {
+export function StatusPage({
+  icon,
+  tone = 'neutral',
+  code,
+  title,
+  text,
+  actions,
+  top,
+  textWidth = 520,
+  'data-testid': testId,
+}: Props) {
   return (
-    <main className="flex min-h-full flex-col items-center justify-center gap-4 bg-bg-subtle p-6 text-center">
+    <main
+      className="flex min-h-full flex-col items-center justify-center gap-4 bg-bg-subtle p-6 text-center"
+      data-testid={testId}
+    >
       {top}
       <div aria-hidden="true" className={`flex h-24 w-24 items-center justify-center rounded-full ${CIRCLE[tone]}`}>
         {icon}

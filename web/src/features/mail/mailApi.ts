@@ -3,7 +3,14 @@ import type { ListPrefs } from '../prefs/prefsApi';
 
 export type SpecialUse = 'inbox' | 'drafts' | 'sent' | 'junk' | 'trash';
 
-export type MailboxSummary = { id: string; email: string; unread: number; sync_state: string };
+export type MailboxSummary = {
+  id: string;
+  email: string;
+  unread: number;
+  sync_state: string;
+  ai_enabled?: boolean;
+  ai_available?: boolean;
+};
 
 export type Folder = {
   id: string;

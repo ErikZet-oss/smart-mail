@@ -12,11 +12,16 @@ from sqlalchemy import and_, desc, func, or_, select
 from app.ai.categories import CATEGORY_BY_ID, TRIAGE_CATEGORIES
 from app.ai.models import Classification
 from app.ai.service import category_counts
-from app.api.mail import _mailbox, fail
+from app.api.mail import _ai_provider_configured, _mailbox, fail
 from app.api.messages import MessageListItem
-from app.auth.deps import DB, Auth
-from app.mail.models import Message
+from app.auth.deps import DB, Auth, SettingsDep
+from app.core.config import Settings
+from app.mail.models import Mailbox, Message
 from app.mail.prefs import get_list_prefs
+
+
+def _ai_active(mailbox: Mailbox, settings: Settings) -> bool:
+    return bool(mailbox.ai_enabled and mailbox.ai_enabled_at is not None and _ai_provider_configured(settings))
 
 router = APIRouter(prefix="/api/mail", tags=["mail-ai"])
 
@@ -75,8 +80,10 @@ def _cls_fields(row: Classification | None) -> dict[str, Any]:
 
 
 @router.get("/mailboxes/{ref}/ai/categories")
-async def list_ai_categories(ref: str, ctx: Auth, db: DB) -> CategoriesOut:
+async def list_ai_categories(ref: str, ctx: Auth, db: DB, settings: SettingsDep) -> CategoriesOut:
     mailbox = await _mailbox(db, ctx, ref)
+    if not _ai_active(mailbox, settings):
+        return CategoriesOut(categories=[])
     counts = await category_counts(db, mailbox.id)
     return CategoriesOut(
         categories=[
@@ -98,6 +105,7 @@ async def list_category_messages(
     category: str,
     ctx: Auth,
     db: DB,
+    settings: SettingsDep,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int | None, Query(ge=1, le=200)] = None,
     filter: FilterName = "all",
@@ -106,9 +114,24 @@ async def list_category_messages(
     if category not in CATEGORY_BY_ID:
         raise fail(404, "category_not_found")
     mailbox = await _mailbox(db, ctx, ref)
+    cdef = CATEGORY_BY_ID[category]
+    if not _ai_active(mailbox, settings):
+        # AI off / no provider — empty list, never 500 (pilot #18 B3).
+        return CategoryListOut(
+            category=CategoryOut(
+                id=cdef.id,
+                label_sk=cdef.label_sk,
+                description_sk=cdef.description_sk,
+                color_token=cdef.color_token,
+                count=0,
+            ),
+            total=0,
+            page=page,
+            page_size=page_size or 50,
+            messages=[],
+        )
     prefs = await get_list_prefs(db, ctx.session.active_person_id)
     size = page_size or prefs.page_size
-    cdef = CATEGORY_BY_ID[category]
 
     cond = [
         Classification.mailbox_id == mailbox.id,
