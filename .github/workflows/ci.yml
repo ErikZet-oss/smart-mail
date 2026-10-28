@@ -50,7 +50,7 @@ jobs:
         run: |
           docker compose up -d --build imap-test
           for i in $(seq 1 30); do
-            docker compose exec -T imap-test bash -c 'echo > /dev/tcp/127.0.0.1/143 && echo > /dev/tcp/127.0.0.1/4190 && echo > /dev/tcp/127.0.0.1/24' && break
+            docker compose exec -T imap-test bash -c 'echo > /dev/tcp/127.0.0.1/143 && echo > /dev/tcp/127.0.0.1/4190 && echo > /dev/tcp/127.0.0.1/24 && echo > /dev/tcp/127.0.0.1/587' && break
             sleep 2
           done
           make imap-seed
@@ -60,6 +60,8 @@ jobs:
           TEST_IMAP_PORT: "1143"
           TEST_SIEVE_PORT: "4190"
           TEST_LMTP_PORT: "1024"
+          TEST_SMTP_HOST: localhost
+          TEST_SMTP_PORT: "1587"
           REQUIRE_IMAP: "1"
         run: uv run pytest -q
       - name: Dependency audit (pip-audit)

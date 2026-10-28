@@ -21,6 +21,7 @@ from app.mail.compose import (
     ensure_default_identity,
     pre_send_checks,
     queue_send,
+    sync_draft_to_imap,
 )
 from app.mail.compose_models import CannedResponse, ComposeAttachment, ComposeDraft, Identity
 from app.mail.models import Message
@@ -272,6 +273,8 @@ async def patch_draft(
         draft.scheduled_at = body.scheduled_at
         draft.status = "scheduled" if body.scheduled_at else "editing"
     draft.updated_at = datetime.now(UTC)
+    # Frontend autosaves every 30 s — mirror to IMAP Koncepty (CLAUDE.md §5 / GitHub #20).
+    await sync_draft_to_imap(db, settings, draft)
     await db.commit()
     await db.refresh(draft)
     return _draft_out(draft, await _load_atts(db, draft.id), settings)

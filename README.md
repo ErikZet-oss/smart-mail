@@ -174,7 +174,8 @@ Kôš a vlastné priečinky (Dodávatelia, Faktúry, Kurier, Nitra, Senica, Smar
 nad 90 %) a stav Money (zatiaľ vypnuté). Worker sleduje Doručenú poštu cez IDLE a ostatné priečinky obnovuje každých
 2 minúty. Live schránky firmy (eshop@, info@, pobočky) sa vo vývoji **nikdy** nepoužívajú.
 
-Lokálny testovací IMAP (Dovecot) je v compose ako `imap-test`:
+Lokálny testovací IMAP (Dovecot) je v compose ako `imap-test` (IMAP :1143, ManageSieve :4190, LMTP :1024,
+SMTP AUTH :1587 — odoslanie bez hesla schránky musí zlyhať, s heslom prejde a APPEND do Odoslané, issue #20):
 
 ```bash
 docker compose up -d imap-test
