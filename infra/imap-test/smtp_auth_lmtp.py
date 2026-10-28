@@ -15,7 +15,8 @@ import smtplib
 USERS_PATH = "/etc/dovecot/users"
 LMTP_HOST = "127.0.0.1"
 LMTP_PORT = 24
-LISTEN_HOST = "0.0.0.0"
+# Bound for other compose services on the docker network (not host-wide in production).
+LISTEN_HOST = "0.0.0.0"  # noqa: S104
 LISTEN_PORT = 587
 
 _USER_RE = re.compile(r"^([^:]+):\{PLAIN\}([^:]+):")
