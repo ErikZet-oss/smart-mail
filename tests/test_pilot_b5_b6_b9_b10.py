@@ -295,9 +295,11 @@ async def test_b6_image_proxy_svg_415(client: Client, db: AsyncSession, mail_ser
 
     class FakeResp:
         status_code = 200
-        headers = {"content-type": "image/svg+xml"}
-        content = b"<svg xmlns='http://www.w3.org/2000/svg'></svg>"
         is_redirect = False
+
+        def __init__(self) -> None:
+            self.headers = {"content-type": "image/svg+xml"}
+            self.content = b"<svg xmlns='http://www.w3.org/2000/svg'></svg>"
 
     class FakeClient:
         def __init__(self, *a, **k):
