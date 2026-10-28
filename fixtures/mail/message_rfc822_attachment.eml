@@ -1,0 +1,27 @@
+Content-Type: multipart/mixed; boundary="===============7748838985574493661=="
+MIME-Version: 1.0
+From: Archiv <archiv@firma.example>
+To: pilot@smartmail.test
+Subject: Preposlany .eml
+
+--===============7748838985574493661==
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+
+ViBwcmlsb2hlIGplIGNlbGEgc3ByYXZhLg==
+
+--===============7748838985574493661==
+Content-Type: message/rfc822
+MIME-Version: 1.0
+Content-Disposition: attachment; filename="sprava.eml"
+
+From: Zakaznik <zakaznik@abcstav.example>
+Subject: Vnutorna sprava
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+MIME-Version: 1.0
+
+Povodny text.
+
+--===============7748838985574493661==--

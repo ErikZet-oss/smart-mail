@@ -1,0 +1,39 @@
+Content-Type: multipart/related;
+ boundary="===============2921532575731492022=="
+MIME-Version: 1.0
+From: Jana <jana@partner.example>
+To: pilot@smartmail.test
+Subject: Outlook podpis s logom
+
+--===============2921532575731492022==
+Content-Type: multipart/alternative;
+ boundary="===============3914795877043957237=="
+MIME-Version: 1.0
+
+--===============3914795877043957237==
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+
+UG96ZHJhdiB6IE91dGxvb2t1
+
+--===============3914795877043957237==
+Content-Type: text/html; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+
+PHA+UG96ZHJhdjwvcD48aW1nIHNyYz0iY2lkOmxvZ29Ab3V0bG9vayIgYWx0PSJsb2dvIj4=
+
+--===============3914795877043957237==--
+
+--===============2921532575731492022==
+Content-Type: image/png
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-ID: <logo@outlook>
+Content-Disposition: inline; filename="logo.png"
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAA
+AABJRU5ErkJggg==
+
+--===============2921532575731492022==--

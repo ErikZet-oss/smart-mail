@@ -155,11 +155,14 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   });
 
   const msg = detail.data;
-  const hasRemote = Boolean(msg?.body_html_sanitized?.includes('smartmail-remote'));
+  const remoteOffered = Boolean(msg?.remote_images_offered);
+  const hasRemote = remoteOffered && Boolean(msg?.body_html_sanitized?.includes('smartmail-remote'));
+  // remote_images=always → show proxied images without an extra click (B6)
+  const imagesVisible = showImages || (msg?.remote_images_mode === 'always' && remoteOffered);
   const bodyHtml = useMemo(() => {
     if (!msg?.body_html_sanitized) return null;
-    return showImages ? showRemoteImages(msg.body_html_sanitized) : msg.body_html_sanitized;
-  }, [msg, showImages]);
+    return imagesVisible ? showRemoteImages(msg.body_html_sanitized) : msg.body_html_sanitized;
+  }, [msg, imagesVisible]);
 
   if (!messageId) {
     return (
@@ -414,7 +417,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
             </div>
           </div>
 
-          {hasRemote && !showImages ? (
+          {hasRemote && !imagesVisible ? (
             <div className="mb-4">
               <Banner
                 kind="info"

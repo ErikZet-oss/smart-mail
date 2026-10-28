@@ -1,0 +1,23 @@
+From: =?utf-8?q?Dod=C3=A1vate=C4=BE?= <dodavatel@firma.example>
+To: pilot@smartmail.test
+Subject: Gmail =?utf-8?q?pr=C3=ADloha?= s Content-ID
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="===============8892803704269781855=="
+
+--===============8892803704269781855==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+V prílohe je obrázok.
+
+--===============8892803704269781855==
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="screenshot.png"
+MIME-Version: 1.0
+Content-ID: <f_abc123@gmail.com>
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAA
+AABJRU5ErkJggg==
+
+--===============8892803704269781855==--
