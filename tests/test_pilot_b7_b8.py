@@ -85,6 +85,32 @@ async def test_b7_send_allows_smartmail_test_domain(
 
 
 @pytest.mark.asyncio
+async def test_b7_empty_allowlist_does_not_block_external_on_send(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, app
+) -> None:
+    """Empty MAIL_SEND_TEST_ALLOWLIST must not 422 every recipient (Phase 1e send path)."""
+    app.state.settings.mail_send_test_allowlist = ""
+    await _signed_in(client, db, mail_server, "pilot-b7-empty@smartmail.test")
+    created = await client.send_json("POST", "/api/mail/mailboxes/default/compose", {"mode": "new"})
+    draft_id = created.json()["id"]
+    await client.send_json(
+        "PATCH",
+        f"/api/mail/compose/{draft_id}",
+        {
+            "to_addrs": [{"email": "novak@abcstav.example"}],
+            "subject": "Test",
+            "body_html": "<p>Ďakujeme.</p>",
+        },
+    )
+    from unittest.mock import AsyncMock, patch
+
+    with patch("app.mail.compose.send_message", new_callable=AsyncMock):
+        sent = await client.send_json("POST", f"/api/mail/compose/{draft_id}/send", {"force": False})
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["status"] in {"sent", "queued", "sending"}
+
+
+@pytest.mark.asyncio
 async def test_b8_ai_views_messages_uses_sqlalchemy_case(
     client: Client, db: AsyncSession, mail_server: FakeMailServer, app
 ) -> None:

@@ -79,16 +79,16 @@ export function AppShell({ section, mailbox = 'default', unread = 0, children, h
   const [timedOut, setTimedOut] = useState(false);
   // Bump only on retry — never on isFetching (that reset the timer in CI, pilot #18 B2).
   const [waitGen, setWaitGen] = useState(0);
-  // Absolute deadline so StrictMode remounts do not keep restarting from a full 10 s.
+  // Absolute deadline set in an effect (not during render) so StrictMode effect re-runs
+  // keep the same end time instead of restarting a full ME_LOAD_TIMEOUT_MS.
   const deadlineRef = useRef<number | null>(null);
-  if (!me.data && !me.isError) {
-    if (deadlineRef.current === null) deadlineRef.current = Date.now() + ME_LOAD_TIMEOUT_MS;
-  } else {
-    deadlineRef.current = null;
-  }
   useEffect(() => {
-    if (me.data || me.isError || deadlineRef.current === null) {
+    if (me.data || me.isError) {
+      deadlineRef.current = null;
       return;
+    }
+    if (deadlineRef.current === null) {
+      deadlineRef.current = Date.now() + ME_LOAD_TIMEOUT_MS;
     }
     const remaining = Math.max(0, deadlineRef.current - Date.now());
     const id = window.setTimeout(() => setTimedOut(true), remaining);

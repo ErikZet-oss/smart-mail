@@ -199,9 +199,10 @@ export function ScreenW4() {
   }, [draftId, localId, bootstrap]);
 
   useEffect(() => {
-    if (draftQuery.data) applyDraft(draftQuery.data);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply once per draft payload
-  }, [draftQuery.data?.id, draftQuery.data?.updated_at]);
+    // Do not clobber in-progress edits when a late GET/hydrate arrives (pilot #18 B7 e2e).
+    if (draftQuery.data && !dirty) applyDraft(draftQuery.data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply once per draft payload / when edits flush
+  }, [draftQuery.data?.id, draftQuery.data?.updated_at, dirty]);
 
   const save = useMutation({
     mutationFn: async () => {

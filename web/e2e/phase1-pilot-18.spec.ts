@@ -109,7 +109,11 @@ test('B7 send to disallowed address shows Slovak error within 2s', async ({ page
 
   await page.goto('/compose?mailbox=default');
   await expect(page.getByTestId('compose-screen')).toBeVisible();
-  await page.getByLabel('Komu').fill('zakaznik@firma.sk');
+  const toField = page.getByLabel('Komu');
+  // Wait until draft hydrate finished so a late applyDraft cannot wipe the fill.
+  await expect(toField).toBeVisible();
+  await toField.fill('zakaznik@firma.sk');
+  await expect(toField).toHaveValue('zakaznik@firma.sk');
   await page.getByLabel('Predmet').fill('Test B7');
   await page.getByRole('button', { name: 'Odoslať' }).click();
 
@@ -118,5 +122,5 @@ test('B7 send to disallowed address shows Slovak error within 2s', async ({ page
   await expect(banner).toContainText('Testovací server smie posielať len na povolené adresy');
   await expect(banner).toContainText('zakaznik@firma.sk');
   // Draft stays open for edit
-  await expect(page.getByLabel('Komu')).toHaveValue('zakaznik@firma.sk');
+  await expect(toField).toHaveValue('zakaznik@firma.sk');
 });

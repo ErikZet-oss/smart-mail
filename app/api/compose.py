@@ -355,19 +355,22 @@ async def send_draft(
     if draft.status not in {"editing", "failed", "scheduled"}:
         raise fail(409, "draft_not_editable")
     # Prefer allowlist rejection on Send click (422) over a silent worker failure (pilot #18 B7).
-    emails = [
-        str(a.get("email") or "")
-        for a in list(draft.to_addrs or []) + list(draft.cc_addrs or []) + list(draft.bcc_addrs or [])
-    ]
-    blocked = blocked_recipients(settings, emails)
-    if blocked:
-        raise fail(
-            422,
-            "recipient_not_allowed",
-            blocked=blocked,
-            allowlist=test_allowlist_addresses(settings),
-            show_allowlist=settings.app_env == "test",
-        )
+    # Empty MAIL_SEND_TEST_ALLOWLIST does not block — only enforce when the list is non-empty.
+    allowlist = test_allowlist_addresses(settings)
+    if allowlist:
+        emails = [
+            str(a.get("email") or "")
+            for a in list(draft.to_addrs or []) + list(draft.cc_addrs or []) + list(draft.bcc_addrs or [])
+        ]
+        blocked = blocked_recipients(settings, emails)
+        if blocked:
+            raise fail(
+                422,
+                "recipient_not_allowed",
+                blocked=blocked,
+                allowlist=allowlist,
+                show_allowlist=settings.app_env == "test",
+            )
     try:
         await queue_send(db, settings, draft, account_id=ctx.account.id, person_id=person.id, force=body.force)
     except ValueError as exc:
