@@ -441,7 +441,7 @@ export function ScreenW4() {
           </header>
         ) : null}
         <header
-          className={`flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-3 ${mobile ? 'overflow-x-auto' : ''}`}
+          className={`flex h-14 shrink-0 items-center gap-1 border-border-default px-3 ${mobile ? 'order-last overflow-x-auto border-t' : 'border-b'}`}
         >
           {mobile ? null : <div className="flex-1" />}
           <button
@@ -525,9 +525,19 @@ export function ScreenW4() {
                 <Banner kind="danger" message={sendErrorMessage(t, draft?.send_error)} />
               </div>
             ) : null}
-            <div className="grid grid-cols-[minmax(72px,172px)_1fr] items-center gap-y-2.5 px-6 pb-3 pt-4">
+            <div
+              className={
+                mobile
+                  ? 'grid grid-cols-[72px_1fr] items-stretch px-4 [&>*]:flex [&>*]:min-h-11 [&>*]:items-center [&>*]:border-b [&>*]:border-border-default'
+                  : 'grid grid-cols-[minmax(72px,172px)_1fr] items-center gap-y-2.5 px-6 pb-3 pt-4'
+              }
+            >
               <span className="type-body text-text-primary">{t('compose.from')}</span>
-              <div className="type-small flex min-h-9 min-w-0 flex-wrap items-center gap-x-3 rounded-sm border border-border-default px-2 py-1.5 text-text-primary">
+              <div
+                className={`type-small flex min-h-9 min-w-0 flex-wrap items-center gap-x-3 text-text-primary ${
+                  mobile ? 'py-1.5' : 'rounded-sm border border-border-default px-2 py-1.5'
+                }`}
+              >
                 <span className="truncate">{identity ? `${identity.display_name} <${identity.email}>` : '…'}</span>
                 {personName ? (
                   <span className="type-caption inline-flex items-center rounded-full bg-brand-primary-50 px-2.5 py-0.5 text-brand-primary-700">
@@ -543,7 +553,11 @@ export function ScreenW4() {
                     setTo(event.target.value);
                     setDirty(true);
                   }}
-                  className="type-body h-9 flex-1 rounded-sm border border-border-default px-3"
+                  className={
+                    mobile
+                      ? 'type-body h-11 min-w-0 flex-1 bg-transparent focus:outline-none'
+                      : 'type-body h-9 flex-1 rounded-sm border border-border-default px-3'
+                  }
                   aria-label={t('compose.to')}
                 />
                 <button
@@ -563,7 +577,11 @@ export function ScreenW4() {
                       setCc(event.target.value);
                       setDirty(true);
                     }}
-                    className="type-body h-9 rounded-sm border border-border-default px-3"
+                    className={
+                      mobile
+                        ? 'type-body h-11 bg-transparent focus:outline-none'
+                        : 'type-body h-9 rounded-sm border border-border-default px-3'
+                    }
                     aria-label={t('compose.cc')}
                   />
                 </>
@@ -575,12 +593,20 @@ export function ScreenW4() {
                   setSubject(event.target.value);
                   setDirty(true);
                 }}
-                className="type-body h-9 rounded-sm border border-border-default px-3"
+                className={
+                  mobile
+                    ? 'type-body h-11 bg-transparent focus:outline-none'
+                    : 'type-body h-9 rounded-sm border border-border-default px-3'
+                }
                 aria-label={t('compose.subject')}
               />
             </div>
 
-            <div className="mx-6 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border-default">
+            <div
+              className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
+                mobile ? '' : 'mx-6 mb-3 rounded-md border border-border-default'
+              }`}
+            >
               <div className="flex items-center gap-0.5 border-b border-border-default bg-bg-subtle px-2 py-1 text-text-primary">
                 <button
                   type="button"
@@ -613,7 +639,9 @@ export function ScreenW4() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 px-6 pb-3">
+            <div
+              className={`flex flex-wrap items-center gap-3 ${mobile ? 'border-t border-border-default px-4 py-2' : 'px-6 pb-3'}`}
+            >
               <div className="relative flex">
                 <Button
                   type="button"

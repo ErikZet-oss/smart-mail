@@ -19,7 +19,7 @@ export function SwipeRow({ children, onDone }: Props) {
     <div className="relative overflow-hidden">
       <div
         aria-hidden="true"
-        className={`absolute inset-y-0 right-0 flex w-24 items-center justify-center bg-brand-primary-50 text-brand-primary-800 ${
+        className={`absolute inset-y-0 right-0 flex w-24 items-center justify-center bg-brand-primary-50 text-brand-primary-700 ${
           dx < -20 ? 'opacity-100' : 'opacity-0'
         }`}
       >

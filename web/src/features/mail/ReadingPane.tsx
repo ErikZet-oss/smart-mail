@@ -295,7 +295,11 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           </p>
         </header>
       ) : null}
-      <div className="flex h-14 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border-default px-2">
+      <div
+        className={`flex h-14 shrink-0 items-center gap-0.5 overflow-x-auto border-border-default px-2 ${
+          mobile ? 'order-last border-t' : 'border-b'
+        }`}
+      >
         <ToolBtn
           icon={<Reply size={18} />}
           label={t('mail.toolbar.reply')}
@@ -369,14 +373,14 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           <div className="mt-6 h-40 rounded-xs bg-bg-muted" />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto px-7 py-4">
+        <div className={`min-h-0 flex-1 overflow-y-auto ${mobile ? 'px-4 py-3' : 'px-7 py-4'}`}>
           <div className="mb-4 flex items-start gap-2">
-            <h2 className="type-title min-w-0 flex-1 break-words text-text-primary">
+            <h2 className={`${mobile ? 'type-heading' : 'type-title'} min-w-0 flex-1 break-words text-text-primary`}>
               {msg.subject || t('mail.noSubject')}
             </h2>
             <Link
               to={`/mail/${encodeURIComponent(mailbox)}/${encodeURIComponent(folderRef)}/${encodeURIComponent(msg.thread_id ?? msg.id)}`}
-              className="shrink-0 rounded-xs text-text-secondary hover:text-text-primary"
+              className={`shrink-0 rounded-xs text-text-secondary hover:text-text-primary ${mobile ? 'hidden' : ''}`}
               title={t('mail.openFull')}
               aria-label={t('mail.openFull')}
             >

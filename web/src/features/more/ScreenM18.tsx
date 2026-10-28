@@ -119,7 +119,7 @@ export function ScreenM18({ onClose, onLogout }: Props) {
         <Link
           to="/contacts/personal"
           onClick={onClose}
-          className="flex min-h-[48px] items-center gap-3 border-b border-border-subtle px-4 py-3 text-text-primary hover:bg-bg-subtle"
+          className="flex min-h-[48px] items-center gap-3 border-b border-border-default px-4 py-3 text-text-primary hover:bg-bg-subtle"
         >
           <Users size={20} aria-hidden="true" />
           <span className="type-body flex-1">{t('rail.contacts')}</span>
@@ -128,7 +128,7 @@ export function ScreenM18({ onClose, onLogout }: Props) {
         <Link
           to="/settings"
           onClick={onClose}
-          className="flex min-h-[48px] items-center gap-3 border-b border-border-subtle px-4 py-3 text-text-primary hover:bg-bg-subtle"
+          className="flex min-h-[48px] items-center gap-3 border-b border-border-default px-4 py-3 text-text-primary hover:bg-bg-subtle"
         >
           <Settings size={20} aria-hidden="true" />
           <span className="type-body flex-1">{t('rail.settings')}</span>
@@ -140,7 +140,7 @@ export function ScreenM18({ onClose, onLogout }: Props) {
             onClose();
             open('notifications');
           }}
-          className="flex min-h-[48px] w-full items-center gap-3 border-b border-border-subtle px-4 py-3 text-left text-text-primary hover:bg-bg-subtle"
+          className="flex min-h-[48px] w-full items-center gap-3 border-b border-border-default px-4 py-3 text-left text-text-primary hover:bg-bg-subtle"
         >
           <Bell size={20} aria-hidden="true" />
           <span className="type-body flex-1">{t('rail.notifications')}</span>
@@ -150,7 +150,7 @@ export function ScreenM18({ onClose, onLogout }: Props) {
           <button
             type="button"
             onClick={() => setSwitchOpen(true)}
-            className="flex min-h-[48px] w-full items-center gap-3 border-b border-border-subtle px-4 py-3 text-left text-text-primary hover:bg-bg-subtle"
+            className="flex min-h-[48px] w-full items-center gap-3 border-b border-border-default px-4 py-3 text-left text-text-primary hover:bg-bg-subtle"
           >
             <UserCheck size={20} aria-hidden="true" />
             <span className="min-w-0 flex-1">
@@ -162,7 +162,7 @@ export function ScreenM18({ onClose, onLogout }: Props) {
             <ChevronRight size={18} className="text-text-tertiary" aria-hidden="true" />
           </button>
         ) : null}
-        <div className="flex flex-col gap-2 border-b border-border-subtle px-4 py-3">
+        <div className="flex flex-col gap-2 border-b border-border-default px-4 py-3">
           <div className="flex items-center gap-3">
             <Moon size={20} aria-hidden="true" className="text-text-primary" />
             <span className="type-body text-text-primary">{t('prefs.theme')}</span>
@@ -197,7 +197,7 @@ export function ScreenM18({ onClose, onLogout }: Props) {
             onClose();
             open('about');
           }}
-          className="flex min-h-[48px] w-full items-center gap-3 border-b border-border-subtle px-4 py-3 text-left text-text-primary hover:bg-bg-subtle"
+          className="flex min-h-[48px] w-full items-center gap-3 border-b border-border-default px-4 py-3 text-left text-text-primary hover:bg-bg-subtle"
         >
           <CircleHelp size={20} aria-hidden="true" />
           <span className="type-body flex-1">{t('rail.about')}</span>

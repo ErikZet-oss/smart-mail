@@ -146,7 +146,7 @@ export function NotificationsPanel({ onClose }: Props) {
                   <li key={item.id}>
                     <button
                       type="button"
-                      className="flex w-full items-start gap-3 border-b border-border-subtle px-4 py-3 text-left hover:bg-bg-subtle"
+                      className="flex w-full items-start gap-3 border-b border-border-default px-4 py-3 text-left hover:bg-bg-subtle"
                       onClick={() => {
                         if (item.unread) dismiss.mutate({ ids: [item.id] });
                         onClose();

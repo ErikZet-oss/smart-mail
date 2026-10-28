@@ -555,7 +555,7 @@ function ScreenW2Body({
               </div>
             </div>
           ) : null}
-          <label className="relative block">
+          <label className={mobile ? 'hidden' : 'relative block'}>
             <Search
               size={16}
               className="pointer-events-none absolute left-3 top-2.5 text-text-secondary"
