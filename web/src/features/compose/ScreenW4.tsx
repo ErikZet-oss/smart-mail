@@ -274,6 +274,20 @@ export function ScreenW4() {
             onClick: () => navigate(`/compose/${localId}?mailbox=${encodeURIComponent(mailbox)}`),
           }
         : undefined;
+      if (
+        error instanceof ApiError &&
+        (error.detail.code === 'attachment_infected' || error.detail.code === 'attachment_missing')
+      ) {
+        setPreSendOpen(false);
+        const name = typeof error.detail.filename === 'string' ? error.detail.filename : '';
+        toasts.error(
+          error.detail.code === 'attachment_infected'
+            ? t('compose.attachmentInfectedSend', { name })
+            : t('compose.attachmentMissingSend', { name }),
+        );
+        void draftQuery.refetch();
+        return;
+      }
       if (error instanceof ApiError && error.detail.code === 'recipient_not_allowed') {
         const meta: SendErrorMeta = {
           code: 'recipient_not_allowed',
@@ -616,6 +630,13 @@ export function ScreenW4() {
                   type="button"
                   className="rounded-r-none"
                   onClick={() => {
+                    const infected = (draft?.attachments ?? []).find(
+                      (item) => !item.is_inline && item.av_status === 'infected',
+                    );
+                    if (infected) {
+                      toasts.error(t('compose.attachmentInfectedSend', { name: infected.filename }));
+                      return;
+                    }
                     const checks = draft?.checks ?? [];
                     if (checks.some((c) => c.blocking) || checks.length > 0) {
                       void save.mutateAsync().then(() => setPreSendOpen(true));
@@ -722,30 +743,42 @@ export function ScreenW4() {
                 {(draft?.attachments ?? [])
                   .filter((a) => !a.is_inline)
                   .map((a) => {
+                    const pending = a.av_status === 'pending';
                     const unscanned = a.av_status === 'skipped' || a.av_status === 'error';
+                    const infected = a.av_status === 'infected';
                     return (
                       <li
                         key={a.id}
-                        className="type-small flex h-8 items-center gap-2 rounded-sm border border-border-default px-2.5 text-text-primary"
+                        className="type-small flex flex-col justify-center gap-0.5 rounded-sm border border-border-default px-2.5 py-1 text-text-primary"
                       >
-                        <FileText size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
-                        <span className="min-w-0 flex-1 truncate">{a.filename}</span>
-                        {unscanned ? (
-                          <span className="type-caption shrink-0 text-text-tertiary">
-                            ({t('mail.attachmentUnscanned')})
+                        <span className="flex h-8 items-center gap-2">
+                          <FileText size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
+                          <span className="min-w-0 flex-1 truncate">{a.filename}</span>
+                          {unscanned ? (
+                            <span className="type-caption shrink-0 text-text-tertiary">
+                              ({t('mail.attachmentUnscanned')})
+                            </span>
+                          ) : null}
+                          {infected ? (
+                            <span className="type-caption shrink-0 text-danger-600">
+                              ({t('compose.attachmentInfectedChip')})
+                            </span>
+                          ) : null}
+                          <span className="type-caption shrink-0 text-text-secondary">
+                            {Math.round(a.size / 1024)} kB
                           </span>
-                        ) : null}
-                        <span className="type-caption shrink-0 text-text-secondary">
-                          {Math.round(a.size / 1024)} kB
+                          <button
+                            type="button"
+                            className="shrink-0 rounded-xs text-text-secondary hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary-500"
+                            aria-label={`${t('compose.removeAttachment')} ${a.filename}`}
+                            onClick={() => removeAtt.mutate(a.id)}
+                          >
+                            <X size={14} aria-hidden="true" />
+                          </button>
                         </span>
-                        <button
-                          type="button"
-                          className="shrink-0 rounded-xs text-text-secondary hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary-500"
-                          aria-label={`${t('compose.removeAttachment')} ${a.filename}`}
-                          onClick={() => removeAtt.mutate(a.id)}
-                        >
-                          <X size={14} aria-hidden="true" />
-                        </button>
+                        {pending ? (
+                          <span className="type-caption pb-1 text-text-tertiary">{t('compose.attachmentPending')}</span>
+                        ) : null}
                       </li>
                     );
                   })}

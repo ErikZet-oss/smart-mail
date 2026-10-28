@@ -8,6 +8,11 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   (same stored file, not a second copy). Infected files are left behind. Files not
   yet scanned (`skipped` / `error`) stay, with the same antivírus label as in the
   reading pane. The user can remove a chip before send.
+- Send re-reads the antivirus status of the stored file (the draft copy can be
+  stale). `infected` is 409 `attachment_infected` with the file name and cannot be
+  forced. `pending` warns „Príloha ešte nebola skontrolovaná antivírusom“ and the
+  user confirms. A missing file is 409 `attachment_missing`, not an empty attachment.
+  The compose chip shows the current status. The undo-delay job runs the same check.
 
 ## [Unreleased] — Pilot #31: signature images survive in Gmail
 

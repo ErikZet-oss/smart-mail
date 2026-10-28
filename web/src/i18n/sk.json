@@ -471,6 +471,10 @@
     "attachments": "Prílohy",
     "removeAttachment": "Odstrániť prílohu",
     "attachmentInfected": "Príloha obsahuje vírus a nebola priložená.",
+    "attachmentPending": "Príloha ešte nebola skontrolovaná antivírusom",
+    "attachmentInfectedChip": "obsahuje vírus",
+    "attachmentInfectedSend": "Príloha {{name}} obsahuje vírus. Správu nemožno odoslať.",
+    "attachmentMissingSend": "Príloha {{name}} sa nenašla. Správu nemožno odoslať.",
     "aiLater": "AI panel príde v ďalšej fáze.",
     "maxSize": "Maximálna povolená veľkosť súboru je 25 MB",
     "attachFile": "Priložiť súbor",
@@ -499,6 +503,7 @@
       "no_recipients": "Chýba príjemca.",
       "placeholder": "V texte ostáva [[DOPLNIŤ]].",
       "attachment_mentioned": "Spomínate prílohu – skontrolujte, či je priložená.",
+      "attachment_pending": "Príloha ešte nebola skontrolovaná antivírusom",
       "external_recipient": "Správa ide mimo firmu."
     }
   },
