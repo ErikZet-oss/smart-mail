@@ -54,7 +54,7 @@ test.describe('Phase 1f — settings + W4e', () => {
       },
     });
     await page.goto('/settings/preferences/ui');
-    await expect(page.getByRole('heading', { name: /Nastavenia/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Používateľské rozhranie' })).toBeVisible();
     await expect(page.getByText('Klasické zobrazenie')).toBeVisible();
     await shot(page, 'phase1f-W12-preferences');
   });
@@ -151,10 +151,10 @@ test.describe('Phase 1f — settings + W4e', () => {
     await shot(page, 'phase1f-W12-02-folders');
     await page.goto('/settings/identity/list');
     await expect(page.getByRole('button', { name: /Jana Testová <jana@smartsro\.sk>/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: '<> Zdrojový kód' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Zdrojový kód' })).toBeVisible();
     await shot(page, 'phase1f-W12-03a-identity');
-    await page.getByRole('button', { name: '<> Zdrojový kód' }).click();
-    await expect(page.getByLabel('<> Zdrojový kód')).toHaveValue(/Jana Testová/);
+    await page.getByRole('button', { name: 'Zdrojový kód' }).click();
+    await expect(page.getByRole('textbox', { name: 'Zdrojový kód' })).toHaveValue(/Jana Testová/);
     await shot(page, 'phase1f-W12-03a-identity-source');
     await page.goto('/settings/provider');
     await expect(page.getByText('jana@smartsro.sk')).toBeVisible();

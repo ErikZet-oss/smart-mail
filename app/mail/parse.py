@@ -15,6 +15,7 @@ from email.message import Message
 from email.policy import default
 from email.utils import parsedate_to_datetime
 
+from app.core.config import Settings
 from app.mail.sanitize import sanitize_html
 
 _PREVIEW_LEN = 200
@@ -185,7 +186,7 @@ def _collect_leaf_parts(part: Message, out: list[Message]) -> None:
     out.append(part)
 
 
-def parse_rfc822(raw: bytes) -> ParsedMessage:
+def parse_rfc822(raw: bytes, settings: Settings | None = None) -> ParsedMessage:
     msg = message_from_bytes(raw, policy=default)
     text: str | None = None
     html: str | None = None
@@ -239,7 +240,7 @@ def parse_rfc822(raw: bytes) -> ParsedMessage:
         else:
             _append_attachment(attachments, msg, force_not_inline=True)
 
-    sanitized = sanitize_html(html) if html else None
+    sanitized = sanitize_html(html, settings=settings) if html else None
     referenced = cids_referenced_in_html(html) | cids_referenced_in_html(sanitized)
     for att in attachments:
         if att.content_id and att.content_id in referenced:

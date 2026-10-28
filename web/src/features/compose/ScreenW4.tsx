@@ -812,8 +812,9 @@ export function ScreenW4() {
           onSave={(html) => {
             void patchDraft(localId, { signature_html_override: html, include_signature: true }).then((d) => {
               void qc.setQueryData(['compose', localId], d);
+              const signature = d.signature_html_override || html;
               const without = (editor?.getHTML() ?? '').replace(/<div data-sm-signature="1">[\s\S]*?<\/div>/, '');
-              editor?.commands.setContent(`${without}<div data-sm-signature="1">${html}</div>`);
+              editor?.commands.setContent(`${without}<div data-sm-signature="1">${signature}</div>`);
               setDirty(true);
               setSignatureOpen(false);
               toasts.success(t('compose.signatureSaved'));

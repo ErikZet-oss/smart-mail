@@ -534,7 +534,12 @@ async def _render_message_html(
 ) -> tuple[str | None, bool]:
     """Rewrite cid: → inline URLs (B5) and sign remote images for the proxy (B6)."""
     from app.mail.cid_rewrite import normalize_cid, rewrite_cid_images
-    from app.mail.remote_images import html_has_remote_placeholder, should_offer_remote_images, sign_remote_image_attrs
+    from app.mail.remote_images import (
+        html_has_remote_placeholder,
+        proxy_signature_images,
+        should_offer_remote_images,
+        sign_remote_image_attrs,
+    )
 
     html = message.body_html_sanitized
     if not html:
@@ -545,6 +550,7 @@ async def _render_message_html(
         if a.content_id and (a.content_type or "").lower().startswith("image/")
     }
     html = rewrite_cid_images(html, mailbox_ref=ref, cid_to_attachment_id=cid_map)
+    html = proxy_signature_images(html, settings)
     contacts = await _contact_emails_for_person(db, person_id)
     offered = should_offer_remote_images(
         remote_mode,

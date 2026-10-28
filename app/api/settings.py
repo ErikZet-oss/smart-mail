@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -14,7 +15,10 @@ from app.auth.deps import DB, ActivePerson, Auth, SettingsDep, client_ip
 from app.auth.models import Account, AccountKind, Branch, Person, Role
 from app.auth.security import decrypt
 from app.core.audit import AuditLog, audit
+from app.mail import storage
+from app.mail.clamav import scan_bytes
 from app.mail.compose_models import CannedResponse, Identity
+from app.mail.image_proxy import proxy_path
 from app.mail.models import Mailbox, MailboxAccess, SieveScriptBackup
 from app.mail.prefs import get_list_prefs, get_ui_prefs, save_section
 from app.mail.sanitize import sanitize_html
@@ -38,7 +42,19 @@ from app.mail.sieve_async import (
     read_then_write_script,
     save_active_script,
 )
-from app.mail.signature import default_branch_template, render_signature
+from app.mail.signature import (
+    SignatureError,
+    apply_signature_languages,
+    default_branch_template,
+    preview_signature_html,
+    signature_presets,
+)
+from app.mail.signature_images import (
+    MAX_SIGNATURE_IMAGES,
+    SignatureImageError,
+    image_dicts,
+    normalize_signature_image,
+)
 from app.settings.schema import SECTION_PATHS, schema_document
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -138,7 +154,7 @@ class ProfileIn(BaseModel):
 @router.get("/profile")
 async def get_profile(ctx: Auth, person: ActivePerson, db: DB) -> dict[str, Any]:
     branch = await db.get(Branch, person.branch_id) if person.branch_id else None
-    preview = render_signature(person=person, branch=branch, identity=None, email=ctx.account.email)
+    preview = preview_signature_html(person=person, branch=branch, identity=None, email=ctx.account.email)
     return {
         "id": str(person.id),
         "first_name": person.first_name,
@@ -220,9 +236,10 @@ async def update_identity(
     identity.organization = (body.organization or "").strip()[:100] or None
     identity.reply_to = (body.reply_to or "").strip().lower() or None
     identity.bcc = [a.strip().lower() for a in body.bcc if a.strip()]
-    cleaned: dict[str, str] = {}
-    for lang, html in body.signature_html.items():
-        cleaned[lang] = sanitize_html(html[:65_536])
+    try:
+        cleaned, stripped = apply_signature_languages(body.signature_html, require_sk=False)
+    except SignatureError as exc:
+        raise fail(422, exc.code, **exc.extra) from exc
     identity.signature_html = cleaned
     if body.is_default:
         others = (
@@ -244,11 +261,25 @@ async def update_identity(
     )
     await db.commit()
     await db.refresh(identity)
-    return _identity_out(identity)
+    return _identity_out(identity, stripped)
 
 
-def _identity_out(i: Identity) -> dict[str, Any]:
-    return {
+def _public_images(raw: object) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": rec["id"],
+            "cid": rec["cid"],
+            "preview_url": f"/api/settings/signature-images/{rec['id']}",
+            "content_type": rec.get("content_type"),
+            "size": rec.get("size"),
+            "filename": rec.get("filename"),
+        }
+        for rec in image_dicts(raw)
+    ]
+
+
+def _identity_out(i: Identity, stripped: dict[str, list[str]] | None = None) -> dict[str, Any]:
+    out: dict[str, Any] = {
         "id": str(i.id),
         "mailbox_id": str(i.mailbox_id),
         "display_name": i.display_name,
@@ -258,7 +289,11 @@ def _identity_out(i: Identity) -> dict[str, Any]:
         "bcc": i.bcc,
         "is_default": i.is_default,
         "signature_html": i.signature_html,
+        "signature_images": _public_images(i.signature_images),
     }
+    if stripped is not None:
+        out["signature_stripped"] = stripped
+    return out
 
 
 # ----- responses 04 -----
@@ -904,6 +939,7 @@ async def admin_branches(ctx: Auth, db: DB) -> list[dict[str, Any]]:
                 "idle_ask_minutes": b.idle_ask_minutes,
                 "remember_days": b.remember_days,
                 "signature_template_html": b.signature_template_html,
+                "signature_images": _public_images(b.signature_images),
                 "folder_ids": b.folder_ids,
                 "money_centre_id": b.money_centre_id,
                 "money_price_list_id": b.money_price_list_id,
@@ -917,7 +953,9 @@ async def admin_branches(ctx: Auth, db: DB) -> list[dict[str, Any]]:
                         "role": p.role.value,
                         "is_manager": p.is_manager,
                         "active": p.active,
+                        "phone": p.phone,
                         "mobile": p.mobile,
+                        "personal_email": p.personal_email,
                     }
                     for p in people
                 ],
@@ -953,7 +991,7 @@ async def create_branch(body: BranchIn, request: Request, ctx: Auth, db: DB) -> 
         phone=body.phone,
         hours=body.hours,
         mailbox_id=uuid.UUID(body.mailbox_id) if body.mailbox_id else None,
-        signature_template_html=body.signature_template_html or default_branch_template(),
+        signature_template_html=_branch_signature(body.signature_template_html),
         remember_days=body.remember_days or 30,
     )
     db.add(branch)
@@ -987,8 +1025,9 @@ async def update_branch(branch_id: uuid.UUID, body: BranchIn, request: Request, 
         branch.idle_ask_minutes = body.idle_ask_minutes or None
     if body.remember_days is not None:
         branch.remember_days = body.remember_days
+    stripped: dict[str, list[str]] = {}
     if body.signature_template_html is not None:
-        cleaned = {lang: sanitize_html(html[:65_536]) for lang, html in body.signature_template_html.items()}
+        cleaned, stripped = _apply_branch_signature(body.signature_template_html)
         branch.signature_template_html = cleaned
     if body.folder_ids is not None:
         branch.folder_ids = body.folder_ids
@@ -1009,7 +1048,13 @@ async def update_branch(branch_id: uuid.UUID, body: BranchIn, request: Request, 
         ip=client_ip(request),
     )
     await db.commit()
-    return {"id": str(branch.id), "name": branch.name}
+    return {
+        "id": str(branch.id),
+        "name": branch.name,
+        "signature_template_html": branch.signature_template_html,
+        "signature_images": _public_images(branch.signature_images),
+        "signature_stripped": stripped,
+    }
 
 
 class PersonAdminIn(BaseModel):
@@ -1174,6 +1219,171 @@ def _mailbox_admin_out(m: Mailbox) -> dict[str, Any]:
         "quota_limit_kb": m.quota_limit_kb,
         "last_synced_at": m.last_synced_at.isoformat() if m.last_synced_at else None,
     }
+
+
+def _apply_branch_signature(raw: dict[str, str]) -> tuple[dict[str, str], dict[str, list[str]]]:
+    try:
+        return apply_signature_languages(raw, require_sk=True)
+    except SignatureError as exc:
+        raise fail(422, exc.code, **exc.extra) from exc
+
+
+def _branch_signature(raw: dict[str, str] | None) -> dict[str, str]:
+    if not raw:
+        return default_branch_template()
+    cleaned, _stripped = _apply_branch_signature(raw)
+    return cleaned
+
+
+class RemotePreviewIn(BaseModel):
+    urls: list[str] = Field(default_factory=list)
+
+
+def _branch_managed(mailbox: Mailbox, account: Account) -> bool:
+    return mailbox.kind in {"branch", "shared"} or account.kind == AccountKind.branch
+
+
+@router.get("/signature-presets")
+async def get_signature_presets(ctx: Auth) -> dict[str, dict[str, str]]:
+    del ctx
+    return signature_presets()
+
+
+@router.get("/mailboxes/{mailbox_ref}/signature-context")
+async def signature_context(mailbox_ref: str, ctx: Auth, db: DB) -> dict[str, Any]:
+    mailbox = await _mailbox(db, ctx, mailbox_ref)
+    branch = await db.scalar(select(Branch).where(Branch.mailbox_id == mailbox.id))
+    managed = _branch_managed(mailbox, ctx.account)
+    preview = ""
+    if managed:
+        preview = preview_signature_html(
+            person=ctx.person,
+            branch=branch,
+            identity=None,
+            email=mailbox.email,
+            language="sk",
+        )
+    return {
+        "mailbox_kind": mailbox.kind,
+        "account_kind": ctx.account.kind.value,
+        "branch_managed": managed,
+        "preview_html": preview,
+        "branch_id": str(branch.id) if branch else None,
+    }
+
+
+@router.post("/signature-remote-previews")
+async def signature_remote_previews(body: RemotePreviewIn, ctx: Auth, settings: SettingsDep) -> dict[str, Any]:
+    del ctx
+    previews: dict[str, str] = {}
+    for url in body.urls[:20]:
+        if isinstance(url, str) and url.startswith("https://") and len(url) <= 2048:
+            previews[url] = proxy_path(settings, url)
+    return {"previews": previews}
+
+
+async def _store_signature_file(settings: SettingsDep, existing: object, file: UploadFile) -> dict[str, Any]:
+    if len(image_dicts(existing)) >= MAX_SIGNATURE_IMAGES:
+        raise fail(422, "image_limit")
+    data = await file.read()
+    try:
+        payload, content_type = normalize_signature_image(data)
+    except SignatureImageError as exc:
+        raise fail(422, exc.code) from exc
+    av = await scan_bytes(settings, payload)
+    if av == "infected":
+        raise fail(422, "attachment_infected")
+    key, _digest = storage.put_bytes(settings, payload, prefix="signatures")
+    filename = (file.filename or "obrazok").rsplit("/", 1)[-1].rsplit("\\", 1)[-1][:80] or "obrazok"
+    image_id = uuid.uuid4().hex
+    return {
+        "id": image_id,
+        "cid": f"sig-{uuid.uuid4().hex}@smartmail",
+        "storage_key": key,
+        "content_type": content_type,
+        "size": len(payload),
+        "filename": filename,
+    }
+
+
+@router.post("/identities/{identity_id}/signature-images")
+async def upload_identity_signature_image(
+    identity_id: uuid.UUID,
+    ctx: Auth,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+    file: Annotated[UploadFile, File()],
+) -> dict[str, Any]:
+    del person
+    identity = await db.get(Identity, identity_id)
+    if identity is None:
+        raise fail(404, "identity_not_found")
+    await _mailbox_by_id(db, ctx, identity.mailbox_id)
+    rec = await _store_signature_file(settings, identity.signature_images, file)
+    identity.signature_images = [*image_dicts(identity.signature_images), rec]
+    await db.commit()
+    return _public_images([rec])[0]
+
+
+@router.post("/admin/branches/{branch_id}/signature-images")
+async def upload_branch_signature_image(
+    branch_id: uuid.UUID,
+    ctx: Auth,
+    db: DB,
+    settings: SettingsDep,
+    file: Annotated[UploadFile, File()],
+) -> dict[str, Any]:
+    require_admin(ctx)
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        raise fail(404, "branch_not_found")
+    rec = await _store_signature_file(settings, branch.signature_images, file)
+    branch.signature_images = [*image_dicts(branch.signature_images), rec]
+    await db.commit()
+    return _public_images([rec])[0]
+
+
+@router.get("/signature-images/{image_id}")
+async def get_signature_image(image_id: str, ctx: Auth, db: DB, settings: SettingsDep) -> Response:
+    if len(image_id) != 32 or any(ch not in "0123456789abcdef" for ch in image_id):
+        raise fail(404, "not_found")
+    found: dict[str, Any] | None = None
+    owner: uuid.UUID | None = None
+    for identity in (await db.scalars(select(Identity))).all():
+        for rec in image_dicts(identity.signature_images):
+            if rec.get("id") == image_id:
+                found = rec
+                owner = identity.mailbox_id
+                break
+        if found:
+            break
+    if found is None:
+        for branch in (await db.scalars(select(Branch))).all():
+            for rec in image_dicts(branch.signature_images):
+                if rec.get("id") == image_id:
+                    found = rec
+                    owner = branch.mailbox_id
+                    break
+            if found:
+                break
+    if found is None:
+        raise fail(404, "not_found")
+    admin = ctx.person is not None and ctx.person.role == Role.admin
+    if not admin:
+        if owner is None:
+            raise fail(404, "not_found")
+        access = await db.scalar(
+            select(MailboxAccess).where(MailboxAccess.account_id == ctx.account.id, MailboxAccess.mailbox_id == owner)
+        )
+        if access is None:
+            raise fail(404, "not_found")
+    key = str(found.get("storage_key") or "")
+    data = storage.get_bytes(settings, key)
+    if not data:
+        raise fail(404, "not_found")
+    media = str(found.get("content_type") or "image/png")
+    return Response(content=data, media_type=media)
 
 
 # ----- helpers -----

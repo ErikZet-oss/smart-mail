@@ -50,3 +50,18 @@ body {
     letter-spacing: var(--type-micro-tracking);
   }
 }
+
+.signature-editor .ProseMirror {
+  min-height: 220px;
+  padding: 12px;
+  outline: none;
+}
+
+.signature-editor .ProseMirror p {
+  margin: 0 0 0.4em;
+}
+
+.signature-editor .signature-raw img {
+  max-width: 100%;
+  height: auto;
+}

@@ -1,4 +1,4 @@
-import { api } from '../../lib/api';
+import { api, apiForm } from '../../lib/api';
 
 export type NavSection = {
   id: string;
@@ -27,7 +27,47 @@ export const fetchIdentities = (mailbox = 'default') =>
   api<Record<string, unknown>[]>('GET', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/identities`);
 
 export const saveIdentity = (id: string, body: Record<string, unknown>) =>
-  api('PUT', `/api/settings/identities/${id}`, body);
+  api<Record<string, unknown>>('PUT', `/api/settings/identities/${id}`, body);
+
+export type SignatureContext = {
+  mailbox_kind: string;
+  account_kind: string;
+  branch_managed: boolean;
+  preview_html: string;
+  branch_id: string | null;
+};
+
+export type SignatureImageRecord = {
+  id: string;
+  cid: string;
+  preview_url: string;
+};
+
+export const fetchSignatureContext = (mailbox = 'default') =>
+  api<SignatureContext>('GET', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/signature-context`);
+
+export const fetchSignaturePresets = () =>
+  api<{ karta: Record<string, string>; text: Record<string, string> }>('GET', '/api/settings/signature-presets');
+
+export const signRemotePreviews = (urls: string[]) =>
+  api<{ previews: Record<string, string> }>(
+    'POST',
+    '/api/settings/signature-remote-previews',
+    { urls },
+    { global: false },
+  );
+
+export const uploadIdentityImage = (id: string, file: File) => {
+  const body = new FormData();
+  body.append('file', file);
+  return apiForm<SignatureImageRecord>('POST', `/api/settings/identities/${id}/signature-images`, body);
+};
+
+export const uploadBranchImage = (id: string, file: File) => {
+  const body = new FormData();
+  body.append('file', file);
+  return apiForm<SignatureImageRecord>('POST', `/api/settings/admin/branches/${id}/signature-images`, body);
+};
 
 export const fetchResponses = () => api<Record<string, unknown>[]>('GET', '/api/settings/responses');
 export const createResponse = (body: Record<string, unknown>) => api('POST', '/api/settings/responses', body);
@@ -65,7 +105,7 @@ export const revokeSession = (id: string) => api('POST', `/api/settings/security
 export const fetchAdminUsers = () => api<Record<string, unknown>[]>('GET', '/api/settings/admin/users');
 export const fetchAdminBranches = () => api<Record<string, unknown>[]>('GET', '/api/settings/admin/branches');
 export const saveBranch = (id: string, body: Record<string, unknown>) =>
-  api('PUT', `/api/settings/admin/branches/${id}`, body);
+  api<Record<string, unknown>>('PUT', `/api/settings/admin/branches/${id}`, body);
 export const createBranch = (body: Record<string, unknown>) => api('POST', '/api/settings/admin/branches', body);
 export const savePersonAdmin = (id: string, body: Record<string, unknown>) =>
   api('PUT', `/api/settings/admin/people/${id}`, body);

@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from email.utils import format_datetime, make_msgid
+from pathlib import Path
 from typing import Any, Literal
 
 import structlog
@@ -22,8 +23,9 @@ from app.mail.compose_models import ComposeAttachment, ComposeDraft, Identity
 from app.mail.flags import ANSWERED_FLAG, FORWARDED_FLAG, apply_local_flag
 from app.mail.imap_append import append_to_sent_async, delete_draft_uid_async, save_draft_replace_async
 from app.mail.models import FolderMeta, Mailbox, Message
-from app.mail.sanitize import sanitize_html
-from app.mail.signature import html_to_text, render_signature
+from app.mail.sanitize import sanitize_compose_body
+from app.mail.signature import LOGO_CID, PHOTO_CID, html_to_text, render_signature
+from app.mail.signature_images import add_related_images, cids_in_html, image_dicts, sniff_image_type
 from app.mail.smtp import SmtpError, send_message, smtp_endpoint
 from app.mail.sync import (
     Credentials,
@@ -123,7 +125,7 @@ async def create_draft(
         to_addrs=to,
         cc_addrs=cc,
         subject=subject,
-        body_html=sanitize_html(body_html),
+        body_html=sanitize_compose_body(body_html, settings=settings),
         body_text=html_to_text(body_html),
         signature_person_id=person.id if person else None,
         include_signature=True,
@@ -157,6 +159,53 @@ def pre_send_checks(draft: ComposeDraft, settings: Settings) -> list[dict[str, A
     if external:
         issues.append({"code": "external_recipient", "blocking": False, "message": "external"})
     return issues
+
+
+def _logo_png() -> bytes | None:
+    path = Path(__file__).resolve().parents[2] / "design" / "brand" / "logo-smart.png"
+    if path.is_file():
+        return path.read_bytes()
+    return None
+
+
+async def _signature_blobs(
+    db: AsyncSession,
+    settings: Settings,
+    draft: ComposeDraft,
+    identity: Identity,
+    html: str,
+) -> list[tuple[str, bytes, str]]:
+    """Inline CID parts for signature images referenced by the HTML body (D22)."""
+    wanted = cids_in_html(html)
+    if not wanted:
+        return []
+    records = image_dicts(identity.signature_images)
+    branch = await db.scalar(select(Branch).where(Branch.mailbox_id == draft.mailbox_id))
+    if branch is not None:
+        records.extend(image_dicts(branch.signature_images))
+    by_cid = {str(rec["cid"]): rec for rec in records}
+    blobs: list[tuple[str, bytes, str]] = []
+    for cid in wanted:
+        if cid == LOGO_CID:
+            data = _logo_png()
+            if data:
+                blobs.append((cid, data, "image/png"))
+            continue
+        if cid == PHOTO_CID:
+            person_id = draft.signature_person_id or draft.person_id
+            person = await db.get(Person, person_id) if person_id else None
+            if person is not None and person.photo_key:
+                data = storage.get_bytes(settings, person.photo_key)
+                if data:
+                    blobs.append((cid, data, sniff_image_type(data)))
+            continue
+        rec = by_cid.get(cid)
+        if rec is None:
+            continue
+        data = storage.get_bytes(settings, str(rec.get("storage_key") or ""))
+        if data:
+            blobs.append((cid, data, str(rec.get("content_type") or "image/png")))
+    return blobs
 
 
 async def build_mime(
@@ -195,6 +244,7 @@ async def build_mime(
     text = draft.body_text or html_to_text(html)
     msg.set_content(text)
     msg.add_alternative(html, subtype="html")
+    add_related_images(msg, await _signature_blobs(db, settings, draft, identity, html))
 
     atts = list((await db.execute(select(ComposeAttachment).where(ComposeAttachment.draft_id == draft.id))).scalars())
     for att in atts:

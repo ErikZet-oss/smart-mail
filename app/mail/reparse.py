@@ -47,7 +47,7 @@ async def reparse_messages_with_attachments(
             skipped += 1
             continue
         try:
-            parsed = parse_rfc822(raw)
+            parsed = parse_rfc822(raw, settings)
         except Exception as exc:
             log.warning("mail.reparse_failed", message_id=str(message.id), error=type(exc).__name__)
             errors += 1

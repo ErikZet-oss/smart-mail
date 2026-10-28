@@ -1,18 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Check } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
-import { Button } from '../../components/Button';
 import { Banner } from '../../components/Banner';
+import { Button } from '../../components/Button';
+import { ConfirmDialog } from '../../components/Dialog';
+import { ApiError } from '../../lib/api';
 import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
-import { ApiError } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
 import { SettingsFieldControl } from './Field';
-import { HtmlSignatureEditor } from './HtmlSignatureEditor';
+import { HtmlSignatureEditor, SanitizedHtml } from './HtmlSignatureEditor';
+import { fillSignature, type SignatureLang } from './signatureHtml';
 import { MobileSettingsIndex } from './MobileSettingsIndex';
 import { SettingsBreadcrumb, SettingsNav, SettingsSubList, SettingsSubTabs } from './SettingsNav';
 import { buildNavItems, isItemActive, TABBED_SECTIONS } from './settingsNavModel';
@@ -32,6 +34,8 @@ import {
   fetchResponses,
   fetchSessions,
   fetchSettingsNav,
+  fetchSignatureContext,
+  fetchSignaturePresets,
   fetchVacation,
   restoreSieve,
   revokeSession,
@@ -42,6 +46,9 @@ import {
   savePreferences,
   saveProfile,
   saveVacation,
+  signRemotePreviews,
+  uploadBranchImage,
+  uploadIdentityImage,
 } from './settingsApi';
 
 type FilterRuleDraft = {
@@ -405,9 +412,9 @@ function ProfilePanel() {
           />
         </label>
       ))}
-      <div
+      <SanitizedHtml
         className="rounded-sm border border-border-default p-3"
-        dangerouslySetInnerHTML={{ __html: String(form.signature_preview_html ?? '') }}
+        html={String(form.signature_preview_html ?? '')}
       />
       <Button type="button" onClick={() => save.mutate()} disabled={save.isPending}>
         {t('settings.save')}
@@ -420,21 +427,67 @@ function camel(key: string) {
   return key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 }
 
+function signatureErrorText(t: (key: string) => string, error: unknown): string {
+  if (!(error instanceof ApiError)) return t('settings.signature.saveFailed');
+  const code = error.detail.code;
+  if (code === 'signature_sk_required') return t('settings.signature.skRequired');
+  if (code === 'unknown_signature_variable') return t('settings.signature.unknownVariable');
+  if (code === 'signature_too_large') return t('settings.signature.tooLarge');
+  if (code === 'image_too_large') return t('settings.signature.imageTooLarge');
+  if (code === 'image_limit') return t('settings.signature.imageLimit');
+  if (code === 'image_type') return t('settings.signature.imageType');
+  return t('settings.signature.saveFailed');
+}
+
 function IdentitiesPanel() {
   const { t } = useTranslation();
   const toasts = useToasts();
   const list = useQuery({ queryKey: ['settings', 'identities'], queryFn: () => fetchIdentities() });
+  const context = useQuery({ queryKey: ['settings', 'signature-context'], queryFn: () => fetchSignatureContext() });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
+  const [lang, setLang] = useState<SignatureLang>('sk');
+  const [stripped, setStripped] = useState<Record<string, string[]>>({});
+  const [remotes, setRemotes] = useState<Record<string, string>>({});
+  const asked = useRef(new Set<string>());
   const server = (list.data ?? []).find((i) => String(i.id) === selectedId) ?? list.data?.[0];
   const form = draft && String(draft.id) === String(server?.id) ? draft : (server ?? null);
+  const htmls = (form?.signature_html as Record<string, string> | undefined) ?? {};
+  const images = (form?.signature_images as { cid: string; preview_url: string }[] | undefined) ?? [];
+  const previews: Record<string, string> = { ...remotes };
+  for (const image of images) previews[image.cid] = image.preview_url;
+  const onRemoteUrls = useCallback((urls: string[]) => {
+    const fresh = urls.filter((url) => !asked.current.has(url));
+    if (!fresh.length) return;
+    for (const url of fresh) asked.current.add(url);
+    void signRemotePreviews(fresh)
+      .then((data) => setRemotes((prev) => ({ ...prev, ...data.previews })))
+      .catch(() => undefined);
+  }, []);
   const save = useMutation({
     mutationFn: async () => {
-      if (!form?.id) return;
-      await saveIdentity(String(form.id), form);
+      if (!form?.id) return null;
+      return saveIdentity(String(form.id), form);
     },
-    onSuccess: () => toasts.success(t('settings.saved')),
+    onSuccess: (saved) => {
+      if (!saved) return;
+      setDraft(saved);
+      setStripped((saved.signature_stripped as Record<string, string[]>) ?? {});
+      toasts.success(t('settings.saved'));
+    },
+    onError: (error) => toasts.error(signatureErrorText(t, error)),
   });
+  if (context.data?.branch_managed) {
+    return (
+      <div className="flex max-w-xl flex-col gap-3">
+        <p className="type-body text-text-primary">{t('settings.identity.branchPreview')}</p>
+        <SanitizedHtml className="rounded-md border border-border-default p-4" html={context.data.preview_html} />
+        <Link to="/settings/branches/signature" className="type-label text-brand-primary-600">
+          {t('settings.identity.editTemplate')}
+        </Link>
+      </div>
+    );
+  }
   return (
     <div className="flex gap-6">
       <ul className="w-56 shrink-0">
@@ -448,6 +501,7 @@ function IdentitiesPanel() {
               onClick={() => {
                 setSelectedId(String(i.id));
                 setDraft(i);
+                setStripped({});
               }}
             >
               {String(i.display_name)} &lt;{String(i.email)}&gt;
@@ -456,7 +510,7 @@ function IdentitiesPanel() {
         ))}
       </ul>
       {form?.id ? (
-        <div className="flex max-w-xl flex-1 flex-col gap-3">
+        <div className="flex min-w-0 max-w-3xl flex-1 flex-col gap-3">
           <label className="flex flex-col gap-1">
             <span className="type-label text-text-secondary">{t('settings.identity.displayName')}</span>
             <input
@@ -465,19 +519,61 @@ function IdentitiesPanel() {
               onChange={(event) => setDraft({ ...form, display_name: event.target.value })}
             />
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="type-label text-text-secondary">{t('settings.identity.email')}</span>
+            <input
+              className="type-body h-9 rounded-sm border border-border-default px-3"
+              value={String(form.email ?? '')}
+              onChange={(event) => setDraft({ ...form, email: event.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="type-label text-text-secondary">{t('settings.identity.organization')}</span>
+            <input
+              className="type-body h-9 rounded-sm border border-border-default px-3"
+              value={String(form.organization ?? '')}
+              onChange={(event) => setDraft({ ...form, organization: event.target.value })}
+            />
+          </label>
+          <label className="type-body flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={Boolean(form.is_default)}
+              onChange={(event) => setDraft({ ...form, is_default: event.target.checked })}
+            />
+            {t('settings.identity.defaultIdentity')}
+          </label>
           <HtmlSignatureEditor
             label={t('settings.identity.signature')}
-            value={String((form.signature_html as Record<string, string> | undefined)?.sk ?? '')}
-            onChange={(html) =>
-              setDraft({
-                ...form,
-                signature_html: { ...((form.signature_html as object) ?? {}), sk: html },
-              })
-            }
+            languages
+            language={lang}
+            onLanguage={setLang}
+            value={htmls[lang] ?? ''}
+            imagePreviews={previews}
+            onRemoteUrls={onRemoteUrls}
+            stripped={stripped[lang]}
+            uploadImage={async (file) => {
+              const saved = await uploadIdentityImage(String(form.id), file);
+              setDraft({ ...form, signature_images: [...images, saved] });
+              return saved;
+            }}
+            onChange={(html) => setDraft({ ...form, signature_html: { ...htmls, [lang]: html } })}
           />
-          <Button type="button" onClick={() => save.mutate()} disabled={save.isPending}>
-            {t('settings.save')}
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" onClick={() => save.mutate()} disabled={save.isPending}>
+              {t('settings.save')}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setDraft(server ?? null);
+                setStripped({});
+              }}
+            >
+              {t('common.cancel')}
+            </Button>
+          </div>
         </div>
       ) : null}
     </div>
@@ -528,7 +624,13 @@ function ResponsesPanel() {
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
-      <HtmlSignatureEditor value={body} onChange={setBody} label={t('settings.responses.body')} />
+      <HtmlSignatureEditor
+        value={body}
+        onChange={setBody}
+        label={t('settings.responses.body')}
+        footer="plain"
+        maxBytes={20_000}
+      />
       <Button type="button" onClick={() => create.mutate()} disabled={!name || create.isPending}>
         {t('settings.responses.create')}
       </Button>
@@ -1013,35 +1115,102 @@ function UsersPanel() {
   );
 }
 
+type BranchPerson = {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  function?: string;
+  phone?: string;
+  mobile?: string;
+  personal_email?: string;
+};
+
+function branchPreviewValues(
+  person: BranchPerson | undefined,
+  branch: Record<string, unknown>,
+): Record<string, string> {
+  const initials = `${(person?.first_name ?? '').slice(0, 1)}${(person?.last_name ?? '').slice(0, 1)}`.toUpperCase();
+  const photo = initials
+    ? `<div style="width:72px;height:80px;background:var(--brand-primary-600);color:var(--text-on-primary);text-align:center;line-height:80px;font-weight:700;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)">${initials}</div>`
+    : '';
+  return {
+    meno: person?.first_name ?? '',
+    priezvisko: person?.last_name ?? '',
+    funkcia: person?.function ?? '',
+    telefon: person?.phone ?? '',
+    mobil: person?.mobile ?? '',
+    email_osobny: person?.personal_email ?? '',
+    email_pobocky: String(branch.mailbox_email ?? ''),
+    pobocka: String(branch.name ?? ''),
+    adresa_pobocky: String(branch.address ?? ''),
+    telefon_pobocky: String(branch.phone ?? ''),
+    oteviracie_hodiny: String(branch.hours ?? ''),
+    web: 'www.smartsro.sk',
+    firma: 'Smart s.r.o.',
+    fotka: photo,
+    logo: '<img src="/logo-smart.svg" alt="SMART" width="96" height="33">',
+  };
+}
+
 function BranchesPanel({ sub }: { sub?: string }) {
   const { t } = useTranslation();
   const toasts = useToasts();
   const qc = useQueryClient();
   const branches = useQuery({ queryKey: ['settings', 'branches'], queryFn: fetchAdminBranches });
+  const presets = useQuery({
+    queryKey: ['settings', 'signature-presets'],
+    queryFn: fetchSignaturePresets,
+    enabled: sub === 'signature' || sub === 'podpis',
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [lang, setLang] = useState<SignatureLang>('sk');
+  const [personId, setPersonId] = useState<string>('');
+  const [templatesById, setTemplatesById] = useState<Record<string, Record<string, string>>>({});
+  const [stripped, setStripped] = useState<Record<string, string[]>>({});
+  const [remotes, setRemotes] = useState<Record<string, string>>({});
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const asked = useRef(new Set<string>());
   const current = (branches.data ?? []).find((b) => String(b.id) === selectedId) ?? branches.data?.[0] ?? null;
-  const [sigById, setSigById] = useState<Record<string, string>>({});
   const branchId = current ? String(current.id) : '';
-  const sig =
-    sigById[branchId] ??
-    (current ? ((current.signature_template_html as Record<string, string> | undefined)?.sk ?? '') : '');
+  const stored = (current?.signature_template_html as Record<string, string> | undefined) ?? {};
+  const templates = templatesById[branchId] ?? stored;
+  const sig = templates[lang] ?? '';
+  const images = (current?.signature_images as { cid: string; preview_url: string }[] | undefined) ?? [];
+  const previews: Record<string, string> = { ...remotes };
+  for (const image of images) previews[image.cid] = image.preview_url;
+  const onRemoteUrls = useCallback((urls: string[]) => {
+    const fresh = urls.filter((url) => !asked.current.has(url));
+    if (!fresh.length) return;
+    for (const url of fresh) asked.current.add(url);
+    void signRemotePreviews(fresh)
+      .then((data) => setRemotes((prev) => ({ ...prev, ...data.previews })))
+      .catch(() => undefined);
+  }, []);
 
   const saveSig = useMutation({
     mutationFn: async () => {
-      if (!current) return;
-      await saveBranch(String(current.id), {
+      if (!current) return null;
+      return saveBranch(String(current.id), {
         name: current.name,
         address: current.address,
         phone: current.phone,
         hours: current.hours,
         mailbox_id: current.mailbox_id,
-        signature_template_html: { sk: sig },
+        signature_template_html: templates,
       });
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      if (saved?.signature_template_html && branchId) {
+        setTemplatesById((prev) => ({
+          ...prev,
+          [branchId]: saved.signature_template_html as Record<string, string>,
+        }));
+        setStripped((saved.signature_stripped as Record<string, string[]>) ?? {});
+      }
       toasts.success(t('settings.saved'));
       void qc.invalidateQueries({ queryKey: ['settings', 'branches'] });
     },
+    onError: (error) => toasts.error(signatureErrorText(t, error)),
   });
 
   if (!current) return <p className="type-body text-text-secondary">{t('settings.branches.empty')}</p>;
@@ -1075,16 +1244,90 @@ function BranchesPanel({ sub }: { sub?: string }) {
   }
 
   if (sub === 'signature' || sub === 'podpis') {
+    const people = (current.people as BranchPerson[]) ?? [];
+    const person = people.find((item) => item.id === personId) ?? people[0];
+    const preview = fillSignature(sig, branchPreviewValues(person, current));
     return (
-      <div className="flex max-w-2xl flex-col gap-3">
+      <div className="flex max-w-3xl flex-col gap-3">
+        <label className="flex max-w-xs flex-col gap-1">
+          <span className="type-label text-text-secondary">{t('settings.branches.pick')}</span>
+          <select
+            className="type-body h-9 rounded-sm border border-border-default px-2"
+            value={branchId}
+            onChange={(event) => setSelectedId(event.target.value)}
+          >
+            {(branches.data ?? []).map((branch) => (
+              <option key={String(branch.id)} value={String(branch.id)}>
+                {String(branch.name)}
+              </option>
+            ))}
+          </select>
+        </label>
         <HtmlSignatureEditor
-          value={sig}
-          onChange={(html) => setSigById((prev) => ({ ...prev, [branchId]: html }))}
           label={t('settings.branches.signature')}
+          languages
+          language={lang}
+          onLanguage={setLang}
+          variables
+          presets={{ karta: presets.data?.karta[lang], text: presets.data?.text[lang] }}
+          value={sig}
+          imagePreviews={previews}
+          onRemoteUrls={onRemoteUrls}
+          stripped={stripped[lang]}
+          uploadImage={
+            branchId
+              ? async (file) => {
+                  const saved = await uploadBranchImage(branchId, file);
+                  void qc.invalidateQueries({ queryKey: ['settings', 'branches'] });
+                  return saved;
+                }
+              : undefined
+          }
+          onChange={(html) =>
+            setTemplatesById((prev) => ({
+              ...prev,
+              [branchId]: { ...(prev[branchId] ?? stored), [lang]: html },
+            }))
+          }
         />
-        <Button type="button" onClick={() => saveSig.mutate()} disabled={saveSig.isPending}>
-          {t('settings.save')}
-        </Button>
+        <div className="flex gap-2">
+          <Button type="button" onClick={() => saveSig.mutate()} disabled={saveSig.isPending}>
+            {t('settings.save')}
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setRestoreOpen(true)}>
+            {t('settings.signature.restore')}
+          </Button>
+        </div>
+        <div className="flex flex-col gap-2 rounded-md border border-border-default p-3">
+          <span className="type-label text-text-secondary">{t('settings.signature.preview')}</span>
+          <label className="flex max-w-xs flex-col gap-1">
+            <span className="type-caption text-text-tertiary">{t('settings.signature.previewPerson')}</span>
+            <select
+              className="type-body h-9 rounded-sm border border-border-default px-2"
+              value={person?.id ?? ''}
+              onChange={(event) => setPersonId(event.target.value)}
+            >
+              {people.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.first_name} {item.last_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <SanitizedHtml className="rounded-sm bg-bg-subtle p-3" html={preview} />
+        </div>
+        {restoreOpen && presets.data ? (
+          <ConfirmDialog
+            title={t('settings.signature.restoreTitle')}
+            body={t('settings.signature.restoreBody')}
+            confirmLabel={t('settings.signature.restore')}
+            onClose={() => setRestoreOpen(false)}
+            onConfirm={() => {
+              setTemplatesById((prev) => ({ ...prev, [branchId]: { ...presets.data.karta } }));
+              setRestoreOpen(false);
+            }}
+          />
+        ) : null}
       </div>
     );
   }

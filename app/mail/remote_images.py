@@ -15,6 +15,9 @@ _DATA_REMOTE = re.compile(
     r'(data-remote-src=)(?P<q>["\'])(?P<url>https?://[^"\']+)(?P=q)',
     re.IGNORECASE,
 )
+_IMG_TAG = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
+_KEEP_SRC = re.compile(r"data-sm-keep-src\s*=", re.IGNORECASE)
+_IMG_SRC = re.compile(r"""\bsrc\s*=\s*(?P<q>["'])(?P<url>https://[^"']*)(?P=q)""", re.IGNORECASE)
 
 
 def sender_is_known(*, from_email: str | None, contact_emails: set[str], internal_domains: list[str]) -> bool:
@@ -40,6 +43,28 @@ def should_offer_remote_images(
     if mode == "always":
         return True
     return sender_is_known(from_email=from_email, contact_emails=contact_emails, internal_domains=internal_domains)
+
+
+def proxy_signature_images(html: str, settings: Settings) -> str:
+    """Our signature https images (server keep-src stamp) load via the signed proxy.
+
+    Direct https is blocked by CSP ``img-src 'self'``. This does not enable remote images
+    from other senders — those stay on the placeholder until the reader asks for them.
+    """
+
+    def repl(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        if not _KEEP_SRC.search(tag):
+            return tag
+        src = _IMG_SRC.search(tag)
+        if src is None:
+            return tag
+        url = src.group("url")
+        q = src.group("q")
+        proxied = proxy_path(settings, url)
+        return tag[: src.start()] + f"src={q}{proxied}{q}" + tag[src.end() :]
+
+    return _IMG_TAG.sub(repl, html)
 
 
 def sign_remote_image_attrs(html: str, settings: Settings) -> str:

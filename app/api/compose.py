@@ -25,9 +25,9 @@ from app.mail.compose import (
 )
 from app.mail.compose_models import CannedResponse, ComposeAttachment, ComposeDraft, Identity
 from app.mail.models import FolderMeta, Message
-from app.mail.sanitize import sanitize_html
+from app.mail.sanitize import sanitize_compose_body, sanitize_signature_html
 from app.mail.send_guard import blocked_recipients, test_allowlist_addresses
-from app.mail.signature import html_to_text, render_signature
+from app.mail.signature import SIGNATURE_MAX_BYTES, html_to_text, render_signature
 
 router = APIRouter(prefix="/api/mail", tags=["compose"])
 
@@ -314,12 +314,15 @@ async def patch_draft(
     if body.subject is not None:
         draft.subject = body.subject
     if body.body_html is not None:
-        draft.body_html = sanitize_html(body.body_html)
+        draft.body_html = sanitize_compose_body(body.body_html, settings=settings)
         draft.body_text = html_to_text(draft.body_html)
     if body.include_signature is not None:
         draft.include_signature = body.include_signature
     if body.signature_html_override is not None:
-        draft.signature_html_override = sanitize_html(body.signature_html_override)
+        cleaned, _gone = sanitize_signature_html(body.signature_html_override)
+        if len(cleaned.encode("utf-8")) > SIGNATURE_MAX_BYTES:
+            raise fail(422, "signature_too_large")
+        draft.signature_html_override = cleaned
     if body.priority is not None:
         draft.priority = body.priority
     if body.request_mdn is not None:

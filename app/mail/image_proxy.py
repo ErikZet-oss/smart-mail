@@ -33,6 +33,7 @@ PROXY_TIMEOUT_S = 5.0
 DNS_TIMEOUT_S = 3.0
 PROXY_MAX_BYTES = 5 * 1024 * 1024
 _PURPOSE = b"image-proxy"
+_KEEP_PURPOSE = b"signature-keep-src"
 _MAX_REDIRECTS = 3
 
 
@@ -93,6 +94,20 @@ def sign_image_url(settings: Settings, url: str) -> str:
 def verify_image_sig(settings: Settings, url: str, sig: str) -> bool:
     expected = sign_image_url(settings, url)
     return hmac.compare_digest(expected, (sig or "").strip().lower())
+
+
+def signature_keep_token(settings: Settings, url: str) -> str:
+    """Server stamp for an https image in our own signature. Not accepted from mail input."""
+    secret = settings.app_secret_key.get_secret_value().encode("utf-8")
+    key = hmac.new(secret, _KEEP_PURPOSE, hashlib.sha256).digest()
+    return hmac.new(key, url.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def signature_keep_ok(settings: Settings, url: str, token: str) -> bool:
+    if not url.lower().startswith("https://") or not token:
+        return False
+    expected = signature_keep_token(settings, url)
+    return hmac.compare_digest(expected, token.strip().lower())
 
 
 def proxy_path(settings: Settings, url: str) -> str:
