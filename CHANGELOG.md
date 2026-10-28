@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #31: signature images survive in Gmail
+
+- Sending a message rewrites images in the whole HTML. `data:` PNG/JPEG/GIF/WebP
+  and uploaded signature files become inline CID parts. `/logo-smart.svg` and
+  `/logo-smart.png` become the SMART logo as PNG (never SVG). An image-proxy
+  URL becomes the original `https://` address. `https://` stays. `http://` and
+  any other src are removed; the log records how many, not the address.
+
 ## [Unreleased] — Pilot #28: signature and quote stay formatted in Napísať
 
 - Compose (W4) keeps the signature as a TipTap atom `SignatureBlock`. Tables, colours

@@ -119,5 +119,10 @@ def add_related_images(message: EmailMessage, blobs: list[tuple[str, bytes, str]
     if html_part is None:
         return
     for cid, data, content_type in blobs:
+        # SVG is not an e-mail image (issue #31). The logo file we attach is PNG.
+        if not data or "svg" in (content_type or "").lower() or _is_svg(data):
+            continue
         maintype, _, subtype = (content_type or "image/png").partition("/")
-        html_part.add_related(data, maintype=maintype or "image", subtype=subtype or "png", cid=f"<{cid}>")
+        if maintype != "image":
+            continue
+        html_part.add_related(data, maintype=maintype, subtype=subtype or "png", cid=f"<{cid}>")
