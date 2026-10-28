@@ -170,7 +170,7 @@ function ScreenW2Body({
   });
 
   const view = folders.data;
-  const folder = view ? findFolder(view.folders, folderParam) : undefined;
+  const folder = view?.folders ? findFolder(view.folders, folderParam) : undefined;
   const listPrefs = prefs?.list;
   const density = listPrefs?.density ?? 'compact';
   const mode = listPrefs?.mode ?? 'list';

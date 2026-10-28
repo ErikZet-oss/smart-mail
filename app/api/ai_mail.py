@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
-from sqlalchemy import and_, desc, func, or_, select
+from sqlalchemy import and_, case, desc, func, or_, select
 
 from app.ai.categories import CATEGORY_BY_ID, TRIAGE_CATEGORIES
 from app.ai.models import Classification
@@ -22,6 +22,7 @@ from app.mail.prefs import get_list_prefs
 
 def _ai_active(mailbox: Mailbox, settings: Settings) -> bool:
     return bool(mailbox.ai_enabled and mailbox.ai_enabled_at is not None and _ai_provider_configured(settings))
+
 
 router = APIRouter(prefix="/api/mail", tags=["mail-ai"])
 
@@ -161,8 +162,9 @@ async def list_category_messages(
         )
         or 0
     )
-    # Priority first (urgent > normal > low), then date
-    priority_order = func.case(
+    # Priority first (urgent > normal > low), then date.
+    # Must use sqlalchemy.case — func.case(..., else_=) raises TypeError (pilot #18 B8).
+    priority_order = case(
         (Classification.priority == "urgent", 0),
         (Classification.priority == "normal", 1),
         else_=2,

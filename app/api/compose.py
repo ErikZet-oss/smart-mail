@@ -25,6 +25,7 @@ from app.mail.compose import (
 from app.mail.compose_models import CannedResponse, ComposeAttachment, ComposeDraft, Identity
 from app.mail.models import Message
 from app.mail.sanitize import sanitize_html
+from app.mail.send_guard import blocked_recipients, test_allowlist_addresses
 from app.mail.signature import html_to_text, render_signature
 
 router = APIRouter(prefix="/api/mail", tags=["compose"])
@@ -92,6 +93,7 @@ class DraftOut(BaseModel):
     scheduled_at: datetime | None
     undo_until: datetime | None
     send_error: str | None
+    send_error_meta: dict[str, Any] | None = None
     attachments: list[AttOut]
     checks: list[dict[str, Any]] = Field(default_factory=list)
     updated_at: datetime
@@ -112,6 +114,25 @@ class ResponseOut(BaseModel):
     body_html: str
     shared: bool
     shortcut: str | None
+
+
+def _send_error_meta(draft: ComposeDraft, settings: Any) -> dict[str, Any] | None:
+    """Structured send failure for W4/W2 (pilot #18 B7) — never raw SMTP text."""
+    raw = (draft.send_error or "").strip()
+    if not raw:
+        return None
+    code, _, detail = raw.partition(":")
+    if code == "recipient_not_allowed":
+        blocked = [part.strip().lower() for part in detail.split(",") if part.strip()]
+        return {
+            "code": code,
+            "blocked": blocked,
+            "allowlist": test_allowlist_addresses(settings),
+            "show_allowlist": settings.app_env == "test",
+        }
+    if code in {"server_unavailable", "smtp_host_not_allowed"} or code.endswith("Error") or code.endswith("Exception"):
+        return {"code": "server_unavailable"}
+    return {"code": code or raw}
 
 
 def _draft_out(draft: ComposeDraft, atts: list[ComposeAttachment], settings: Any) -> DraftOut:
@@ -137,6 +158,7 @@ def _draft_out(draft: ComposeDraft, atts: list[ComposeAttachment], settings: Any
         scheduled_at=draft.scheduled_at,
         undo_until=draft.undo_until,
         send_error=draft.send_error,
+        send_error_meta=_send_error_meta(draft, settings),
         attachments=[
             AttOut(
                 id=str(a.id),
@@ -332,6 +354,20 @@ async def send_draft(
     draft = await _get_draft(db, ctx, draft_id)
     if draft.status not in {"editing", "failed", "scheduled"}:
         raise fail(409, "draft_not_editable")
+    # Prefer allowlist rejection on Send click (422) over a silent worker failure (pilot #18 B7).
+    emails = [
+        str(a.get("email") or "")
+        for a in list(draft.to_addrs or []) + list(draft.cc_addrs or []) + list(draft.bcc_addrs or [])
+    ]
+    blocked = blocked_recipients(settings, emails)
+    if blocked:
+        raise fail(
+            422,
+            "recipient_not_allowed",
+            blocked=blocked,
+            allowlist=test_allowlist_addresses(settings),
+            show_allowlist=settings.app_env == "test",
+        )
     try:
         await queue_send(db, settings, draft, account_id=ctx.account.id, person_id=person.id, force=body.force)
     except ValueError as exc:

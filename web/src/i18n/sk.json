@@ -470,6 +470,8 @@
     "undone": "Odoslanie zrušené.",
     "sent": "Správa odoslaná.",
     "sendFailed": "Odoslanie zlyhalo – skúste znova.",
+    "sendErrorRecipientNotAllowedTest": "Testovací server smie posielať len na povolené adresy: {{list}}. Adresa {{email}} medzi nimi nie je.",
+    "sendErrorRecipientNotAllowed": "Adresa {{email}} nie je medzi povolenými na odoslanie.",
     "viewerBlocked": "Rola viewer nemôže odosielať.",
     "preSendTitle": "Kontrola pred odoslaním",
     "edit": "Upraviť",

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, RefreshCw, TriangleAlert } from 'lucide-react';
-import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -21,7 +21,7 @@ import { DropZone } from './DropZone';
 import { Rail, type RailSection } from './Rail';
 
 /** How long a hung `/api/auth/me` may leave only a loading shell (pilot #18 B2). */
-export const ME_LOAD_TIMEOUT_MS = 10_000;
+export const ME_LOAD_TIMEOUT_MS = 8_000;
 
 function useOnline(): boolean {
   return useSyncExternalStore(
@@ -76,16 +76,28 @@ export function AppShell({ section, mailbox = 'default', unread = 0, children, h
     }
   }, [navigate, queryClient]);
 
-  const [waitGen, setWaitGen] = useState(0);
   const [timedOut, setTimedOut] = useState(false);
+  // Bump only on retry — never on isFetching (that reset the timer in CI, pilot #18 B2).
+  const [waitGen, setWaitGen] = useState(0);
+  // Absolute deadline so StrictMode remounts do not keep restarting from a full 10 s.
+  const deadlineRef = useRef<number | null>(null);
+  if (!me.data && !me.isError) {
+    if (deadlineRef.current === null) deadlineRef.current = Date.now() + ME_LOAD_TIMEOUT_MS;
+  } else {
+    deadlineRef.current = null;
+  }
   useEffect(() => {
-    if (me.data || me.isError) return;
-    const id = window.setTimeout(() => setTimedOut(true), ME_LOAD_TIMEOUT_MS);
+    if (me.data || me.isError || deadlineRef.current === null) {
+      return;
+    }
+    const remaining = Math.max(0, deadlineRef.current - Date.now());
+    const id = window.setTimeout(() => setTimedOut(true), remaining);
     return () => window.clearTimeout(id);
-  }, [me.data, me.isError, me.isFetching, waitGen]);
+  }, [me.data, me.isError, waitGen]);
 
   const showError = me.isError || (timedOut && !me.data);
   const retryMe = () => {
+    deadlineRef.current = Date.now() + ME_LOAD_TIMEOUT_MS;
     setTimedOut(false);
     setWaitGen((g) => g + 1);
     void me.refetch();

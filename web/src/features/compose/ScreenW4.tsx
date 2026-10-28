@@ -25,6 +25,7 @@ import { Button } from '../../components/Button';
 import { Banner } from '../../components/Banner';
 import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
+import { ApiError } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
 import {
@@ -80,6 +81,28 @@ function formatAddrs(addrs: { name?: string | null; email: string }[]): string {
   return addrs.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ');
 }
 
+type SendErrorMeta = {
+  code: string;
+  blocked?: string[];
+  allowlist?: string[];
+  show_allowlist?: boolean;
+};
+
+/** Slovak copy for Send-click allowlist 422 (pilot #18 B7). Worker/SMTP failed UI lives on PR #21. */
+function formatAllowlistFailure(
+  t: (key: string, opts?: Record<string, string>) => string,
+  meta: SendErrorMeta,
+): string {
+  const email = meta.blocked?.[0] ?? '';
+  if (meta.show_allowlist) {
+    return t('compose.sendErrorRecipientNotAllowedTest', {
+      list: (meta.allowlist ?? []).join(', ') || '—',
+      email,
+    });
+  }
+  return t('compose.sendErrorRecipientNotAllowed', { email });
+}
+
 /** W4 Písanie — Roundcube-like compose (Phase 1e). AI tab deferred (no AI in Phase 1). */
 export function ScreenW4() {
   const { t, i18n } = useTranslation();
@@ -111,6 +134,8 @@ export function ScreenW4() {
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  /** Immediate Send-click failure (422) so we do not wait for a worker poll (pilot #18 B7). */
+  const [sendFailMeta, setSendFailMeta] = useState<SendErrorMeta | null>(null);
 
   useEffect(() => {
     if (!isPopup || !localId) return;
@@ -210,6 +235,7 @@ export function ScreenW4() {
   const send = useMutation({
     mutationFn: async (force: boolean) => {
       if (!localId) throw new Error('no draft');
+      setSendFailMeta(null);
       await patchDraft(localId, {
         to_addrs: parseAddrs(to),
         cc_addrs: parseAddrs(cc),
@@ -238,8 +264,20 @@ export function ScreenW4() {
         toasts.success(t('compose.sent'));
         navigate(`/mail/${encodeURIComponent(mailbox)}/inbox`);
       }
+      // status===failed (SMTP etc.) is handled on PR #21 — do not duplicate here.
     },
-    onError: () => {
+    onError: (error) => {
+      if (error instanceof ApiError && error.detail.code === 'recipient_not_allowed') {
+        const meta: SendErrorMeta = {
+          code: 'recipient_not_allowed',
+          blocked: Array.isArray(error.detail.blocked) ? (error.detail.blocked as string[]) : [],
+          allowlist: Array.isArray(error.detail.allowlist) ? (error.detail.allowlist as string[]) : [],
+          show_allowlist: Boolean(error.detail.show_allowlist),
+        };
+        setSendFailMeta(meta);
+        toasts.error(formatAllowlistFailure(t, meta));
+        return;
+      }
       // ApiError: re-fetch draft for checks; blocking opens W4b
       void draftQuery.refetch().then((res) => {
         if (res.data?.checks.some((c) => c.blocking)) setPreSendOpen(true);
@@ -432,9 +470,9 @@ export function ScreenW4() {
 
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
-            {draft?.send_error ? (
-              <div className="px-4 pt-3">
-                <Banner kind="danger" message={t('compose.sendFailed')} />
+            {sendFailMeta ? (
+              <div className="px-4 pt-3" data-testid="compose-send-error">
+                <Banner kind="danger" message={formatAllowlistFailure(t, sendFailMeta)} />
               </div>
             ) : null}
             <div className="grid grid-cols-[88px_1fr] items-center gap-y-2 border-b border-border-default px-4 py-3">
