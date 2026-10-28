@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #35: person switch refreshes the cache
+
+- Choosing or switching a person drops cached queries other than the signed-in
+  profile, the Kto ste? list and an open compose draft, then reloads what is on
+  screen. Settings, lists and permissions follow the new person. The open draft
+  keeps its signature.
+- A successful login, and a 401 that sends the user back to Prihlásenie, clears
+  the whole query cache so the previous person is not shown again.
+
 ## [Unreleased] — Pilot #31: signature images survive in Gmail
 
 - Sending a message rewrites images in the whole HTML. `data:` PNG/JPEG/GIF/WebP

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, CircleX, Clock, Eye, EyeOff, KeyRound, LoaderCircle, Lock, User } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -57,6 +58,7 @@ export function ScreenW1() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [params] = useSearchParams();
   const reasonParam = params.get('reason');
   const reason = REASONS.find((r) => r === reasonParam);
@@ -92,6 +94,7 @@ export function ScreenW1() {
     setFailure(null);
     try {
       const result = await login(email.trim(), password, remember);
+      queryClient.clear();
       rememberAfterLogin(result.me);
       const from = returnTo(location.state);
       if (result.next === '2fa') navigate('/login/2fa', { replace: true, state: { from, remember } });

@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 
 type Reply = { status?: number; body: unknown };
-type Handler = (body: unknown) => Reply;
+type Handler = (body: unknown) => Reply | Promise<Reply>;
 
 /** Minimal fetch mock keyed by "METHOD /path". Records calls; GET /api/auth/csrf sets the CSRF cookie. */
 export function mockApi(handlers: Record<string, Handler | Reply>) {
@@ -17,7 +17,7 @@ export function mockApi(handlers: Record<string, Handler | Reply>) {
     }
     const handler = handlers[key];
     if (!handler) return new Response(JSON.stringify({ detail: { code: 'not_mocked' } }), { status: 404 });
-    const reply = typeof handler === 'function' ? handler(body) : handler;
+    const reply = await (typeof handler === 'function' ? handler(body) : handler);
     return new Response(JSON.stringify(reply.body), {
       status: reply.status ?? 200,
       headers: { 'Content-Type': 'application/json' },
