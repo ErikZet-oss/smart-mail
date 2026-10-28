@@ -17,7 +17,7 @@ import {
   Underline as UnderlineIcon,
   X,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -34,10 +34,11 @@ import {
   listIdentities,
   patchDraft,
   sendDraft,
-  undoDraft,
   uploadAttachment,
   type ComposeMode,
 } from './composeApi';
+import { sendErrorMessage } from './sendCopy';
+import { watchSend } from './sendWatch';
 import { PreSendDialog } from './PreSendDialog';
 import { ResponsesPicker } from './ResponsesPicker';
 import { ScheduleSendDialog } from './ScheduleSendDialog';
@@ -101,23 +102,6 @@ function formatAllowlistFailure(
     });
   }
   return t('compose.sendErrorRecipientNotAllowed', { email });
-}
-
-/** Map draft.send_error codes to Slovak copy (GitHub #20). */
-function sendErrorMessage(t: (key: string) => string, sendError: string | null | undefined): string {
-  const code = (sendError ?? '').split(':')[0] || '';
-  if (code === 'auth_failed') return t('compose.sendErrorAuth');
-  if (code === 'no_credentials') return t('compose.sendErrorNoCredentials');
-  if (code === 'server_unavailable' || code === 'smtp_host_not_allowed') return t('compose.sendErrorServer');
-  if (
-    code === 'SMTPRecipientsRefused' ||
-    code === 'SMTPDataError' ||
-    code === 'SMTPSenderRefused' ||
-    code === 'recipient_not_allowed'
-  ) {
-    return t('compose.sendErrorRejected');
-  }
-  return t('compose.sendFailed');
 }
 
 /** W4 Písanie — Roundcube-like compose (Phase 1e). AI tab deferred (no AI in Phase 1). */
@@ -221,26 +205,6 @@ export function ScreenW4() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- apply once per draft payload / when edits flush
   }, [draftQuery.data?.id, draftQuery.data?.updated_at, dirty]);
 
-  // Poll while queued/sending so SMTP failures leave a Slovak banner instead of „Odosiela sa…“ (#20).
-  const draftStatus = draftQuery.data?.status;
-  const refetchDraft = draftQuery.refetch;
-  const failedToastKey = useRef<string | null>(null);
-  useEffect(() => {
-    if (draftStatus !== 'queued' && draftStatus !== 'sending') return;
-    const id = window.setInterval(() => {
-      void refetchDraft();
-    }, 1_000);
-    return () => window.clearInterval(id);
-  }, [draftStatus, refetchDraft]);
-  useEffect(() => {
-    const d = draftQuery.data;
-    if (d?.status !== 'failed' || !d.send_error) return;
-    const key = `${d.id}:${d.send_error}`;
-    if (failedToastKey.current === key) return;
-    failedToastKey.current = key;
-    toasts.error(sendErrorMessage(t, d.send_error));
-  }, [draftQuery.data, t, toasts]);
-
   const save = useMutation({
     mutationFn: async () => {
       if (!localId) return null;
@@ -288,26 +252,23 @@ export function ScreenW4() {
       setPreSendOpen(false);
       void qc.setQueryData(['compose', localId], d);
       if (d.status === 'failed') {
-        // Banner + effect toast from send_error; stay on the draft to edit.
+        // Stay on the draft (banner). The shell tracker shows the error toast + „Otvoriť koncept“.
+        watchSend(d, mailbox);
         return;
       }
-      if (d.status === 'queued' || d.status === 'sending') {
-        toasts.success(t('compose.sendingUndo'), {
-          label: t('compose.undo'),
-          onClick: () => {
-            void undoDraft(d.id).then(() => {
-              toasts.success(t('compose.undone'));
-              navigate(`/compose/${d.id}?mailbox=${encodeURIComponent(mailbox)}`);
-            });
-          },
-        });
-      }
-      if (d.status === 'sent') {
-        toasts.success(t('compose.sent'));
+      if (d.status === 'queued' || d.status === 'sending' || d.status === 'sent') {
+        // Close compose; SendTracker keeps polling for up to 60 s (W4 and M4).
+        watchSend(d, mailbox);
         navigate(`/mail/${encodeURIComponent(mailbox)}/inbox`);
       }
     },
     onError: (error) => {
+      const openDraft = localId
+        ? {
+            label: t('compose.openDraft'),
+            onClick: () => navigate(`/compose/${localId}?mailbox=${encodeURIComponent(mailbox)}`),
+          }
+        : undefined;
       if (error instanceof ApiError && error.detail.code === 'recipient_not_allowed') {
         const meta: SendErrorMeta = {
           code: 'recipient_not_allowed',
@@ -316,14 +277,14 @@ export function ScreenW4() {
           show_allowlist: Boolean(error.detail.show_allowlist),
         };
         setSendFailMeta(meta);
-        toasts.error(formatAllowlistFailure(t, meta));
+        toasts.error(formatAllowlistFailure(t, meta), openDraft);
         return;
       }
       // ApiError: re-fetch draft for checks; blocking opens W4b
       void draftQuery.refetch().then((res) => {
         if (res.data?.checks.some((c) => c.blocking)) setPreSendOpen(true);
-        else if (res.data?.status === 'failed') toasts.error(sendErrorMessage(t, res.data.send_error));
-        else toasts.error(t('compose.sendFailed'));
+        else if (res.data?.status === 'failed') watchSend(res.data, mailbox);
+        else toasts.error(t('compose.sendFailed'), openDraft);
       });
     },
   });
@@ -516,7 +477,7 @@ export function ScreenW4() {
               <div className="px-4 pt-3" data-testid="compose-send-error">
                 <Banner kind="danger" message={formatAllowlistFailure(t, sendFailMeta)} />
               </div>
-            ) : draft?.status === 'failed' || draft?.send_error ? (
+            ) : draft?.status === 'failed' ? (
               <div className="px-4 pt-3" data-testid="compose-send-error">
                 <Banner kind="danger" message={sendErrorMessage(t, draft?.send_error)} />
               </div>

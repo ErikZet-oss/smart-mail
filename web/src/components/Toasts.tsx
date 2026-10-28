@@ -67,7 +67,20 @@ function ToastView({ item, onClose }: { item: ToastItem; onClose: () => void }) 
       className="type-small flex items-center gap-2.5 rounded-md bg-bg-rail py-2.5 pl-3.5 pr-3 text-text-on-rail-active shadow-e2"
     >
       {ICON[kind]}
-      <span className="flex-1">{item.message}</span>
+      {item.onActivate ? (
+        <button
+          type="button"
+          onClick={() => {
+            item.onActivate?.();
+            onClose();
+          }}
+          className="flex-1 rounded-xs text-left hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary-500"
+        >
+          {item.message}
+        </button>
+      ) : (
+        <span className="flex-1">{item.message}</span>
+      )}
       {item.action ? (
         <button
           type="button"

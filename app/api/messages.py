@@ -20,6 +20,7 @@ from app.core.content_disposition import content_disposition_attachment
 from app.mail import storage
 from app.mail.actions import MsgAction, MsgTarget, run_msg_action_async
 from app.mail.body import ensure_body, load_attachments
+from app.mail.flags import is_forwarded
 from app.mail.models import Attachment, FolderMeta, Mailbox, Message, Thread
 from app.mail.prefs import ListPrefs, UiPrefs, get_list_prefs, get_ui_prefs, save_section
 from app.mail.sync import Credentials, SyncAuthError, SyncUnavailable, credentials_for, mark_auth_failed, server_of
@@ -50,6 +51,7 @@ class MessageListItem(BaseModel):
     seen: bool
     flagged: bool
     answered: bool
+    forwarded: bool = False
     has_attachments: bool
     thread_count: int = 1
     # Phase 2b — from classifications (optional)
@@ -303,6 +305,7 @@ async def list_messages(
                 seen=m.seen,
                 flagged=m.flagged,
                 answered=m.answered,
+                forwarded=is_forwarded(m.flags),
                 has_attachments=m.has_attachments,
                 thread_count=thread_counts.get(m.thread_id, 1) if m.thread_id else 1,
                 ai_category=classification.category if classification else None,

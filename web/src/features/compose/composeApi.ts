@@ -46,6 +46,10 @@ export type ComposeDraft = {
   attachments: ComposeAttachment[];
   checks: ComposeCheck[];
   updated_at: string;
+  /** Present after SMTP once the Sent folder sync stored the message (issue #23). */
+  sent_message_id?: string | null;
+  sent_thread_id?: string | null;
+  sent_folder_ref?: string | null;
 };
 
 export type Identity = {

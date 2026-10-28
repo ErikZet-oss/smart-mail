@@ -76,6 +76,24 @@ def _act(client: IMAPClient, action: MsgAction, source: MsgTarget, dest: str | N
         raise SyncUnavailable("unknown_action")
 
 
+def add_flag(server: ImapServer, creds: Credentials, folder: str, uid: int, flag: str) -> None:
+    """IMAP ``STORE +FLAGS`` for one message (``\\Answered`` or ``$Forwarded``)."""
+    client = connect(server, creds)
+    try:
+        client.select_folder(folder)
+        client.add_flags([uid], [flag])
+    except SyncAuthError:
+        raise
+    except (OSError, IMAPClientError) as exc:
+        raise SyncUnavailable(type(exc).__name__) from exc
+    finally:
+        logout_quietly(client)
+
+
+async def add_flag_async(server: ImapServer, creds: Credentials, folder: str, uid: int, flag: str) -> None:
+    await asyncio.to_thread(add_flag, server, creds, folder, uid, flag)
+
+
 async def run_msg_action_async(
     server: ImapServer,
     creds: Credentials,

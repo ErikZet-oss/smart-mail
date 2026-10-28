@@ -1,4 +1,4 @@
-import { Flag, Paperclip, Reply, Sparkles } from 'lucide-react';
+import { Flag, Forward, Paperclip, Reply, Sparkles } from 'lucide-react';
 import { useRef, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -50,6 +50,7 @@ export function MessageRow({
   const date = formatMailDate(item.kind === 'message' ? item.data.received_at : item.data.last_message_at);
   const preview = item.data.preview;
   const answered = item.kind === 'message' ? item.data.answered : false;
+  const forwarded = item.kind === 'message' ? Boolean(item.data.forwarded) : false;
   const threadCount = item.kind === 'message' ? item.data.thread_count : item.data.message_count;
   const flagged = item.data.flagged;
   const hasAttachments = item.data.has_attachments;
@@ -132,10 +133,12 @@ export function MessageRow({
               title={t(`ai.categories.${aiCategory}.label`, { defaultValue: aiCategory })}
               className={`size-2 shrink-0 rounded-full ${categoryDotClass(categoryColorToken)}`}
             />
+          ) : answered ? (
+            <Reply size={14} aria-label={t('mail.answered')} className="shrink-0 text-text-tertiary" />
+          ) : forwarded ? (
+            <Forward size={14} aria-label={t('mail.forwarded')} className="shrink-0 text-text-tertiary" />
           ) : unread ? (
             <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-warning-400" />
-          ) : answered ? (
-            <Reply size={14} aria-hidden="true" className="shrink-0 text-text-tertiary" />
           ) : (
             <span aria-hidden="true" className="size-2 shrink-0" />
           )}

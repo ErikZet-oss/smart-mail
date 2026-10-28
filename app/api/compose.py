@@ -24,7 +24,7 @@ from app.mail.compose import (
     sync_draft_to_imap,
 )
 from app.mail.compose_models import CannedResponse, ComposeAttachment, ComposeDraft, Identity
-from app.mail.models import Message
+from app.mail.models import FolderMeta, Message
 from app.mail.sanitize import sanitize_html
 from app.mail.send_guard import blocked_recipients, test_allowlist_addresses
 from app.mail.signature import html_to_text, render_signature
@@ -98,6 +98,10 @@ class DraftOut(BaseModel):
     attachments: list[AttOut]
     checks: list[dict[str, Any]] = Field(default_factory=list)
     updated_at: datetime
+    # Set after a successful send once the Sent folder has been synced (GitHub #23).
+    sent_message_id: str | None = None
+    sent_thread_id: str | None = None
+    sent_folder_ref: str | None = None
 
 
 class IdentityOut(BaseModel):
@@ -136,7 +140,37 @@ def _send_error_meta(draft: ComposeDraft, settings: Any) -> dict[str, Any] | Non
     return {"code": code or raw}
 
 
-def _draft_out(draft: ComposeDraft, atts: list[ComposeAttachment], settings: Any) -> DraftOut:
+def _msgid_keys(value: str) -> set[str]:
+    raw = value.strip()
+    bare = raw.strip("<>").strip()
+    return {raw, bare, f"<{bare}>"}
+
+
+async def _sent_location(db: DB, draft: ComposeDraft) -> tuple[str | None, str | None, str | None]:
+    """Message id, thread id and folder ref of the copy stored in Odoslané."""
+    if draft.status != "sent" or not draft.final_message_id:
+        return None, None, None
+    if (draft.send_error or "").split(":", 1)[0] == "append_failed":
+        return None, None, None
+    row = (
+        await db.execute(
+            select(Message, FolderMeta)
+            .join(FolderMeta, FolderMeta.id == Message.folder_id)
+            .where(Message.mailbox_id == draft.mailbox_id, Message.message_id.in_(_msgid_keys(draft.final_message_id)))
+            .limit(1)
+        )
+    ).first()
+    if row is None:
+        return None, None, None
+    message, folder = row
+    special = folder.special_use if folder.special_use in {"inbox", "drafts", "sent", "junk", "trash"} else None
+    ref = special or str(folder.id)
+    thread = str(message.thread_id) if message.thread_id else str(message.id)
+    return str(message.id), thread, ref
+
+
+async def _draft_out(db: DB, draft: ComposeDraft, atts: list[ComposeAttachment], settings: Any) -> DraftOut:
+    sent_message_id, sent_thread_id, sent_folder_ref = await _sent_location(db, draft)
     return DraftOut(
         id=str(draft.id),
         mailbox_id=str(draft.mailbox_id),
@@ -172,6 +206,9 @@ def _draft_out(draft: ComposeDraft, atts: list[ComposeAttachment], settings: Any
         ],
         checks=pre_send_checks(draft, settings),
         updated_at=draft.updated_at,
+        sent_message_id=sent_message_id,
+        sent_thread_id=sent_thread_id,
+        sent_folder_ref=sent_folder_ref,
     )
 
 
@@ -247,13 +284,13 @@ async def post_compose(
         source=source,
     )
     await db.commit()
-    return _draft_out(draft, [], settings)
+    return await _draft_out(db, draft, [], settings)
 
 
 @router.get("/compose/{draft_id}")
 async def get_draft(draft_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep) -> DraftOut:
     draft = await _get_draft(db, ctx, draft_id)
-    return _draft_out(draft, await _load_atts(db, draft.id), settings)
+    return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
 
 
 @router.patch("/compose/{draft_id}")
@@ -299,7 +336,7 @@ async def patch_draft(
     await sync_draft_to_imap(db, settings, draft)
     await db.commit()
     await db.refresh(draft)
-    return _draft_out(draft, await _load_atts(db, draft.id), settings)
+    return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
 
 
 @router.delete("/compose/{draft_id}")
@@ -347,7 +384,7 @@ async def upload_attachment(
         )
     )
     await db.commit()
-    return _draft_out(draft, await _load_atts(db, draft.id), settings)
+    return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
 
 
 @router.post("/compose/{draft_id}/send")
@@ -400,7 +437,7 @@ async def send_draft(
             import structlog
 
             structlog.get_logger(__name__).warning("compose.enqueue_failed", error=type(exc).__name__)
-    return _draft_out(draft, await _load_atts(db, draft.id), settings)
+    return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
 
 
 @router.post("/compose/{draft_id}/undo")
@@ -412,7 +449,7 @@ async def undo_draft(draft_id: uuid.UUID, ctx: Auth, person: ActivePerson, db: D
         raise fail(409, "not_queued") from None
     await db.commit()
     await db.refresh(draft)
-    return _draft_out(draft, await _load_atts(db, draft.id), settings)
+    return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
 
 
 @router.get("/compose/{draft_id}/signature-preview")
