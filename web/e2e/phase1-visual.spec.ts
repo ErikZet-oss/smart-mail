@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, ME, ME_PICKER, mockApi, shot, test } from './fixtures';
 
 /** Phase 1 visual parity with Figma (docs/FIGMA_MAP.md W12): settings navigation, search, admin group. */
@@ -94,6 +95,9 @@ test.describe('Phase 1 visual — W12 settings navigation', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Používateľské rozhranie' })).toBeVisible();
     await expect(page.getByRole('radio', { name: 'Podľa systému' })).toHaveAttribute('aria-checked', 'true');
     await shot(page, 'visual-W12-01a-ui');
+    const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+    const serious = axe.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+    expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
     await page.getByRole('link', { name: 'Zobrazenie schránky' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Zobrazenie schránky' })).toBeVisible();
     await shot(page, 'visual-W12-01b-mailbox-view');

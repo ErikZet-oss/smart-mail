@@ -158,7 +158,7 @@ export function SettingsNav({ sections, activeSection, sub }: Props) {
         <ul className="flex flex-col pb-3">{personal.map(row)}</ul>
         {admin.length > 0 ? (
           <>
-            <p className="type-micro mx-2 flex items-center gap-1.5 px-2.5 pb-1.5 pt-3 uppercase text-text-tertiary">
+            <p className="type-micro mx-2 flex items-center gap-1.5 px-2.5 pb-1.5 pt-3 uppercase text-text-secondary">
               {t('settings.adminGroup')}
               <Lock size={12} aria-hidden />
             </p>
