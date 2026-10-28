@@ -54,7 +54,7 @@ test.describe('Phase 1f — settings + W4e', () => {
       },
     });
     await page.goto('/settings/preferences/ui');
-    await expect(page.getByRole('heading', { name: /Nastavenia/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Používateľské rozhranie' })).toBeVisible();
     await expect(page.getByText('Klasické zobrazenie')).toBeVisible();
     await shot(page, 'phase1f-W12-preferences');
   });
