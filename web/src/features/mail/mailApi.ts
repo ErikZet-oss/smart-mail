@@ -178,6 +178,9 @@ export type MessageDetail = {
   ai_summary?: string | null;
   ai_language?: string | null;
   security_notes?: string[];
+  /** Pilot #18 B6 — server may offer remote images via signed proxy (not raw https). */
+  remote_images_offered?: boolean;
+  remote_images_mode?: 'never' | 'known' | 'always';
 };
 
 export type BulkAction =

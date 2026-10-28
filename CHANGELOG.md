@@ -9,6 +9,16 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - **B2**: AppShell loading + 10 s timeout → W16-style error with „Skúsiť znova“; React error boundary around the shell.
 - **B3**: Hide AI TRIEDENIE when `ai_enabled=false` or no Anthropic key; `/ai/views/*` returns empty, never 500.
 - **B4**: `/readyz` own 2 s budget + fresh Redis probe; docker healthcheck `curl --max-time 3`.
+- **B5**: Rewrite `cid:` images to `/api/mail/mailboxes/{ref}/attachments/{id}/inline` (image/*, ACL, infected→403).
+- **B6**: Signed `GET /api/mail/image-proxy` for remote images; CSP keeps `img-src` without `https:`; SSRF blocks
+  non-global IPs (`not is_global`, IPv4-mapped unwrap) after async DNS; connect pins the verified IP (Host+SNI);
+  stream abort / Content-Length > 5 MB → 413; purpose-separated HMAC key; SVG→415; honors `remote_images`
+  never/known/always.
+- **B9**: `Content-Disposition: attachment` is never treated as inline even with Content-ID (Gmail); hide as inline
+  only when HTML references the part via `cid:`.
+- **B10**: Keep non-text parts without Content-Disposition (Apple Mail / Outlook); named second text/html|plain and
+  `message/rfc822` are attachments. Nightly job re-parses stored raw for `has_attachments` messages.
+  Fixtures under `fixtures/mail/` (fictional).
 
 ## [Unreleased] — Pilot #20 (blocker): SMTP AUTH + Sent APPEND + draft IMAP
 

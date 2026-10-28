@@ -1,0 +1,21 @@
+Content-Type: multipart/mixed; boundary="===============5284585140540539139=="
+MIME-Version: 1.0
+From: Apple <apple@client.example>
+To: pilot@smartmail.test
+Subject: Apple Mail PDF bez Disposition
+
+--===============5284585140540539139==
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+
+UERGIHYgcHLDrWxvaGU=
+
+--===============5284585140540539139==
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Type: application/pdf; name="objednavka.pdf"
+
+JVBERi0xLjQKMSAwIG9iajw8Pj5lbmRvYmoKdHJhaWxlcjw8Pj4KJSVFT0YK
+
+--===============5284585140540539139==--

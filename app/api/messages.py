@@ -126,6 +126,9 @@ class MessageDetail(BaseModel):
     ai_summary: str | None = None
     ai_language: str | None = None
     security_notes: list[str] = []
+    # Pilot #18 B6 — whether the "Zobraziť obrázky" bar may offer remote images
+    remote_images_offered: bool = False
+    remote_images_mode: Literal["never", "known", "always"] = "known"
 
 
 class FlagIn(BaseModel):
@@ -436,6 +439,16 @@ async def get_message(
 
     atts = await load_attachments(db, message.id)
     thread = await db.get(Thread, message.thread_id) if message.thread_id else None
+    ui = await get_ui_prefs(db, ctx.session.active_person_id)
+    html, remote_offered = await _render_message_html(
+        db,
+        settings,
+        ref=ref,
+        message=message,
+        atts=atts,
+        remote_mode=ui.remote_images,
+        person_id=ctx.session.active_person_id,
+    )
     return MessageDetail(
         id=str(message.id),
         thread_id=str(message.thread_id) if message.thread_id else None,
@@ -454,7 +467,7 @@ async def get_message(
         flagged=message.flagged,
         answered=message.answered,
         body_text=message.body_text,
-        body_html_sanitized=message.body_html_sanitized,
+        body_html_sanitized=html,
         attachments=[
             AttachmentOut(
                 id=str(a.id),
@@ -470,8 +483,75 @@ async def get_message(
         thread_status=thread.status if thread else None,
         snoozed_until=thread.snoozed_until if thread else None,
         assignee_id=str(thread.assignee_id) if thread and thread.assignee_id else None,
+        remote_images_offered=remote_offered,
+        remote_images_mode=ui.remote_images,
         **(await _message_ai_fields(db, settings, message)),
     )
+
+
+async def _contact_emails_for_person(db: DB, person_id: uuid.UUID | None) -> set[str]:
+    if person_id is None:
+        return set()
+    from app.contacts.models import AddressBook, Contact
+    from app.contacts.service import ensure_default_books
+
+    await ensure_default_books(db, person_id)
+    books = (
+        await db.execute(
+            select(AddressBook.id).where(
+                or_(
+                    and_(AddressBook.kind == "personal", AddressBook.owner_person_id == person_id),
+                    AddressBook.kind == "shared",
+                )
+            )
+        )
+    ).scalars()
+    book_ids = list(books)
+    if not book_ids:
+        return set()
+    out: set[str] = set()
+    rows = (await db.execute(select(Contact.emails).where(Contact.address_book_id.in_(book_ids)))).scalars()
+    for emails in rows:
+        for entry in emails or []:
+            em = str(entry.get("email") or "").strip().lower()
+            if em:
+                out.add(em)
+    return out
+
+
+async def _render_message_html(
+    db: DB,
+    settings: Settings,
+    *,
+    ref: str,
+    message: Message,
+    atts: list[Attachment],
+    remote_mode: Literal["never", "known", "always"],
+    person_id: uuid.UUID | None,
+) -> tuple[str | None, bool]:
+    """Rewrite cid: → inline URLs (B5) and sign remote images for the proxy (B6)."""
+    from app.mail.cid_rewrite import normalize_cid, rewrite_cid_images
+    from app.mail.remote_images import html_has_remote_placeholder, should_offer_remote_images, sign_remote_image_attrs
+
+    html = message.body_html_sanitized
+    if not html:
+        return None, False
+    cid_map = {
+        normalize_cid(a.content_id): str(a.id)
+        for a in atts
+        if a.content_id and (a.content_type or "").lower().startswith("image/")
+    }
+    html = rewrite_cid_images(html, mailbox_ref=ref, cid_to_attachment_id=cid_map)
+    contacts = await _contact_emails_for_person(db, person_id)
+    offered = should_offer_remote_images(
+        remote_mode,
+        from_email=message.from_email,
+        contact_emails=contacts,
+        internal_domains=list(settings.internal_domain_list),
+    ) and html_has_remote_placeholder(html)
+    if offered:
+        html = sign_remote_image_attrs(html, settings)
+    return html, offered
 
 
 async def _message_ai_fields(db: DB, settings: Settings, message: Message) -> dict[str, Any]:
@@ -749,6 +829,54 @@ async def download_attachment(ref: str, attachment_id: uuid.UUID, ctx: Auth, db:
         raise fail(404, "attachment_not_found")
     headers = {"Content-Disposition": content_disposition_attachment(att.filename)}
     return Response(content=data, media_type=att.content_type, headers=headers)
+
+
+@router.get("/mailboxes/{ref}/attachments/{attachment_id}/inline")
+async def inline_attachment(ref: str, attachment_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep) -> Response:
+    """Serve an inline image part for cid: rewrite (pilot #18 B5). image/* only."""
+    mailbox = await _mailbox(db, ctx, ref)
+    att = await db.get(Attachment, attachment_id)
+    if att is None:
+        raise fail(404, "attachment_not_found")
+    message = await db.get(Message, att.message_id)
+    if message is None or message.mailbox_id != mailbox.id:
+        raise fail(404, "attachment_not_found")
+    if att.av_status == "infected":
+        raise fail(403, "attachment_infected")
+    ctype = (att.content_type or "").split(";")[0].strip().lower()
+    if not ctype.startswith("image/") or ctype in {"image/svg+xml", "image/svg"}:
+        raise fail(415, "not_inline_image")
+    data = storage.get_bytes(settings, att.storage_key)
+    if data is None:
+        raise fail(404, "attachment_not_found")
+    headers = {
+        "Content-Disposition": f'inline; filename="{att.filename.replace(chr(34), "")}"',
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+    }
+    return Response(content=data, media_type=ctype, headers=headers)
+
+
+@router.get("/image-proxy")
+async def image_proxy(
+    ctx: Auth,
+    settings: SettingsDep,
+    u: Annotated[str, Query(min_length=1, max_length=2048)],
+    sig: Annotated[str, Query(min_length=16, max_length=128)],
+) -> Response:
+    """HMAC-signed remote image proxy (pilot #18 B6). CSP stays without https: in img-src."""
+    from app.mail.image_proxy import ImageProxyError, fetch_proxied_image
+
+    _ = ctx  # auth required — anonymous open proxy forbidden
+    try:
+        body, content_type = await fetch_proxied_image(settings, u, sig)
+    except ImageProxyError as exc:
+        raise fail(exc.status, exc.code) from None
+    return Response(
+        content=body,
+        media_type=content_type,
+        headers={"Cache-Control": "private, max-age=600", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.get("/prefs")

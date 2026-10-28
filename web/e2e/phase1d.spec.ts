@@ -76,7 +76,9 @@ function detail(id = 'm-1') {
     body_text: 'Dobrý deň,\nprosím o zaslanie kópie faktúry 2026123.\n',
     body_html_sanitized:
       '<p>Dobrý deň,</p><p>prosím o zaslanie kópie faktúry 2026123.</p>' +
-      '<p><img src="about:blank#smartmail-remote" data-remote-src="https://cdn.example/remote.png" alt="" /></p>',
+      // Placeholder + signed same-origin proxy (B6) — never put raw https in src (CSP img-src).
+      '<p><img src="about:blank#smartmail-remote" ' +
+      'data-remote-src="/api/mail/image-proxy?u=https%3A%2F%2Fcdn.example%2Fremote.png&amp;sig=test" alt="" /></p>',
     attachments: [
       {
         id: 'a-1',
@@ -91,6 +93,9 @@ function detail(id = 'm-1') {
     thread_status: 'open',
     snoozed_until: null,
     assignee_id: null,
+    // B6: banner only when the server offers remote images for this sender/mode
+    remote_images_offered: true,
+    remote_images_mode: 'known' as const,
   };
 }
 

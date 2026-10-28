@@ -103,6 +103,15 @@ async def rescan_clamav_attachments(ctx: dict[str, Any]) -> dict[str, int]:
         return await rescan_pending_attachments(db, settings)
 
 
+async def reparse_attachment_messages(ctx: dict[str, Any]) -> dict[str, int]:
+    """One-shot / cron: re-parse stored raw for has_attachments after B9/B10 parse fixes."""
+    from app.mail.reparse import reparse_messages_with_attachments
+
+    settings: Settings = ctx["settings"]
+    async with ctx["sessionmaker"]() as db:
+        return await reparse_messages_with_attachments(db, settings)
+
+
 async def _syncable(ctx: dict[str, Any]) -> list[Mailbox]:
     settings: Settings = ctx["settings"]
     async with ctx["sessionmaker"]() as db:
@@ -204,6 +213,7 @@ class WorkerSettings:
         func(send_compose_draft, keep_result=0),
         func(flush_scheduled_sends, keep_result=0),
         func(rescan_clamav_attachments, keep_result=0),
+        func(reparse_attachment_messages, keep_result=0),
     ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, minute=set(range(60)), run_at_startup=True),
@@ -211,6 +221,8 @@ class WorkerSettings:
         cron(flush_scheduled_sends, minute=set(range(60)), run_at_startup=True, unique=True),
         # every 15 minutes (0, 15, 30, 45)
         cron(rescan_clamav_attachments, minute={0, 15, 30, 45}, unique=True),
+        # nightly re-parse of stored raw with attachments (pilot #18 B9/B10)
+        cron(reparse_attachment_messages, hour={3}, minute={15}, unique=True),
     ]
     on_startup = startup
     on_shutdown = shutdown
