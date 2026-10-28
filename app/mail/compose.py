@@ -628,6 +628,7 @@ async def sync_draft_to_imap(db: AsyncSession, settings: Settings, draft: Compos
     """APPEND the draft to IMAP Koncepty / \\Drafts and drop the previous UID (CLAUDE.md §5).
 
     Failures are logged only — local autosave must still succeed when IMAP is down.
+    An infected or missing attachment is not copied to Koncepty; the local draft still saves.
     """
     if draft.status not in {"editing", "failed", "scheduled"}:
         return
@@ -653,6 +654,9 @@ async def sync_draft_to_imap(db: AsyncSession, settings: Settings, draft: Compos
         if new_uid is not None:
             draft.imap_draft_uid = new_uid
             await db.flush()
+    except AttachmentNotSendable as exc:
+        # Do not APPEND the file, and do not fail the local autosave. The name stays out of the log.
+        log.warning("compose.draft_imap_skipped", draft_id=str(draft.id), code=exc.code)
     except SyncAuthError:
         await mark_auth_failed(db, mailbox, now=datetime.now(UTC))
         log.warning("compose.draft_imap_auth_failed", draft_id=str(draft.id))

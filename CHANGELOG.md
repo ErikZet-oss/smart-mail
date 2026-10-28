@@ -13,6 +13,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   forced. `pending` warns „Príloha ešte nebola skontrolovaná antivírusom“ and the
   user confirms. A missing file is 409 `attachment_missing`, not an empty attachment.
   The compose chip shows the current status. The undo-delay job runs the same check.
+- Autosave to Koncepty skips the IMAP copy when a forwarded file is infected or
+  missing (`compose.draft_imap_skipped`, draft id and code only). The local draft
+  still saves and the chip shows the status.
 
 ## [Unreleased] — Pilot #31: signature images survive in Gmail
 

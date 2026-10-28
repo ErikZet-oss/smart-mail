@@ -367,3 +367,54 @@ async def test_30_missing_blob_blocks_send(
         await build_mime(db, settings, draft, identity)
     assert exc.value.code == "attachment_missing"
     assert exc.value.filename == "chybajuci-subor-fiktivny.pdf"
+
+
+@pytest.mark.asyncio
+async def test_30_autosave_with_infected_forward_attachment_skips_imap_and_succeeds(
+    client: Client,
+    db: AsyncSession,
+    mail_server: FakeMailServer,
+    settings: Settings,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    filename = "virus-koncept-fiktivny.pdf"
+    _msg, source, draft_id = await _forward_file(
+        client,
+        db,
+        mail_server,
+        settings,
+        filename=filename,
+        data=_PENDING,
+        av_status="pending",
+    )
+    source.av_status = "infected"
+    await db.commit()
+
+    with patch("app.mail.compose.save_draft_replace_async", new_callable=AsyncMock) as append:
+        saved = await client.send_json(
+            "PATCH",
+            f"/api/mail/compose/{draft_id}",
+            {"subject": "Uložený koncept", "body_html": "<p>Lokálne uložené.</p>"},
+        )
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert body["subject"] == "Uložený koncept"
+    assert "Lokálne uložené." in body["body_html"]
+    assert body["attachments"][0]["av_status"] == "infected"
+    append.assert_not_awaited()
+
+    draft = await db.get(ComposeDraft, uuid.UUID(draft_id))
+    assert draft is not None
+    assert draft.status == "editing"
+    assert draft.imap_draft_uid is None
+    assert draft.subject == "Uložený koncept"
+
+    captured = capsys.readouterr().out
+    lines = [line for line in captured.splitlines() if "compose.draft_imap_skipped" in line]
+    assert len(lines) == 1
+    event = json.loads(lines[0])
+    assert event["event"] == "compose.draft_imap_skipped"
+    assert event["draft_id"] == draft_id
+    assert event["code"] == "attachment_infected"
+    assert filename not in lines[0]
+    assert _PENDING.decode() not in lines[0]
