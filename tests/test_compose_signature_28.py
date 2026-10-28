@@ -6,6 +6,7 @@ and the quote from the stored message.
 
 from __future__ import annotations
 
+import re
 import uuid
 from email.message import EmailMessage
 from pathlib import Path
@@ -153,16 +154,15 @@ async def test_issue28_send_signature_matches_preview_not_flattened_editor(
     await db.refresh(identity)
     mime = await build_mime(db, settings, draft, identity)
     html = _html_part(mime)
-    span = signature_span(html)
-    assert span is not None
-    inner = span[1]
     assert "HACKED" not in html
     assert "evil.example" not in html
-    assert "<table" in inner
-    assert "style=" in inner
-    assert "cid:logo@smartmail" in inner
-    assert "https://cdn.example/jana-testova.png" in inner
+    assert "<table" in html
+    assert "style=" in html
+    assert "cid:logo@smartmail" in html
+    assert "https://cdn.example/jana-testova.png" in html
     assert "Ďakujeme." in html
+    assert "data-sm-" not in html
+    assert "data-cid" not in html
 
     person_id = draft.signature_person_id or draft.person_id
     from app.auth.models import Person
@@ -170,7 +170,9 @@ async def test_issue28_send_signature_matches_preview_not_flattened_editor(
     person = await db.get(Person, person_id) if person_id else None
     rendered = render_signature(person=person, branch=None, identity=identity, email=identity.email, language="sk")
     preview = preview_signature_html(person=person, branch=None, identity=identity, email=identity.email, language="sk")
-    assert normalize_signature_html(inner) == normalize_signature_html(rendered)
+    visible = re.sub(r'\sdata-sm-[\w-]*="[^"]*"', "", rendered)
+    visible = re.sub(r"""\sdata-cid=(?:"[^"]*"|'[^']*')""", "", visible)
+    assert normalize_signature_html(visible) in normalize_signature_html(html)
     assert normalize_signature_html(preview) == normalize_signature_html(rendered)
 
 

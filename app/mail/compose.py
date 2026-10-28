@@ -26,6 +26,7 @@ from app.mail.compose_models import ComposeAttachment, ComposeDraft, Identity
 from app.mail.flags import ANSWERED_FLAG, FORWARDED_FLAG, apply_local_flag
 from app.mail.imap_append import append_to_sent_async, delete_draft_uid_async, save_draft_replace_async
 from app.mail.models import Attachment, FolderMeta, Mailbox, Message
+from app.mail.outgoing_images import normalize_outgoing_images
 from app.mail.parse import parse_rfc822
 from app.mail.sanitize import REMOTE_PLACEHOLDER, sanitize_quote_html
 from app.mail.signature import LOGO_CID, PHOTO_CID, html_to_text, render_signature
@@ -210,6 +211,37 @@ async def _signature_blobs(
     return blobs
 
 
+async def _outgoing_images_by_id(
+    db: AsyncSession, settings: Settings, draft: ComposeDraft, identity: Identity
+) -> dict[str, tuple[str, bytes, str]]:
+    """Uploaded signature files addressable as ``/api/settings/signature-images/<id>``."""
+    records = image_dicts(identity.signature_images)
+    mailbox_branch = await db.scalar(select(Branch).where(Branch.mailbox_id == draft.mailbox_id))
+    if mailbox_branch is not None:
+        records.extend(image_dicts(mailbox_branch.signature_images))
+    person_id = draft.signature_person_id or draft.person_id
+    person = await db.get(Person, person_id) if person_id else None
+    if person is not None and person.branch_id is not None:
+        person_branch = await db.get(Branch, person.branch_id)
+        if person_branch is not None:
+            records.extend(image_dicts(person_branch.signature_images))
+    found: dict[str, tuple[str, bytes, str]] = {}
+    for rec in records:
+        image_id = rec.get("id")
+        cid = rec.get("cid")
+        if not isinstance(image_id, str) or not isinstance(cid, str):
+            continue
+        data = storage.get_bytes(settings, str(rec.get("storage_key") or "")) or b""
+        found[image_id] = (cid, data, str(rec.get("content_type") or "image/png"))
+    return found
+
+
+def log_stripped_images(draft_id: str, count: int) -> None:
+    """How many images were dropped. The URL is not logged."""
+    if count > 0:
+        log.info("compose.images_stripped", draft_id=draft_id, count=count)
+
+
 async def rendered_signature(db: AsyncSession, draft: ComposeDraft) -> str:
     """Signature for this draft from the template or the stored per-message override."""
     if not draft.include_signature:
@@ -339,12 +371,24 @@ async def build_mime(
             msg["References"] = f"{refs} {source.message_id}".strip() if refs else source.message_id
 
     await rehydrate_draft_html(db, settings, draft)
-    html = draft.body_html or ""
-    text = draft.body_text or html_to_text(html)
+    # Keep the draft HTML (it may still hold data: icons for the editor). The MIME copy
+    # is the one Gmail can display: CID parts and https only.
+    raw_html = draft.body_html or ""
+    html, blobs, stripped = normalize_outgoing_images(
+        raw_html,
+        logo_png=_logo_png(),
+        images_by_id=await _outgoing_images_by_id(db, settings, draft, identity),
+    )
+    log_stripped_images(str(draft.id), stripped)
+    text = draft.body_text or html_to_text(raw_html)
     msg.set_content(text)
     msg.add_alternative(html, subtype="html")
-    blobs = await _signature_blobs(db, settings, draft, identity, html)
     seen = {cid.lower() for cid, _data, _ctype in blobs}
+    for cid, data, ctype in await _signature_blobs(db, settings, draft, identity, html):
+        if cid.lower() in seen:
+            continue
+        blobs.append((cid, data, ctype))
+        seen.add(cid.lower())
     if draft.in_reply_to_message_id is not None:
         # W4 has no „Preposlať s prílohami“ control, so ordinary attachments are not copied.
         # cid: images referenced by the quote are related parts, on reply and on forward.
