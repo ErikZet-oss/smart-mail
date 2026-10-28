@@ -23,7 +23,7 @@ from app.mail.compose_models import ComposeAttachment, ComposeDraft, Identity
 from app.mail.flags import ANSWERED_FLAG, FORWARDED_FLAG, apply_local_flag
 from app.mail.imap_append import append_to_sent_async, delete_draft_uid_async, save_draft_replace_async
 from app.mail.models import FolderMeta, Mailbox, Message
-from app.mail.sanitize import sanitize_html
+from app.mail.sanitize import sanitize_compose_body
 from app.mail.signature import LOGO_CID, PHOTO_CID, html_to_text, render_signature
 from app.mail.signature_images import add_related_images, cids_in_html, image_dicts, sniff_image_type
 from app.mail.smtp import SmtpError, send_message, smtp_endpoint
@@ -125,7 +125,7 @@ async def create_draft(
         to_addrs=to,
         cc_addrs=cc,
         subject=subject,
-        body_html=sanitize_html(body_html),
+        body_html=sanitize_compose_body(body_html, settings=settings),
         body_text=html_to_text(body_html),
         signature_person_id=person.id if person else None,
         include_signature=True,

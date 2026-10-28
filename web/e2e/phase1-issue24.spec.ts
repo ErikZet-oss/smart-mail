@@ -60,7 +60,12 @@ test.describe('Issue 24 — signature editor', () => {
     await expect(page.getByRole('button', { name: 'Zdrojový kód' })).toBeVisible();
     await page.getByRole('button', { name: 'Zdrojový kód' }).click();
     await page.getByRole('textbox', { name: 'Zdrojový kód' }).fill(KARTA);
+    await shot(page, 'issue24-W12-03a-source');
     await page.getByRole('button', { name: 'Vložiť', exact: true }).click();
+    await page.getByRole('button', { name: 'Vložiť obrázok' }).click();
+    await expect(page.getByRole('dialog', { name: 'Vložiť obrázok' })).toBeVisible();
+    await shot(page, 'issue24-W12-03a-image');
+    await page.getByRole('dialog', { name: 'Vložiť obrázok' }).getByRole('button', { name: 'Zrušiť' }).click();
     await expect(page.getByText('PETER HUDÁK')).toBeVisible();
     await expect(page.getByRole('img', { name: 'Peter Hudák' })).toBeVisible();
     await page.getByRole('button', { name: 'Uložiť' }).click();

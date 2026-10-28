@@ -1,6 +1,7 @@
 """Signature image uploads (DECISIONS D22, SETTINGS 03a / 11c).
 
-PNG, JPEG and GIF stay raster images. SVG is converted to PNG. At most 5 uploads and 200 kB each.
+PNG, JPEG and GIF stay raster images. SVG is rejected — the browser converts SVG to PNG before
+upload. At most 5 uploads and 200 kB each, and at most 2000×2000 px.
 Uploaded bytes are stored outside the HTML and referenced as ``cid:`` so the 64 kB HTML limit still holds.
 """
 
@@ -8,8 +9,6 @@ from __future__ import annotations
 
 import io
 import re
-import shutil
-import subprocess
 from email.message import EmailMessage
 from typing import Any
 
@@ -17,6 +16,7 @@ _CID = re.compile(r"""cid:([^"'>\s]+)""", re.IGNORECASE)
 
 MAX_SIGNATURE_IMAGE_BYTES = 200 * 1024
 MAX_SIGNATURE_IMAGES = 5
+MAX_SIGNATURE_IMAGE_PX = 2000
 
 
 class SignatureImageError(Exception):
@@ -51,20 +51,16 @@ def _is_svg(data: bytes) -> bool:
     return head.startswith(b"<svg") or (head.startswith(b"<?xml") and b"<svg" in data[:2000].lower())
 
 
-def _svg_to_png(data: bytes) -> bytes:
-    """Rasterise SVG with a system tool when one is installed. The browser converts before upload."""
-    tools: tuple[tuple[str, list[str]], ...] = (
-        ("rsvg-convert", ["-f", "png"]),
-        ("convert", ["svg:-", "png:-"]),
-    )
-    for binary, args in tools:
-        path = shutil.which(binary)
-        if not path:
-            continue
-        completed = subprocess.run([path, *args], input=data, capture_output=True, check=False)  # noqa: S603
-        if completed.returncode == 0 and completed.stdout.startswith(b"\x89PNG"):
-            return completed.stdout
-    raise SignatureImageError("image_type")
+def _reject_huge(image: object) -> None:
+    """``image.size`` before any ``save`` — a small file can still be a decompression bomb."""
+    size = getattr(image, "size", None)
+    if not isinstance(size, tuple) or len(size) != 2:
+        raise SignatureImageError("image_type")
+    width, height = size
+    if not isinstance(width, int) or not isinstance(height, int):
+        raise SignatureImageError("image_type")
+    if width < 1 or height < 1 or width > MAX_SIGNATURE_IMAGE_PX or height > MAX_SIGNATURE_IMAGE_PX:
+        raise SignatureImageError("image_too_large")
 
 
 def normalize_signature_image(data: bytes) -> tuple[bytes, str]:
@@ -72,16 +68,16 @@ def normalize_signature_image(data: bytes) -> tuple[bytes, str]:
     if not data or len(data) > MAX_SIGNATURE_IMAGE_BYTES:
         raise SignatureImageError("image_too_large" if data else "image_type")
     if _is_svg(data):
-        png = _svg_to_png(data)
-        if len(png) > MAX_SIGNATURE_IMAGE_BYTES:
-            raise SignatureImageError("image_too_large")
-        return png, "image/png"
+        # SVG is converted in the browser. Never rasterise it here (file read / SSRF).
+        raise SignatureImageError("image_type")
     try:
         from PIL import Image
     except ImportError as exc:  # pragma: no cover - pillow is a project dependency
         raise SignatureImageError("image_type") from exc
+    Image.MAX_IMAGE_PIXELS = MAX_SIGNATURE_IMAGE_PX * MAX_SIGNATURE_IMAGE_PX
     try:
         with Image.open(io.BytesIO(data)) as image:
+            _reject_huge(image)
             fmt = (image.format or "").upper()
             if fmt == "GIF":
                 return data, "image/gif"
@@ -98,6 +94,8 @@ def normalize_signature_image(data: bytes) -> tuple[bytes, str]:
                 raise SignatureImageError("image_type")
     except SignatureImageError:
         raise
+    except Image.DecompressionBombError as exc:
+        raise SignatureImageError("image_too_large") from exc
     except Exception as exc:
         raise SignatureImageError("image_type") from exc
     if len(payload) > MAX_SIGNATURE_IMAGE_BYTES:

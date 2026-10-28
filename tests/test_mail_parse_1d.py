@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from email.message import EmailMessage
 
 from app.mail.parse import parse_rfc822
@@ -22,6 +23,22 @@ def test_parse_1d_plain_text_body_and_preview() -> None:
     assert parsed.body_html_sanitized is None
     assert parsed.preview is not None and "potvrdenie" in parsed.preview
     assert parsed.attachments == []
+
+
+def test_parse_1d_keep_src_on_received_mail_is_blocked() -> None:
+    msg = EmailMessage()
+    msg["Subject"] = "Sledovanie"
+    msg.set_content("plain")
+    msg.add_alternative(
+        '<img src="https://evil.example/x.png" data-sm-keep-src="1" data-cid="x">',
+        subtype="html",
+    )
+    parsed = parse_rfc822(_raw(msg))
+    assert parsed.body_html_sanitized is not None
+    assert REMOTE_PLACEHOLDER in parsed.body_html_sanitized
+    assert "data-sm-keep-src" not in parsed.body_html_sanitized
+    assert "data-cid" not in parsed.body_html_sanitized
+    assert re.search(r'(?<![\w-])src="https://', parsed.body_html_sanitized) is None
 
 
 def test_parse_1d_html_is_sanitized_and_remote_images_blocked() -> None:

@@ -2,14 +2,23 @@
 
 Remote http(s) images are replaced with a marker so the reading pane can show "Zobraziť obrázky"; cid: and data:
 images stay (inline signature images, DECISIONS D22).
+
+``data-sm-keep-src`` and ``data-cid`` are not accepted from message HTML. The server stamps
+``data-sm-keep-src`` only after it has sanitized our own signature. A received message that
+copies the attribute is blocked like any other remote image. A stamp we minted survives so
+the reading pane can load that image through the signed proxy (CSP ``img-src 'self'``).
 """
 
 from __future__ import annotations
 
+import html as html_lib
 import re
 from typing import Final
 
 import nh3
+
+from app.core.config import Settings, get_settings
+from app.mail.image_proxy import signature_keep_ok, signature_keep_token
 
 REMOTE_PLACEHOLDER: Final = "about:blank#smartmail-remote"
 _MAX_DEFAULT = 512_000
@@ -63,16 +72,20 @@ _TAGS: Final = {
     "ul",
 }
 
-_ATTRS: Final = {
+_COMMON_ATTRS: Final = {
     "*": {"class", "style", "title", "dir", "lang"},
     "a": {"href", "name", "target"},
-    "img": {"src", "alt", "width", "height", "data-cid", "data-sm-keep-src"},
     "td": {"colspan", "rowspan", "align", "valign", "width", "height"},
     "th": {"colspan", "rowspan", "align", "valign", "width", "height"},
     "col": {"span", "width"},
     "colgroup": {"span"},
     "table": {"width", "border", "cellpadding", "cellspacing", "align"},
 }
+
+# Received mail. ``data-sm-keep-src`` and ``data-cid`` are stripped — never taken from input.
+_MESSAGE_ATTRS: Final = {**_COMMON_ATTRS, "img": {"src", "alt", "width", "height"}}
+# Signatures. The keep-src stamp is added after nh3, not copied from the editor.
+_SIGNATURE_ATTRS: Final = {**_COMMON_ATTRS, "img": {"src", "alt", "width", "height", "data-cid"}}
 
 _URL_SCHEMES: Final = {"http", "https", "mailto", "cid", "data"}
 _REMOTE_SRC = re.compile(
@@ -83,39 +96,102 @@ _REMOTE_SRC = re.compile(
 
 _IMG_TAG = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
 _DANGER_TAGS = ("script", "iframe", "form", "input", "object", "embed", "base", "meta", "textarea", "button", "svg")
-# https images in a signature stay (D22). Message bodies still rewrite remote images.
-_KEEP_SRC = re.compile(r"data-sm-keep-src\s*=", re.IGNORECASE)
+_KEEP_VAL = re.compile(
+    r"""\sdata-sm-keep-src\s*=\s*(?P<q>["'])(?P<val>[^"']*)(?P=q)""",
+    re.IGNORECASE,
+)
 _IMG_SRC = re.compile(r"""\bsrc\s*=\s*(?P<q>["'])(?P<url>[^"']*)(?P=q)""", re.IGNORECASE)
+_REMOTE_ATTR = re.compile(
+    r"""\sdata-remote-src\s*=\s*(?P<q>["'])(?P<url>https?://[^"']+)(?P=q)""",
+    re.IGNORECASE,
+)
 _ALLOWED_SIG_SRC = re.compile(
     r"^(https://|cid:|data:image/(?:png|jpeg|gif|webp);|/api/settings/signature-images/|/api/mail/image-proxy\?|/logo-smart\.)",
     re.IGNORECASE,
 )
+_SIG_OPEN = re.compile(
+    r"""<div\b[^>]*\bdata-sm-signature\s*=\s*(?P<q>["'])1(?P=q)[^>]*>""",
+    re.IGNORECASE,
+)
+
+
+def _settings_of(settings: Settings | None) -> Settings:
+    return settings if settings is not None else get_settings()
+
+
+def _append_attr(tag: str, attr: str) -> str:
+    if tag.endswith("/>"):
+        return tag[:-2].rstrip() + f" {attr}/>"
+    return tag[:-1].rstrip() + f" {attr}>"
 
 
 def _rewrite_remote_imgs(html: str) -> str:
+    """Every remote image becomes a placeholder. The keep-src attribute is not a bypass."""
+
     def repl_src(match: re.Match[str]) -> str:
         q = match.group("q")
         url = match.group("url")
         return f"{match.group('pre')}{q}{REMOTE_PLACEHOLDER}{q} data-remote-src={q}{url}{q}"
 
-    def repl_tag(match: re.Match[str]) -> str:
-        tag = match.group(0)
-        if _KEEP_SRC.search(tag):
-            return tag
-        return _REMOTE_SRC.sub(repl_src, tag)
-
-    return _IMG_TAG.sub(repl_tag, html)
+    return _IMG_TAG.sub(lambda match: _REMOTE_SRC.sub(repl_src, match.group(0)), html)
 
 
-def _mark_signature_urls(html: str) -> str:
-    """Mark https signature images so a later message sanitise does not turn them into placeholders."""
+def _trusted_signature_urls(html: str, settings: Settings) -> set[str]:
+    """https URLs whose keep-src stamp was minted by this server."""
+    found: set[str] = set()
+    for tag in _IMG_TAG.findall(html):
+        src = _IMG_SRC.search(tag)
+        token = _KEEP_VAL.search(tag)
+        if src is None or token is None:
+            continue
+        url = html_lib.unescape(src.group("url"))
+        if signature_keep_ok(settings, url, token.group("val")):
+            found.add(url)
+    return found
+
+
+def _restore_trusted_signature_imgs(html: str, urls: set[str], settings: Settings) -> str:
+    """Put server-stamped signature images back (https src + a fresh stamp) after the remote rewrite."""
+    if not urls:
+        return html
 
     def repl(match: re.Match[str]) -> str:
         tag = match.group(0)
-        src = _IMG_SRC.search(tag)
-        if src is None or not src.group("url").lower().startswith("https://") or _KEEP_SRC.search(tag):
+        remote = _REMOTE_ATTR.search(tag)
+        if remote is None:
             return tag
-        return tag[:-1] + ' data-sm-keep-src="1">'
+        url = html_lib.unescape(remote.group("url"))
+        if url not in urls:
+            return tag
+        src = _IMG_SRC.search(tag)
+        if src is None:
+            return tag
+        q = src.group("q")
+        safe = html_lib.escape(url, quote=True)
+        token = signature_keep_token(settings, url)
+        without_remote = _REMOTE_ATTR.sub("", tag)
+        src_now = _IMG_SRC.search(without_remote)
+        if src_now is None:
+            return tag
+        replaced = without_remote[: src_now.start()] + f"src={q}{safe}{q}" + without_remote[src_now.end() :]
+        return _append_attr(replaced, f'data-sm-keep-src="{token}"')
+
+    return _IMG_TAG.sub(repl, html)
+
+
+def _mark_signature_urls(html: str, settings: Settings) -> str:
+    """Stamp https signature images. Any keep-src value from the editor is discarded first."""
+
+    def repl(match: re.Match[str]) -> str:
+        tag = _KEEP_VAL.sub("", match.group(0))
+        src = _IMG_SRC.search(tag)
+        if src is None:
+            return tag
+        url = html_lib.unescape(src.group("url"))
+        if not url.lower().startswith("https://"):
+            return tag
+        token = signature_keep_token(settings, url)
+        return _append_attr(tag, f'data-sm-keep-src="{token}"')
 
     return _IMG_TAG.sub(repl, html)
 
@@ -135,6 +211,31 @@ def _drop_disallowed_signature_src(html: str) -> str:
     return _IMG_TAG.sub(repl, html)
 
 
+def _signature_span(html: str) -> tuple[str, str, str] | None:
+    """Split ``<div data-sm-signature="1">…</div>``, including nested divs."""
+    opened = _SIG_OPEN.search(html)
+    if opened is None:
+        return None
+    depth = 1
+    index = opened.end()
+    lower = html.lower()
+    while index < len(html) and depth:
+        next_open = lower.find("<div", index)
+        next_close = lower.find("</div>", index)
+        if next_close < 0:
+            return None
+        if next_open != -1 and next_open < next_close:
+            depth += 1
+            index = next_open + 4
+            continue
+        depth -= 1
+        if depth == 0:
+            inner = html[opened.end() : next_close]
+            return html[: opened.start()], inner, html[next_close + len("</div>") :]
+        index = next_close + len("</div>")
+    return None
+
+
 def signature_stripped_parts(original: str, cleaned: str) -> list[str]:
     """Names of dangerous constructs that were in the input and are gone after nh3."""
     original_l = original.lower()
@@ -150,40 +251,69 @@ def signature_stripped_parts(original: str, cleaned: str) -> list[str]:
     return gone
 
 
-def sanitize_signature_html(html: str) -> tuple[str, list[str]]:
+def sanitize_signature_html(html: str, settings: Settings | None = None) -> tuple[str, list[str]]:
     """nh3 for signatures (D22): tables, inline styles, img. https URLs stay. No remote-image placeholder.
 
+    ``data-sm-keep-src`` from the input is dropped. The server adds its own stamp afterwards.
     Returns ``(html, stripped)``. Does not truncate — callers reject bodies over 64 kB.
     """
     if not html:
         return "", []
+    resolved = _settings_of(settings)
     cleaned = nh3.clean(
         html,
         tags=_TAGS,
-        attributes=_ATTRS,
+        attributes=_SIGNATURE_ATTRS,
         url_schemes=_URL_SCHEMES,
         link_rel="noopener noreferrer",
     )
     cleaned = _drop_disallowed_signature_src(cleaned)
-    cleaned = _mark_signature_urls(cleaned)
+    cleaned = _mark_signature_urls(cleaned, resolved)
     return cleaned, signature_stripped_parts(html, cleaned)
 
 
-def sanitize_html(html: str, *, max_bytes: int = _MAX_DEFAULT) -> str:
-    """Return safe HTML. Empty input stays empty. Oversized bodies are truncated after sanitizing."""
+def sanitize_html(html: str, *, max_bytes: int = _MAX_DEFAULT, settings: Settings | None = None) -> str:
+    """Return safe HTML. Empty input stays empty. Oversized bodies are truncated after sanitizing.
+
+    Remote images are placeholders. A keep-src value from the message is ignored. Images whose
+    stamp this server created (our signature) keep their https URL and receive a fresh stamp.
+    """
     if not html:
         return ""
+    resolved = _settings_of(settings)
+    trusted = _trusted_signature_urls(html, resolved)
     cleaned = nh3.clean(
         html,
         tags=_TAGS,
-        attributes=_ATTRS,
+        attributes=_MESSAGE_ATTRS,
         url_schemes=_URL_SCHEMES,
         link_rel="noopener noreferrer",
     )
     cleaned = _rewrite_remote_imgs(cleaned)
+    cleaned = _restore_trusted_signature_imgs(cleaned, trusted, resolved)
     raw = cleaned.encode("utf-8")
     if len(raw) <= max_bytes:
         return cleaned
     # cut on a character boundary
     cut = raw[:max_bytes].decode("utf-8", errors="ignore")
     return cut + "…"
+
+
+def sanitize_compose_body(html: str, settings: Settings | None = None) -> str:
+    """Message rules for the draft, signature rules for the ``data-sm-signature`` block.
+
+    The signature block is sanitized on its own so https images there are stamped by the
+    server. Images outside that block cannot opt out of remote-image blocking.
+    """
+    if not html:
+        return ""
+    span = _signature_span(html)
+    if span is None:
+        return sanitize_html(html, settings=settings)
+    before, inner, after = span
+    signature, _gone = sanitize_signature_html(inner, settings=settings)
+    return (
+        sanitize_html(before, settings=settings)
+        + f'<div data-sm-signature="1">{signature}</div>'
+        + sanitize_html(after, settings=settings)
+    )

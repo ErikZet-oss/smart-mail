@@ -7,9 +7,10 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - Identity signature (03a) and the per-message signature (W4e) use the TipTap editor:
   bold, italic, underline, alignment, font, size, colours, link, table, image,
   horizontal rule, special characters, and a „Zdrojový kód“ dialog (Vložiť / Zrušiť).
-- Uploaded PNG/JPG/GIF (SVG converted to PNG), at most 5 images and 200 kB each, are stored
-  outside the HTML and sent as inline CID. https image URLs stay links and are not rewritten
-  to the remote-image placeholder inside a signature.
+- Uploaded PNG/JPG/GIF, at most 5 images, 200 kB and 2000×2000 px each, are stored
+  outside the HTML and sent as inline CID. SVG is converted in the browser; the server rejects it.
+  https image URLs in our own signature stay, stamped by the server, and the reading pane loads
+  them through the signed image proxy. A received message cannot opt out of remote-image blocking.
 - Branch template (11c): language tabs SK / CZ / EN / DE, variable chips, presets „Karta“ and
   „Text“, live preview. A shared branch mailbox in 03a shows only the preview and a link to
   section 11. Slovak is required. Unknown variables are rejected. Saving reports what nh3 stripped.

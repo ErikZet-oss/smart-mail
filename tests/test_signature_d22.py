@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 from email.message import EmailMessage
 
 import pytest
@@ -10,9 +11,12 @@ from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.mail.compose_models import Identity
 from app.mail.models import Mailbox
-from app.mail.sanitize import sanitize_html, sanitize_signature_html
+from app.mail.parse import parse_rfc822
+from app.mail.remote_images import proxy_signature_images
+from app.mail.sanitize import REMOTE_PLACEHOLDER, sanitize_compose_body, sanitize_html, sanitize_signature_html
 from app.mail.signature import (
     SignatureError,
     apply_signature_languages,
@@ -26,6 +30,15 @@ from tests.conftest import Client, FakeMailServer, make_personal
 from tests.test_mail_sync_1c import PASSWORD
 
 
+def _sig_settings() -> Settings:
+    return Settings(
+        app_env="test",
+        app_secret_key="test-secret-key-that-is-long-enough-0123456789",
+        storage_backend="local",
+        mail_sync_enabled=False,
+    )
+
+
 def _png() -> bytes:
     out = io.BytesIO()
     Image.new("RGB", (1, 1), (10, 20, 30)).save(out, format="PNG")
@@ -35,17 +48,70 @@ def _png() -> bytes:
 def test_d22_signature_keeps_table_style_and_https() -> None:
     html = (
         '<table style="border-collapse:collapse"><tr><td style="font-family:Arial">Peter Hudák</td></tr></table>'
-        '<img src="https://example.com/signature-photo.png" alt="Peter Hudák">'
+        '<img src="https://example.com/signature-photo.png" alt="Peter Hudák" data-sm-keep-src="1">'
     )
-    cleaned, gone = sanitize_signature_html(html)
+    settings = _sig_settings()
+    cleaned, gone = sanitize_signature_html(html, settings=settings)
     assert "<table" in cleaned
     assert "font-family" in cleaned or "Arial" in cleaned
     assert 'src="https://example.com/signature-photo.png"' in cleaned
     assert "data-sm-keep-src" in cleaned
+    assert 'data-sm-keep-src="1"' not in cleaned
     assert gone == []
-    wrapped = sanitize_html(f'<div data-sm-signature="1">{cleaned}</div>')
+    wrapped = sanitize_html(f'<div data-sm-signature="1">{cleaned}</div>', settings=settings)
     assert "https://example.com/signature-photo.png" in wrapped
     assert "about:blank#smartmail-remote" not in wrapped
+    shown = proxy_signature_images(wrapped, settings)
+    assert "/api/mail/image-proxy?" in shown
+    assert 'src="https://example.com/signature-photo.png"' not in shown
+
+
+def test_d22_sent_signature_image_is_proxied_not_loaded_directly() -> None:
+    settings = _sig_settings()
+    signature, _gone = sanitize_signature_html(
+        '<img src="https://cdn.example/logo.png" alt="Peter Hudák">',
+        settings=settings,
+    )
+    message = EmailMessage()
+    message.set_content("Ahoj")
+    message.add_alternative(f'<div data-sm-signature="1">{signature}</div>', subtype="html")
+    parsed = parse_rfc822(message.as_bytes(), settings)
+    assert parsed.body_html_sanitized is not None
+    assert "https://cdn.example/logo.png" in parsed.body_html_sanitized
+    assert REMOTE_PLACEHOLDER not in parsed.body_html_sanitized
+    shown = proxy_signature_images(parsed.body_html_sanitized, settings)
+    assert "/api/mail/image-proxy?" in shown
+    assert 'src="https://cdn.example/logo.png"' not in shown
+
+
+def test_d22_received_keep_src_is_blocked_like_any_remote_image() -> None:
+    out = sanitize_html(
+        '<img src="https://evil.example/x.png" alt="x" data-sm-keep-src="1" data-cid="sig-1@smartmail">'
+    )
+    assert f'src="{REMOTE_PLACEHOLDER}"' in out
+    assert 'data-remote-src="https://evil.example/x.png"' in out
+    assert "data-sm-keep-src" not in out
+    assert "data-cid" not in out
+    assert re.search(r'(?<![\w-])src="https://', out) is None
+
+
+def test_d22_compose_body_blocks_attacker_and_keeps_own_signature() -> None:
+    settings = _sig_settings()
+    signature, _gone = sanitize_signature_html(
+        '<img src="https://cdn.example/logo.png" alt="Peter Hudák"><div>vnútro</div>',
+        settings=settings,
+    )
+    body = (
+        '<p>Ahoj</p><img src="https://evil.example/t.png" data-sm-keep-src="1">'
+        f'<div data-sm-signature="1">{signature}</div>'
+    )
+    out = sanitize_compose_body(body, settings=settings)
+    assert f'src="{REMOTE_PLACEHOLDER}"' in out
+    assert "data-remote-src" in out and "evil.example" in out
+    assert "https://cdn.example/logo.png" in out
+    assert "data-sm-keep-src" in out
+    assert 'data-sm-keep-src="1"' not in out
+    assert "vnútro" in out
 
 
 def test_d22_signature_strips_script_and_reports_it() -> None:
@@ -93,6 +159,21 @@ def test_d22_image_limit_and_png() -> None:
     with pytest.raises(SignatureImageError) as too_big:
         normalize_signature_image(b"\x89PNG" + b"x" * (200 * 1024))
     assert too_big.value.code == "image_too_large"
+
+
+def test_d22_svg_is_rejected() -> None:
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg"><image href="http://127.0.0.1/x"/></svg>'
+    with pytest.raises(SignatureImageError) as rejected:
+        normalize_signature_image(svg)
+    assert rejected.value.code == "image_type"
+
+
+def test_d22_image_pixel_dimensions_rejected() -> None:
+    out = io.BytesIO()
+    Image.new("RGB", (2001, 1), (1, 2, 3)).save(out, format="PNG")
+    with pytest.raises(SignatureImageError) as too_wide:
+        normalize_signature_image(out.getvalue())
+    assert too_wide.value.code == "image_too_large"
 
 
 def test_d22_related_cid_on_html_part() -> None:

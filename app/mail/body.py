@@ -61,7 +61,7 @@ async def ensure_body(
         return message
 
     key, _sha = storage.put_bytes(settings, raw, prefix=f"mail/{mailbox.id}/raw")
-    parsed = parse_rfc822(raw)
+    parsed = parse_rfc822(raw, settings)
     message.raw_storage_key = key
     message.body_text = parsed.body_text
     message.body_html_sanitized = parsed.body_html_sanitized
