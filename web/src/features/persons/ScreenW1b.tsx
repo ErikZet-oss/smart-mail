@@ -9,6 +9,7 @@ import { Button } from '../../components/Button';
 import { Logo } from '../../components/Logo';
 import { Switch } from '../../components/Switch';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
+import { refreshAfterPersonChange } from '../../lib/sessionCache';
 import { logout, returnTo, type Person } from '../auth/authApi';
 import { choosePerson, fetchPicker, initials, PICKER_KEY } from './personsApi';
 
@@ -103,7 +104,7 @@ export function ScreenW1b() {
     try {
       const me = await choosePerson(person.id, mobile ? rememberPhone : true);
       queryClient.setQueryData(['me'], me);
-      await queryClient.invalidateQueries({ queryKey: PICKER_KEY });
+      await refreshAfterPersonChange(queryClient);
       navigate(returnTo(location.state), { replace: true });
     } catch {
       // person deactivated or moved meanwhile: show the current list again

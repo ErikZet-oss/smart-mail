@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { KeyRound, LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +18,7 @@ export function ScreenW1a() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const state = location.state as { from?: string; remember?: boolean } | null;
 
   const [digits, setDigits] = useState<string[]>(empty);
@@ -47,6 +49,7 @@ export function ScreenW1a() {
     setSubmitting(true);
     try {
       const result = await verifyMfa(code, rememberDevice);
+      queryClient.clear();
       rememberAfterLogin(result.me);
       const from = returnTo(state);
       navigate(result.next === 'who' ? '/who' : from, { replace: true, state: { from } });

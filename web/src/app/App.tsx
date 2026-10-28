@@ -8,7 +8,7 @@ import { SendTracker } from '../features/compose/SendTracker';
 import { ThemeProvider } from '../features/prefs/ThemeProvider';
 import { SystemUiProvider } from '../features/system/systemUi';
 import { onGlobalError } from '../lib/api';
-import { createRouter, handleGlobalError } from './router';
+import { createRouter, handleGlobalError, routeForError } from './router';
 
 type Router = ReturnType<typeof createRouter>;
 
@@ -21,10 +21,14 @@ export function App({ router: given }: { router?: Router }) {
   useEffect(() => {
     onGlobalError((error) => {
       const { pathname, search } = router.state.location;
-      void handleGlobalError(error, pathname + search, (to, options) => router.navigate(to, options));
+      const current = pathname + search;
+      const target = routeForError(error, current);
+      // A revoked session must not keep the previous person's lists, settings or drafts.
+      if (error.status === 401 && target?.startsWith('/login')) queryClient.clear();
+      void handleGlobalError(error, current, (to, options) => router.navigate(to, options));
     });
     return () => onGlobalError(undefined);
-  }, [router]);
+  }, [queryClient, router]);
 
   return (
     <QueryClientProvider client={queryClient}>
