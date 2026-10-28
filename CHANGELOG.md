@@ -2,6 +2,18 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #28: signature and quote stay formatted in Napísať
+
+- Compose (W4) keeps the signature as a TipTap atom `SignatureBlock`. Tables, colours
+  and images render like the settings preview and are not editable in the text.
+  The Podpis button still opens the per-message editor. Changing the identity
+  replaces the block.
+- A reply or forward keeps the original message as a `QuotedMessage` atom.
+  On send the server rebuilds the signature with `render_signature` and the quote
+  from the stored message. Signature or quote HTML from the browser is ignored.
+- The user's own text uses Underline, colour, highlight, alignment, link, table
+  and inline CID images, so that formatting is not rewritten on save.
+
 ## [Unreleased] — Pilot #24: Roundcube signature editor (D22, SETTINGS 03a / 11c)
 
 - Identity signature (03a) and the per-message signature (W4e) use the TipTap editor:

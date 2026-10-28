@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html as html_lib
 import re
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -19,11 +20,11 @@ from app.core.audit import audit
 from app.core.config import Settings
 from app.mail import storage
 from app.mail.actions import add_flag_async
+from app.mail.compose_html import assemble_outgoing_html
 from app.mail.compose_models import ComposeAttachment, ComposeDraft, Identity
 from app.mail.flags import ANSWERED_FLAG, FORWARDED_FLAG, apply_local_flag
 from app.mail.imap_append import append_to_sent_async, delete_draft_uid_async, save_draft_replace_async
 from app.mail.models import FolderMeta, Mailbox, Message
-from app.mail.sanitize import sanitize_compose_body
 from app.mail.signature import LOGO_CID, PHOTO_CID, html_to_text, render_signature
 from app.mail.signature_images import add_related_images, cids_in_html, image_dicts, sniff_image_type
 from app.mail.smtp import SmtpError, send_message, smtp_endpoint
@@ -89,7 +90,6 @@ async def create_draft(
     to: list[dict[str, str | None]] = []
     cc: list[dict[str, str | None]] = []
     subject = ""
-    body_html = ""
     if source and mode in ("reply", "reply_all"):
         to = [{"name": source.from_name, "email": source.from_email}]
         if mode == "reply_all":
@@ -99,20 +99,24 @@ async def create_draft(
             cc.extend(_addrs(source.cc_addrs))
         subj = source.subject or ""
         subject = subj if subj.lower().startswith("re:") else f"Re: {subj}"
-        quoted = (source.body_html_sanitized or f"<pre>{html_to_text(source.body_text or '')}</pre>") if source else ""
-        body_html = f"<p></p><blockquote>{quoted}</blockquote>"
     elif source and mode == "forward":
         subj = source.subject or ""
         subject = subj if subj.lower().startswith("fwd:") else f"Fwd: {subj}"
-        quoted = source.body_html_sanitized or f"<pre>{html_to_text(source.body_text or '')}</pre>"
-        body_html = f"<p></p><p>---------- Preposlaná správa ----------</p>{quoted}"
 
-    sig_person = person
-    signature = render_signature(
-        person=sig_person, branch=branch, identity=identity, email=identity.email, language="sk"
+    quoted = ""
+    if source and mode in ("reply", "reply_all", "forward"):
+        if source.body_html_sanitized:
+            quoted = source.body_html_sanitized
+        elif source.body_text:
+            quoted = f"<pre>{html_lib.escape(source.body_text)}</pre>"
+    signature = render_signature(person=person, branch=branch, identity=identity, email=identity.email, language="sk")
+    body_html = assemble_outgoing_html(
+        user_html="<p></p>",
+        quote_html=quoted or None,
+        signature_html=signature or None,
+        mode=mode,
+        settings=settings,
     )
-    if signature:
-        body_html = f'{body_html}<div data-sm-signature="1">{signature}</div>'
 
     draft = ComposeDraft(
         mailbox_id=mailbox.id,
@@ -125,7 +129,7 @@ async def create_draft(
         to_addrs=to,
         cc_addrs=cc,
         subject=subject,
-        body_html=sanitize_compose_body(body_html, settings=settings),
+        body_html=body_html,
         body_text=html_to_text(body_html),
         signature_person_id=person.id if person else None,
         include_signature=True,
@@ -208,6 +212,48 @@ async def _signature_blobs(
     return blobs
 
 
+async def rendered_signature(db: AsyncSession, draft: ComposeDraft) -> str:
+    """Signature for this draft from the template or the stored per-message override."""
+    if not draft.include_signature:
+        return ""
+    identity = await db.get(Identity, draft.identity_id) if draft.identity_id else None
+    person_id = draft.signature_person_id or draft.person_id
+    person = await db.get(Person, person_id) if person_id else None
+    branch = None
+    if person is not None and person.branch_id is not None:
+        branch = await db.get(Branch, person.branch_id)
+    if branch is None:
+        branch = await db.scalar(select(Branch).where(Branch.mailbox_id == draft.mailbox_id))
+    return render_signature(
+        person=person,
+        branch=branch,
+        identity=identity,
+        email=identity.email if identity else "",
+        override_html=draft.signature_html_override,
+    )
+
+
+async def rehydrate_draft_html(db: AsyncSession, settings: Settings, draft: ComposeDraft) -> None:
+    """Replace editor signature and quote with the server copies (issue #28)."""
+    quote: str | None = None
+    if draft.mode in {"reply", "reply_all", "forward"} and draft.in_reply_to_message_id is not None:
+        source = await db.get(Message, draft.in_reply_to_message_id)
+        if source is not None:
+            if source.body_html_sanitized:
+                quote = source.body_html_sanitized
+            elif source.body_text:
+                quote = f"<pre>{html_lib.escape(source.body_text)}</pre>"
+    signature = await rendered_signature(db, draft)
+    draft.body_html = assemble_outgoing_html(
+        user_html=draft.body_html or "",
+        quote_html=quote,
+        signature_html=signature or None,
+        mode=draft.mode,
+        settings=settings,
+    )
+    draft.body_text = html_to_text(draft.body_html)
+
+
 async def build_mime(
     db: AsyncSession,
     settings: Settings,
@@ -240,14 +286,28 @@ async def build_mime(
             refs = (source.references or "").strip()
             msg["References"] = f"{refs} {source.message_id}".strip() if refs else source.message_id
 
+    await rehydrate_draft_html(db, settings, draft)
     html = draft.body_html or ""
     text = draft.body_text or html_to_text(html)
     msg.set_content(text)
     msg.add_alternative(html, subtype="html")
-    add_related_images(msg, await _signature_blobs(db, settings, draft, identity, html))
+    blobs = await _signature_blobs(db, settings, draft, identity, html)
+    seen = {cid for cid, _data, _ctype in blobs}
 
     atts = list((await db.execute(select(ComposeAttachment).where(ComposeAttachment.draft_id == draft.id))).scalars())
+    regular: list[ComposeAttachment] = []
     for att in atts:
+        if att.is_inline and att.content_id:
+            if att.content_id in seen:
+                continue
+            data = storage.get_bytes(settings, att.storage_key) or b""
+            if data:
+                blobs.append((att.content_id, data, att.content_type or "image/png"))
+                seen.add(att.content_id)
+            continue
+        regular.append(att)
+    add_related_images(msg, blobs)
+    for att in regular:
         payload = storage.get_bytes(settings, att.storage_key) or b""
         maintype, _, subtype = (att.content_type or "application/octet-stream").partition("/")
         msg.add_attachment(

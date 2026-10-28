@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, Form, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 
@@ -21,13 +21,15 @@ from app.mail.compose import (
     ensure_default_identity,
     pre_send_checks,
     queue_send,
+    rehydrate_draft_html,
     sync_draft_to_imap,
 )
 from app.mail.compose_models import CannedResponse, ComposeAttachment, ComposeDraft, Identity
 from app.mail.models import FolderMeta, Message
-from app.mail.sanitize import sanitize_compose_body, sanitize_signature_html
+from app.mail.sanitize import sanitize_signature_html
 from app.mail.send_guard import blocked_recipients, test_allowlist_addresses
-from app.mail.signature import SIGNATURE_MAX_BYTES, html_to_text, render_signature
+from app.mail.signature import SIGNATURE_MAX_BYTES, render_signature
+from app.mail.signature_images import sniff_image_type
 
 router = APIRouter(prefix="/api/mail", tags=["compose"])
 
@@ -70,6 +72,8 @@ class AttOut(BaseModel):
     content_type: str
     size: int
     av_status: str
+    is_inline: bool = False
+    content_id: str | None = None
 
 
 class DraftOut(BaseModel):
@@ -201,6 +205,8 @@ async def _draft_out(db: DB, draft: ComposeDraft, atts: list[ComposeAttachment],
                 content_type=a.content_type,
                 size=a.size,
                 av_status=a.av_status,
+                is_inline=a.is_inline,
+                content_id=a.content_id,
             )
             for a in atts
         ],
@@ -304,6 +310,9 @@ async def patch_draft(
         identity = await db.get(Identity, body.identity_id)
         if identity is None or identity.mailbox_id != draft.mailbox_id:
             raise fail(404, "identity_not_found")
+        if identity.id != draft.identity_id:
+            # A different From replaces the block. The one-off edit belonged to the previous identity.
+            draft.signature_html_override = None
         draft.identity_id = identity.id
     if body.to_addrs is not None:
         draft.to_addrs = [a.model_dump() for a in body.to_addrs]
@@ -314,8 +323,7 @@ async def patch_draft(
     if body.subject is not None:
         draft.subject = body.subject
     if body.body_html is not None:
-        draft.body_html = sanitize_compose_body(body.body_html, settings=settings)
-        draft.body_text = html_to_text(draft.body_html)
+        draft.body_html = body.body_html
     if body.include_signature is not None:
         draft.include_signature = body.include_signature
     if body.signature_html_override is not None:
@@ -334,6 +342,7 @@ async def patch_draft(
     if "scheduled_at" in body.model_fields_set:
         draft.scheduled_at = body.scheduled_at
         draft.status = "scheduled" if body.scheduled_at else "editing"
+    await rehydrate_draft_html(db, settings, draft)
     draft.updated_at = datetime.now(UTC)
     # Frontend autosaves every 30 s — mirror to IMAP Koncepty (CLAUDE.md §5 / GitHub #20).
     await sync_draft_to_imap(db, settings, draft)
@@ -362,6 +371,7 @@ async def upload_attachment(
     db: DB,
     settings: SettingsDep,
     file: Annotated[UploadFile, File()],
+    inline: Annotated[bool, Form()] = False,
 ) -> DraftOut:
     draft = await _get_draft(db, ctx, draft_id)
     if draft.status not in {"editing", "failed", "scheduled"}:
@@ -369,6 +379,13 @@ async def upload_attachment(
     data = await file.read()
     if len(data) > MAX_ATTACH_BYTES:
         raise fail(413, "attachment_too_large")
+    content_type = file.content_type or "application/octet-stream"
+    content_id: str | None = None
+    if inline:
+        content_type = sniff_image_type(data)
+        if content_type == "application/octet-stream":
+            raise fail(422, "image_type")
+        content_id = f"{uuid.uuid4().hex}@smartmail"
     from app.mail.clamav import scan_bytes
 
     av = await scan_bytes(settings, data)
@@ -379,11 +396,13 @@ async def upload_attachment(
         ComposeAttachment(
             draft_id=draft.id,
             filename=file.filename or "attachment.bin",
-            content_type=file.content_type or "application/octet-stream",
+            content_type=content_type,
             size=len(data),
             storage_key=key,
             sha256=digest,
             av_status=av,
+            is_inline=inline,
+            content_id=content_id,
         )
     )
     await db.commit()

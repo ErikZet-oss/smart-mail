@@ -65,3 +65,47 @@ body {
   max-width: 100%;
   height: auto;
 }
+
+/* W4 compose. Signature and quote are atoms; their own HTML keeps the card look (issue #28). */
+.compose-editor .ProseMirror {
+  min-height: 280px;
+  padding: 12px 16px;
+  outline: none;
+}
+
+.compose-editor .ProseMirror p {
+  margin: 0 0 0.6em;
+}
+
+.compose-editor .ProseMirror td,
+.compose-editor .ProseMirror th {
+  border: 1px solid var(--border-default);
+  padding: 4px 8px;
+}
+
+.compose-editor .signature-block,
+.compose-editor .quoted-message {
+  margin-top: 12px;
+}
+
+.compose-editor .signature-block {
+  cursor: default;
+}
+
+.compose-editor .signature-block td,
+.compose-editor .signature-block th,
+.compose-editor .quoted-message td,
+.compose-editor .quoted-message th {
+  border: unset;
+  padding: unset;
+}
+
+.compose-editor .quoted-message {
+  border-left: 3px solid var(--border-strong);
+  padding: 4px 0 4px 12px;
+}
+
+.compose-editor .signature-block img {
+  max-width: 100%;
+  height: auto;
+}
