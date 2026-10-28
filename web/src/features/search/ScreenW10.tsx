@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Search } from 'lucide-react';
+import { ArrowLeft, Mail, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -7,6 +7,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/Button';
 import { AppShell } from '../../components/shell/AppShell';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
+import { formatMailDate } from '../mail/formatMailDate';
 import { runSearch, searchKey, type SearchField, type SearchScope } from './searchApi';
 
 const RECENT_KEY = 'sm.search.recent';
@@ -119,7 +120,7 @@ export function ScreenW10() {
             ) : null}
           </div>
           <label className="relative block max-w-2xl">
-            <Search size={16} className="pointer-events-none absolute left-3 top-2.5 text-text-tertiary" />
+            <Search size={18} className="pointer-events-none absolute left-3 top-[11px] text-text-secondary" />
             <input
               type="search"
               value={draft}
@@ -129,7 +130,7 @@ export function ScreenW10() {
                 if (e.key === 'Enter') applyQuery(draft);
               }}
               placeholder={t('search.placeholder')}
-              className="type-body h-10 w-full rounded-sm border border-border-default bg-bg-canvas pl-10 pr-3 text-text-primary placeholder:text-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand-primary-500"
+              className="type-body h-10 w-full rounded-md border border-border-strong bg-bg-canvas pl-10 pr-3 text-text-primary placeholder:text-text-tertiary focus:border-brand-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand-primary-500"
               aria-label={t('search.title')}
             />
           </label>
@@ -141,10 +142,11 @@ export function ScreenW10() {
                   key={s}
                   type="button"
                   onClick={() => setScope(s)}
-                  className={`type-caption rounded-full px-2.5 py-1 ${
+                  aria-pressed={scope === s}
+                  className={`type-caption inline-flex h-6 items-center rounded-full border px-2.5 ${
                     scope === s
-                      ? 'bg-brand-primary-600 text-text-on-primary'
-                      : 'bg-bg-muted text-text-secondary hover:bg-bg-subtle'
+                      ? 'border-brand-primary-600 bg-brand-primary-600 text-text-on-primary'
+                      : 'border-border-default bg-bg-canvas text-text-primary hover:bg-bg-subtle'
                   }`}
                 >
                   {t(`search.scope.${s}`)}
@@ -158,10 +160,11 @@ export function ScreenW10() {
                   key={f.id}
                   type="button"
                   onClick={() => setField(f.id)}
-                  className={`type-caption rounded-full px-2.5 py-1 ${
+                  aria-pressed={field === f.id}
+                  className={`type-caption inline-flex h-6 items-center rounded-full border px-2.5 ${
                     field === f.id
-                      ? 'bg-brand-primary-50 text-brand-primary-800 ring-1 ring-brand-primary-300'
-                      : 'bg-bg-muted text-text-secondary hover:bg-bg-subtle'
+                      ? 'border-brand-primary-400 bg-brand-primary-50 text-brand-primary-700'
+                      : 'border-border-default bg-bg-canvas text-text-primary hover:bg-bg-subtle'
                   }`}
                 >
                   {t(f.labelKey)}
@@ -176,7 +179,7 @@ export function ScreenW10() {
             mobile && recent.length > 0 ? (
               <div className="p-4" data-testid="search-recent">
                 <p className="type-caption mb-2 text-text-tertiary">{t('search.recent')}</p>
-                <ul className="divide-y divide-border-subtle rounded-sm border border-border-default">
+                <ul className="divide-y divide-border-default rounded-sm border border-border-default">
                   {recent.map((q) => (
                     <li key={q}>
                       <button
@@ -219,50 +222,59 @@ export function ScreenW10() {
               ) : null}
             </div>
           ) : (
-            <ul className="divide-y divide-border-subtle">
-              <li className="type-caption bg-bg-subtle px-4 py-2 text-text-secondary">
+            <section className="m-4 overflow-hidden rounded-md border border-border-default sm:mx-6">
+              <h2 className="type-heading flex h-11 items-center border-b border-border-default px-3.5 text-text-primary">
                 {t('search.emailsGroup', { count: result.data?.total ?? 0 })}
-              </li>
-              {messages.map((m) => (
-                <li key={m.id}>
-                  <div className="flex flex-col gap-0.5 px-4 py-3 hover:bg-bg-subtle">
-                    <Link
-                      to={`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`}
-                      className="type-small font-medium text-text-primary"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigate(`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`);
-                      }}
-                    >
-                      {m.subject || t('search.noSubject')}
-                    </Link>
-                    <span className="type-caption text-text-secondary">
-                      {m.from_name ? <span>{m.from_name}</span> : null}
-                      {m.from_email ? (
-                        <>
-                          {m.from_name ? ' · ' : null}
-                          <button
-                            type="button"
-                            className="text-brand-primary-700 underline"
-                            onClick={() => {
-                              const email = m.from_email;
-                              if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
-                            }}
-                          >
-                            {m.from_email}
-                          </button>
-                        </>
-                      ) : !m.from_name ? (
-                        '—'
+              </h2>
+              <ul className="divide-y divide-border-default">
+                {messages.map((m) => (
+                  <li key={m.id} className="flex items-start gap-3 px-3.5 py-2.5 hover:bg-bg-subtle">
+                    <Mail size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-text-secondary" />
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="type-small min-w-0 truncate text-text-primary">
+                        {m.from_name ? <span className="font-semibold">{m.from_name}</span> : null}
+                        {m.from_email ? (
+                          <>
+                            {m.from_name ? ' ' : null}
+                            <button
+                              type="button"
+                              className="text-text-secondary hover:text-brand-primary-600 hover:underline"
+                              onClick={() => {
+                                const email = m.from_email;
+                                if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
+                              }}
+                            >
+                              {m.from_email}
+                            </button>
+                          </>
+                        ) : !m.from_name ? (
+                          '—'
+                        ) : null}
+                        {' · '}
+                        <Link
+                          to={`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`}
+                          className="text-text-primary hover:underline"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            navigate(`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`);
+                          }}
+                        >
+                          {m.subject || t('search.noSubject')}
+                        </Link>
+                      </span>
+                      {m.preview ? (
+                        <span className="type-caption line-clamp-2 font-normal text-text-secondary">{m.preview}</span>
                       ) : null}
-                    </span>
-                    {m.preview ? (
-                      <span className="type-caption line-clamp-2 text-text-tertiary">{m.preview}</span>
+                    </div>
+                    {m.received_at ? (
+                      <span className="type-caption shrink-0 font-normal text-text-secondary">
+                        {formatMailDate(m.received_at)}
+                      </span>
                     ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </div>
       </div>

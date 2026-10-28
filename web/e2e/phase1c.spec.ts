@@ -137,7 +137,7 @@ test.describe('W2 shell & folders (1c)', () => {
     await shot(page, 'phase1c-W2b-chip-menu-one-person');
     await menu.getByRole('menuitem', { name: 'Môj profil' }).click();
     await expect(page).toHaveURL(/\/settings\/identity\/profile$/);
-    await expect(page.getByRole('heading', { name: 'Nastavenia › Môj profil' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Môj profil' })).toBeVisible();
     await shot(page, 'phase1c-W12-profile-placeholder');
     await page.getByRole('button', { name: 'Odhlásiť' }).click();
     await expect(page).toHaveURL(/\/login$/);

@@ -555,10 +555,10 @@ function ScreenW2Body({
               </div>
             </div>
           ) : null}
-          <label className="relative block">
+          <label className={mobile ? 'hidden' : 'relative block'}>
             <Search
-              size={14}
-              className="pointer-events-none absolute left-2.5 top-2.5 text-text-tertiary"
+              size={16}
+              className="pointer-events-none absolute left-3 top-2.5 text-text-secondary"
               aria-hidden="true"
             />
             <input
@@ -584,7 +584,7 @@ function ScreenW2Body({
                 }
               }}
               placeholder={t('mail.searchPlaceholder')}
-              className="type-small h-9 w-full rounded-sm border border-border-default bg-bg-canvas pl-8 pr-3 text-text-primary placeholder:text-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-brand-primary-500"
+              className="type-body h-9 w-full rounded-md border border-transparent bg-bg-muted pl-9 pr-3 text-text-primary placeholder:text-text-tertiary focus:border-brand-primary-500 focus:bg-bg-canvas focus-visible:outline-none"
             />
           </label>
           {classic ? null : (
@@ -597,10 +597,11 @@ function ScreenW2Body({
                     setFilter(f);
                     setPage(1);
                   }}
-                  className={`type-caption rounded-full px-2.5 py-1 ${
+                  aria-pressed={filter === f}
+                  className={`type-small h-[26px] rounded-full border px-2 ${
                     filter === f
-                      ? 'bg-brand-primary-600 text-text-on-primary'
-                      : 'bg-bg-muted text-text-secondary hover:bg-bg-subtle'
+                      ? 'border-brand-primary-600 bg-brand-primary-600 text-text-on-primary'
+                      : 'border-border-default bg-bg-canvas text-text-primary hover:bg-bg-subtle'
                   }`}
                 >
                   {t(`mail.filter.${f}`)}

@@ -177,7 +177,7 @@ describe('W2b PersonChip', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Pracuje: Jana Nováková' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Môj profil' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/settings/identity/profile'));
-    expect(await screen.findByRole('heading', { name: 'Nastavenia › Môj profil' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Môj profil' })).toBeInTheDocument();
     expect(await screen.findByDisplayValue('Nováková')).toBeInTheDocument();
   });
 
