@@ -9,6 +9,7 @@ from email.message import EmailMessage
 from email.utils import format_datetime, make_msgid
 from typing import Any, Literal
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,10 +18,20 @@ from app.core.audit import audit
 from app.core.config import Settings
 from app.mail import storage
 from app.mail.compose_models import ComposeAttachment, ComposeDraft, Identity
+from app.mail.imap_append import append_to_sent_async, delete_draft_uid_async, save_draft_replace_async
 from app.mail.models import Mailbox, Message
 from app.mail.sanitize import sanitize_html
 from app.mail.signature import html_to_text, render_signature
-from app.mail.smtp import SmtpError, send_message
+from app.mail.smtp import SmtpError, send_message, smtp_endpoint
+from app.mail.sync import (
+    SyncAuthError,
+    SyncUnavailable,
+    credentials_for,
+    mark_auth_failed,
+    server_of,
+)
+
+log = structlog.get_logger(__name__)
 
 Mode = Literal["new", "reply", "reply_all", "forward"]
 Priority = Literal["low", "normal", "high"]
@@ -245,7 +256,44 @@ async def cancel_send(
     return draft
 
 
+async def sync_draft_to_imap(db: AsyncSession, settings: Settings, draft: ComposeDraft) -> None:
+    """APPEND the draft to IMAP Koncepty / \\Drafts and drop the previous UID (CLAUDE.md §5).
+
+    Failures are logged only — local autosave must still succeed when IMAP is down.
+    """
+    if draft.status not in {"editing", "failed", "scheduled"}:
+        return
+    mailbox = await db.get(Mailbox, draft.mailbox_id)
+    if mailbox is None:
+        return
+    identity = await db.get(Identity, draft.identity_id) if draft.identity_id else None
+    if identity is None:
+        return
+    creds = await credentials_for(db, mailbox, settings)
+    if creds is None:
+        return
+    if not settings.sync_host_allowed(mailbox.imap_host):
+        return
+    try:
+        mime = await build_mime(db, settings, draft, identity)
+        new_uid = await save_draft_replace_async(
+            server_of(mailbox, settings),
+            creds,
+            mime,
+            previous_uid=draft.imap_draft_uid,
+        )
+        if new_uid is not None:
+            draft.imap_draft_uid = new_uid
+            await db.flush()
+    except SyncAuthError:
+        await mark_auth_failed(db, mailbox, now=datetime.now(UTC))
+        log.warning("compose.draft_imap_auth_failed", draft_id=str(draft.id))
+    except SyncUnavailable as exc:
+        log.warning("compose.draft_imap_unavailable", draft_id=str(draft.id), error=str(exc))
+
+
 async def execute_send(db: AsyncSession, settings: Settings, draft_id: uuid.UUID) -> str:
+    """SMTP with mailbox AUTH, then APPEND to \\Sent. APPEND failure never re-sends (GitHub #20)."""
     draft = await db.get(ComposeDraft, draft_id)
     if draft is None:
         return "missing"
@@ -266,22 +314,65 @@ async def execute_send(db: AsyncSession, settings: Settings, draft_id: uuid.UUID
         draft.send_error = "identity_missing"
         await db.commit()
         return "failed"
+
+    creds = await credentials_for(db, mailbox, settings)
+    if creds is None:
+        draft.status = "failed"
+        draft.send_error = "no_credentials"
+        await db.commit()
+        return "failed"
+
+    host, port, security = smtp_endpoint(mailbox, settings)
+    mime: EmailMessage | None = None
     try:
         mime = await build_mime(db, settings, draft, identity)
-        await send_message(settings, mime)
-        draft.status = "sent"
-        draft.undo_until = None
-        audit(
-            db,
-            action="mail.compose_sent",
-            account_id=draft.account_id,
-            person_id=draft.person_id,
-            details={"draft_id": str(draft.id)},
+        await send_message(
+            settings,
+            mime,
+            host=host,
+            port=port,
+            security=security,
+            username=creds.email,
+            password=creds.password,
+            mail_from=identity.email,
         )
-        await db.commit()
-        return "sent"
     except SmtpError as exc:
         draft.status = "failed"
         draft.send_error = exc.reason[:200]
+        if exc.reason == "auth_failed" or exc.reason.startswith("auth_failed"):
+            await mark_auth_failed(db, mailbox, now=datetime.now(UTC))
         await db.commit()
         return "failed"
+
+    # SMTP accepted the message — commit sent before IMAP APPEND so a store failure cannot resend.
+    draft.status = "sent"
+    draft.undo_until = None
+    draft.send_error = None
+    audit(
+        db,
+        action="mail.compose_sent",
+        account_id=draft.account_id,
+        person_id=draft.person_id,
+        details={"draft_id": str(draft.id), "smtp_host": host},
+    )
+    await db.commit()
+
+    if draft.save_sent and mime is not None:
+        try:
+            await append_to_sent_async(server_of(mailbox, settings), creds, mime)
+        except SyncAuthError:
+            await mark_auth_failed(db, mailbox, now=datetime.now(UTC))
+            await db.commit()
+            log.warning("compose.sent_append_auth_failed", draft_id=str(draft.id))
+        except SyncUnavailable as exc:
+            log.warning("compose.sent_append_failed", draft_id=str(draft.id), error=str(exc))
+
+    if draft.imap_draft_uid is not None:
+        try:
+            await delete_draft_uid_async(server_of(mailbox, settings), creds, draft.imap_draft_uid)
+            draft.imap_draft_uid = None
+            await db.commit()
+        except (SyncAuthError, SyncUnavailable) as exc:
+            log.warning("compose.draft_cleanup_failed", draft_id=str(draft.id), error=type(exc).__name__)
+
+    return "sent"

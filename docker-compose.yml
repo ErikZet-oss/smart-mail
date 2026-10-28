@@ -83,14 +83,20 @@ services:
       start_period: 300s
 
   imap-test:
-    # TEST mail server (Dovecot: IMAP + SPECIAL-USE, IDLE, CONDSTORE, QUOTA, ManageSieve, LMTP) with fictional
-    # mailboxes only (infra/imap-test/users). Seed: `make imap-seed`. Never a replacement for the customer's server.
-    # LMTP :1024 → vacation auto-reply integration tests (Phase 1h-e).
+    # TEST mail server (Dovecot: IMAP + SPECIAL-USE, IDLE, CONDSTORE, QUOTA, ManageSieve, LMTP, SMTP submission)
+    # with fictional mailboxes only (infra/imap-test/users). Seed: `make imap-seed`.
+    # LMTP :1024 → vacation auto-reply (1h-e). Submission :1587 → SMTP AUTH required (issue #20).
     build: ./infra/imap-test
     volumes: [imap-test-data:/srv/mail]
-    ports: ["127.0.0.1:1143:143", "127.0.0.1:4190:4190", "127.0.0.1:1024:24"]
+    ports:
+      [
+        "127.0.0.1:1143:143",
+        "127.0.0.1:4190:4190",
+        "127.0.0.1:1024:24",
+        "127.0.0.1:1587:587",
+      ]
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/143"]
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/143 && echo > /dev/tcp/127.0.0.1/587"]
       interval: 5s
       timeout: 3s
       retries: 20

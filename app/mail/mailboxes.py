@@ -26,6 +26,10 @@ async def ensure_own_mailbox(db: AsyncSession, account: Account, settings: Setti
             imap_host=settings.imap_login_host,
             imap_port=settings.imap_login_port,
             imap_security=settings.imap_login_security,
+            # Outbound SMTP follows the same login host defaults until Settings › Schránky overrides (#20).
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
+            smtp_security=settings.smtp_security,
             credential_account_id=account.id,
             sync_state="new",
             ai_enabled=False,
@@ -37,6 +41,11 @@ async def ensure_own_mailbox(db: AsyncSession, account: Account, settings: Setti
         mailbox.credential_account_id = account.id
         if mailbox.sync_state == "auth_failed":
             mailbox.sync_state, mailbox.sync_error = "new", None  # fresh password from this login
+        # Fill SMTP from env when an older row has none (pilot mailboxes created before #20).
+        if not mailbox.smtp_host:
+            mailbox.smtp_host = settings.smtp_host
+            mailbox.smtp_port = settings.smtp_port
+            mailbox.smtp_security = settings.smtp_security
     access = (
         await db.execute(
             select(MailboxAccess).where(MailboxAccess.account_id == account.id, MailboxAccess.mailbox_id == mailbox.id)
