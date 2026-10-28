@@ -3,7 +3,14 @@ import type { ListPrefs } from '../prefs/prefsApi';
 
 export type SpecialUse = 'inbox' | 'drafts' | 'sent' | 'junk' | 'trash';
 
-export type MailboxSummary = { id: string; email: string; unread: number; sync_state: string };
+export type MailboxSummary = {
+  id: string;
+  email: string;
+  unread: number;
+  sync_state: string;
+  ai_enabled?: boolean;
+  ai_available?: boolean;
+};
 
 export type Folder = {
   id: string;
@@ -60,7 +67,8 @@ export function folderRef(folder: Folder): string {
   return folder.special_use ?? folder.id;
 }
 
-export function findFolder(folders: Folder[], ref: string): Folder | undefined {
+export function findFolder(folders: Folder[] | null | undefined, ref: string): Folder | undefined {
+  if (!folders?.length) return undefined;
   return folders.find((f) => f.special_use === ref) ?? folders.find((f) => f.id === ref);
 }
 

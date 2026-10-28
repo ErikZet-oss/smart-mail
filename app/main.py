@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -22,26 +23,40 @@ from app.core.logging import configure_logging
 
 log = structlog.get_logger(__name__)
 
-CHECK_TIMEOUT_S = 2.0
+# Short, dedicated budget so /readyz never waits on a slow app request (pilot #18 B4).
+CHECK_TIMEOUT_S = 1.5
+READYZ_BUDGET_S = 2.0
 
 
 async def _check_db(engine: AsyncEngine) -> bool:
     try:
-        async with asyncio.timeout(CHECK_TIMEOUT_S), engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
+        async with asyncio.timeout(CHECK_TIMEOUT_S):
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
         return True
     except Exception as exc:  # report, never crash the probe
         log.warning("readyz.db_failed", error=type(exc).__name__)
         return False
 
 
-async def _check_redis(redis: Redis) -> bool:
+async def _check_redis(redis_url: str) -> bool:
+    """Fresh short-timeout client — independent of the app Redis pool."""
+    probe: Redis | None = None
     try:
+        probe = Redis.from_url(
+            redis_url,
+            socket_connect_timeout=CHECK_TIMEOUT_S,
+            socket_timeout=CHECK_TIMEOUT_S,
+        )
         async with asyncio.timeout(CHECK_TIMEOUT_S):
-            return bool(await redis.ping())
+            return bool(await probe.ping())
     except Exception as exc:
         log.warning("readyz.redis_failed", error=type(exc).__name__)
         return False
+    finally:
+        if probe is not None:
+            with contextlib.suppress(Exception):
+                await probe.aclose()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -50,9 +65,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+        # pool_timeout keeps /readyz from waiting long when the pool is busy (pilot #18 B4).
+        app.state.engine = create_async_engine(settings.database_url, pool_pre_ping=True, pool_timeout=2)
         app.state.sessionmaker = async_sessionmaker(app.state.engine, expire_on_commit=False)
-        app.state.redis = Redis.from_url(settings.redis_url)
+        app.state.redis = Redis.from_url(
+            settings.redis_url,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
         log.info("app.started", version=__version__, env=settings.app_env)
         try:
             yield
@@ -97,8 +117,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/readyz", tags=["system"])
     async def readyz(response: Response) -> dict[str, Any]:
-        """Readiness: database and Redis reachable. Money and the AI provider are NOT required (CLAUDE.md §1)."""
-        db_ok, redis_ok = await asyncio.gather(_check_db(app.state.engine), _check_redis(app.state.redis))
+        """Readiness: database and Redis reachable. Money and the AI provider are NOT required (CLAUDE.md §1).
+
+        Own short budget — must not wait on other in-flight requests (pilot #18 B4).
+        """
+        try:
+            async with asyncio.timeout(READYZ_BUDGET_S):
+                db_ok, redis_ok = await asyncio.gather(
+                    _check_db(app.state.engine),
+                    _check_redis(settings.redis_url),
+                )
+        except TimeoutError:
+            log.warning("readyz.budget_exceeded")
+            db_ok, redis_ok = False, False
         ready = db_ok and redis_ok
         if not ready:
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE

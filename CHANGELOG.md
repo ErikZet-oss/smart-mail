@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #18 (before 2c): ManageSieve, shell errors, AI gate, readyz
+
+- **B1**: ManageSieve via `asyncio.to_thread` (connect 5 s, overall 10 s); Redis cache „Sieve unavailable“ 10 min;
+  W12-05/06 Slovak banner, no 500. Black-hole Sieve must not stall `/readyz` or the message list.
+- **B2**: AppShell loading + 10 s timeout → W16-style error with „Skúsiť znova“; React error boundary around the shell.
+- **B3**: Hide AI TRIEDENIE when `ai_enabled=false` or no Anthropic key; `/ai/views/*` returns empty, never 500.
+- **B4**: `/readyz` own 2 s budget + fresh Redis probe; docker healthcheck `curl --max-time 3`.
+
 ## [Unreleased] — Pilot #20 (blocker): SMTP AUTH + Sent APPEND + draft IMAP
 
 - Outbound SMTP uses mailbox credentials (`credentials_for`, Fernet D27) and `mailbox.smtp_*` (else `SMTP_*` env);
@@ -11,6 +19,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - Compose autosave mirrors the draft to IMAP `\Drafts` / Koncepty (APPEND new, delete previous UID).
 - `imap-test` exposes AUTH-required SMTP on :587 (bridge → LMTP); CI test: no auth fails, with auth succeeds + Sent.
 - W4 shows a clear Slovak error on `failed` instead of staying on „Odosiela sa…“.
+
 
 ## [Unreleased] — Phase 2b: classify + AI views (W2f)
 

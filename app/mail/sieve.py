@@ -8,6 +8,7 @@ What we cannot edit stays as raw Sieve and is shown read-only in the UI.
 from __future__ import annotations
 
 import re
+import socket
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -996,6 +997,11 @@ def connect_sieve(
     username: str,
     password: str,
 ) -> ManageSieveClient:
+    """Connect to ManageSieve. Prefer STARTTLS; fall back to cleartext once.
+
+    Callers that must not block the event loop use ``app.mail.sieve_async`` (TCP
+    connect timeout 5 s, overall 10 s, Redis unavailable cache).
+    """
     host, port = resolve_sieve_endpoint(mailbox, settings)
     if not mailbox.sieve_enabled:
         raise SieveError("sieve_disabled")
@@ -1004,12 +1010,29 @@ def connect_sieve(
     client = ManageSieveClient(host, port)
     try:
         ok = client.connect(username, password, starttls=True, authmech="LOGIN")
-    except Exception:
+    except SieveError:
+        raise
+    except Exception as exc:
+        # Distinguishes black-hole / refused TCP from auth failure (pilot #18).
+        if isinstance(exc, (TimeoutError, OSError, socket.timeout)):
+            raise SieveError("sieve_unavailable", str(exc) or type(exc).__name__) from exc
+        # sievelib.Error on connection failure
+        if type(exc).__name__ == "Error" and "Connection to server failed" in str(exc):
+            raise SieveError("sieve_unavailable", str(exc)) from exc
         ok = False
     if not ok:
         client = ManageSieveClient(host, port)
-        if not client.connect(username, password, starttls=False, authmech="LOGIN"):
-            raise SieveError("sieve_auth_failed")
+        try:
+            if not client.connect(username, password, starttls=False, authmech="LOGIN"):
+                raise SieveError("sieve_auth_failed")
+        except SieveError:
+            raise
+        except Exception as exc:
+            if isinstance(exc, (TimeoutError, OSError, socket.timeout)):
+                raise SieveError("sieve_unavailable", str(exc) or type(exc).__name__) from exc
+            if type(exc).__name__ == "Error" and "Connection to server failed" in str(exc):
+                raise SieveError("sieve_unavailable", str(exc)) from exc
+            raise SieveError("sieve_auth_failed") from exc
     return client
 
 

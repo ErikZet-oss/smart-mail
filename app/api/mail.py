@@ -51,6 +51,8 @@ class MailboxOut(BaseModel):
     email: str
     unread: int
     sync_state: str
+    ai_enabled: bool = False
+    ai_available: bool = False
 
 
 class FolderOut(BaseModel):
@@ -105,16 +107,28 @@ async def _inbox_unread(db: DB, mailbox_id: uuid.UUID) -> int:
     return int(value or 0)
 
 
-async def _mailbox_out(db: DB, mailbox: Mailbox) -> MailboxOut:
+def _ai_provider_configured(settings: Settings) -> bool:
+    """True when classify can run (Anthropic key present — Bedrock remains a stub)."""
+    if settings.llm_provider == "bedrock":
+        return False
+    key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
+    return bool(key and key.strip())
+
+
+async def _mailbox_out(db: DB, mailbox: Mailbox, settings: Settings | None = None) -> MailboxOut:
+    ai_on = bool(mailbox.ai_enabled and mailbox.ai_enabled_at is not None)
+    available = _ai_provider_configured(settings) if settings is not None else False
     return MailboxOut(
         id=str(mailbox.id),
         email=mailbox.email,
         unread=await _inbox_unread(db, mailbox.id),
         sync_state=mailbox.sync_state,
+        ai_enabled=ai_on,
+        ai_available=available and ai_on,
     )
 
 
-async def folders_out(db: DB, mailbox: Mailbox) -> FoldersOut:
+async def folders_out(db: DB, mailbox: Mailbox, settings: Settings | None = None) -> FoldersOut:
     metas = list((await db.execute(select(FolderMeta).where(FolderMeta.mailbox_id == mailbox.id))).scalars())
     by_name = {m.name: m for m in metas}
     # the column shows subscribed folders (Roundcube) and the parents they need to hang under
@@ -131,7 +145,7 @@ async def folders_out(db: DB, mailbox: Mailbox) -> FoldersOut:
     ordered = order_folders([(n, by_name[n].delimiter) for n in shown], special)
     quota = quota_view(mailbox.quota_used_kb, mailbox.quota_limit_kb)
     return FoldersOut(
-        mailbox=await _mailbox_out(db, mailbox),
+        mailbox=await _mailbox_out(db, mailbox, settings),
         folders=[
             FolderOut(
                 id=str(by_name[f.name].id),
@@ -179,8 +193,8 @@ async def _sync(request: Request, db: DB, mailbox: Mailbox, settings: Settings) 
 
 
 @router.get("/mailboxes")
-async def mailboxes(ctx: Auth, db: DB) -> list[MailboxOut]:
-    return [await _mailbox_out(db, m) for m in await accessible_mailboxes(db, ctx.account.id)]
+async def mailboxes(ctx: Auth, db: DB, settings: SettingsDep) -> list[MailboxOut]:
+    return [await _mailbox_out(db, m, settings) for m in await accessible_mailboxes(db, ctx.account.id)]
 
 
 @router.get("/mailboxes/{ref}/folders")
@@ -188,14 +202,14 @@ async def folders(ref: str, request: Request, ctx: Auth, db: DB, settings: Setti
     mailbox = await _mailbox(db, ctx, ref)
     if mailbox.sync_state == "new" and settings.mail_sync_enabled:
         await _sync(request, db, mailbox, settings)  # first open after the first login: fill the column now
-    return await folders_out(db, mailbox)
+    return await folders_out(db, mailbox, settings)
 
 
 @router.post("/mailboxes/{ref}/refresh")
 async def refresh(ref: str, request: Request, ctx: Auth, db: DB, settings: SettingsDep) -> FoldersOut:
     mailbox = await _mailbox(db, ctx, ref)
     await _sync(request, db, mailbox, settings)
-    return await folders_out(db, mailbox)
+    return await folders_out(db, mailbox, settings)
 
 
 async def _act(
@@ -228,7 +242,7 @@ async def _act(
     audit(db, audit_action, object_type="mailbox", object_id=str(mailbox.id), ip=client_ip(request), details=details)
     await db.commit()
     await _sync(request, db, mailbox, settings)
-    return await folders_out(db, mailbox)
+    return await folders_out(db, mailbox, settings)
 
 
 @router.post("/mailboxes/{ref}/folders/{folder_id}/mark-read")
@@ -321,7 +335,7 @@ async def rename_folder(
         raise fail(409, "special_folder")
     target = rename_target(meta.name, meta.delimiter, _segment(body.name, meta.delimiter))
     if target == meta.name:
-        return await folders_out(db, mailbox)
+        return await folders_out(db, mailbox, settings)
     await _ensure_free(db, mailbox, target)
     return await _act(
         request, db, settings, mailbox, FolderAction.rename, meta.name, target=target,

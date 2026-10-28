@@ -42,6 +42,8 @@ export const fetchFilters = (mailbox = 'default') =>
     has_backup?: boolean;
     help?: string;
     mailbox_scope?: string;
+    sieve_unavailable?: boolean;
+    sieve_message?: string;
   }>('GET', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/filters`);
 export const saveFilters = (mailbox: string, rules: unknown[]) =>
   api('PUT', `/api/settings/mailboxes/${encodeURIComponent(mailbox)}/filters`, { rules });

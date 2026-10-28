@@ -56,6 +56,7 @@ async def send_message(
         assert_send_allowed(settings, message, host=host)
     except SendGuardError as exc:
         log.warning("smtp.guard_blocked", code=exc.code)
+        # Keep blocked addresses in the reason so the compose UI can show them (pilot #18 B7).
         reason = f"{exc.code}:{exc.detail}" if exc.detail else exc.code
         raise SmtpError(reason) from exc
     use_tls = security == "ssl"

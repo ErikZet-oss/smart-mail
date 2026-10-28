@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Loader2, RefreshCw, TriangleAlert } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,11 +11,17 @@ import { useIdleAsk } from '../../features/persons/useIdleAsk';
 import { CommandPaletteHost } from '../../features/search/CommandPalette';
 import { SystemHost } from '../../features/system/SystemHost';
 import { useGlobalShortcuts } from '../../features/system/useGlobalShortcuts';
+import { ApiError } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { Banner } from '../Banner';
+import { Button } from '../Button';
+import { StatusPage } from '../StatusPage';
 import { BottomNav, type BottomSection } from './BottomNav';
 import { DropZone } from './DropZone';
 import { Rail, type RailSection } from './Rail';
+
+/** How long a hung `/api/auth/me` may leave only a loading shell (pilot #18 B2). */
+export const ME_LOAD_TIMEOUT_MS = 8_000;
 
 function useOnline(): boolean {
   return useSyncExternalStore(
@@ -69,7 +76,66 @@ export function AppShell({ section, mailbox = 'default', unread = 0, children, h
     }
   }, [navigate, queryClient]);
 
-  if (!me.data) return <main className="h-full bg-bg-subtle" aria-busy="true" />;
+  const [timedOut, setTimedOut] = useState(false);
+  // Bump only on retry — never on isFetching (that reset the timer in CI, pilot #18 B2).
+  const [waitGen, setWaitGen] = useState(0);
+  // Absolute deadline set in an effect (not during render) so StrictMode effect re-runs
+  // keep the same end time instead of restarting a full ME_LOAD_TIMEOUT_MS.
+  const deadlineRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (me.data || me.isError) {
+      deadlineRef.current = null;
+      return;
+    }
+    if (deadlineRef.current === null) {
+      deadlineRef.current = Date.now() + ME_LOAD_TIMEOUT_MS;
+    }
+    const remaining = Math.max(0, deadlineRef.current - Date.now());
+    const id = window.setTimeout(() => setTimedOut(true), remaining);
+    return () => window.clearTimeout(id);
+  }, [me.data, me.isError, waitGen]);
+
+  const showError = me.isError || (timedOut && !me.data);
+  const retryMe = () => {
+    deadlineRef.current = Date.now() + ME_LOAD_TIMEOUT_MS;
+    setTimedOut(false);
+    setWaitGen((g) => g + 1);
+    void me.refetch();
+  };
+
+  if (showError) {
+    const ref =
+      me.error instanceof ApiError && typeof me.error.detail.ref === 'string' ? String(me.error.detail.ref) : '';
+    return (
+      <StatusPage
+        tone="danger"
+        data-testid="shell-load-error"
+        icon={<TriangleAlert size={44} strokeWidth={1.5} />}
+        code={ref ? t('system.error.code', { ref }) : t('system.error.codeNoRef')}
+        title={t('system.loadFailed.title')}
+        text={t('system.loadFailed.text')}
+        actions={
+          <Button icon={<RefreshCw size={16} />} onClick={retryMe}>
+            {t('system.retry')}
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (!me.data) {
+    return (
+      <main
+        className="flex h-full flex-col items-center justify-center gap-3 bg-bg-subtle text-text-secondary"
+        aria-busy="true"
+        data-testid="shell-loading"
+      >
+        <Loader2 size={28} className="animate-spin text-brand-primary-600" aria-hidden="true" />
+        <p className="type-body">{t('system.loading.title')}</p>
+        <p className="type-small text-text-tertiary">{t('system.loading.text')}</p>
+      </main>
+    );
+  }
 
   if (mobile) {
     return (

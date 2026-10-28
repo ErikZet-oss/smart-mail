@@ -50,6 +50,16 @@ def recipient_allowed(settings: Settings, email: str) -> bool:
     return address in _parse_allowlist(settings.mail_send_test_allowlist)
 
 
+def test_allowlist_addresses(settings: Settings) -> list[str]:
+    """Sorted addresses from MAIL_SEND_TEST_ALLOWLIST (for API/UI copy when APP_ENV=test)."""
+    return sorted(_parse_allowlist(settings.mail_send_test_allowlist))
+
+
+def blocked_recipients(settings: Settings, emails: list[str]) -> list[str]:
+    """Addresses that would be rejected by the outbound send guard (pilot #18 B7)."""
+    return sorted({addr.strip().lower() for addr in emails if addr and not recipient_allowed(settings, addr)})
+
+
 def collect_recipients(message: EmailMessage) -> list[str]:
     headers = []
     for key in ("To", "Cc", "Bcc"):
@@ -62,6 +72,6 @@ def assert_send_allowed(settings: Settings, message: EmailMessage, *, host: str)
     """Raise SendGuardError before any SMTP connection when the send would leave the sandbox."""
     if not smtp_host_allowed(settings, host):
         raise SendGuardError("smtp_host_not_allowed", detail=host.lower())
-    blocked = [addr for addr in collect_recipients(message) if not recipient_allowed(settings, addr)]
+    blocked = blocked_recipients(settings, collect_recipients(message))
     if blocked:
-        raise SendGuardError("recipient_not_allowed", detail=",".join(sorted({a.lower() for a in blocked})))
+        raise SendGuardError("recipient_not_allowed", detail=",".join(blocked))

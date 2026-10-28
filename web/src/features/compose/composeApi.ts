@@ -36,6 +36,13 @@ export type ComposeDraft = {
   scheduled_at: string | null;
   undo_until: string | null;
   send_error: string | null;
+  /** Structured send failure (pilot #18 B7) — prefer over parsing send_error. */
+  send_error_meta?: {
+    code: string;
+    blocked?: string[];
+    allowlist?: string[];
+    show_allowlist?: boolean;
+  } | null;
   attachments: ComposeAttachment[];
   checks: ComposeCheck[];
   updated_at: string;

@@ -24,18 +24,19 @@ from app.mail.sieve import (
     ParsedScript,
     SieveError,
     VacationSettings,
-    active_script_name,
     apply_live_raw_to_readonly,
     apply_vacation_to_script,
     compile_script,
-    connect_sieve,
     dicts_to_filters,
     filters_to_dicts,
-    get_script,
     parse_roundcube_script,
-    put_script,
-    sieve_supports_variables,
     validate_editable_rules,
+)
+from app.mail.sieve_async import (
+    SIEVE_UNAVAILABLE_MESSAGE_SK,
+    load_active_script,
+    read_then_write_script,
+    save_active_script,
 )
 from app.mail.signature import default_branch_template, render_signature
 from app.settings.schema import SECTION_PATHS, schema_document
@@ -482,26 +483,40 @@ def _vacation_payload(vac: VacationSettings) -> dict[str, Any]:
     }
 
 
+def _sieve_unavailable_payload(**extra: Any) -> dict[str, Any]:
+    return {
+        "sieve_unavailable": True,
+        "sieve_message": SIEVE_UNAVAILABLE_MESSAGE_SK,
+        **extra,
+    }
+
+
 @router.get("/mailboxes/{mailbox_ref}/filters")
 async def get_filters(
-    mailbox_ref: str, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
+    mailbox_ref: str, request: Request, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
 ) -> dict[str, Any]:
     mailbox = await _mailbox(db, ctx, mailbox_ref)
     script_name = DEFAULT_SCRIPT_NAME
+    script = ""
+    unavailable = False
+    user, password = await _mailbox_creds(db, settings, ctx, mailbox)
     try:
-        user, password = await _mailbox_creds(db, settings, ctx, mailbox)
-        client = connect_sieve(settings, mailbox, username=user, password=password)
-        script_name = active_script_name(client)
-        script = get_script(client, script_name)
-        client.logout()
+        script_name, script, _supports = await load_active_script(
+            redis=request.app.state.redis,
+            settings=settings,
+            mailbox=mailbox,
+            username=user,
+            password=password,
+        )
     except SieveError as exc:
         if exc.code in {"sieve_auth_failed", "sieve_host_not_allowed", "sieve_disabled"}:
             raise fail(409, exc.code) from exc
-        script = ""
+        # sieve_unavailable (and unexpected ManageSieve failures) → soft empty + SK banner
+        unavailable = True
     parsed = parse_roundcube_script(script, script_name=script_name)
     rules = [r for r in parsed.rules if r.kind != "vacation"]
     backup = await _latest_backup(db, mailbox.id)
-    return {
+    payload: dict[str, Any] = {
         "rules": filters_to_dicts(rules),
         "script_name": script_name,
         "mailbox_scope": mailbox.kind,
@@ -511,6 +526,9 @@ async def get_filters(
             "Filtre nie sú predvolené – každá schránka má vlastné."
         ),
     }
+    if unavailable:
+        payload.update(_sieve_unavailable_payload())
+    return payload
 
 
 @router.put("/mailboxes/{mailbox_ref}/filters")
@@ -527,37 +545,58 @@ async def put_filters(
         validate_editable_rules(rules)
     except FilterValidationError as exc:
         raise fail(422, exc.code, message=exc.message) from exc
-    try:
-        user, password = await _mailbox_creds(db, settings, ctx, mailbox)
-        client = connect_sieve(settings, mailbox, username=user, password=password)
-        script_name = active_script_name(client)
-        current = get_script(client, script_name)
-        await _backup_script(
-            db, mailbox=mailbox, script_name=script_name, content=current, reason="filters_save", person_id=person.id
-        )
+    user, password = await _mailbox_creds(db, settings, ctx, mailbox)
+    new_script_holder: dict[str, str] = {}
+    compile_error: list[FilterValidationError] = []
+
+    def build(script_name: str, current: str, supports_variables: bool) -> str:
         parsed = parse_roundcube_script(current, script_name=script_name)
         live_filters = [r for r in parsed.rules if r.kind != "vacation"]
-        # Readonly rules: raw from live script by id/order — ignore client raw
-        rules = apply_live_raw_to_readonly(rules, live_filters)
+        merged = apply_live_raw_to_readonly(rules, live_filters)
         try:
-            new_script = compile_script(
+            compiled = compile_script(
                 ParsedScript(
                     preamble=parsed.preamble,
-                    rules=rules,
+                    rules=merged,
                     vacation=parsed.vacation,
                     script_name=script_name,
                 ),
                 vacation=parsed.vacation,
-                rules=rules,
+                rules=merged,
                 include_vacation=parsed.vacation.enabled or any(r.kind == "vacation" for r in parsed.rules),
-                supports_variables=sieve_supports_variables(client),
+                supports_variables=supports_variables,
             )
         except FilterValidationError as exc:
-            raise fail(422, exc.code, message=exc.message) from exc
-        put_script(client, script_name, new_script, activate=True)
-        client.logout()
+            compile_error.append(exc)
+            raise
+        new_script_holder["content"] = compiled
+        return compiled
+
+    try:
+        script_name, current = await read_then_write_script(
+            redis=request.app.state.redis,
+            settings=settings,
+            mailbox=mailbox,
+            username=user,
+            password=password,
+            build=build,
+        )
+    except FilterValidationError as exc:
+        raise fail(422, exc.code, message=exc.message) from exc
     except SieveError as exc:
-        raise fail(409, exc.code, detail=exc.detail) from exc
+        raise fail(
+            409,
+            exc.code,
+            detail=exc.detail,
+            message=SIEVE_UNAVAILABLE_MESSAGE_SK if exc.code == "sieve_unavailable" else None,
+        ) from exc
+    if compile_error:
+        err = compile_error[0]
+        raise fail(422, err.code, message=err.message)
+    await _backup_script(
+        db, mailbox=mailbox, script_name=script_name, content=current, reason="filters_save", person_id=person.id
+    )
+    new_script = new_script_holder.get("content") or current
     audit(
         db,
         "settings.filters_saved",
@@ -579,16 +618,19 @@ async def put_filters(
 
 @router.get("/mailboxes/{mailbox_ref}/vacation")
 async def get_vacation(
-    mailbox_ref: str, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
+    mailbox_ref: str, request: Request, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
 ) -> dict[str, Any]:
     mailbox = await _mailbox(db, ctx, mailbox_ref)
     stored = await _section(db, person.id, f"vacation.{mailbox.id}")
+    user, password = await _mailbox_creds(db, settings, ctx, mailbox)
     try:
-        user, password = await _mailbox_creds(db, settings, ctx, mailbox)
-        client = connect_sieve(settings, mailbox, username=user, password=password)
-        script_name = active_script_name(client)
-        script = get_script(client, script_name)
-        client.logout()
+        script_name, script, _supports = await load_active_script(
+            redis=request.app.state.redis,
+            settings=settings,
+            mailbox=mailbox,
+            username=user,
+            password=password,
+        )
         parsed = parse_roundcube_script(script, script_name=script_name)
         data = _vacation_payload(parsed.vacation)
         if stored:
@@ -608,6 +650,7 @@ async def get_vacation(
         data = stored or _vacation_payload(VacationSettings())
         data["mailbox_scope_help"] = "Platí pre celú schránku"
         data["last_changed"] = await _vacation_last_changed(db, mailbox.id)
+        data.update(_sieve_unavailable_payload())
         return data
 
 
@@ -629,25 +672,36 @@ async def put_vacation(
         start=body.start,
         end=body.end,
     )
-    try:
-        user, password = await _mailbox_creds(db, settings, ctx, mailbox)
-        client = connect_sieve(settings, mailbox, username=user, password=password)
-        script_name = active_script_name(client)
-        current = get_script(client, script_name)
-        await _backup_script(
-            db, mailbox=mailbox, script_name=script_name, content=current, reason="vacation_save", person_id=person.id
-        )
+    user, password = await _mailbox_creds(db, settings, ctx, mailbox)
+
+    def build(script_name: str, current: str, supports_variables: bool) -> str:
         # Same active script — never activate another set for vacation
-        new_script = apply_vacation_to_script(
+        return apply_vacation_to_script(
             current,
             vac,
             script_name=script_name,
-            supports_variables=sieve_supports_variables(client),
+            supports_variables=supports_variables,
         )
-        put_script(client, script_name, new_script, activate=True)
-        client.logout()
+
+    try:
+        script_name, current = await read_then_write_script(
+            redis=request.app.state.redis,
+            settings=settings,
+            mailbox=mailbox,
+            username=user,
+            password=password,
+            build=build,
+        )
     except SieveError as exc:
-        raise fail(409, exc.code, detail=exc.detail) from exc
+        raise fail(
+            409,
+            exc.code,
+            detail=exc.detail,
+            message=SIEVE_UNAVAILABLE_MESSAGE_SK if exc.code == "sieve_unavailable" else None,
+        ) from exc
+    await _backup_script(
+        db, mailbox=mailbox, script_name=script_name, content=current, reason="vacation_save", person_id=person.id
+    )
     data = _vacation_payload(vac)
     data["script_name"] = script_name
     await save_section(db, person.id, f"vacation.{mailbox.id}", data)
@@ -676,18 +730,27 @@ async def restore_sieve(
     backup = await _latest_backup(db, mailbox.id)
     if backup is None:
         raise fail(404, "sieve_backup_missing")
+    user, password = await _mailbox_creds(db, settings, ctx, mailbox)
     try:
-        user, password = await _mailbox_creds(db, settings, ctx, mailbox)
-        client = connect_sieve(settings, mailbox, username=user, password=password)
-        script_name = active_script_name(client)
-        current = get_script(client, script_name)
-        await _backup_script(
-            db, mailbox=mailbox, script_name=script_name, content=current, reason="restore", person_id=person.id
+        script_name, current, _supports = await save_active_script(
+            redis=request.app.state.redis,
+            settings=settings,
+            mailbox=mailbox,
+            username=user,
+            password=password,
+            content=backup.content,
+            script_name=backup.script_name or None,
         )
-        put_script(client, backup.script_name or script_name, backup.content, activate=True)
-        client.logout()
     except SieveError as exc:
-        raise fail(409, exc.code, detail=exc.detail) from exc
+        raise fail(
+            409,
+            exc.code,
+            detail=exc.detail,
+            message=SIEVE_UNAVAILABLE_MESSAGE_SK if exc.code == "sieve_unavailable" else None,
+        ) from exc
+    await _backup_script(
+        db, mailbox=mailbox, script_name=script_name, content=current, reason="restore", person_id=person.id
+    )
     audit(
         db,
         "settings.sieve_restored",
