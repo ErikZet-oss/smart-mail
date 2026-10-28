@@ -9,19 +9,18 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import re
 import uuid
 from email.message import EmailMessage
 from pathlib import Path
 
 import pytest
-import structlog
 from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.logging import configure_logging
 from app.mail import storage
 from app.mail.compose import build_mime, log_stripped_images
 from app.mail.compose_html import assemble_outgoing_html
@@ -221,7 +220,7 @@ def test_issue31_logo_svg_path_is_sent_as_png() -> None:
     assert b"<svg" not in raw
 
 
-def test_issue31_proxy_url_becomes_https_and_junk_is_counted_not_logged() -> None:
+def test_issue31_proxy_url_becomes_https_and_junk_is_counted_not_logged(capsys: pytest.CaptureFixture[str]) -> None:
     secret = "http://tajne.example/icon.png"
     html = (
         '<img src="/api/mail/image-proxy?u=https%3A%2F%2Fcdn.example%2Fjana-testova.png&amp;sig=abc" alt="">'
@@ -239,16 +238,18 @@ def test_issue31_proxy_url_becomes_https_and_junk_is_counted_not_logged() -> Non
     assert "about:" not in out
     assert "data:" not in out
     assert _BAD_SRC.search(out) is None
-    # A second configure replaces the processor list. A logger cached on first use
-    # keeps the old JSON chain and capture_logs stays empty.
-    configure_logging("INFO")
-    log_stripped_images("warmup", 1)
-    configure_logging("INFO")
-    with structlog.testing.capture_logs() as logs:
-        log_stripped_images("draft-1", stripped)
-    assert logs == [{"count": 4, "draft_id": "draft-1", "event": "compose.images_stripped", "log_level": "info"}]
-    assert "tajne.example" not in repr(logs)
-    assert "http" not in repr(logs)
+    log_stripped_images("draft-1", stripped)
+    captured = capsys.readouterr().out
+    lines = [line for line in captured.splitlines() if "compose.images_stripped" in line]
+    assert len(lines) == 1
+    event = json.loads(lines[0])
+    assert event["event"] == "compose.images_stripped"
+    assert event["count"] == 4
+    assert event["draft_id"] == "draft-1"
+    assert event["level"] == "info"
+    assert "tajne.example" not in lines[0]
+    assert "http://" not in lines[0]
+    assert "cdn.example" not in lines[0]
 
 
 @pytest.mark.parametrize(

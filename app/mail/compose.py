@@ -237,21 +237,9 @@ async def _outgoing_images_by_id(
 
 
 def log_stripped_images(draft_id: str, count: int) -> None:
-    """How many images were dropped. The URL is not logged.
-
-    The logger is built from the current structlog config. ``cache_logger_on_first_use``
-    keeps the processor list from the first ``configure_logging`` call, and a later
-    call replaces that list, so a cached logger never reaches ``capture_logs``.
-    """
-    if count <= 0:
-        return
-    config = structlog.get_config()
-    logger = config["wrapper_class"](
-        config["logger_factory"](),
-        processors=list(config["processors"]),
-        context={},
-    )
-    logger.info("compose.images_stripped", draft_id=draft_id, count=count)
+    """How many images were dropped. The URL is not logged."""
+    if count > 0:
+        log.info("compose.images_stripped", draft_id=draft_id, count=count)
 
 
 async def rendered_signature(db: AsyncSession, draft: ComposeDraft) -> str:
