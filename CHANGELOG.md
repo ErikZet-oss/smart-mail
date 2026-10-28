@@ -10,6 +10,17 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - **B3**: Hide AI TRIEDENIE when `ai_enabled=false` or no Anthropic key; `/ai/views/*` returns empty, never 500.
 - **B4**: `/readyz` own 2 s budget + fresh Redis probe; docker healthcheck `curl --max-time 3`.
 
+## [Unreleased] — Pilot #20 (blocker): SMTP AUTH + Sent APPEND + draft IMAP
+
+- Outbound SMTP uses mailbox credentials (`credentials_for`, Fernet D27) and `mailbox.smtp_*` (else `SMTP_*` env);
+  MAIL FROM = identity address; 535 → `auth_failed` + mailbox state like IMAP.
+- After successful SMTP, APPEND to SPECIAL-USE `\Sent` (fallback Sent/Odoslané) with `\Seen`; APPEND failure never
+  re-sends.
+- Compose autosave mirrors the draft to IMAP `\Drafts` / Koncepty (APPEND new, delete previous UID).
+- `imap-test` exposes AUTH-required SMTP on :587 (bridge → LMTP); CI test: no auth fails, with auth succeeds + Sent.
+- W4 shows a clear Slovak error on `failed` instead of staying on „Odosiela sa…“.
+
+
 ## [Unreleased] — Phase 2b: classify + AI views (W2f)
 
 - Deterministic rules first (List-Unsubscribe, carriers, internal domains, ISDOC/UBL, DMARC candidate);
