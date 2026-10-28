@@ -166,7 +166,7 @@ def test_b6_sign_remote_attrs_uses_proxy(settings) -> None:
 
 @pytest.mark.asyncio
 async def test_b5_inline_endpoint_serves_image(
-    client: Client, db: AsyncSession, mail_server: FakeMailServer, settings, app
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, settings
 ) -> None:
     from app.mail import storage
     from app.mail.models import Attachment, FolderMeta, Mailbox, Message
