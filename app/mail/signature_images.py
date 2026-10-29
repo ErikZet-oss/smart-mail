@@ -126,3 +126,39 @@ def add_related_images(message: EmailMessage, blobs: list[tuple[str, bytes, str]
         if maintype != "image":
             continue
         html_part.add_related(data, maintype=maintype, subtype=subtype or "png", cid=f"<{cid}>")
+
+
+MAX_PHOTO_BYTES = 5 * 1024 * 1024
+PHOTO_PX = 256
+
+
+def normalize_person_photo(data: bytes) -> tuple[bytes, str]:
+    """Person photo (SETTINGS 11b „Fotka“, #55): JPG/PNG up to 5 MB, cropped to the centred square and scaled to
+    256 px. Returned as JPEG (photos) — the signature shows it in the hexagon."""
+    if not data or len(data) > MAX_PHOTO_BYTES:
+        raise SignatureImageError("image_too_large" if data else "image_type")
+    if _is_svg(data):
+        raise SignatureImageError("image_type")
+    from PIL import Image
+
+    Image.MAX_IMAGE_PIXELS = 8000 * 8000
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            if (image.format or "").upper() not in {"JPEG", "PNG"}:
+                raise SignatureImageError("image_type")
+            width, height = image.size
+            if width < 1 or height < 1 or width > 8000 or height > 8000:
+                raise SignatureImageError("image_too_large")
+            side = min(width, height)
+            left, top = (width - side) // 2, (height - side) // 2
+            square = image.convert("RGB").crop((left, top, left + side, top + side))
+            square = square.resize((PHOTO_PX, PHOTO_PX), Image.Resampling.LANCZOS)
+            out = io.BytesIO()
+            square.save(out, format="JPEG", quality=88)
+    except SignatureImageError:
+        raise
+    except Image.DecompressionBombError as exc:
+        raise SignatureImageError("image_too_large") from exc
+    except Exception as exc:
+        raise SignatureImageError("image_type") from exc
+    return out.getvalue(), "image/jpeg"

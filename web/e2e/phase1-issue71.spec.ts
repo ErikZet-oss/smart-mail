@@ -111,7 +111,7 @@ test('#71 W12-11b a branch person drawer sends no branch_id', async ({ page }) =
   });
   await page.goto('/settings/branches/people');
   await expect(page.getByTestId('personal-people')).toHaveCount(0);
-  await page.getByTestId('branch-people').getByRole('button', { name: 'Jana Nováková' }).click();
+  await page.getByRole('button', { name: 'Upraviť osobu Jana Nováková' }).click();
   const drawer = page.getByTestId('person-drawer');
   await expect(drawer.getByLabel('Pobočka (pre podpis)')).toHaveCount(0);
   await drawer.getByRole('button', { name: 'Uložiť' }).click();

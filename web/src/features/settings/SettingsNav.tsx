@@ -201,10 +201,23 @@ export function SettingsSubList({ section, sub }: { section: NavSection; sub?: s
 }
 
 /** Tabs for sections whose subsections are tabs in Figma (W12-11 Pobočky a osoby). */
-export function SettingsSubTabs({ section, sub }: { section: NavSection; sub?: string }) {
+export function SettingsSubTabs({
+  section,
+  sub,
+  counts = {},
+}: {
+  section: NavSection;
+  sub?: string;
+  /** Badge after a tab title, e.g. the number of people on „Osoby“ (W12-11b). */
+  counts?: Record<string, number>;
+}) {
   const current = sub ?? section.subs[0]?.path;
   return (
-    <div role="tablist" aria-label={section.title} className="flex gap-6 border-b border-border-default">
+    <div
+      role="tablist"
+      aria-label={section.title}
+      className="flex gap-6 overflow-x-auto border-b border-border-default"
+    >
       {section.subs.map((s) => {
         const active = s.path === current;
         return (
@@ -220,6 +233,11 @@ export function SettingsSubTabs({ section, sub }: { section: NavSection; sub?: s
             }`}
           >
             {s.title}
+            {counts[s.path] !== undefined ? (
+              <span className="type-caption ml-1.5 inline-flex min-w-5 justify-center rounded-full bg-bg-muted px-1.5 text-text-secondary">
+                {counts[s.path]}
+              </span>
+            ) : null}
           </Link>
         );
       })}

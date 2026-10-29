@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -12,7 +12,8 @@ import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
-import { BranchDetails, BranchList, BranchPeople, PersonalAccountPeople } from './BranchAdmin';
+import { BranchDetails, BranchList, BranchLoginSettings, BranchPeople, PersonalAccountPeople } from './BranchAdmin';
+import { adminErrorText } from './adminUi';
 import { BranchIdentityForm } from './BranchIdentityForm';
 import { SettingsFieldControl } from './Field';
 import { UsersPanel } from './UsersPanel';
@@ -24,6 +25,7 @@ import { buildNavItems, isItemActive, TABBED_SECTIONS } from './settingsNavModel
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
   createResponse,
+  deleteBranch,
   deleteResponse,
   fetchAdminBranches,
   fetchAdminMailboxes,
@@ -48,6 +50,7 @@ import {
   saveProfile,
   saveVacation,
   signRemotePreviews,
+  type NavSection,
   uploadBranchImage,
   uploadIdentityImage,
 } from './settingsApi';
@@ -192,7 +195,12 @@ export function ScreenW12() {
             <h1 className="type-heading min-w-0 flex-1 truncate text-text-primary">{title}</h1>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            <SectionBody section={activeSection} sub={sub} meRole={me.data?.person?.role} />
+            <SectionBody
+              section={activeSection}
+              sub={sub}
+              meRole={me.data?.person?.role}
+              navSection={nav.data?.sections.find((s) => s.path === activeSection)}
+            />
           </div>
         </div>
       </AppShell>
@@ -212,6 +220,16 @@ export function ScreenW12() {
     activeItem?.title ?? title,
     ...(subItem && current?.path !== 'identity' ? [subItem.title] : []),
   ];
+  if (activeSection === 'branches' && me.data?.person?.role === 'admin') {
+    return (
+      <AppShell section="settings">
+        <div className="flex h-full min-w-0 flex-1">
+          <SettingsNav sections={sections} activeSection={activeSection} sub={sub} />
+          <BranchesWorkspace section={current} sub={sub} crumbs={crumbs.slice(0, 2)} />
+        </div>
+      </AppShell>
+    );
+  }
   const pageTitle =
     activeSection === 'identity' || showTabs
       ? (activeItem?.title ?? title)
@@ -241,7 +259,17 @@ export function ScreenW12() {
   );
 }
 
-function SectionBody({ section, sub, meRole }: { section: string; sub?: string; meRole?: string }) {
+function SectionBody({
+  section,
+  sub,
+  meRole,
+  navSection,
+}: {
+  section: string;
+  sub?: string;
+  meRole?: string;
+  navSection?: NavSection;
+}) {
   if (section === 'preferences') return <PreferencesPanel sub={sub} />;
   if (section === 'identity' && sub === 'profile') return <ProfilePanel />;
   if (section === 'identity') return <IdentitiesPanel canEditBranch={meRole === 'admin'} />;
@@ -253,7 +281,9 @@ function SectionBody({ section, sub, meRole }: { section: string; sub?: string; 
   if (section === 'security') return <SecurityPanel />;
   if (section === 'folders') return <FoldersHint />;
   if (section === 'users') return meRole === 'admin' ? <UsersPanel /> : <AdminOnly />;
-  if (section === 'branches') return meRole === 'admin' ? <BranchesPanel sub={sub} /> : <AdminOnly />;
+  if (section === 'branches') {
+    return meRole === 'admin' ? <BranchesWorkspace section={navSection} sub={sub} crumbs={[]} mobile /> : <AdminOnly />;
+  }
   if (section === 'mailboxes') return meRole === 'admin' ? <MailboxesPanel /> : <AdminOnly />;
   return <p className="type-body text-text-secondary">…</p>;
 }
@@ -1146,17 +1176,155 @@ function branchPreviewValues(
   };
 }
 
-function BranchesPanel({ sub }: { sub?: string }) {
+/** W12-11 Pobočky a osoby (Figma `68:60641`, `68:61587`, `72:62234`): the branch list as its own full-height
+ * column, the branch name as the page title, „Vymazať pobočku“ in the header and the tabs Údaje · Osoby (count) ·
+ * Podpis · Prihlasovanie · Money. On a phone the list sits above the tabs. */
+function BranchesWorkspace({
+  section,
+  sub,
+  crumbs,
+  mobile = false,
+}: {
+  section?: NavSection;
+  sub?: string;
+  crumbs: string[];
+  mobile?: boolean;
+}) {
+  const { t } = useTranslation();
+  const branches = useQuery({ queryKey: ['settings', 'branches'], queryFn: fetchAdminBranches });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const all = branches.data ?? [];
+  const current = all.find((b) => String(b.id) === selectedId) ?? all[0] ?? null;
+  const subItem = section?.subs.find((s) => s.path === sub) ?? section?.subs[0];
+  const activePeople = current
+    ? ((current.people as { active: boolean }[] | undefined) ?? []).filter((p) => p.active).length
+    : 0;
+  const list = (
+    <BranchList
+      branches={all}
+      currentId={current ? String(current.id) : ''}
+      onSelect={setSelectedId}
+      column={!mobile}
+    />
+  );
+  const body = current ? (
+    <>
+      <h1 className="type-title mb-6 text-text-primary">{String(current.name)}</h1>
+      {section ? (
+        <div className="mb-6">
+          <SettingsSubTabs section={section} sub={sub} counts={{ people: activePeople }} />
+        </div>
+      ) : null}
+      <BranchesPanel key={String(current.id)} sub={sub} current={current} branches={all} />
+    </>
+  ) : (
+    <p className="type-body text-text-secondary">{t('settings.branches.empty')}</p>
+  );
+  const remove = current ? (
+    <button
+      type="button"
+      onClick={() => setDeleting(true)}
+      className="type-label inline-flex shrink-0 items-center gap-1.5 rounded-xs text-brand-primary-700 hover:underline"
+    >
+      <Trash2 size={16} aria-hidden="true" />
+      {t('settings.branches.delete')}
+    </button>
+  ) : null;
+  const dialog =
+    deleting && current ? (
+      <DeleteBranchDialog
+        branch={current}
+        onClose={() => setDeleting(false)}
+        onDeleted={() => {
+          setDeleting(false);
+          setSelectedId(null);
+        }}
+      />
+    ) : null;
+
+  if (mobile) {
+    return (
+      <div className="flex min-w-0 flex-col gap-4" data-testid="branches-workspace">
+        {list}
+        {current ? <div className="flex justify-end">{remove}</div> : null}
+        {body}
+        {dialog}
+      </div>
+    );
+  }
+  return (
+    <>
+      {list}
+      <main className="flex min-w-0 flex-1 flex-col bg-bg-canvas" data-testid="branches-workspace">
+        <header className="flex h-[var(--layout-topbar)] shrink-0 items-center gap-4 border-b border-border-default bg-bg-subtle px-6">
+          <div className="min-w-0 flex-1">
+            <SettingsBreadcrumb
+              parts={[...crumbs, ...(current ? [String(current.name)] : []), ...(subItem ? [subItem.title] : [])]}
+            />
+          </div>
+          {remove}
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-8 pt-6">{body}</div>
+      </main>
+      {dialog}
+    </>
+  );
+}
+
+function DeleteBranchDialog({
+  branch,
+  onClose,
+  onDeleted,
+}: {
+  branch: Record<string, unknown>;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
   const { t } = useTranslation();
   const toasts = useToasts();
   const qc = useQueryClient();
-  const branches = useQuery({ queryKey: ['settings', 'branches'], queryFn: fetchAdminBranches });
+  const remove = useMutation({
+    mutationFn: () => deleteBranch(String(branch.id)),
+    onSuccess: () => {
+      toasts.success(t('settings.branches.deleted'));
+      void qc.invalidateQueries({ queryKey: ['settings', 'branches'] });
+      onDeleted();
+    },
+    onError: (error) => {
+      toasts.error(adminErrorText(t, error));
+      onClose();
+    },
+  });
+  return (
+    <ConfirmDialog
+      title={t('settings.branches.deleteTitle', { name: String(branch.name) })}
+      body={t('settings.branches.deleteBody')}
+      confirmLabel={t('settings.branches.delete')}
+      busy={remove.isPending}
+      onConfirm={() => remove.mutate()}
+      onClose={onClose}
+    />
+  );
+}
+
+function BranchesPanel({
+  sub,
+  current,
+  branches,
+}: {
+  sub?: string;
+  current: Record<string, unknown>;
+  branches: Record<string, unknown>[];
+}) {
+  const { t } = useTranslation();
+  const toasts = useToasts();
+  const qc = useQueryClient();
   const presets = useQuery({
     queryKey: ['settings', 'signature-presets'],
     queryFn: fetchSignaturePresets,
     enabled: sub === 'signature' || sub === 'podpis',
   });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lang, setLang] = useState<SignatureLang>('sk');
   const [personId, setPersonId] = useState<string>('');
   const [templatesById, setTemplatesById] = useState<Record<string, Record<string, string>>>({});
@@ -1164,8 +1332,7 @@ function BranchesPanel({ sub }: { sub?: string }) {
   const [remotes, setRemotes] = useState<Record<string, string>>({});
   const [restoreOpen, setRestoreOpen] = useState(false);
   const asked = useRef(new Set<string>());
-  const current = (branches.data ?? []).find((b) => String(b.id) === selectedId) ?? branches.data?.[0] ?? null;
-  const branchId = current ? String(current.id) : '';
+  const branchId = String(current.id);
   const stored = (current?.signature_template_html as Record<string, string> | undefined) ?? {};
   const templates = templatesById[branchId] ?? stored;
   const sig = templates[lang] ?? '';
@@ -1183,7 +1350,6 @@ function BranchesPanel({ sub }: { sub?: string }) {
 
   const saveSig = useMutation({
     mutationFn: async () => {
-      if (!current) return null;
       return saveBranch(String(current.id), {
         name: current.name,
         address: current.address,
@@ -1207,24 +1373,11 @@ function BranchesPanel({ sub }: { sub?: string }) {
     onError: (error) => toasts.error(signatureErrorText(t, error)),
   });
 
-  const list = <BranchList branches={branches.data ?? []} currentId={branchId} onSelect={(id) => setSelectedId(id)} />;
-  if (!current) {
-    return (
-      <div className="flex flex-col gap-4 lg:flex-row">
-        {list}
-        <p className="type-body text-text-secondary">{t('settings.branches.empty')}</p>
-      </div>
-    );
-  }
-
   if (sub === 'people' || sub === 'osoby') {
     return (
-      <div className="flex flex-col gap-6 lg:flex-row">
-        {list}
-        <div className="flex min-w-0 flex-1 flex-col gap-8">
-          <BranchPeople branch={current} />
-          <PersonalAccountPeople branches={branches.data ?? []} />
-        </div>
+      <div className="flex min-w-0 flex-col gap-8 pb-6">
+        <BranchPeople branch={current} branches={branches} />
+        <PersonalAccountPeople branches={branches} />
       </div>
     );
   }
@@ -1234,21 +1387,7 @@ function BranchesPanel({ sub }: { sub?: string }) {
     const person = people.find((item) => item.id === personId) ?? people[0];
     const preview = fillSignature(sig, branchPreviewValues(person, current));
     return (
-      <div className="flex max-w-3xl flex-col gap-3">
-        <label className="flex max-w-xs flex-col gap-1">
-          <span className="type-label text-text-secondary">{t('settings.branches.pick')}</span>
-          <select
-            className="type-body h-9 rounded-sm border border-border-default px-2"
-            value={branchId}
-            onChange={(event) => setSelectedId(event.target.value)}
-          >
-            {(branches.data ?? []).map((branch) => (
-              <option key={String(branch.id)} value={String(branch.id)}>
-                {String(branch.name)}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="flex max-w-3xl flex-col gap-3 pb-6">
         <HtmlSignatureEditor
           label={t('settings.branches.signature')}
           languages
@@ -1318,19 +1457,16 @@ function BranchesPanel({ sub }: { sub?: string }) {
     );
   }
 
+  if (sub === 'login' || sub === 'prihlasovanie') {
+    return <BranchLoginSettings key={branchId} branch={current} />;
+  }
+
   if (sub === 'money') {
     // Pilot deploy keeps FEATURE_MONEY=false — no Money bindings in the UI (ADR-010).
     return <Banner kind="info" message={t('settings.branches.moneyHidden')} />;
   }
 
-  return (
-    <div className="flex flex-col gap-6 lg:flex-row">
-      {list}
-      <div className="min-w-0 flex-1">
-        <BranchDetails key={branchId} branch={current} />
-      </div>
-    </div>
-  );
+  return <BranchDetails key={branchId} branch={current} />;
 }
 
 function MailboxesPanel() {

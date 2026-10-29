@@ -141,10 +141,28 @@ export type AdminPerson = {
   phone: string | null;
   mobile: string | null;
   personal_email: string | null;
+  photo_url?: string | null;
+  cover_branch_ids?: string[];
 };
 
 /** W12-11b „Osobné účty“ (#71): the person of a personal login and the branch used for its signature. */
 export type PersonalPerson = AdminPerson & { login_email: string; branch_id: string | null };
+
+export const deleteBranch = (id: string) => api('DELETE', `/api/settings/admin/branches/${id}`);
+export type BranchFolder = { id: string; name: string; mailbox_email: string };
+export const fetchBranchFolders = () => api<BranchFolder[]>('GET', '/api/settings/admin/branch-folders');
+
+async function uploadImage<T>(url: string, file: File): Promise<T> {
+  const body = new FormData();
+  body.append('file', file);
+  return apiForm<T>('POST', url, body);
+}
+export const uploadBranchLogo = (id: string, file: File) =>
+  uploadImage<{ logo_url: string }>(`/api/settings/admin/branches/${id}/logo`, file);
+export const removeBranchLogo = (id: string) => api('DELETE', `/api/settings/admin/branches/${id}/logo`);
+export const uploadPersonPhoto = (id: string, file: File) =>
+  uploadImage<{ photo_url: string }>(`/api/settings/admin/people/${id}/photo`, file);
+export const removePersonPhoto = (id: string) => api('DELETE', `/api/settings/admin/people/${id}/photo`);
 
 export const fetchPersonalPeople = () => api<PersonalPerson[]>('GET', '/api/settings/admin/personal-people');
 

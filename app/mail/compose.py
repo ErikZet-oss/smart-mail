@@ -324,15 +324,21 @@ async def _signature_blobs(
         records.extend(image_dicts(branch.signature_images))
     by_cid = {str(rec["cid"]): rec for rec in records}
     blobs: list[tuple[str, bytes, str]] = []
+    signer, signature_branch = await signature_person_branch(db, draft)
     for cid in wanted:
         if cid == LOGO_CID:
-            data = _logo_png()
+            # „Logo do podpisu“ of the branch (#55), else the company logo
+            data = (
+                storage.get_bytes(settings, signature_branch.logo_key)
+                if signature_branch and signature_branch.logo_key
+                else None
+            )
+            data = data or _logo_png()
             if data:
-                blobs.append((cid, data, "image/png"))
+                blobs.append((cid, data, sniff_image_type(data)))
             continue
         if cid == PHOTO_CID:
-            person_id = draft.signature_person_id or draft.person_id
-            person = await db.get(Person, person_id) if person_id else None
+            person = signer
             if person is not None and person.photo_key:
                 data = storage.get_bytes(settings, person.photo_key)
                 if data:
@@ -378,11 +384,9 @@ def log_stripped_images(draft_id: str, count: int) -> None:
         log.info("compose.images_stripped", draft_id=draft_id, count=count)
 
 
-async def rendered_signature(db: AsyncSession, draft: ComposeDraft) -> str:
-    """Signature for this draft from the template or the stored per-message override."""
-    if not draft.include_signature:
-        return ""
-    identity = await db.get(Identity, draft.identity_id) if draft.identity_id else None
+async def signature_person_branch(db: AsyncSession, draft: ComposeDraft) -> tuple[Person | None, Branch | None]:
+    """Signer of the draft and the branch whose data fills the signature: the person's branch, else the branch of
+    the mailbox."""
     person_id = draft.signature_person_id or draft.person_id
     person = await db.get(Person, person_id) if person_id else None
     branch = None
@@ -390,6 +394,15 @@ async def rendered_signature(db: AsyncSession, draft: ComposeDraft) -> str:
         branch = await db.get(Branch, person.branch_id)
     if branch is None:
         branch = await db.scalar(select(Branch).where(Branch.mailbox_id == draft.mailbox_id))
+    return person, branch
+
+
+async def rendered_signature(db: AsyncSession, draft: ComposeDraft) -> str:
+    """Signature for this draft from the template or the stored per-message override."""
+    if not draft.include_signature:
+        return ""
+    identity = await db.get(Identity, draft.identity_id) if draft.identity_id else None
+    person, branch = await signature_person_branch(db, draft)
     return render_signature(
         person=person,
         branch=branch,

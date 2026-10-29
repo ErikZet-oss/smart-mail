@@ -2,6 +2,24 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #55 Settings 11 Pobočky a osoby to Figma (W12-11a/b/d)
+
+- Layout: the branch list is its own full-height column with „Pridať pobočku“ at the bottom; the branch name is the
+  page title; breadcrumb … › Pobočka › tab; „Vymazať pobočku“ top right; tabs with the people count on „Osoby“.
+- 11b Osoby: the whole row opens the drawer (click, Enter) plus a pencil „Upraviť osobu {meno}“ (pilot finding);
+  „Aktívna“ is a switch in the row (409 `last_active_person` keeps ≥ 1 active person); photos in the table.
+- Drawer: „Fotka“ (`POST/DELETE /api/settings/admin/people/{id}/photo`, JPG/PNG ≤ 5 MB, centred square 256 px →
+  {fotka}); „Pôsobí aj na pobočkách“ (`cover_branch_ids`, person_branches, audited). „Obchodník v Money“ stays hidden
+  until Phase 3.
+- 11a Údaje: „Logo do podpisu“ (`POST/DELETE /api/settings/admin/branches/{id}/logo`, PNG/SVG→PNG ≤ 200 kB →
+  {logo} in preview and as CID at send), „Priečinky pobočky“ (`GET /api/settings/admin/branch-folders`, D21), and the
+  Uložiť / Zrušiť bar.
+- 11d Prihlasovanie: „Opýtať sa Kto ste? po nečinnosti“ and „Zostať prihlásený na zariadení“. „Prehľad pobočky –
+  upozorniť na nevybavené“ is left for Phase 5 (no column yet, customer decision).
+- „Vymazať pobočku“ (`DELETE /api/settings/admin/branches/{id}`): only an empty branch — 409 `branch_has_people` /
+  `branch_has_login`; inactive persons keep their name and lose the branch; audit `settings.branch_deleted`.
+- Settings 10 (Používatelia a role) parity follows in a separate PR.
+
 ## [Unreleased] — Pilot #71: person of a personal login (eshop@) in Pobočky a osoby
 
 - W12-11b Osoby: section „Osobné účty“ (persons of personal logins, `GET /api/settings/admin/personal-people`) with

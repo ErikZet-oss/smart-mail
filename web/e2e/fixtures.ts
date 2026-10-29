@@ -166,6 +166,7 @@ export const SETTINGS_DEFAULTS: Record<string, Reply> = {
   'GET /api/settings/admin/mailboxes': { body: [] },
   'GET /api/settings/admin/users': { body: [] },
   'GET /api/settings/admin/personal-people': { body: [] },
+  'GET /api/settings/admin/branch-folders': { body: [] },
   // Branch signature (11c) loads presets on open. An unmocked 401 logs the shell out.
   'GET /api/settings/signature-presets': {
     body: {
