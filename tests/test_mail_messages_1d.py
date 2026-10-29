@@ -195,3 +195,33 @@ async def test_1d_message_not_found(client: Client, db: AsyncSession, mail_serve
     r = await client.get(f"/api/mail/mailboxes/default/messages/{uuid.uuid4()}")
     assert r.status_code == 404
     assert r.json()["detail"]["code"] == "message_not_found"
+
+
+async def test_1d_long_message_ids_fit_the_thread_key_and_replies_still_join(db: AsyncSession) -> None:
+    """Pilot (eshop@): a Message-ID longer than the varchar(80) thread key aborted the whole first sync."""
+    from dataclasses import replace
+
+    from tests.test_mail_sync_1c import make_mailbox
+
+    mailbox = await make_mailbox(db, await make_personal(db))
+    long_id = "<" + "newsletter-" + "x" * 300 + "@bulk.example>"
+    root = replace(env(1, "\\Seen", subject="Akcia"), message_id=long_id)
+    reply = replace(
+        env(2, subject="Re: Akcia"),
+        message_id="<reply-1@example.test>",
+        in_reply_to=long_id,
+        received_at=NOW + timedelta(hours=1),
+    )
+    old_reply = replace(
+        env(3, subject="Re: Akcia"),
+        message_id="<reply-2@example.test>",
+        in_reply_to=long_id,
+        received_at=NOW + timedelta(days=60),  # outside the 30-day window: new thread with a date suffix
+    )
+    await _seed_inbox(db, mailbox, root, reply, old_reply)
+    threads = list((await db.execute(select(Thread).where(Thread.mailbox_id == mailbox.id))).scalars())
+    assert all(len(t.thread_key) <= 80 for t in threads)
+    by_uid = {m.uid: m.thread_id for m in (await db.execute(select(Message))).scalars()}
+    assert by_uid[1] == by_uid[2]
+    assert by_uid[3] != by_uid[1]
+    assert len(threads) == 2
