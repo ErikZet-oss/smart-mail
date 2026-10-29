@@ -12,7 +12,7 @@ from app.core.config import Settings
 from app.mail import storage
 from app.mail.clamav import scan_bytes
 from app.mail.models import Attachment, Message
-from app.mail.parse import parse_rfc822
+from app.mail.parse import has_file_attachments, parse_rfc822
 
 log = structlog.get_logger(__name__)
 
@@ -56,7 +56,7 @@ async def reparse_messages_with_attachments(
         message.body_html_sanitized = parsed.body_html_sanitized
         message.preview = parsed.preview
         message.auth_results = parsed.auth_results
-        message.has_attachments = bool(parsed.attachments)
+        message.has_attachments = has_file_attachments(parsed)
         message.body_fetched_at = message.body_fetched_at or datetime.now(UTC)
         await db.execute(delete(Attachment).where(Attachment.message_id == message.id))
         mailbox_id = message.mailbox_id
