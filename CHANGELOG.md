@@ -4,6 +4,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — #89 fast delete / move / flags (no sync inside the request)
 
+### Fixed
+- Deploy: `deploy/docker-compose.yml` did not pass the AI settings (`ANTHROPIC_API_KEY`, `LLM_PROVIDER`, `LLM_MODEL_*`, `AI_DAILY_BUDGET_USD`) from `.env` into the app and worker containers, so the key set by install.sh never reached the app. `tests/test_deploy_env_passthrough.py` now fails when install.sh writes an app setting that compose does not pass.
+
 **Backend:**
 - Toolbar actions (bulk `delete`/`junk`/`archive`/`move`, delete inside Kôš = expunge, flags, the read mark when a message is opened) now handle the request in this order:
   1. run the IMAP command;
