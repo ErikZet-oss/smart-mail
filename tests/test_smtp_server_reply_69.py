@@ -8,7 +8,6 @@ from typing import Any
 
 import pytest
 from aiosmtplib import SMTPDataError, SMTPSenderRefused
-from structlog.testing import capture_logs
 
 from app.core.config import Settings
 from app.mail import smtp
@@ -37,8 +36,14 @@ async def _send_failing(monkeypatch: pytest.MonkeyPatch, exc: Exception) -> Smtp
 
 async def test_69_reason_keeps_code_and_server_text(monkeypatch: pytest.MonkeyPatch) -> None:
     exc = SMTPSenderRefused(550, "Sending mail from your country (de) is not allowed", "nitra@smartsro.sk")
-    with capture_logs() as logs:
-        err = await _send_failing(monkeypatch, exc)
+    logs: list[dict[str, Any]] = []
+
+    class _Log:  # structlog caches bound loggers across the suite, so capture_logs() is order-dependent
+        def warning(self, event: str, **kw: Any) -> None:
+            logs.append({"event": event, **kw})
+
+    monkeypatch.setattr(smtp, "log", _Log())
+    err = await _send_failing(monkeypatch, exc)
     assert err.reason == "SMTPSenderRefused:550:Sending mail from your country (de) is not allowed"
     event = next(e for e in logs if e["event"] == "smtp.send_failed")
     assert event["smtp_code"] == 550
