@@ -2,6 +2,27 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #100 classify prompt with category descriptions
+
+**Problem:** a supplier's own invoice was triaged as „Žiadosť o faktúru“.
+
+**System prompt** (`classify_system`) is now built from `CATEGORIES`:
+- every category's id, Slovak name and description (SETTINGS_SPEC 17c; in 2f, 17c swaps only the source list);
+- direction rules for the pairs the model confuses:
+  - `supplier_document` (issued TO us) vs `invoice_request` (someone ASKS us);
+  - `payment`;
+  - `inquiry` vs `order`;
+  - `supplier_info` vs `newsletter`.
+
+**User prompt:**
+- now has a `Recipients:` line: the count, our own addresses, and external ones only counted;
+- attachment names keep their extensions;
+- untrusted wrapping is unchanged.
+
+There is no rule from „Faktura“ in the subject; the ISDOC/UBL rule already existed.
+
+**Eval:** fictional smoke fixtures 004–006 (supplier invoice PDF+CSV, invoice request, payment reminder), with a test that every smoke fixture is fictional and valid.
+
 ## [Unreleased] — #96 PR 1: Presunúť do… / Kopírovať do…
 
 - New bulk action `copy` (IMAP UID COPY):
