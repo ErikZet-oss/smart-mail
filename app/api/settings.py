@@ -1496,11 +1496,16 @@ async def add_person(branch_id: uuid.UUID, body: PersonAdminIn, request: Request
     return {"id": str(person.id), "first_name": person.first_name, "last_name": person.last_name}
 
 
-async def _keep_one_active(db: DB, person: Person) -> None:
-    """SETTINGS 11b: at least one active person stays on a branch (people with an own login only borrow the branch
-    for their signature, #71)."""
+async def _is_last_active_of_branch_login(db: DB, person: Person) -> bool:
+    """SETTINGS 11b: a branch login keeps at least one active person for „Kto ste?“. People with an own login only
+    borrow the branch for their signature (#71). A branch without a login (e.g. a test branch being removed) has no
+    picker, so its last person may go — otherwise „Vymazať pobočku“ could never succeed (pilot)."""
+    if person.branch_id is None or not person.active:
+        return False
     if await db.scalar(select(Account.id).where(Account.person_id == person.id)) is not None:
-        return
+        return False
+    if await db.scalar(select(Account.id).where(Account.branch_id == person.branch_id).limit(1)) is None:
+        return False
     others = await db.scalar(
         select(func.count())
         .select_from(Person)
@@ -1511,7 +1516,11 @@ async def _keep_one_active(db: DB, person: Person) -> None:
             Person.id.not_in(own_login_person_ids()),
         )
     )
-    if not others:
+    return not others
+
+
+async def _keep_one_active(db: DB, person: Person) -> None:
+    if await _is_last_active_of_branch_login(db, person):
         raise fail(409, "last_active_person")
 
 
@@ -1596,20 +1605,8 @@ async def delete_person_admin(person_id: uuid.UUID, request: Request, ctx: Recen
     if person is None:
         raise fail(404, "person_not_found")
     own_login = await db.scalar(select(Account.id).where(Account.person_id == person.id))
-    if person.branch_id is not None and person.active and own_login is None:
-        # people with an own login only borrow the branch for their signature (#71)
-        others = await db.scalar(
-            select(func.count())
-            .select_from(Person)
-            .where(
-                Person.branch_id == person.branch_id,
-                Person.active.is_(True),
-                Person.id != person.id,
-                Person.id.not_in(own_login_person_ids()),
-            )
-        )
-        if not others:
-            raise fail(409, "last_active_person")
+    if await _is_last_active_of_branch_login(db, person):
+        raise fail(409, "last_active_person")
     before = _person_state(person)
     drafts = select(func.count()).select_from(ComposeDraft)
     has_history = bool(
