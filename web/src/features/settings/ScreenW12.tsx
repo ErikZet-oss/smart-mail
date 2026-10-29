@@ -13,6 +13,7 @@ import { useToasts } from '../../components/toastContext';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
 import { BranchDetails, BranchList, BranchPeople } from './BranchAdmin';
+import { BranchIdentityForm } from './BranchIdentityForm';
 import { SettingsFieldControl } from './Field';
 import { UsersPanel } from './UsersPanel';
 import { HtmlSignatureEditor, SanitizedHtml } from './HtmlSignatureEditor';
@@ -243,7 +244,7 @@ export function ScreenW12() {
 function SectionBody({ section, sub, meRole }: { section: string; sub?: string; meRole?: string }) {
   if (section === 'preferences') return <PreferencesPanel sub={sub} />;
   if (section === 'identity' && sub === 'profile') return <ProfilePanel />;
-  if (section === 'identity') return <IdentitiesPanel />;
+  if (section === 'identity') return <IdentitiesPanel canEditBranch={meRole === 'admin'} />;
   if (section === 'responses') return <ResponsesPanel />;
   if (section === 'filters') return <FiltersPanel />;
   if (section === 'vacation') return <VacationPanel />;
@@ -439,7 +440,7 @@ function signatureErrorText(t: (key: string) => string, error: unknown): string 
   return t('settings.signature.saveFailed');
 }
 
-function IdentitiesPanel() {
+function IdentitiesPanel({ canEditBranch }: { canEditBranch: boolean }) {
   const { t } = useTranslation();
   const toasts = useToasts();
   const list = useQuery({ queryKey: ['settings', 'identities'], queryFn: () => fetchIdentities() });
@@ -479,12 +480,18 @@ function IdentitiesPanel() {
   });
   if (context.data?.branch_managed) {
     return (
-      <div className="flex max-w-xl flex-col gap-3">
-        <p className="type-body text-text-primary">{t('settings.identity.branchPreview')}</p>
-        <SanitizedHtml className="rounded-md border border-border-default p-4" html={context.data.preview_html} />
-        <Link to="/settings/branches/signature" className="type-label text-brand-primary-600">
-          {t('settings.identity.editTemplate')}
-        </Link>
+      <div className="flex max-w-3xl flex-col gap-6">
+        <BranchIdentityForm canEdit={canEditBranch} />
+        <section className="flex flex-col gap-3">
+          <h2 className="type-heading text-text-primary">{t('settings.identity.signature')}</h2>
+          <div className="type-small flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border-default bg-bg-subtle px-4 py-3 text-text-primary">
+            <span className="flex-1">{t('settings.identity.branchPreview')}</span>
+            <Link to="/settings/branches/signature" className="type-label text-brand-primary-600">
+              {t('settings.identity.editTemplate')}
+            </Link>
+          </div>
+          <SanitizedHtml className="rounded-md border border-border-default p-4" html={context.data.preview_html} />
+        </section>
       </div>
     );
   }

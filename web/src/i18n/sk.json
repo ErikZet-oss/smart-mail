@@ -709,10 +709,15 @@
       "displayName": "Zobrazované meno",
       "email": "E-mail",
       "organization": "Organizácia",
+      "display_name": "Zobrazované meno",
+      "reply_to": "Odpovedať na",
+      "branchAdminOnly": "Odosielateľa pobočkovej schránky mení správca.",
       "defaultIdentity": "Predvolená identita",
       "signature": "Podpis",
-      "branchPreview": "Podpis pobočky – mení správca",
-      "editTemplate": "Upraviť šablónu pobočky"
+      "branchPreview": "Podpis pobočky – mení správca v Pobočky a osoby › Podpis. Nastaví sa podľa osoby, ktorá píše.",
+      "editTemplate": "Otvoriť šablónu",
+      "section": "Identita",
+      "displayNameHelp": "Toto meno vidí zákazník v poli Od."
     },
     "signature": {
       "source": "Zdrojový kód",
@@ -877,6 +882,8 @@
         "last_active_person": "Posledná aktívna osoba pobočky sa nedá odstrániť.",
         "mailbox_required": "Najprv vyberte schránku pobočky.",
         "branch_exists": "Pobočka s týmto názvom už existuje.",
+        "identity_email_not_internal": "Adresa musí byť firemná (napr. nitra@smartsro.sk).",
+        "admin_required": "Túto zmenu môže urobiť len správca.",
         "generic": "Zmenu sa nepodarilo uložiť."
       }
     },
