@@ -1,0 +1,11 @@
+{
+  "id": "fictional-004",
+  "subject": "Faktura E3/2026/0412",
+  "from": "fakturace@dodavatel-skrutiek.example",
+  "to": ["nitra@smartmail.test", "senica@smartmail.test", "trencin@smartmail.test"],
+  "attachments": ["E3_2026_0412.pdf", "E3_2026_0412.csv"],
+  "body_text": "Dobrý den, v příloze zasíláme fakturu. Vždy se řiďte bankovními údaji na faktuře. S pozdravem, účtárna",
+  "language": "cs",
+  "category": "supplier_document",
+  "notes": "Fictional smoke fixture only — never replace with real mail. #100: a supplier's own invoice, not a request."
+}

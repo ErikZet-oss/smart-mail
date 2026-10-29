@@ -1,0 +1,11 @@
+{
+  "id": "fictional-006",
+  "subject": "Upomienka – neuhradená faktúra 2026/118",
+  "from": "pohladavky@dodavatel-naradia.example",
+  "to": ["eshop@smartmail.test"],
+  "attachments": [],
+  "body_text": "Dobrý deň, evidujeme neuhradenú faktúru 2026/118 splatnú 15.10.2026. Prosíme o úhradu do 7 dní.",
+  "language": "sk",
+  "category": "payment",
+  "notes": "Fictional smoke fixture only — never replace with real mail. #100: about paying, not the document."
+}
