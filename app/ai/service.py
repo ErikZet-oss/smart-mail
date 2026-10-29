@@ -179,6 +179,11 @@ async def process_mailbox_ai(
                 auth_results=message.auth_results,
                 internal_domains=settings.internal_domain_list,
                 extra_note_codes=list(plan.note_codes),
+                recipients=[
+                    str(a.get("email"))
+                    for a in [*(message.to_addrs or []), *(message.cc_addrs or [])]
+                    if a.get("email")
+                ],
             )
         except Exception as exc:  # never crash mail sync
             log.warning(
