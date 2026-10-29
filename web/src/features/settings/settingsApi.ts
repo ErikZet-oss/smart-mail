@@ -143,6 +143,11 @@ export type AdminPerson = {
   personal_email: string | null;
 };
 
+/** W12-11b „Osobné účty“ (#71): the person of a personal login and the branch used for its signature. */
+export type PersonalPerson = AdminPerson & { login_email: string; branch_id: string | null };
+
+export const fetchPersonalPeople = () => api<PersonalPerson[]>('GET', '/api/settings/admin/personal-people');
+
 export type BranchLogin = { id: string; email: string; kind: 'personal' | 'branch'; linked: boolean };
 
 export const fetchUsers = () => api<AdminUser[]>('GET', '/api/settings/admin/users');

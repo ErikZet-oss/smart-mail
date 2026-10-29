@@ -2,6 +2,18 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #71: person of a personal login (eshop@) in Pobočky a osoby
+
+- W12-11b Osoby: section „Osobné účty“ (persons of personal logins, `GET /api/settings/admin/personal-people`) with
+  the same drawer; field „Pobočka (pre podpis)“ (select of branches + „bez pobočky“), no manager flag, no delete.
+- `PUT /api/settings/admin/people/{id}` accepts `branch_id` (omitted = unchanged, null = no branch) only for the person
+  of a personal login (422 `branch_only_for_personal_account`); audit before/after includes `branch_id`.
+- „Kto ste?“ of a branch login, the branch people list, the last-admin guard and the last-active-person rule leave out
+  persons with an own personal login, so the signature branch never puts them into a branch picker.
+- Signature: on a mailbox other than the branch's own, the identity's own signature wins and the branch only fills
+  {pobocka}, {adresa_pobocky}, {telefon_pobocky}; on the branch mailbox the branch template still rules.
+- „Zmeniť na prihlásenie pobočky“ deactivates the placeholder person also when it had a signature branch.
+
 ## [Unreleased] — Pilot #69: SMTP server reply on a refused send
 
 - `send_message`: an SMTP refusal keeps the server's reply in `SmtpError.reason` / `send_error`

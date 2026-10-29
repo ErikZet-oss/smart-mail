@@ -12,6 +12,7 @@ from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import Account, AccountKind, Branch, Person, PersonBranch, Role
+from app.auth.persons import own_login_person_ids
 from app.auth.sessions import RevokeReason, revoke_account_sessions
 
 
@@ -43,6 +44,7 @@ async def active_admin_exists(db: AsyncSession) -> bool:
             Person.active.is_(True),
             Person.role == Role.admin,
             or_(Person.branch_id == Account.branch_id, Person.id.in_(covering)),
+            Person.id.not_in(own_login_person_ids()),  # not in the branch picker (#71)
         )
     )
     branch = select(Account.id).where(
@@ -64,7 +66,7 @@ async def convert_to_branch(db: AsyncSession, account: Account, branch: Branch, 
     (history keeps the name). Sessions of the account are revoked, so the next login shows "Kto ste?".
     Returns the number of revoked sessions."""
     placeholder = await db.get(Person, account.person_id) if account.person_id else None
-    if placeholder is not None and placeholder.branch_id is None:
+    if placeholder is not None:  # its branch, if any, was only for the signature (#71)
         placeholder.active = False
     account.kind = AccountKind.branch
     account.branch_id = branch.id

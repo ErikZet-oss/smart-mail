@@ -19,8 +19,10 @@ import {
   ROLES,
   saveBranch,
   savePersonAdmin,
+  fetchPersonalPeople,
   type AdminPerson,
   type BranchLogin,
+  type PersonalPerson,
   type RoleId,
 } from './settingsApi';
 import { FormRow } from './UsersPanel';
@@ -300,13 +302,69 @@ export function BranchPeople({ branch }: { branch: Branch }) {
   );
 }
 
+/** W12-11b „Osobné účty“ (#71): persons of personal logins (eshop@) — same drawer, plus the branch for the signature.
+ * They never appear in „Kto ste?“ of that branch. */
+export function PersonalAccountPeople({ branches }: { branches: Branch[] }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState<PersonalPerson | null>(null);
+  const people = useQuery({ queryKey: [...BRANCHES, 'personal'], queryFn: fetchPersonalPeople });
+  const branchName = (id: string | null) => branches.find((b) => String(b.id) === id)?.name;
+  if (!people.data?.length) return null;
+  return (
+    <section className="flex flex-col gap-3" data-testid="personal-people" aria-labelledby="personal-people-title">
+      <h3 id="personal-people-title" className="type-heading text-text-primary">
+        {t('settings.branches.personal.title')}
+      </h3>
+      <p className="type-small text-text-secondary">{t('settings.branches.personal.hint')}</p>
+      <div className="overflow-x-auto rounded-md border border-border-default">
+        <table className="w-full min-w-[640px] border-collapse">
+          <thead className="bg-bg-subtle">
+            <tr className="type-label text-left text-text-secondary">
+              <th className="px-3 py-2 font-semibold">{t('settings.branches.personal.login')}</th>
+              <th className="px-3 py-2 font-semibold">{t('settings.branches.columns.name')}</th>
+              <th className="px-3 py-2 font-semibold">{t('settings.branches.columns.function')}</th>
+              <th className="px-3 py-2 font-semibold">{t('settings.branches.personal.branch')}</th>
+              <th className="px-3 py-2 font-semibold">{t('settings.branches.columns.active')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {people.data.map((p) => (
+              <tr key={p.id} className="type-body border-t border-border-default text-text-primary">
+                <td className="px-3 py-2">{p.login_email}</td>
+                <td className="px-3 py-2">
+                  <button
+                    type="button"
+                    className="text-left hover:text-brand-primary-700 hover:underline"
+                    onClick={() => setOpen(p)}
+                  >
+                    {p.first_name} {p.last_name}
+                  </button>
+                </td>
+                <td className="px-3 py-2">{p.function ?? ''}</td>
+                <td className="px-3 py-2">
+                  {p.branch_id ? String(branchName(p.branch_id) ?? '') : t('settings.branches.personal.noBranch')}
+                </td>
+                <td className="px-3 py-2">{p.active ? t('settings.users.active') : t('settings.users.inactive')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {open ? <PersonDrawer branchId="" person={open} personal={{ branches }} onClose={() => setOpen(null)} /> : null}
+    </section>
+  );
+}
+
 function PersonDrawer({
   branchId,
   person,
+  personal,
   onClose,
 }: {
   branchId: string;
-  person: AdminPerson | null;
+  person: AdminPerson | PersonalPerson | null;
+  /** Person of a personal login (#71): branch select for the signature, no manager flag and no delete. */
+  personal?: { branches: Branch[] };
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -323,6 +381,9 @@ function PersonDrawer({
     is_manager: person?.is_manager ?? false,
     active: person?.active ?? true,
   });
+  const [signatureBranch, setSignatureBranch] = useState(
+    person && 'branch_id' in person ? (person.branch_id ?? '') : '',
+  );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const text = (key: 'first_name' | 'last_name' | 'function' | 'phone' | 'mobile') => ({
     value: form[key],
@@ -340,6 +401,7 @@ function PersonDrawer({
         phone: form.phone || null,
         mobile: form.mobile || null,
         personal_email: person?.personal_email ?? null,
+        ...(personal ? { branch_id: signatureBranch || null } : {}),
       };
       return person ? savePersonAdmin(person.id, body) : addPersonAdmin(branchId, body);
     },
@@ -431,14 +493,29 @@ function PersonDrawer({
               ))}
             </select>
           </label>
-          <div className="flex flex-col gap-0.5">
-            <Switch
-              checked={form.is_manager}
-              onChange={(v) => setForm((prev) => ({ ...prev, is_manager: v }))}
-              label={t('settings.branches.person.manager')}
-            />
-            <p className="type-caption pl-[42px] text-text-secondary">{t('settings.branches.person.managerHelp')}</p>
-          </div>
+          {personal ? (
+            <label className="flex flex-col gap-1">
+              <span className="type-label text-text-primary">{t('settings.branches.personal.branch')}</span>
+              <select className={INPUT} value={signatureBranch} onChange={(e) => setSignatureBranch(e.target.value)}>
+                <option value="">{t('settings.branches.personal.noBranch')}</option>
+                {personal.branches.map((b) => (
+                  <option key={String(b.id)} value={String(b.id)}>
+                    {String(b.name)}
+                  </option>
+                ))}
+              </select>
+              <span className="type-caption text-text-secondary">{t('settings.branches.personal.branchHelp')}</span>
+            </label>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              <Switch
+                checked={form.is_manager}
+                onChange={(v) => setForm((prev) => ({ ...prev, is_manager: v }))}
+                label={t('settings.branches.person.manager')}
+              />
+              <p className="type-caption pl-[42px] text-text-secondary">{t('settings.branches.person.managerHelp')}</p>
+            </div>
+          )}
           <Switch
             checked={form.active}
             onChange={(v) => setForm((prev) => ({ ...prev, active: v }))}
@@ -446,7 +523,7 @@ function PersonDrawer({
           />
         </div>
         <footer className="flex shrink-0 items-center gap-2 border-t border-border-default p-5">
-          {person ? (
+          {person && !personal ? (
             <Button
               type="button"
               className="bg-danger-600 hover:bg-danger-600 hover:brightness-95"

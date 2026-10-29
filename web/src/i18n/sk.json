@@ -908,6 +908,14 @@
       "link": "Prepojiť prihlásenie s pobočkou",
       "linked": "Prihlásenie je prepojené s pobočkou.",
       "peopleHint": "Klik na meno vyberie osobu v „Kto ste?“ – bez PIN-u (D9).",
+      "personal": {
+        "title": "Osobné účty",
+        "hint": "Osoby s vlastným prihlásením (napr. eshop@). Pobočka slúži len pre podpis – v „Kto ste?“ pobočky sa nezobrazujú.",
+        "login": "Prihlásenie",
+        "branch": "Pobočka (pre podpis)",
+        "branchHelp": "Adresa, telefón a názov pobočky sa doplnia do podpisu. Osoba sa tým nepridá do „Kto ste?“ pobočky.",
+        "noBranch": "bez pobočky"
+      },
       "columns": {
         "name": "Meno",
         "function": "Funkcia",
