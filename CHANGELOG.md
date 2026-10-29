@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #62: flaky W12-11a e2e (red main)
+
+- Cause: since #53 the W12-11a Údaje tab loads `GET /api/settings/admin/mailboxes`; `phase1-visual.spec.ts` did not mock
+  it, the e2e mock answered 401 and the global handler sent the page to /login — sometimes before the breadcrumb
+  assertion. Test-only; the app behaves correctly (a real 401 must sign out).
+- `e2e/fixtures.ts`: Settings 10/11 admin endpoints in `SETTINGS_DEFAULTS`; every unmocked API call is logged as
+  `[mockApi] unmocked … → 401`. The two other unmocked calls of the suite (settings preferences in the axe test,
+  image proxy) are mocked; the full suite now has none.
 ## [Unreleased] — Pilot #38: body search also on the IMAP server (Roundcube parity)
 
 - `GET /api/search?server=true`: for Telo (`BODY`) and Celá správa (`TEXT`) the backend also runs `UID SEARCH CHARSET
