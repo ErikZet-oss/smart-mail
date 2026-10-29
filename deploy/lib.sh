@@ -128,6 +128,26 @@ render_edge_configs() {
   fi
 }
 
+reload_edge_configs() {
+  # A running nginx/Caddy keeps the old config when only the bind-mounted file changed (no image rebuild):
+  # reload them, after a syntax check, so a new rule (e.g. the .mjs MIME type, #59) takes effect.
+  local nginx_before="$1" caddy_before="$2"
+  local nginx_now caddy_now
+  nginx_now="$(sha256sum "$DEPLOY_DIR/nginx-active.conf" | awk '{print $1}')"
+  if [[ "$nginx_now" != "$nginx_before" ]]; then
+    echo "nginx konfigurácia sa zmenila – načítavam ju znova…"
+    "${COMPOSE[@]}" exec -T web nginx -t
+    "${COMPOSE[@]}" exec -T web nginx -s reload
+  fi
+  if [[ "${DEPLOY_MODE:-ci}" == "vps" && -f "$DEPLOY_DIR/Caddyfile" ]]; then
+    caddy_now="$(sha256sum "$DEPLOY_DIR/Caddyfile" | awk '{print $1}')"
+    if [[ "$caddy_now" != "$caddy_before" ]]; then
+      echo "Caddy konfigurácia sa zmenila – načítavam ju znova…"
+      "${COMPOSE[@]}" --profile vps exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+    fi
+  fi
+}
+
 compose_up() {
   local profiles=()
   case "${DEPLOY_MODE:-ci}" in

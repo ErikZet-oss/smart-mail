@@ -64,6 +64,9 @@ rollback() {
 trap 'rollback' ERR
 
 # Re-render nginx/Caddy from DEPLOY_MODE (vps strips CF-Connecting-IP; tunnel keeps it).
+# Bind-mounted configs are not re-read by a running container, so remember whether they changed (pilot #59).
+NGINX_BEFORE="$(sha256sum "$DEPLOY_DIR/nginx-active.conf" 2>/dev/null | awk '{print $1}')"
+CADDY_BEFORE="$(sha256sum "$DEPLOY_DIR/Caddyfile" 2>/dev/null | awk '{print $1}')"
 render_edge_configs
 
 # Backup before migrations (alembic runs in the app container entrypoint).
@@ -81,6 +84,7 @@ else
   compose_up
 fi
 wait_healthy "http://127.0.0.1:8080/readyz"
+reload_edge_configs "$NGINX_BEFORE" "$CADDY_BEFORE"
 trap - ERR
 save_git_sha
 echo "Aktualizácia hotová. Smart Mail beží: ${APP_BASE_URL:-http://127.0.0.1:8080}"
