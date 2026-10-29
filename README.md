@@ -108,8 +108,10 @@ aplikácia znova otvorí výber. Menu osoby vždy obsahuje **Môj profil** a **O
 Pobočkové schránky a ďalšie osoby zatiaľ založíte príkazom (neskôr v Nastaveniach › Pobočky a osoby):
 
 ```bash
+# The same is available in Nastavenia › Používatelia a role / Pobočky a osoby (#33).
 docker compose exec app python -m app.cli add-account jana@smartsro.sk --first-name Jana --last-name Nová --role sales
 docker compose exec app python -m app.cli add-account nitra@smartsro.sk --branch Nitra      # pobočková schránka
+docker compose exec app python -m app.cli add-account fa@smartsro.sk --branch Nitra --convert  # existujúci osobný účet
 docker compose exec app python -m app.cli add-person Nitra --first-name Peter --last-name Novák
 docker compose exec app python -m app.cli maintenance on --until 2026-11-01T08:00:00+01:00  # obrazovka Údržba
 docker compose exec app python -m app.cli maintenance off
