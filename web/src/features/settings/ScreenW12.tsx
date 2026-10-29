@@ -12,7 +12,7 @@ import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
-import { BranchDetails, BranchList, BranchPeople } from './BranchAdmin';
+import { BranchDetails, BranchList, BranchPeople, PersonalAccountPeople } from './BranchAdmin';
 import { BranchIdentityForm } from './BranchIdentityForm';
 import { SettingsFieldControl } from './Field';
 import { UsersPanel } from './UsersPanel';
@@ -1221,8 +1221,9 @@ function BranchesPanel({ sub }: { sub?: string }) {
     return (
       <div className="flex flex-col gap-6 lg:flex-row">
         {list}
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-8">
           <BranchPeople branch={current} />
+          <PersonalAccountPeople branches={branches.data ?? []} />
         </div>
       </div>
     );

@@ -6,8 +6,9 @@ from __future__ import annotations
 import unicodedata
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.auth.models import Account, AccountKind, DevicePersonMemory, Person, PersonBranch
 
@@ -45,6 +46,13 @@ def picker_order(person: Person) -> tuple[bool, tuple[tuple[int, ...], str], tup
     return (not person.is_manager, slovak_sort_key(person.first_name), slovak_sort_key(person.last_name))
 
 
+def own_login_person_ids() -> Select[uuid.UUID | None]:
+    """Persons that sign in with their own personal account (eshop@, a personal mailbox). Aliased, so it never
+    correlates with an outer query on accounts."""
+    own = aliased(Account)
+    return select(own.person_id).where(own.kind == AccountKind.personal, own.person_id.is_not(None)).correlate(None)
+
+
 async def eligible_persons(db: AsyncSession, account: Account) -> list[Person]:
     if account.kind == AccountKind.personal:
         if account.person_id is None:
@@ -58,6 +66,8 @@ async def eligible_persons(db: AsyncSession, account: Account) -> list[Person]:
         select(Person)
         .where(Person.active.is_(True))
         .where((Person.branch_id == account.branch_id) | Person.id.in_(covering))
+        # a person with an own login only has a branch for the signature, never a place in „Kto ste?“ (#71)
+        .where(Person.id.not_in(own_login_person_ids()))
     )
     return sorted(rows.scalars().all(), key=picker_order)
 

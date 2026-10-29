@@ -311,11 +311,24 @@ def render_signature(
     lang = language.lower()[:2] or "sk"
     if lang == "cz":
         lang = "cs"
-    template = ""
+    branch_template = ""
     if branch and isinstance(branch.signature_template_html, dict):
-        template = branch.signature_template_html.get(lang) or branch.signature_template_html.get("sk") or ""
-    if not template and identity and isinstance(identity.signature_html, dict):
-        template = identity.signature_html.get(lang) or identity.signature_html.get("sk") or ""
+        branch_template = branch.signature_template_html.get(lang) or branch.signature_template_html.get("sk") or ""
+    own_template = ""
+    if identity and isinstance(identity.signature_html, dict):
+        own_template = identity.signature_html.get(lang) or identity.signature_html.get("sk") or ""
+    # The branch template rules the branch mailbox. On another mailbox (eshop@ with a branch for the signature, #71)
+    # the identity's own signature wins and the branch only fills {adresa_pobocky}, {telefon_pobocky}, {pobocka}.
+    own_mailbox = (
+        branch is not None
+        and branch.mailbox_id is not None
+        and identity is not None
+        and identity.mailbox_id != branch.mailbox_id
+    )
+    if own_mailbox and own_template:
+        template = own_template
+    else:
+        template = branch_template or own_template
     if not template and person:
         parts = [
             f"<p><strong>{html.escape(person.full_name)}</strong>",

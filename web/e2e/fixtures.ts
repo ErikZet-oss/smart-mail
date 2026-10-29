@@ -165,6 +165,7 @@ export const SETTINGS_DEFAULTS: Record<string, Reply> = {
   // Settings 10/11 (#33) load these on open; an unmocked call answers 401 and logs the shell out mid-test (#62).
   'GET /api/settings/admin/mailboxes': { body: [] },
   'GET /api/settings/admin/users': { body: [] },
+  'GET /api/settings/admin/personal-people': { body: [] },
   // Branch signature (11c) loads presets on open. An unmocked 401 logs the shell out.
   'GET /api/settings/signature-presets': {
     body: {

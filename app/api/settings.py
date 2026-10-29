@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from app.auth.admin_accounts import AccountRuleError, convert_to_branch, create_account, ensure_admin_remains
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep, client_ip
 from app.auth.models import Account, AccountKind, Branch, Person, Role
+from app.auth.persons import own_login_person_ids
 from app.auth.security import decrypt
 from app.core.audit import AuditLog, audit
 from app.mail import storage
@@ -947,6 +948,7 @@ def _person_state(p: Person) -> dict[str, Any]:
         "role": p.role.value,
         "is_manager": p.is_manager,
         "active": p.active,
+        "branch_id": str(p.branch_id) if p.branch_id else None,
     }
 
 
@@ -1052,13 +1054,50 @@ async def patch_user(account_id: uuid.UUID, body: UserPatch, request: Request, c
 # ----- admin 11 branches -----
 
 
+def _admin_person(p: Person) -> dict[str, Any]:
+    return {
+        "id": str(p.id),
+        "first_name": p.first_name,
+        "last_name": p.last_name,
+        "function": p.function,
+        "role": p.role.value,
+        "is_manager": p.is_manager,
+        "active": p.active,
+        "phone": p.phone,
+        "mobile": p.mobile,
+        "personal_email": p.personal_email,
+    }
+
+
+@router.get("/admin/personal-people")
+async def admin_personal_people(ctx: Auth, db: DB) -> list[dict[str, Any]]:
+    """W12-11b „Osobné účty“ (#71): the persons of personal logins (eshop@), with the branch used for their
+    signature."""
+    require_admin(ctx)
+    rows = (
+        await db.execute(
+            select(Person, Account.email)
+            .join(Account, Account.person_id == Person.id)
+            .where(Account.kind == AccountKind.personal)
+            .order_by(Account.email)
+        )
+    ).all()
+    return [
+        {**_admin_person(p), "login_email": email, "branch_id": str(p.branch_id) if p.branch_id else None}
+        for p, email in rows
+    ]
+
+
 @router.get("/admin/branches")
 async def admin_branches(ctx: Auth, db: DB) -> list[dict[str, Any]]:
     require_admin(ctx)
     rows = (await db.scalars(select(Branch).order_by(Branch.name))).all()
     out = []
     for b in rows:
-        people = (await db.scalars(select(Person).where(Person.branch_id == b.id))).all()
+        # persons with an own login are listed under „Osobné účty“, their branch only feeds the signature (#71)
+        people = (
+            await db.scalars(select(Person).where(Person.branch_id == b.id, Person.id.not_in(own_login_person_ids())))
+        ).all()
         mailbox = await db.get(Mailbox, b.mailbox_id) if b.mailbox_id else None
         login = await db.scalar(select(Account).where(Account.email == mailbox.email)) if mailbox else None
         out.append(
@@ -1087,21 +1126,7 @@ async def admin_branches(ctx: Auth, db: DB) -> list[dict[str, Any]]:
                 "money_centre_id": b.money_centre_id,
                 "money_price_list_id": b.money_price_list_id,
                 "money_warehouse_id": b.money_warehouse_id,
-                "people": [
-                    {
-                        "id": str(p.id),
-                        "first_name": p.first_name,
-                        "last_name": p.last_name,
-                        "function": p.function,
-                        "role": p.role.value,
-                        "is_manager": p.is_manager,
-                        "active": p.active,
-                        "phone": p.phone,
-                        "mobile": p.mobile,
-                        "personal_email": p.personal_email,
-                    }
-                    for p in people
-                ],
+                "people": [_admin_person(p) for p in people],
             }
         )
     return out
@@ -1210,6 +1235,8 @@ class PersonAdminIn(BaseModel):
     is_manager: bool = False
     active: bool = True
     personal_email: str | None = None
+    # „Pobočka (pre podpis)“ — only for the person of a personal account; omitted = unchanged, null = no branch (#71)
+    branch_id: uuid.UUID | None = None
 
 
 @router.post("/admin/branches/{branch_id}/people")
@@ -1271,6 +1298,15 @@ async def update_person_admin(
     person.is_manager = body.is_manager
     person.active = body.active
     person.personal_email = body.personal_email
+    if "branch_id" in body.model_fields_set:
+        own_login = await db.scalar(
+            select(Account.id).where(Account.person_id == person.id, Account.kind == AccountKind.personal)
+        )
+        if own_login is None:
+            raise fail(422, "branch_only_for_personal_account")
+        if body.branch_id is not None and await db.get(Branch, body.branch_id) is None:
+            raise fail(404, "branch_not_found")
+        person.branch_id = body.branch_id
     try:
         await ensure_admin_remains(db)
     except AccountRuleError as exc:
@@ -1298,11 +1334,18 @@ async def delete_person_admin(person_id: uuid.UUID, request: Request, ctx: Auth,
     person = await db.get(Person, person_id)
     if person is None:
         raise fail(404, "person_not_found")
-    if person.branch_id is not None and person.active:
+    own_login = await db.scalar(select(Account.id).where(Account.person_id == person.id))
+    if person.branch_id is not None and person.active and own_login is None:
+        # people with an own login only borrow the branch for their signature (#71)
         others = await db.scalar(
             select(func.count())
             .select_from(Person)
-            .where(Person.branch_id == person.branch_id, Person.active.is_(True), Person.id != person.id)
+            .where(
+                Person.branch_id == person.branch_id,
+                Person.active.is_(True),
+                Person.id != person.id,
+                Person.id.not_in(own_login_person_ids()),
+            )
         )
         if not others:
             raise fail(409, "last_active_person")
@@ -1310,7 +1353,7 @@ async def delete_person_admin(person_id: uuid.UUID, request: Request, ctx: Auth,
     drafts = select(func.count()).select_from(ComposeDraft)
     has_history = bool(
         await db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.person_id == person.id))
-        or await db.scalar(select(func.count()).select_from(Account).where(Account.person_id == person.id))
+        or own_login is not None
         or await db.scalar(
             drafts.where(or_(ComposeDraft.person_id == person.id, ComposeDraft.signature_person_id == person.id))
         )
