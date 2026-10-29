@@ -357,6 +357,10 @@ test.describe('pilot: remote images bar', () => {
         return { body: { id: 'c-1' } };
       },
     });
+    // the proxied image itself (an <img> 401 would not log out, but keep the run free of unmocked calls, #62)
+    await page.route('**/api/mail/image-proxy?*', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') }),
+    );
     await page.goto('/mail/default/inbox');
     await page.getByText('Kópia faktúry 2026123').click();
     await expect(page.getByText('Vzdialené obrázky sú zablokované.')).toBeVisible();

@@ -162,6 +162,9 @@ export const SETTINGS_DEFAULTS: Record<string, Reply> = {
       signature_preview_html: '<p>Jana</p>',
     },
   },
+  // Settings 10/11 (#33) load these on open; an unmocked call answers 401 and logs the shell out mid-test (#62).
+  'GET /api/settings/admin/mailboxes': { body: [] },
+  'GET /api/settings/admin/users': { body: [] },
   // Branch signature (11c) loads presets on open. An unmocked 401 logs the shell out.
   'GET /api/settings/signature-presets': {
     body: {
@@ -210,6 +213,8 @@ export async function mockApi(page: Page, given: Record<string, ReplySource>) {
       // Phase 2b poll — empty triage so Phase 1 shells stay signed in
       reply = { body: EMPTY_AI_CATEGORIES };
     } else if (!reply) {
+      // Unmocked: answer 401 like the real API without a session — this logs the shell out, so say which call (#62).
+      console.warn(`[mockApi] unmocked ${key} → 401 (the page will go to /login)`);
       reply = { status: 401, body: { detail: { code: 'unauthenticated', reason: 'missing' } } };
     }
     if (reply.never) return; // keeps the request pending (submitting state)
