@@ -278,3 +278,22 @@ async def test_g5_existing_folder_name_is_refused(
     await _signed_in(client, db, mail_server)
     r = await client.send_json("POST", "/api/mail/mailboxes/default/folders", {"name": "Nitra"})
     assert r.status_code == 409 and r.json()["detail"]["code"] == "folder_exists"
+
+
+# --- large folders (pilot: 25,000 messages in eshop@) --------------------------------------------------------------
+async def test_1c_first_sync_of_a_large_folder_stays_under_the_bind_parameter_limit(db: AsyncSession) -> None:
+    """One INSERT with every envelope exceeded asyncpg's 32767 bind parameters and the mailbox stayed at 0."""
+    mailbox = await make_mailbox(db, await make_personal(db))
+    count = 3_000  # ~20 columns per row -> 60,000 parameters in one statement before the fix
+    new = [env(uid) for uid in range(1, count + 1)]
+    await apply_snapshot(db, mailbox, snapshot(delta("INBOX", 7, count + 1, count, count, new=new)), now=NOW)
+    await db.commit()
+    stored = await db.scalar(select(func.count()).select_from(Message).where(Message.mailbox_id == mailbox.id))
+    assert stored == count
+    assert mailbox.sync_state == "ok"
+
+    # most of the folder expunged elsewhere: the delete must be chunked too
+    keep = {1, 2, 3}
+    await apply_snapshot(db, mailbox, snapshot(delta("INBOX", 7, count + 1, 3, 3, present_uids=keep)), now=NOW)
+    await db.commit()
+    assert await uids(db, mailbox, "INBOX") == [1, 2, 3]

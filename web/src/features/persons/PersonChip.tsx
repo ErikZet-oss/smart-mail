@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { Avatar } from '../../components/Avatar';
 import { useToast } from '../../components/toastContext';
+import { refreshAfterPersonChange } from '../../lib/sessionCache';
 import type { Person } from '../auth/authApi';
 import { choosePerson, fetchPicker, initials, PICKER_KEY } from './personsApi';
 
@@ -96,7 +97,7 @@ export function PersonChip({ onLogout, extras = [] }: Props) {
     try {
       const me = await choosePerson(person.id, true);
       queryClient.setQueryData(['me'], me);
-      await queryClient.invalidateQueries({ queryKey: PICKER_KEY });
+      await refreshAfterPersonChange(queryClient);
       toast({ message: t('person.switched', { name: person.first_name }), durationMs: TOAST_MS });
     } catch {
       await picker.refetch();

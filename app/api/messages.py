@@ -20,10 +20,11 @@ from app.core.content_disposition import content_disposition_attachment
 from app.mail import storage
 from app.mail.actions import MsgAction, MsgTarget, run_msg_action_async
 from app.mail.body import ensure_body, load_attachments
-from app.mail.flags import is_forwarded
+from app.mail.flags import apply_local_flag, is_forwarded
 from app.mail.models import Attachment, FolderMeta, Mailbox, Message, Thread
 from app.mail.prefs import ListPrefs, UiPrefs, get_list_prefs, get_ui_prefs, save_section
 from app.mail.sync import Credentials, SyncAuthError, SyncUnavailable, credentials_for, mark_auth_failed, server_of
+from app.mail.threads import refresh_thread_counts
 
 router = APIRouter(prefix="/api/mail", tags=["mail-messages"])
 
@@ -190,6 +191,7 @@ async def _run(
     dest: FolderMeta | None = None,
     audit_action: str,
     details: dict[str, object],
+    sync_after: bool = True,
 ) -> None:
     creds = await _creds(db, mailbox, settings)
     try:
@@ -208,7 +210,8 @@ async def _run(
         raise fail(503, "mail_server_unavailable") from None
     audit(db, audit_action, object_type="mailbox", object_id=str(mailbox.id), ip=client_ip(request), details=details)
     await db.commit()
-    await _sync(request, db, mailbox, settings)
+    if sync_after:
+        await _sync(request, db, mailbox, settings)
 
 
 def _sort_col(prefs: ListPrefs) -> Any:
@@ -435,8 +438,16 @@ async def get_message(
                     [message.uid],
                     audit_action="mail.message_seen",
                     details={"uid": message.uid, "folder": folder.name},
+                    # Opening a message must not wait for a sync of every folder (pilot: 5-10 s on a
+                    # 30,000-message mailbox). Record the flag locally; IDLE/poll picks up the rest.
+                    sync_after=False,
                 )
                 message.seen = True
+                apply_local_flag(message, "\\Seen")
+                folder.unread = max(0, (folder.unread or 0) - 1)
+                if message.thread_id is not None:
+                    await refresh_thread_counts(db, message.thread_id)
+                await db.commit()
             except HTTPException:
                 pass
 

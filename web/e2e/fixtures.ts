@@ -1,6 +1,7 @@
 import { test as base, type Page, type Route } from '@playwright/test';
 
 type Reply = { status?: number; body: unknown; delayMs?: number; never?: boolean };
+type ReplySource = Reply | Promise<Reply> | ((body: unknown) => Reply | Promise<Reply>);
 
 export const ME = {
   account_id: 'a1',
@@ -177,7 +178,7 @@ const AI_CATEGORIES = /^GET \/api\/mail\/mailboxes\/[^/]+\/ai\/categories$/;
 
 /** Mock the API: "METHOD /path" → reply (or a function of the JSON body for stateful flows). The W2 folder column
  * answers with `MAIL_DEFAULTS` unless overridden; other unmocked API calls answer 401 (not signed in). */
-export async function mockApi(page: Page, given: Record<string, Reply | ((body: unknown) => Reply)>) {
+export async function mockApi(page: Page, given: Record<string, ReplySource>) {
   const replies = { ...MAIL_DEFAULTS, ...SETTINGS_DEFAULTS, ...given };
   await page.route('**/api/**', async (route: Route) => {
     const request = route.request();
@@ -196,7 +197,7 @@ export async function mockApi(page: Page, given: Record<string, Reply | ((body: 
         payload = null;
       }
     }
-    let reply: Reply | undefined = typeof entry === 'function' ? entry(payload) : entry;
+    let reply: Reply | undefined = await (typeof entry === 'function' ? entry(payload) : entry);
     // Phase 1d: list/detail prefs must not 401 a signed-in shell when a test only stubs folders
     if (!reply && FOLDER_MESSAGES.test(key)) {
       reply = { body: emptyMessagesList() };

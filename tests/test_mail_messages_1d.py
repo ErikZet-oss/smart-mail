@@ -8,6 +8,7 @@ from __future__ import annotations
 import uuid
 from datetime import timedelta
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -195,3 +196,104 @@ async def test_1d_message_not_found(client: Client, db: AsyncSession, mail_serve
     r = await client.get(f"/api/mail/mailboxes/default/messages/{uuid.uuid4()}")
     assert r.status_code == 404
     assert r.json()["detail"]["code"] == "message_not_found"
+
+
+async def test_1d_long_message_ids_fit_the_thread_key_and_replies_still_join(db: AsyncSession) -> None:
+    """Pilot (eshop@): a Message-ID longer than the varchar(80) thread key aborted the whole first sync."""
+    from dataclasses import replace
+
+    from tests.test_mail_sync_1c import make_mailbox
+
+    mailbox = await make_mailbox(db, await make_personal(db))
+    long_id = "<" + "newsletter-" + "x" * 300 + "@bulk.example>"
+    root = replace(env(1, "\\Seen", subject="Akcia"), message_id=long_id)
+    reply = replace(
+        env(2, subject="Re: Akcia"),
+        message_id="<reply-1@example.test>",
+        in_reply_to=long_id,
+        received_at=NOW + timedelta(hours=1),
+    )
+    old_reply = replace(
+        env(3, subject="Re: Akcia"),
+        message_id="<reply-2@example.test>",
+        in_reply_to=long_id,
+        received_at=NOW + timedelta(days=60),  # outside the 30-day window: new thread with a date suffix
+    )
+    await _seed_inbox(db, mailbox, root, reply, old_reply)
+    threads = list((await db.execute(select(Thread).where(Thread.mailbox_id == mailbox.id))).scalars())
+    assert all(len(t.thread_key) <= 80 for t in threads)
+    by_uid = {m.uid: m.thread_id for m in (await db.execute(select(Message))).scalars()}
+    assert by_uid[1] == by_uid[2]
+    assert by_uid[3] != by_uid[1]
+    assert len(threads) == 2
+
+
+async def test_1d_old_fallback_threads_of_the_same_day_share_one_thread(db: AsyncSession) -> None:
+    """Pilot (eshop@): two carrier notifications on one day, >30 days after the first, tried to insert the same
+    suffixed thread key twice -> UniqueViolation -> opening an unread message returned 500."""
+    from dataclasses import replace
+
+    from tests.test_mail_sync_1c import make_mailbox
+
+    mailbox = await make_mailbox(db, await make_personal(db))
+
+    def note(uid: int, offset: timedelta) -> Envelope:
+        base = env(uid, subject="Automatische generierte Sendungsinformation")
+        return replace(base, message_id=None, in_reply_to=None, references=None, received_at=NOW + offset)
+
+    first = note(1, timedelta(0))
+    soon = note(2, timedelta(days=5))  # within the window: same thread as 1
+    later_a = note(3, timedelta(days=60))  # window expired: new thread
+    later_b = note(4, timedelta(days=60, hours=2))  # same day as 3: must join it, not collide
+    much_later = note(5, timedelta(days=200))  # yet another window
+    await _seed_inbox(db, mailbox, first, soon, later_a, later_b, much_later)
+
+    by_uid = {m.uid: m.thread_id for m in (await db.execute(select(Message))).scalars()}
+    assert None not in by_uid.values()
+    assert by_uid[1] == by_uid[2]
+    assert by_uid[3] == by_uid[4] != by_uid[1]
+    assert by_uid[5] not in {by_uid[1], by_uid[3]}
+    threads = list((await db.execute(select(Thread).where(Thread.mailbox_id == mailbox.id))).scalars())
+    assert len(threads) == 3
+    assert all(len(t.thread_key) <= 80 for t in threads)
+
+
+async def test_1d_opening_an_unread_message_marks_it_read_without_a_full_sync(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pilot (eshop@, ~30,000 messages): every open of an unread message ran a sync of all folders (5-10 s)."""
+    import app.api.messages as messages_api
+
+    mailbox = await _signed_in(client, db, mail_server)
+    folder = await _seed_inbox(db, mailbox, env(1, subject="Neprečítaná"))
+    msg = await db.scalar(select(Message).where(Message.folder_id == folder.id))
+    assert msg is not None and not msg.seen
+    msg.body_text = "Telo"
+    msg.body_fetched_at = NOW
+    msg.raw_storage_key = "mail/x/raw/ab/cd/fake"
+    await db.commit()
+    unread_before = folder.unread
+
+    stored: list[object] = []
+
+    async def fake_action(*args: object, **kwargs: object) -> None:
+        stored.append(args[2])
+
+    async def fake_creds(*args: object, **kwargs: object) -> object:
+        return object()
+
+    async def no_full_sync(*args: object, **kwargs: object) -> None:
+        raise AssertionError("opening a message must not run a full mailbox sync")
+
+    monkeypatch.setattr(messages_api, "run_msg_action_async", fake_action)
+    monkeypatch.setattr(messages_api, "_creds", fake_creds)
+    monkeypatch.setattr(messages_api, "_sync", no_full_sync)
+
+    r = await client.get(f"/api/mail/mailboxes/default/messages/{msg.id}")
+    assert r.status_code == 200
+    assert stored, "\\Seen must still be stored on the IMAP server"
+    await db.refresh(msg)
+    await db.refresh(folder)
+    assert msg.seen
+    assert "\\Seen" in (msg.flags or [])
+    assert folder.unread == max(0, unread_before - 1)

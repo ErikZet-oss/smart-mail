@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { Avatar } from '../../components/Avatar';
+import { refreshAfterPersonChange } from '../../lib/sessionCache';
 import { fetchMe } from '../auth/authApi';
 import { choosePerson, fetchPicker, initials, PICKER_KEY } from '../persons/personsApi';
 import { useTheme } from '../prefs/ThemeProvider';
@@ -44,8 +45,7 @@ export function ScreenM18({ onClose, onLogout }: Props) {
     mutationFn: (personId: string) => choosePerson(personId, true),
     onSuccess: (next) => {
       queryClient.setQueryData(['me'], next);
-      void queryClient.invalidateQueries({ queryKey: PICKER_KEY });
-      setSwitchOpen(false);
+      void refreshAfterPersonChange(queryClient).finally(() => setSwitchOpen(false));
     },
   });
 
