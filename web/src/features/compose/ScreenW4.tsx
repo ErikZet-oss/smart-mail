@@ -20,12 +20,16 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '../../components/Button';
+import { Avatar } from '../../components/Avatar';
 import { Banner } from '../../components/Banner';
+import { ConfirmDialog } from '../../components/Dialog';
+import { Menu } from '../../components/Menu';
 import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
+import { fetchPicker, PICKER_KEY } from '../persons/personsApi';
 import {
   createDraft,
   deleteAttachment,
@@ -122,6 +126,10 @@ export function ScreenW4() {
   const isPopup = search.get('popup') === '1';
 
   const me = useQuery({ queryKey: ['auth', 'me'], queryFn: fetchMe });
+  const picker = useQuery({ queryKey: PICKER_KEY, queryFn: fetchPicker, enabled: me.data?.kind === 'branch' });
+  const [signerMenu, setSignerMenu] = useState<{ x: number; y: number } | null>(null);
+  const [keptSigner, setKeptSigner] = useState<string | null>(null);
+  const [overrideFor, setOverrideFor] = useState<{ id: string; name: string } | null>(null);
   const [localId, setLocalId] = useState<string | null>(draftId ?? null);
   const [to, setTo] = useState(seedTo);
   const [cc, setCc] = useState('');
@@ -245,6 +253,32 @@ export function ScreenW4() {
     }, 30_000);
     return () => window.clearTimeout(timer);
   }, [localId, dirty, to, cc, subject, priority, mdn, save]);
+
+  // „Odpovedá: … ▾“ and the hint after a person switch (#65): the server re-renders the signature block for that person;
+  // the editor gets the returned body, so typed text and the quote stay and only the signature changes.
+  const changeSigner = useMutation({
+    mutationFn: ({ personId, replace }: { personId: string; replace: boolean }) => {
+      if (!localId) throw new Error('no draft');
+      return patchDraft(localId, {
+        signature_person_id: personId,
+        replace_signature_override: replace,
+        body_html: editor?.getHTML() ?? '',
+      });
+    },
+    onSuccess: (d) => {
+      setOverrideFor(null);
+      void qc.setQueryData(['compose', localId], d);
+      editor?.commands.setContent(d.body_html || '<p></p>', { emitUpdate: false });
+    },
+    onError: (error, vars) => {
+      if (error instanceof ApiError && error.detail.code === 'signature_override_confirm') {
+        const name = signers.find((p) => p.id === vars.personId)?.full_name ?? '';
+        setOverrideFor({ id: vars.personId, name });
+        return;
+      }
+      toasts.error(t('compose.signaturePersonFailed'));
+    },
+  });
 
   const send = useMutation({
     mutationFn: async (force: boolean) => {
@@ -381,7 +415,16 @@ export function ScreenW4() {
 
   const draft = draftQuery.data;
   const identity = identities.data?.find((i) => i.id === draft?.identity_id) ?? identities.data?.[0];
-  const personName = me.data?.person?.full_name ?? '';
+  // The chip shows whose signature the draft carries, never just the active person (#65).
+  const personName = draft?.signature_person_name ?? me.data?.person?.full_name ?? '';
+  const signers = picker.data?.persons ?? [];
+  const personInitial = (personName.trim().charAt(0) || '?').toLocaleUpperCase('sk');
+  const activePerson = me.data?.person ?? null;
+  const signerId = draft?.signature_person_id ?? null;
+  const showSignerHint =
+    Boolean(draft && activePerson && signerId && activePerson.id !== signerId) &&
+    keptSigner !== `${signerId}:${activePerson?.id ?? ''}` &&
+    signers.some((p) => p.id === activePerson?.id);
   const mobile = useMediaQuery(MOBILE_QUERY);
 
   function openPopupWindow() {
@@ -550,6 +593,26 @@ export function ScreenW4() {
 
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
+            {showSignerHint && activePerson ? (
+              <div className="px-4 pt-3" data-testid="compose-signer-hint">
+                <Banner
+                  kind="warning"
+                  message={t('compose.signaturePersonHint', {
+                    draftPerson: personName,
+                    active: activePerson.full_name,
+                  })}
+                  action={{
+                    label: t('compose.signaturePersonChange'),
+                    onClick: () => changeSigner.mutate({ personId: activePerson.id, replace: false }),
+                    disabled: changeSigner.isPending,
+                  }}
+                  secondaryAction={{
+                    label: t('compose.signaturePersonKeep'),
+                    onClick: () => setKeptSigner(`${signerId}:${activePerson.id}`),
+                  }}
+                />
+              </div>
+            ) : null}
             {sendFailMeta ? (
               <div className="px-4 pt-3" data-testid="compose-send-error">
                 <Banner kind="danger" message={formatAllowlistFailure(t, sendFailMeta)} />
@@ -573,12 +636,41 @@ export function ScreenW4() {
                 }`}
               >
                 <span className="truncate">{identity ? `${identity.display_name} <${identity.email}>` : '…'}</span>
-                {personName ? (
-                  <span className="type-caption inline-flex items-center rounded-full bg-brand-primary-50 px-2.5 py-0.5 text-brand-primary-700">
-                    {t('compose.replier', { name: personName })}
-                  </span>
-                ) : null}
               </div>
+              {personName ? (
+                <>
+                  <span className="type-body text-text-primary">{t('compose.replierLabel')}</span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                    {personName && signers.length > 1 && !me.data?.read_only ? (
+                      <button
+                        type="button"
+                        aria-haspopup="menu"
+                        aria-label={`${t('compose.replier', { name: personName })} – ${t('compose.replierMenu')}`}
+                        data-testid="compose-signer"
+                        onClick={(event) => {
+                          const box = event.currentTarget.getBoundingClientRect();
+                          setSignerMenu({ x: box.left, y: box.bottom + 4 });
+                        }}
+                        className="type-label inline-flex items-center gap-1.5 rounded-full border border-brand-primary-600 bg-brand-primary-50 py-0.5 pl-1 pr-2.5 text-brand-primary-700 hover:bg-brand-primary-100"
+                      >
+                        <Avatar initials={personInitial} seed={signerId ?? ''} size={20} />
+                        {t('compose.replier', { name: personName })}
+                        <ChevronDown size={12} aria-hidden="true" />
+                      </button>
+                    ) : personName ? (
+                      <span
+                        data-testid="compose-signer"
+                        className="type-caption inline-flex items-center rounded-full bg-brand-primary-50 px-2.5 py-0.5 text-brand-primary-700"
+                      >
+                        {t('compose.replier', { name: personName })}
+                      </span>
+                    ) : null}
+                    {me.data?.kind === 'branch' ? (
+                      <span className="type-caption text-text-secondary">{t('compose.replierBranchHint')}</span>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
               <span className="type-body text-text-primary">{t('compose.to')}</span>
               <div className="flex gap-2">
                 <input
@@ -895,6 +987,35 @@ export function ScreenW4() {
           onEdit={() => setPreSendOpen(false)}
           onSendAnyway={() => send.mutate(true)}
           busy={send.isPending}
+        />
+      ) : null}
+      {signerMenu ? (
+        <Menu
+          label={t('compose.replierMenu')}
+          at={signerMenu}
+          width={240}
+          onClose={() => setSignerMenu(null)}
+          entries={signers.map((p) => ({
+            kind: 'item' as const,
+            id: p.id,
+            label: p.full_name,
+            hint: p.function ?? undefined,
+            checked: p.id === (signerId ?? activePerson?.id),
+            onSelect: () => {
+              setSignerMenu(null);
+              if (p.id !== signerId) changeSigner.mutate({ personId: p.id, replace: false });
+            },
+          }))}
+        />
+      ) : null}
+      {overrideFor ? (
+        <ConfirmDialog
+          title={t('compose.signatureOverrideTitle')}
+          body={t('compose.signatureOverrideBody', { name: overrideFor.name })}
+          confirmLabel={t('compose.signatureOverrideConfirm')}
+          busy={changeSigner.isPending}
+          onConfirm={() => changeSigner.mutate({ personId: overrideFor.id, replace: true })}
+          onClose={() => setOverrideFor(null)}
         />
       ) : null}
       {scheduleOpen ? (
