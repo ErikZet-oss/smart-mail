@@ -25,6 +25,8 @@ dependencies = [
     "python-multipart>=0.0.32",
     "sievelib>=1.6.0",
     "anthropic>=0.40",
+    # signature images, person photos and branch logos are normalised at upload (app/mail/signature_images.py)
+    "pillow>=11.0",
 ]
 
 [dependency-groups]
@@ -39,7 +41,6 @@ dev = [
     "weasyprint==70.0",
     "jinja2>=3.1.4",
     "python-barcode>=0.15",
-    "pillow>=11.0",
     # schema drift check (tools/validate_graphql.py)
     "graphql-core>=3.2",
     "moto>=5.2.4",

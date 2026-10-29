@@ -13,6 +13,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — #81 Phase 1 close-out
 
+### Fixed
+- Person photo, branch logo and signature image uploads failed on the server (500 / „nepodporovaný formát“): Pillow was a dev-only dependency and the Docker image installs `--no-dev`. Pillow is now a runtime dependency; `tests/test_runtime_dependencies.py` fails when `app/` imports a dev-only package.
+
 **Done in Phase 1:**
 - mailbox login (IMAP) with 2FA for personal accounts and re-auth for admin changes;
 - branches, persons, „Kto ste?“ and branch signatures;
