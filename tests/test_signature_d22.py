@@ -136,8 +136,8 @@ def test_d22_empty_variable_drops_separator() -> None:
 def test_d22_karta_template_uses_known_variables() -> None:
     html = karta_template("sk")
     assert "<table" in html
-    assert "{meno}" in html and "{fotka}" in html and "{logo}" in html
-    assert "S pozdravom" in html
+    assert "{meno}" in html and "{priezvisko}" in html and "{funkcia}" in html and "{pobocka}" in html
+    assert "{mobil}" in html and "{email_pobocky}" in html and "{adresa_pobocky}" in html
     assert unknown_variables(html) == []
     assert "{mobil}" in text_template("cs")
     assert "S pozdravem" in text_template("cs")
@@ -248,3 +248,26 @@ async def test_d22_identity_image_upload(client: Client, db: AsyncSession, mail_
     fetched = await client.get(saved["preview_url"])
     assert fetched.status_code == 200
     assert fetched.content.startswith(b"\x89PNG")
+
+
+def test_36_karta_is_the_customer_design_in_every_language() -> None:
+    """Issue #36: logo | name, function · branch, phone/e-mail/address icons, e-shop button; tel: link kept."""
+    from app.mail.signature import apply_signature_languages, fill_variables
+
+    texts = {
+        "sk": ("spojovací materiál", "Nakupujte v e-shope smartsro.sk"),
+        "cs": ("spojovací materiál", "Nakupujte v e-shopu smartsro.sk"),
+        "en": ("fasteners", "Shop online at smartsro.sk"),
+        "de": ("Verbindungselemente", "Jetzt im Online-Shop smartsro.sk einkaufen"),
+    }
+    for lang, (tagline, button) in texts.items():
+        html = karta_template(lang)
+        assert tagline in html and button in html
+        assert html.count("data:image/png;base64,") == 5  # logo, phone, e-mail, address, cart
+        assert "utm_campaign=logo" in html and "utm_campaign=eshop" in html
+        assert len(html.encode()) < 64 * 1024
+        cleaned, stripped = apply_signature_languages({"sk": html}, require_sk=True)
+        assert stripped == {}
+        out = fill_variables(cleaned["sk"], {"meno": "Ján", "mobil": "+421 900 000 002", "email_pobocky": "a@b.sk"})
+        assert 'href="tel:+421 900 000 002"' in out
+        assert 'href="mailto:a@b.sk"' in out

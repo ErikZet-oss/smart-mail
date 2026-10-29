@@ -8,6 +8,7 @@ Colours in the default „Karta“ template are read from design/tokens.css (D24
 
 from __future__ import annotations
 
+import base64
 import html
 import re
 from pathlib import Path
@@ -19,6 +20,7 @@ from app.mail.sanitize import sanitize_signature_html
 SIGNATURE_LANGS = ("sk", "cs", "en", "de")
 SIGNATURE_MAX_BYTES = 64 * 1024
 COMPANY_WEB = "www.smartsro.sk"
+COMPANY_WEB_URL = "https://www.smartsro.sk/"
 LOGO_CID = "logo@smartmail"
 PHOTO_CID = "fotka@smartmail"
 
@@ -50,12 +52,6 @@ _VAR = re.compile(r"\{([a-z0-9_]+)\}", re.I)
 _EMPTY = "\x00"
 _SEP = r"(?:[ \t]*[·|–][ \t]*|[ \t]+-[ \t]+|&nbsp;·&nbsp;|<br\s*/?>)"
 
-_GREET_CARD = {
-    "sk": "S pozdravom,",
-    "cs": "S pozdravem,",
-    "en": "Kind regards,",
-    "de": "Mit freundlichen Grüßen,",
-}
 _GREET_TEXT = {
     "sk": "S pozdravom",
     "cs": "S pozdravem",
@@ -160,30 +156,83 @@ def _values(person: Person | None, branch: Branch | None, email: str) -> dict[st
     }
 
 
+_ASSETS = Path(__file__).resolve().parent / "assets" / "signature"
+# Customer's card design (pilot, issue #36). Icons and logo are the customer's own PNGs. They are embedded as data:
+# images; at send time outgoing_images turns every data: image into a CID part, so Gmail/Outlook show them.
+_KARTA_TAGLINE = {
+    "sk": "spojovací materiál",
+    "cs": "spojovací materiál",
+    "en": "fasteners",
+    "de": "Verbindungselemente",
+}
+_KARTA_BUTTON = {
+    "sk": "Nakupujte v e-shope smartsro.sk",
+    "cs": "Nakupujte v e-shopu smartsro.sk",
+    "en": "Shop online at smartsro.sk",
+    "de": "Jetzt im Online-Shop smartsro.sk einkaufen",
+}
+_KARTA_ICON_ALT = {
+    "sk": ("Tel.", "E-mail", "Adresa"),
+    "cs": ("Tel.", "E-mail", "Adresa"),
+    "en": ("Phone", "E-mail", "Address"),
+    "de": ("Tel.", "E-Mail", "Adresse"),
+}
+_UTM = "utm_source=email&amp;utm_medium=podpis"
+
+
+def _asset_data_uri(name: str) -> str:
+    data = (_ASSETS / f"{name}.png").read_bytes()
+    return "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+
+
 def karta_template(lang: str = "sk") -> str:
-    """Default branch template „Karta“ — the Roundcube HTML card (SETTINGS 11c)."""
-    greet = html.escape(_GREET_CARD.get(lang, _GREET_CARD["sk"]))
+    """Default branch template „Karta“ (SETTINGS 11c) in the customer's design: logo | name, function, icons, e-shop."""
+    lang = lang if lang in _KARTA_BUTTON else "sk"
     brand = _token("brand-primary-600")
     text = _token("text-primary")
     muted = _token("text-secondary")
-    tertiary = _token("text-tertiary")
-    border = _token("border-strong")
+    on_brand = _token("text-on-primary")
+    tagline = html.escape(_KARTA_TAGLINE[lang])
+    button = html.escape(_KARTA_BUTTON[lang])
+    alt_phone, alt_mail, alt_address = (html.escape(a) for a in _KARTA_ICON_ALT[lang])
+
+    def icon(name: str, alt: str) -> str:
+        return (
+            '<td style="padding:2px 8px 2px 0;vertical-align:middle;">'
+            f'<img src="{_asset_data_uri(name)}" width="20" height="20" alt="{alt}" style="display:block;border:0;">'
+            "</td>"
+        )
+
+    cell = "padding:2px 0;vertical-align:middle;"
+    link = f"color:{text};text-decoration:none;"
     return (
-        f'<p style="margin:0 0 8px;font-family:Arial,sans-serif;font-size:14px;color:{text}">{greet}</p>'
-        f'<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-left:3px solid {border};'
-        f'font-family:Arial,sans-serif">'
-        "<tr>"
-        '<td style="padding:10px 14px;vertical-align:middle">{fotka}</td>'
-        '<td style="padding:10px 8px;vertical-align:middle">'
-        f'<div style="font-weight:700;font-size:14px;letter-spacing:0.04em;text-transform:uppercase;color:{text}">'
-        "{meno} {priezvisko}</div>"
-        f'<div style="color:{brand};font-size:13px">{{funkcia}}</div>'
-        f'<div style="height:2px;background:{brand};width:220px;margin:4px 0;line-height:2px;font-size:0">&nbsp;</div>'
-        f'<div style="font-size:12px;color:{muted}">{{telefon}} · {{adresa_pobocky}}</div>'
-        f'<div style="font-size:12px;color:{muted}">{{email_pobocky}} · {{web}}</div>'
+        '<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;'
+        f'font-family:Arial,Helvetica,sans-serif;color:{text};"><tr>'
+        f'<td style="padding:0 16px 0 0;border-right:2px solid {brand};vertical-align:middle;">'
+        f'<a href="{COMPANY_WEB_URL}?{_UTM}&amp;utm_campaign=logo" style="text-decoration:none;">'
+        f'<img src="{_asset_data_uri("logo")}" width="150" height="51" alt="SMART s.r.o." '
+        'style="display:block;border:0;"></a>'
+        f'<div style="font-size:11px;color:{muted};padding-top:6px;letter-spacing:0.3px;">{tagline}</div>'
         "</td>"
-        '<td style="padding:10px 14px;vertical-align:middle;text-align:center">{logo}'
-        f'<div style="font-size:11px;letter-spacing:0.06em;color:{tertiary}">Spojovací materiál</div>'
+        '<td style="padding:0 0 0 16px;vertical-align:middle;">'
+        f'<div style="font-size:16px;font-weight:bold;color:{brand};line-height:20px;">{{meno}} {{priezvisko}}</div>'
+        f'<div style="font-size:12px;color:{muted};line-height:18px;padding-bottom:8px;">'
+        "{funkcia} · {pobocka}</div>"
+        '<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-size:12px;'
+        'line-height:20px;">'
+        f'<tr>{icon("phone", alt_phone)}<td style="{cell}">'
+        f'<a href="tel:{{mobil}}" style="{link}">{{mobil}}</a></td></tr>'
+        f'<tr>{icon("email", alt_mail)}<td style="{cell}">'
+        f'<a href="mailto:{{email_pobocky}}" style="{link}">{{email_pobocky}}</a></td></tr>'
+        f'<tr>{icon("address", alt_address)}<td style="{cell}color:{text};">{{adresa_pobocky}}</td></tr>'
+        "</table>"
+        '<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:10px;"><tr>'
+        f'<td style="background:{brand};border-radius:6px;padding:7px 14px;">'
+        f'<a href="{COMPANY_WEB_URL}?{_UTM}&amp;utm_campaign=eshop" style="color:{on_brand};text-decoration:none;'
+        'font-size:12px;font-weight:bold;white-space:nowrap;">'
+        f'<img src="{_asset_data_uri("cart")}" width="16" height="16" alt="" style="border:0;vertical-align:-3px;">'
+        f"&nbsp; {button} &rarr;</a>"
+        "</td></tr></table>"
         "</td></tr></table>"
     )
 

@@ -158,7 +158,9 @@ async def test_issue28_send_signature_matches_preview_not_flattened_editor(
     assert "evil.example" not in html
     assert "<table" in html
     assert "style=" in html
-    assert "cid:logo@smartmail" in html
+    # Karta (customer design, #36): logo + 4 icons are data: in the template and CID parts in the MIME.
+    assert "data:image" not in html
+    assert html.count('src="cid:img-') >= 5
     assert "https://cdn.example/jana-testova.png" in html
     assert "Ďakujeme." in html
     assert "data-sm-" not in html
@@ -172,7 +174,12 @@ async def test_issue28_send_signature_matches_preview_not_flattened_editor(
     preview = preview_signature_html(person=person, branch=None, identity=identity, email=identity.email, language="sk")
     visible = re.sub(r'\sdata-sm-[\w-]*="[^"]*"', "", rendered)
     visible = re.sub(r"""\sdata-cid=(?:"[^"]*"|'[^']*')""", "", visible)
-    assert normalize_signature_html(visible) in normalize_signature_html(html)
+
+    # Same card as the preview, except that data: images became cid: parts at send.
+    def unify(text: str) -> str:
+        return re.sub(r'src="(?:data:image/[^"]+|cid:img-[^"]+)"', 'src="IMG"', text)
+
+    assert unify(normalize_signature_html(visible)) in unify(normalize_signature_html(html))
     assert normalize_signature_html(preview) == normalize_signature_html(rendered)
 
 
