@@ -26,6 +26,7 @@ from app.api import (
     persons,
     search,
     security_2fa,
+    suggestions,
     system,
 )
 from app.api import settings as settings_api
@@ -116,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(mail.router)
     app.include_router(messages.router)
     app.include_router(ai_mail.router)
+    app.include_router(suggestions.router)
     app.include_router(compose.router)
     app.include_router(settings_api.router)
     app.include_router(contacts.router)

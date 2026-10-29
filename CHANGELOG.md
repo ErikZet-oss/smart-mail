@@ -2,6 +2,25 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #94 Phase 2c PR 2: approve / reject reply suggestions (backend)
+
+**`POST /api/suggestions/{id}/approve`** (optional edited `body`). Needs an active person (viewer → 403). Order of work:
+1. Locks the row.
+2. Re-runs the reply guards on the final text: blocking → 409 `suggestion_blocked` with the checks, nothing changes.
+3. Creates a **reply draft** through the normal compose code. The AI text is escaped into paragraphs above the quote, and the signature of the person who approves is added.
+4. Saves it to **Koncepty** (IMAP APPEND).
+
+**Approve never sends** (autonomy level 2, hard rule). It also stores who decided and when, the final payload with `draft_id`, and the diff when edited.
+
+**`POST /api/suggestions/{id}/reject`** stores the reason chips `wrong_category` / `wrong_data` / `tone` / `not_needed` (AI_ASSISTANT §10) and an optional note.
+
+**Both endpoints:**
+- shadow rows and other mailboxes → 404;
+- a second decision → 409 `suggestion_decided`;
+- audit `ai.suggestion_approved` / `ai.suggestion_rejected` (actor user, no body).
+
+The card UI follows in PR 3.
+
 ## [Unreleased] — #96 PR 2: drag & drop onto folders
 
 - Desktop: drag a message row onto a folder in the G3 column to move it.

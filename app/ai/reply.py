@@ -375,3 +375,22 @@ async def suggest_replies(
 
     log.info("ai.pipeline_reply", mailbox_id=str(mailbox.id), **stats.as_dict())
     return stats.as_dict()
+
+
+async def recheck_reply(
+    db: AsyncSession, mailbox: Mailbox, settings: Settings, message: Message, *, body: str, language: str | None
+) -> list[dict[str, Any]]:
+    """The same guards as at creation, on the body being approved (CLAUDE.md §8: the backend re-runs all checks)."""
+    cls = await db.scalar(select(Classification).where(Classification.message_id == message.id).limit(1))
+    notes: list[str] = list(((cls.payload or {}) if cls else {}).get("note_codes") or [])
+    recipient = message.from_email
+    return reply_checks(
+        body=body,
+        context=thread_block(await _thread_messages(db, message)),
+        recipient=recipient,
+        recipient_known=bool(recipient) and await _recipient_known(db, mailbox, recipient or "", message),
+        internal_domains=settings.internal_domain_list,
+        security_notes=[n for n in notes if n.startswith(SECURITY_PREFIX)],
+        expected_language=cls.language if cls else None,
+        proposal_language=language,
+    )
