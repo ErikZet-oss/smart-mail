@@ -96,6 +96,16 @@ test.describe('Phase 1h-e — import debts, empty states, axe', () => {
       'GET /api/search': {
         body: { q: 'x', scope: 'all', fields: ['full'], total: 0, oldest_downloaded_at: null, messages: [] },
       },
+      // without it the settings page got a 401 and could end on /login before the axe check (#62)
+      'GET /api/settings/preferences': {
+        body: {
+          ui: { theme: 'system', classic: false },
+          list: { density: 'compact', mode: 'list', page_size: 50, show_ai_summary: true },
+          reading: {},
+          composing: { undo_send_seconds: 10 },
+          shortcuts: {},
+        },
+      },
     });
 
     await page.goto('/mail/default/inbox');
