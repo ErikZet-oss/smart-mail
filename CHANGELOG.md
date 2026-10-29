@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #85 react-router 6 for the pilot (ADR-013)
+
+- Decision (Erik, B): stay on react-router 6.x; upgrade to 7.x in Phase 7. Recorded in `docs/adr/013-react-router-6-pilot.md`, including the advisory IDs.
+- `safeInternalPath` guards every navigation target taken from router state or server data:
+  - accepts only paths that start with `/`;
+  - rejects `//`, any backslash and control characters;
+  - used by `returnTo` (W1, W1a, W1b), W16, W17 and notification links.
+- Regression test: `#85 safeInternalPath`.
+
 ## [Unreleased] — #81 Phase 1 close-out
 
 **Done in Phase 1:**

@@ -6,6 +6,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Button } from '../../components/Button';
 import { StatusPage } from '../../components/StatusPage';
+import { safeInternalPath } from '../../lib/safePath';
 import { api, formatRef } from '../../lib/api';
 
 const ICON = 44;
@@ -18,7 +19,7 @@ export function ScreenW16a() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? location.pathname;
+  const from = safeInternalPath((location.state as { from?: unknown } | null)?.from, location.pathname);
   const subject = encodeURIComponent(t('system.forbidden.mailSubject', { path: from }));
   const info = useQuery({
     queryKey: ['system', 'info'],
@@ -81,7 +82,7 @@ export function ScreenW16c() {
   const location = useLocation();
   const [params] = useSearchParams();
   const ref = formatRef(params.get('ref') ?? '');
-  const from = (location.state as { from?: string } | null)?.from ?? '/';
+  const from = safeInternalPath((location.state as { from?: unknown } | null)?.from);
   const [copied, setCopied] = useState(false);
 
   async function copy() {
