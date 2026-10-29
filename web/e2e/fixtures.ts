@@ -180,6 +180,7 @@ const FOLDER_MESSAGES = /^GET \/api\/mail\/mailboxes\/[^/]+\/folders\/[^/]+\/mes
 const MESSAGE_DETAIL = /^GET \/api\/mail\/mailboxes\/[^/]+\/messages\/[^/]+$/;
 const MAILBOX_FOLDERS = /^GET \/api\/mail\/mailboxes\/[^/]+\/folders$/;
 const AI_CATEGORIES = /^GET \/api\/mail\/mailboxes\/[^/]+\/ai\/categories$/;
+const USER_ACCESS = /^GET \/api\/settings\/admin\/users\/[^/]+\/mailbox-access$/;
 
 /** Mock the API: "METHOD /path" → reply (or a function of the JSON body for stateful flows). The W2 folder column
  * answers with `MAIL_DEFAULTS` unless overridden; other unmocked API calls answer 401 (not signed in). */
@@ -211,6 +212,9 @@ export async function mockApi(page: Page, given: Record<string, ReplySource>) {
     } else if (!reply && MAILBOX_FOLDERS.test(key)) {
       // deep-link mailboxes (e.g. nitra) share the seeded folder column unless overridden
       reply = { body: foldersView() };
+    } else if (!reply && USER_ACCESS.test(key)) {
+      // Settings 10 detail loads the mailbox access of the selected login (#55)
+      reply = { body: [] };
     } else if (!reply && AI_CATEGORIES.test(key)) {
       // Phase 2b poll — empty triage so Phase 1 shells stay signed in
       reply = { body: EMPTY_AI_CATEGORIES };

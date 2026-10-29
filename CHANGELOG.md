@@ -2,6 +2,19 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #55 part 2: Settings 10 Používatelia a role to Figma (W12-10)
+
+- Layout: the accounts are a full-height column with „Hľadať účet“; the list shows Typ · Rola or „N osoby“ of a branch
+  login (`persons_count`) · last login; „Vytvoriť“ sits in the header; Uložiť / Zrušiť bar with „Neuložené zmeny“.
+- „Overiť“: `POST /api/settings/admin/users/{id}/verify` — one test login on the mail server with a password typed by
+  the admin; never stored or logged; failures count towards the login rate limit; audit `settings.user_verified`.
+- „Odhlásiť zo všetkých zariadení“: `POST /api/settings/admin/users/{id}/logout-all` (confirm; revoke reason
+  `admin_logout`; audit with the number of sessions).
+- „Prístup k schránkam“: `GET/PUT /api/settings/admin/users/{id}/mailbox-access` — Čítať / Odosielať ako per mailbox
+  (Odosielať needs Čítať; the login's own mailbox is fixed); audit before/after.
+- „Matica oprávnení“ (read-only) from PRODUCT_SPEC §4.
+- Not shown (customer decision): „Vyžadovať 2FA“, „Prihlásenie cez Microsoft/Google“, „Vymazať“ account.
+
 ## [Unreleased] — #55 Settings 11 Pobočky a osoby to Figma (W12-11a/b/d)
 
 - Layout: the branch list is its own full-height column with „Pridať pobočku“ at the bottom; the branch name is the
