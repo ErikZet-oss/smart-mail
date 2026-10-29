@@ -29,6 +29,7 @@ from app.auth.security import decrypt
 from app.auth.sessions import RevokeReason, revoke_account_sessions
 from app.core.audit import audit
 from app.core.config import Settings
+from app.mail.bodystructure import has_file_attachments_structure
 from app.mail.folders import ListedFolder, assign_special_use
 from app.mail.imap import ImapServer
 from app.mail.models import FolderMeta, Mailbox, Message
@@ -40,7 +41,16 @@ REFS_FIELD = b"BODY[HEADER.FIELDS (REFERENCES)]"
 # Bind-parameter budget per statement (asyncpg/PostgreSQL limit 32767): 500 rows x ~20 columns, 10000 UIDs.
 INSERT_CHUNK = 500
 DELETE_CHUNK = 10_000
-FETCH_ITEMS = ["UID", "FLAGS", "ENVELOPE", "INTERNALDATE", "RFC822.SIZE", "BODY.PEEK[HEADER.FIELDS (REFERENCES)]"]
+# BODYSTRUCTURE: the paperclip before the first open, without downloading the message (#52)
+FETCH_ITEMS = [
+    "UID",
+    "FLAGS",
+    "ENVELOPE",
+    "INTERNALDATE",
+    "RFC822.SIZE",
+    "BODY.PEEK[HEADER.FIELDS (REFERENCES)]",
+    "BODYSTRUCTURE",
+]
 LOCK_TIMEOUT_S = 300
 UNEXPECTED_PREFIX = "unexpected:"
 
@@ -89,6 +99,7 @@ class Envelope:
     size: int
     flags: list[str]
     modseq: int | None
+    has_attachments: bool = False  # from BODYSTRUCTURE; the first open overwrites it (ensure_body)
 
 
 @dataclass
@@ -198,6 +209,7 @@ def parse_envelope(uid: int, data: dict[bytes, Any]) -> Envelope:
         cc=_addresses(env.cc if env else None),
         sent_at=_aware(env.date) if env else None,
         received_at=_aware(data.get(b"INTERNALDATE")),
+        has_attachments=has_file_attachments_structure(data.get(b"BODYSTRUCTURE")),
         size=int(data.get(b"RFC822.SIZE", 0)),
         flags=[_flag(f) for f in data.get(b"FLAGS", ())],
         modseq=int(modseq[0]) if modseq else None,
@@ -416,6 +428,7 @@ async def apply_snapshot(db: AsyncSession, mailbox: Mailbox, snapshot: MailboxSn
                     "size": e.size,
                     "flags": _stored_flags(e.flags),
                     "modseq": e.modseq,
+                    "has_attachments": e.has_attachments,
                     **_flag_columns(e.flags),
                 }
                 for e in delta.new
