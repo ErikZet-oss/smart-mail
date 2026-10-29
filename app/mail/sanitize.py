@@ -87,7 +87,7 @@ _MESSAGE_ATTRS: Final = {**_COMMON_ATTRS, "img": {"src", "alt", "width", "height
 # Signatures. The keep-src stamp is added after nh3, not copied from the editor.
 _SIGNATURE_ATTRS: Final = {**_COMMON_ATTRS, "img": {"src", "alt", "width", "height", "data-cid"}}
 
-_URL_SCHEMES: Final = {"http", "https", "mailto", "cid", "data"}
+_URL_SCHEMES: Final = {"http", "https", "mailto", "tel", "cid", "data"}
 _REMOTE_SRC = re.compile(
     r'(?P<pre><img\b[^>]*?\bsrc\s*=\s*)(?P<q>["\'])(?P<url>https?://[^"\']+)(?P=q)',
     re.IGNORECASE,
