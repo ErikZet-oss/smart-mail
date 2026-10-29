@@ -1,4 +1,13 @@
 {
+  "reauth": {
+    "title": "Potvrďte heslom",
+    "body": "Ide o citlivú zmenu nastavení. Zadajte heslo k vášmu e-mailu – platí 15 minút.",
+    "password": "Heslo k e-mailu",
+    "confirm": "Potvrdiť",
+    "wrong": "Nesprávne heslo. Skúste to znova.",
+    "rateLimited": "Príliš veľa pokusov. Skúste to o chvíľu.",
+    "failed": "Overenie sa nepodarilo. Skúste to znova."
+  },
   "app": {
     "name": "Smart Mail",
     "footer": "Smart Mail · v{{version}}",
@@ -925,6 +934,7 @@
         "admin_required": "Túto zmenu môže urobiť len správca.",
         "generic": "Zmenu sa nepodarilo uložiť.",
         "rate_limited": "Príliš veľa pokusov. Skúste to o chvíľu.",
+        "reauth_required": "Zmena sa neuložila – nebola potvrdená heslom.",
         "mail_server_unavailable": "Mailový server neodpovedá.",
         "mailbox_not_found": "Schránka neexistuje.",
         "branch_has_people": "Pobočka má aktívne osoby. Najprv ich presuňte alebo deaktivujte.",

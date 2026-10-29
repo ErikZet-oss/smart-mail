@@ -45,6 +45,7 @@ type Navigate = (to: string, options: { replace: boolean; state: { from: string 
 export function routeForError(error: ApiError, currentPath: string): string | null {
   const { status, detail } = error;
   if (status === 503 && detail.code === 'maintenance') return ROUTES.W17.path;
+  if (status === 401 && detail.code === 'reauth_required') return null; // the re-auth dialog handles it (#54)
   if (status === 401) {
     const reason = detail.reason;
     if (reason === 'password_changed') return `${ROUTES.W1.path}?reason=password-changed`;
