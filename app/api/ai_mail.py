@@ -1,4 +1,4 @@
-"""AI triage views — category counts and filtered lists (Phase 2b W2f). No suggestion cards."""
+"""AI triage views — category counts and filtered lists (Phase 2b W2f) and the reply suggestions of a message (2c)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from sqlalchemy import and_, case, desc, func, or_, select
 
 from app.ai.categories import CATEGORY_BY_ID, TRIAGE_CATEGORIES
-from app.ai.models import Classification
+from app.ai.models import AiSuggestion, Classification
+from app.ai.pipeline import normalize_message_id_header
 from app.ai.service import category_counts
 from app.api.mail import _ai_provider_configured, _mailbox, fail
 from app.api.messages import MessageListItem
@@ -249,3 +250,70 @@ async def get_message_classification(ref: str, message_id: uuid.UUID, ctx: Auth,
         note_codes=list(payload.get("note_codes") or []),
         source=payload.get("source"),
     )
+
+
+class SuggestionCheckOut(BaseModel):
+    id: str
+    level: str
+    params: dict[str, Any]
+
+
+class SuggestionOut(BaseModel):
+    id: str
+    type: str
+    status: str
+    to: list[str]
+    subject: str
+    body: str
+    language: str | None
+    rationale: str | None
+    confidence: float | None
+    checks: list[SuggestionCheckOut]
+    blocked: bool
+
+
+def suggestion_out(row: AiSuggestion) -> SuggestionOut:
+    payload = row.payload or {}
+    checks = [SuggestionCheckOut.model_validate(c) for c in row.checks or []]
+    return SuggestionOut(
+        id=str(row.id),
+        type=row.suggestion_type,
+        status=row.status,
+        to=[str(a) for a in payload.get("to") or []],
+        subject=str(payload.get("subject") or ""),
+        body=str(payload.get("body") or ""),
+        language=payload.get("language"),
+        rationale=row.rationale,
+        confidence=float(row.confidence) if row.confidence is not None else None,
+        checks=checks,
+        blocked=any(c.level == "blocking" for c in checks),
+    )
+
+
+@router.get("/mailboxes/{ref}/messages/{message_id}/suggestions")
+async def get_message_suggestions(ref: str, message_id: uuid.UUID, ctx: Auth, db: DB) -> list[SuggestionOut]:
+    """Pending suggestions for the reading pane (2c). Shadow-mode rows are never returned (AI_ASSISTANT §2)."""
+    mailbox = await _mailbox(db, ctx, ref)
+    message = await db.get(Message, message_id)
+    if message is None or message.mailbox_id != mailbox.id:
+        raise fail(404, "message_not_found")
+    # Copies of the same e-mail in other folders share one set of suggestions (§2, once per Message-ID) — but only
+    # inside this mailbox: a suggestion made for a mailbox the caller cannot open must never show here (#99 review).
+    header = normalize_message_id_header(message.message_id)
+    same_mail = AiSuggestion.message_id == message.id
+    if header:
+        copies = select(Classification.message_id).where(
+            Classification.message_id_header == header, Classification.mailbox_id == mailbox.id
+        )
+        same_mail = or_(same_mail, AiSuggestion.message_id.in_(copies))
+    rows = await db.execute(
+        select(AiSuggestion)
+        .where(
+            same_mail,
+            AiSuggestion.mailbox_id == mailbox.id,
+            AiSuggestion.status == "pending",
+            AiSuggestion.shadow.is_(False),
+        )
+        .order_by(AiSuggestion.created_at)
+    )
+    return [suggestion_out(row) for row in rows.scalars()]

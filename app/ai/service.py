@@ -1,4 +1,4 @@
-"""AI pipeline after mail sync — classify (Phase 2b); no reply suggestion cards."""
+"""AI pipeline after mail sync — classify (Phase 2b), then reply suggestions (Phase 2c)."""
 
 from __future__ import annotations
 
@@ -34,6 +34,8 @@ _PAID_RUN_STATUSES = ("ok", "invalid_output", "error")
 
 
 async def shadow_mode_enabled(db: AsyncSession, person_id: uuid.UUID | None = None) -> bool:
+    """Shadow mode is ON unless a row explicitly turns it off (fail-safe, Erik's shadow week #94): suggestions are
+    created and measured but stay hidden until an admin switches them visible (toggle in 2f)."""
     if person_id is not None:
         row = await db.scalar(
             select(FeatureFlag).where(FeatureFlag.key == SHADOW_FLAG, FeatureFlag.person_id == person_id)
@@ -43,7 +45,7 @@ async def shadow_mode_enabled(db: AsyncSession, person_id: uuid.UUID | None = No
     global_row = await db.scalar(
         select(FeatureFlag).where(FeatureFlag.key == SHADOW_FLAG, FeatureFlag.person_id.is_(None))
     )
-    return bool(global_row and global_row.enabled)
+    return True if global_row is None else bool(global_row.enabled)
 
 
 async def daily_spend_usd(db: AsyncSession, day: datetime | None = None) -> Decimal:
@@ -287,7 +289,7 @@ async def process_mailbox_ai(
     return stats
 
 
-async def ensure_shadow_flag(db: AsyncSession, *, enabled: bool = False) -> FeatureFlag:
+async def ensure_shadow_flag(db: AsyncSession, *, enabled: bool = True) -> FeatureFlag:
     row = await db.scalar(select(FeatureFlag).where(FeatureFlag.key == SHADOW_FLAG, FeatureFlag.person_id.is_(None)))
     if row is None:
         row = FeatureFlag(key=SHADOW_FLAG, person_id=None, enabled=enabled, data={})
@@ -318,3 +320,25 @@ async def category_counts(db: AsyncSession, mailbox_id: uuid.UUID) -> dict[str, 
         .group_by(Classification.category)
     )
     return {str(cat): int(cnt) for cat, cnt in rows.all() if cat}
+
+
+async def suggest_replies_for_mailbox(db: AsyncSession, mailbox: Mailbox, settings: Settings) -> dict[str, int]:
+    """Phase 2c step after classify: reply suggestions; bodies are fetched from IMAP only for these messages."""
+    from app.ai.reply import suggest_replies
+    from app.mail.body import ensure_body
+    from app.mail.sync import credentials_for
+
+    creds = await credentials_for(db, mailbox, settings)
+
+    async def load_body(message: Message) -> None:
+        if creds is not None and settings.sync_host_allowed(mailbox.imap_host):
+            await ensure_body(db, settings, mailbox, message, creds)
+
+    return await suggest_replies(
+        db,
+        mailbox,
+        settings,
+        spent_usd=await daily_spend_usd(db),
+        shadow=await shadow_mode_enabled(db),
+        load_body=load_body,
+    )

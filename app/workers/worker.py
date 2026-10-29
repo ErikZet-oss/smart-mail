@@ -44,8 +44,8 @@ async def sync_mailbox_job(ctx: dict[str, Any], mailbox_id: str, scope: Scope = 
 
 
 async def process_mailbox_ai_job(ctx: dict[str, Any], mailbox_id: str) -> dict[str, int]:
-    """Phase 2a pipeline skeleton: eligibility + Message-ID idempotency; classify in 2b."""
-    from app.ai.service import process_mailbox_ai
+    """AI pipeline: eligibility + Message-ID idempotency, classify (2b), then reply suggestions (2c)."""
+    from app.ai.service import process_mailbox_ai, suggest_replies_for_mailbox
 
     settings: Settings = ctx["settings"]
     async with ctx["sessionmaker"]() as db:
@@ -54,7 +54,9 @@ async def process_mailbox_ai_job(ctx: dict[str, Any], mailbox_id: str) -> dict[s
             return {"seen": 0}
         stats = await process_mailbox_ai(db, mailbox, settings)
         await db.commit()
-        return stats
+        replies = await suggest_replies_for_mailbox(db, mailbox, settings)
+        await db.commit()
+        return {**stats, **{f"reply_{k}": v for k, v in replies.items()}}
 
 
 async def send_compose_draft(ctx: dict[str, Any], draft_id: str) -> str:
