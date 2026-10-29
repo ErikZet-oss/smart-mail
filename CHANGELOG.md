@@ -2,6 +2,21 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #30: forward keeps the original attachments
+
+- Poslať ďalej copies the original message's ordinary attachments onto the draft
+  (same stored file, not a second copy). Infected files are left behind. Files not
+  yet scanned (`skipped` / `error`) stay, with the same antivírus label as in the
+  reading pane. The user can remove a chip before send.
+- Send re-reads the antivirus status of the stored file (the draft copy can be
+  stale). `infected` is 409 `attachment_infected` with the file name and cannot be
+  forced. `pending` warns „Príloha ešte nebola skontrolovaná antivírusom“ and the
+  user confirms. A missing file is 409 `attachment_missing`, not an empty attachment.
+  The compose chip shows the current status. The undo-delay job runs the same check.
+- Autosave to Koncepty skips the IMAP copy when a forwarded file is infected or
+  missing (`compose.draft_imap_skipped`, draft id and code only). The local draft
+  still saves and the chip shows the status.
+
 ## [Unreleased] — Pilot #35: person switch refreshes the cache
 
 - Choosing or switching a person drops cached queries other than the signed-in

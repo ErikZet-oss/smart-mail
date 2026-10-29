@@ -16,12 +16,16 @@ from app.auth.models import Branch, Person
 from app.mail import storage
 from app.mail.compose import (
     Mode,
+    PreSendBlocked,
+    attachment_send_block,
     cancel_send,
+    compose_checks,
     create_draft,
     ensure_default_identity,
-    pre_send_checks,
+    live_av_statuses,
     queue_send,
     rehydrate_draft_html,
+    release_compose_storage,
     sync_draft_to_imap,
 )
 from app.mail.compose_models import CannedResponse, ComposeAttachment, ComposeDraft, Identity
@@ -175,6 +179,7 @@ async def _sent_location(db: DB, draft: ComposeDraft) -> tuple[str | None, str |
 
 async def _draft_out(db: DB, draft: ComposeDraft, atts: list[ComposeAttachment], settings: Any) -> DraftOut:
     sent_message_id, sent_thread_id, sent_folder_ref = await _sent_location(db, draft)
+    statuses = await live_av_statuses(db, atts)
     return DraftOut(
         id=str(draft.id),
         mailbox_id=str(draft.mailbox_id),
@@ -204,13 +209,13 @@ async def _draft_out(db: DB, draft: ComposeDraft, atts: list[ComposeAttachment],
                 filename=a.filename,
                 content_type=a.content_type,
                 size=a.size,
-                av_status=a.av_status,
+                av_status=statuses[a.id],
                 is_inline=a.is_inline,
                 content_id=a.content_id,
             )
             for a in atts
         ],
-        checks=pre_send_checks(draft, settings),
+        checks=await compose_checks(db, draft, settings, atts),
         updated_at=draft.updated_at,
         sent_message_id=sent_message_id,
         sent_thread_id=sent_thread_id,
@@ -290,7 +295,7 @@ async def post_compose(
         source=source,
     )
     await db.commit()
-    return await _draft_out(db, draft, [], settings)
+    return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
 
 
 @router.get("/compose/{draft_id}")
@@ -357,7 +362,7 @@ async def delete_draft(
 ) -> dict[str, bool]:
     draft = await _get_draft(db, ctx, draft_id)
     for att in await _load_atts(db, draft.id):
-        storage.delete_key(settings, att.storage_key)
+        await release_compose_storage(db, settings, att)
     await db.delete(draft)
     await db.commit()
     return {"ok": True}
@@ -409,6 +414,27 @@ async def upload_attachment(
     return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
 
 
+@router.delete("/compose/{draft_id}/attachments/{att_id}")
+async def delete_attachment(
+    draft_id: uuid.UUID,
+    att_id: uuid.UUID,
+    ctx: Auth,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+) -> DraftOut:
+    draft = await _get_draft(db, ctx, draft_id)
+    if draft.status not in {"editing", "failed", "scheduled"}:
+        raise fail(409, "draft_not_editable")
+    att = await db.get(ComposeAttachment, att_id)
+    if att is None or att.draft_id != draft.id:
+        raise fail(404, "attachment_not_found")
+    await release_compose_storage(db, settings, att)
+    await db.delete(att)
+    await db.commit()
+    return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
+
+
 @router.post("/compose/{draft_id}/send")
 async def send_draft(
     draft_id: uuid.UUID, body: SendIn, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
@@ -433,12 +459,13 @@ async def send_draft(
                 allowlist=allowlist,
                 show_allowlist=settings.app_env == "test",
             )
+    unsendable = await attachment_send_block(db, settings, draft)
+    if unsendable is not None:
+        raise fail(409, unsendable.code, filename=unsendable.filename)
     try:
         await queue_send(db, settings, draft, account_id=ctx.account.id, person_id=person.id, force=body.force)
-    except ValueError as exc:
-        if str(exc) == "pre_send_blocked":
-            raise fail(409, "pre_send_blocked", checks=pre_send_checks(draft, settings)) from None
-        raise
+    except PreSendBlocked as exc:
+        raise fail(409, "pre_send_blocked", checks=exc.checks) from None
     await db.commit()
     await db.refresh(draft)
     delay = settings.undo_send_seconds

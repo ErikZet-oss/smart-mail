@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import Branch, Person
@@ -136,6 +136,8 @@ async def create_draft(
     )
     db.add(draft)
     await db.flush()
+    if source is not None and mode == "forward":
+        await copy_forward_attachments(db, draft, source)
     audit(
         db,
         action="mail.compose_created",
@@ -144,6 +146,47 @@ async def create_draft(
         details={"draft_id": str(draft.id), "mode": mode},
     )
     return draft
+
+
+async def copy_forward_attachments(db: AsyncSession, draft: ComposeDraft, source: Message) -> None:
+    """Point the draft at the original files. The bytes stay where they are.
+
+    Infected files are left behind. ``skipped`` and ``error`` are copied with that
+    status so the compose chip can show the same antivírus label as the reading pane.
+    The copied status is only a snapshot: the chip and every send re-read the
+    ``Attachment`` row with the same ``storage_key``. Inline images stay in the quote
+    as related parts, not as a second file chip.
+    """
+    rows = list((await db.execute(select(Attachment).where(Attachment.message_id == source.id))).scalars())
+    for row in rows:
+        if row.is_inline or row.av_status == "infected" or not row.storage_key:
+            continue
+        db.add(
+            ComposeAttachment(
+                draft_id=draft.id,
+                filename=row.filename,
+                content_type=row.content_type,
+                size=row.size,
+                storage_key=row.storage_key,
+                sha256=row.sha256,
+                av_status=row.av_status or "skipped",
+                is_inline=False,
+            )
+        )
+
+
+async def release_compose_storage(db: AsyncSession, settings: Settings, att: ComposeAttachment) -> None:
+    """Delete blob bytes only when no message and no other draft still points at the key."""
+    shared_message = await db.scalar(
+        select(func.count()).select_from(Attachment).where(Attachment.storage_key == att.storage_key)
+    )
+    shared_draft = await db.scalar(
+        select(func.count())
+        .select_from(ComposeAttachment)
+        .where(ComposeAttachment.storage_key == att.storage_key, ComposeAttachment.id != att.id)
+    )
+    if not shared_message and not shared_draft:
+        storage.delete_key(settings, att.storage_key)
 
 
 def pre_send_checks(draft: ComposeDraft, settings: Settings) -> list[dict[str, Any]]:
@@ -162,6 +205,99 @@ def pre_send_checks(draft: ComposeDraft, settings: Settings) -> list[dict[str, A
     if external:
         issues.append({"code": "external_recipient", "blocking": False, "message": "external"})
     return issues
+
+
+class PreSendBlocked(Exception):
+    """Send refused until the user confirms a warning or fixes a blocking check."""
+
+    def __init__(self, checks: list[dict[str, Any]]) -> None:
+        super().__init__("pre_send_blocked")
+        self.checks = checks
+
+
+class AttachmentNotSendable(Exception):
+    """Hard send block. ``force`` cannot override it."""
+
+    def __init__(self, code: str, filename: str) -> None:
+        super().__init__(code)
+        self.code = code
+        self.filename = filename
+
+
+# Same sentence as compose.checks.attachment_pending / compose.attachmentPending in sk.json.
+PENDING_AV_WARNING = "Príloha ešte nebola skontrolovaná antivírusom"
+
+
+def _prefer_av_status(found: list[str], fallback: str) -> str:
+    """Current status of a shared blob. Infected wins; otherwise the source row."""
+    if "infected" in found:
+        return "infected"
+    if "pending" in found:
+        return "pending"
+    if found:
+        return found[0]
+    return fallback
+
+
+async def live_av_statuses(db: AsyncSession, atts: list[ComposeAttachment]) -> dict[uuid.UUID, str]:
+    """Status from the ``Attachment`` row that shares ``storage_key``, when one exists.
+
+    ``copy_forward_attachments`` stores the status at forward time. A later scan can mark
+    the original infected while the draft row stays pending. The chip and the send path
+    both use this lookup.
+    """
+    keys = [a.storage_key for a in atts if a.storage_key]
+    by_key: dict[str, list[str]] = {}
+    if keys:
+        rows = (
+            await db.execute(
+                select(Attachment.storage_key, Attachment.av_status).where(Attachment.storage_key.in_(keys))
+            )
+        ).all()
+        for key, status in rows:
+            by_key.setdefault(key, []).append(status)
+    return {a.id: _prefer_av_status(by_key.get(a.storage_key, []), a.av_status) for a in atts}
+
+
+async def compose_checks(
+    db: AsyncSession,
+    draft: ComposeDraft,
+    settings: Settings,
+    atts: list[ComposeAttachment],
+) -> list[dict[str, Any]]:
+    """``pre_send_checks`` plus a non-blocking warning when a file is still ``pending``."""
+    issues = pre_send_checks(draft, settings)
+    statuses = await live_av_statuses(db, atts)
+    if any(not att.is_inline and statuses[att.id] == "pending" for att in atts):
+        issues.append({"code": "attachment_pending", "blocking": False, "message": PENDING_AV_WARNING})
+    return issues
+
+
+async def attachment_send_block(
+    db: AsyncSession,
+    settings: Settings,
+    draft: ComposeDraft,
+    atts: list[ComposeAttachment] | None = None,
+) -> AttachmentNotSendable | None:
+    """Infected or missing regular files. Re-run on every send, including the undo job."""
+    rows = atts
+    if rows is None:
+        rows = list(
+            (await db.execute(select(ComposeAttachment).where(ComposeAttachment.draft_id == draft.id))).scalars()
+        )
+    regular = [att for att in rows if not att.is_inline]
+    statuses = await live_av_statuses(db, regular)
+    for att in regular:
+        if statuses[att.id] == "infected":
+            return AttachmentNotSendable("attachment_infected", att.filename)
+    for att in regular:
+        if storage.get_bytes(settings, att.storage_key) is None:
+            return AttachmentNotSendable("attachment_missing", att.filename)
+    return None
+
+
+def _send_error_with_filename(code: str, filename: str) -> str:
+    return f"{code}:{filename}"[:200]
 
 
 def _logo_png() -> bytes | None:
@@ -390,7 +526,7 @@ async def build_mime(
         blobs.append((cid, data, ctype))
         seen.add(cid.lower())
     if draft.in_reply_to_message_id is not None:
-        # W4 has no „Preposlať s prílohami“ control, so ordinary attachments are not copied.
+        # A forward already copied ordinary files onto the draft. A reply does not.
         # cid: images referenced by the quote are related parts, on reply and on forward.
         source_atts = list(
             (
@@ -420,8 +556,13 @@ async def build_mime(
             continue
         regular.append(att)
     add_related_images(msg, blobs)
+    statuses = await live_av_statuses(db, regular)
     for att in regular:
-        payload = storage.get_bytes(settings, att.storage_key) or b""
+        if statuses[att.id] == "infected":
+            raise AttachmentNotSendable("attachment_infected", att.filename)
+        payload = storage.get_bytes(settings, att.storage_key)
+        if payload is None:
+            raise AttachmentNotSendable("attachment_missing", att.filename)
         maintype, _, subtype = (att.content_type or "application/octet-stream").partition("/")
         msg.add_attachment(
             payload,
@@ -442,15 +583,14 @@ async def queue_send(
     person_id: uuid.UUID | None,
     force: bool = False,
 ) -> ComposeDraft:
-    checks = pre_send_checks(draft, settings)
     atts = list((await db.execute(select(ComposeAttachment).where(ComposeAttachment.draft_id == draft.id))).scalars())
-    if any(c["code"] == "attachment_mentioned" for c in checks) and not atts:
-        pass  # keep warning
-    else:
-        checks = [c for c in checks if c["code"] != "attachment_mentioned" or not atts]
-    blocking = [c for c in checks if c["blocking"]]
-    if blocking and not force:
-        raise ValueError("pre_send_blocked")
+    checks = await compose_checks(db, draft, settings, atts)
+    if atts:
+        checks = [c for c in checks if c["code"] != "attachment_mentioned"]
+    # Pending is a warning the user confirms (force). It is not a hard block.
+    needs_stop = [c for c in checks if c["blocking"] or c["code"] == "attachment_pending"]
+    if needs_stop and not force:
+        raise PreSendBlocked(checks)
     delay = settings.undo_send_seconds
     draft.status = "queued"
     draft.undo_until = datetime.now(UTC) + timedelta(seconds=delay) if delay > 0 else None
@@ -488,6 +628,7 @@ async def sync_draft_to_imap(db: AsyncSession, settings: Settings, draft: Compos
     """APPEND the draft to IMAP Koncepty / \\Drafts and drop the previous UID (CLAUDE.md §5).
 
     Failures are logged only — local autosave must still succeed when IMAP is down.
+    An infected or missing attachment is not copied to Koncepty; the local draft still saves.
     """
     if draft.status not in {"editing", "failed", "scheduled"}:
         return
@@ -513,6 +654,9 @@ async def sync_draft_to_imap(db: AsyncSession, settings: Settings, draft: Compos
         if new_uid is not None:
             draft.imap_draft_uid = new_uid
             await db.flush()
+    except AttachmentNotSendable as exc:
+        # Do not APPEND the file, and do not fail the local autosave. The name stays out of the log.
+        log.warning("compose.draft_imap_skipped", draft_id=str(draft.id), code=exc.code)
     except SyncAuthError:
         await mark_auth_failed(db, mailbox, now=datetime.now(UTC))
         log.warning("compose.draft_imap_auth_failed", draft_id=str(draft.id))
@@ -562,6 +706,13 @@ async def execute_send(db: AsyncSession, settings: Settings, draft_id: uuid.UUID
         return draft.status
     if draft.undo_until and datetime.now(UTC) < draft.undo_until and draft.status == "queued":
         return "waiting"
+    blocked = await attachment_send_block(db, settings, draft)
+    if blocked is not None:
+        draft.status = "failed"
+        draft.send_error = _send_error_with_filename(blocked.code, blocked.filename)
+        draft.undo_until = None
+        await db.commit()
+        return "failed"
     draft.status = "sending"
     await db.flush()
     identity = await db.get(Identity, draft.identity_id) if draft.identity_id else None
@@ -593,6 +744,12 @@ async def execute_send(db: AsyncSession, settings: Settings, draft_id: uuid.UUID
             password=creds.password,
             mail_from=identity.email,
         )
+    except AttachmentNotSendable as exc:
+        draft.status = "failed"
+        draft.send_error = _send_error_with_filename(exc.code, exc.filename)
+        draft.undo_until = None
+        await db.commit()
+        return "failed"
     except SmtpError as exc:
         draft.status = "failed"
         draft.send_error = exc.reason[:200]

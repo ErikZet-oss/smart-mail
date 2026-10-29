@@ -425,8 +425,11 @@ async def test_issue28_reply_and_forward_mime_keeps_https_and_cid_logo(
         assert "M10×30" in html
         assert "about:blank" not in visible
         assert "/api/mail/image-proxy" not in visible
-        assert "cennik-fiktivny.pdf" not in visible
         assert "<script" not in html.lower()
         assert _related_payloads(mime).get("logo@order") == _PNG
         if mode == "forward":
+            pdf = next(part for part in mime.walk() if part.get_filename() == "cennik-fiktivny.pdf")
+            assert pdf.get_payload(decode=True) == b"%PDF-1.4 fictional"
             assert "Preposlaná správa" in html
+        else:
+            assert "cennik-fiktivny.pdf" not in visible
