@@ -22,6 +22,9 @@ COPY app ./app
 COPY migrations ./migrations
 COPY alembic.ini ./
 COPY templates ./templates
+# Runtime design assets: signature colours (app/mail/signature.py _token) and the PNG logo for outgoing mail
+COPY design/tokens.css ./design/tokens.css
+COPY design/brand/logo-smart.png ./design/brand/logo-smart.png
 
 RUN useradd --system --uid 10001 smartmail && chown -R smartmail /srv
 USER smartmail

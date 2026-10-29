@@ -13,12 +13,16 @@ import html
 import re
 from pathlib import Path
 
+import structlog
+
 from app.auth.models import Branch, Person
 from app.mail.compose_models import Identity
 from app.mail.sanitize import sanitize_signature_html
 
 SIGNATURE_LANGS = ("sk", "cs", "en", "de")
 SIGNATURE_MAX_BYTES = 64 * 1024
+log = structlog.get_logger(__name__)
+
 COMPANY_WEB = "www.smartsro.sk"
 COMPANY_WEB_URL = "https://www.smartsro.sk/"
 LOGO_CID = "logo@smartmail"
@@ -71,6 +75,8 @@ def _token(name: str) -> str:
     """Resolve a design token to the value in tokens.css. Falls back to currentColor, never a guessed hex."""
     css_path = Path(__file__).resolve().parents[2] / "design" / "tokens.css"
     if not css_path.is_file():
+        # Never silent: a missing file turned the whole Karta dark in the pilot (Docker image without design/).
+        log.error("signature.tokens_missing", path=str(css_path))
         return "currentColor"
     text = css_path.read_text(encoding="utf-8")
     match = re.search(rf"--{re.escape(name)}:\s*(#[0-9A-Fa-f]{{3,8}})", text)
