@@ -334,3 +334,36 @@ test.describe('pilot: long message on mobile', () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
+
+test.describe('pilot: remote images bar', () => {
+  test('W3 unknown sender gets the bar; "Vždy od tohto odosielateľa" adds a contact and shows images', async ({
+    page,
+  }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop frame');
+    const remote = {
+      ...detail(),
+      body_html_sanitized:
+        '<p>Akcia</p><img alt="banner" src="about:blank#smartmail-remote" data-remote-src="/api/mail/image-proxy?u=x&amp;s=y">',
+      remote_images_offered: true,
+      remote_images_auto: false,
+      remote_images_mode: 'known',
+    };
+    let created: unknown = null;
+    await mockMail(page, {
+      'GET /api/mail/mailboxes/default/messages/m-1': { body: remote },
+      'GET /api/contacts/books': { body: [{ id: 'b-1', kind: 'personal', name: 'Osobné kontakty' }] },
+      'POST /api/contacts/books/b-1/contacts': () => {
+        created = true;
+        return { body: { id: 'c-1' } };
+      },
+    });
+    await page.goto('/mail/default/inbox');
+    await page.getByText('Kópia faktúry 2026123').click();
+    await expect(page.getByText('Vzdialené obrázky sú zablokované.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Zobraziť obrázky' })).toBeVisible();
+    await page.getByRole('button', { name: 'Vždy od tohto odosielateľa' }).click();
+    await expect(page.getByText('Vzdialené obrázky sú zablokované.')).toHaveCount(0);
+    await expect(page.locator('img[alt="banner"]')).toHaveAttribute('src', /image-proxy/);
+    expect(created).toBe(true);
+  });
+});

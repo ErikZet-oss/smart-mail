@@ -41,11 +41,12 @@ type Props = {
   kind: BannerKind;
   message: string;
   action?: { label: string; onClick: () => void; disabled?: boolean };
+  secondaryAction?: { label: string; onClick: () => void; disabled?: boolean };
   onClose?: () => void;
 };
 
 /** G6 Banner (top of the content area, 3 px left border). */
-export function Banner({ kind, message, action, onClose }: Props) {
+export function Banner({ kind, message, action, secondaryAction, onClose }: Props) {
   const { t } = useTranslation();
   const style = STYLE[kind];
   return (
@@ -63,6 +64,16 @@ export function Banner({ kind, message, action, onClose }: Props) {
           className={`type-label shrink-0 rounded-xs hover:underline disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary-500 ${style.action}`}
         >
           {action.label}
+        </button>
+      ) : null}
+      {secondaryAction ? (
+        <button
+          type="button"
+          onClick={secondaryAction.onClick}
+          disabled={secondaryAction.disabled}
+          className={`type-label shrink-0 rounded-xs hover:underline disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary-500 ${style.action}`}
+        >
+          {secondaryAction.label}
         </button>
       ) : null}
       {onClose ? (

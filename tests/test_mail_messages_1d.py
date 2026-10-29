@@ -297,3 +297,30 @@ async def test_1d_opening_an_unread_message_marks_it_read_without_a_full_sync(
     assert msg.seen
     assert "\\Seen" in (msg.flags or [])
     assert folder.unread == max(0, unread_before - 1)
+
+
+async def test_1d_remote_images_bar_is_offered_for_unknown_senders(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    """Pilot (eshop@): with the default "Od známych odosielateľov" an unknown sender got no bar at all, so remote
+    images could never be shown. Like Roundcube, the bar is always offered; the setting only decides auto-loading."""
+    mailbox = await _signed_in(client, db, mail_server)
+    folder = await _seed_inbox(db, mailbox, env(1, "\\Seen", subject="Newsletter"))
+    msg = await db.scalar(select(Message).where(Message.folder_id == folder.id))
+    assert msg is not None
+    msg.body_text = "Akcia"
+    msg.body_html_sanitized = (
+        '<p>Akcia</p><img src="about:blank#smartmail-remote" data-remote-src="https://cdn.example/akcia.png" alt="">'
+    )
+    msg.body_fetched_at = NOW
+    msg.raw_storage_key = "mail/x/raw/ab/cd/fake"
+    await db.commit()
+
+    r = await client.get(f"/api/mail/mailboxes/default/messages/{msg.id}", params={"mark_read": "false"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["remote_images_mode"] == "known"
+    assert body["remote_images_offered"] is True
+    assert body["remote_images_auto"] is False
+    assert "/api/mail/image-proxy" in body["body_html_sanitized"]
+    assert "cdn.example" not in body["body_html_sanitized"].split("data-remote-src")[0]
