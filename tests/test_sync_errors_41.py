@@ -54,7 +54,7 @@ async def test_41_sync_unexpected_error_sets_error_state(
     assert await sync_mailbox(db, mailbox, settings, now=NOW) == "error"
     await db.refresh(mailbox)
     assert mailbox.sync_state == "error"
-    assert mailbox.sync_error == "ValueError"
+    assert mailbox.sync_error == "unexpected:ValueError"
 
     # the next successful sync clears it
     monkeypatch.setattr(sync_mod, "apply_snapshot", apply_snapshot)
@@ -77,7 +77,8 @@ async def test_41_sync_error_class_name_is_capped_at_64_chars(
     monkeypatch.setattr(sync_mod, "apply_snapshot", broken)
     assert await sync_mailbox(db, mailbox, settings, now=NOW) == "error"
     await db.refresh(mailbox)
-    assert mailbox.sync_error == "E" * 64
+    assert mailbox.sync_error == "unexpected:" + "E" * 53
+    assert len(mailbox.sync_error) == 64
 
 
 async def test_41_threading_failure_keeps_the_envelopes_of_the_sync(

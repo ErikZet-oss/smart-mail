@@ -318,7 +318,8 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
             <ArrowLeft size={22} />
           </button>
           <p className="type-heading min-w-0 flex-1 truncate text-text-primary">
-            {msg?.subject || t('search.noSubject')}
+            {/* no "(bez predmetu)" while the message is loading or failed to load (#41) */}
+            {msg ? msg.subject || t('search.noSubject') : ''}
           </p>
         </header>
       ) : null}

@@ -42,6 +42,7 @@ INSERT_CHUNK = 500
 DELETE_CHUNK = 10_000
 FETCH_ITEMS = ["UID", "FLAGS", "ENVELOPE", "INTERNALDATE", "RFC822.SIZE", "BODY.PEEK[HEADER.FIELDS (REFERENCES)]"]
 LOCK_TIMEOUT_S = 300
+UNEXPECTED_PREFIX = "unexpected:"
 
 Scope = Literal["all", "inbox", "others"]
 
@@ -492,10 +493,12 @@ async def mark_auth_failed(db: AsyncSession, mailbox: Mailbox, *, now: datetime)
 
 async def _mark_unexpected_error(db: AsyncSession, mailbox: Mailbox, exc: Exception) -> str:
     """Any unexpected failure becomes a visible state (#41): G-state banner + notification, never an endless
-    "loading". Only the exception class is stored — never server text or mail data. The next good sync clears it."""
+    "loading". Only "unexpected:" + the exception class is stored — never server text or mail data. The next good
+    sync clears it."""
     mailbox_id = mailbox.id  # read before the rollback expires the instance
     await db.rollback()
-    error = type(exc).__name__[:64]
+    # "unexpected:" tells the client this is not an unreachable server (those set their own codes)
+    error = f"{UNEXPECTED_PREFIX}{type(exc).__name__}"[:64]
     await db.execute(update(Mailbox).where(Mailbox.id == mailbox_id).values(sync_state="error", sync_error=error))
     await db.commit()
     await db.refresh(mailbox)

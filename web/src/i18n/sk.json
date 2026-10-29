@@ -528,7 +528,7 @@
       "source": "Zdroj"
     },
     "loadFailed": "Nepodarilo sa načítať priečinok – skúšame znova.",
-    "syncFailed": "Synchronizácia schránky zlyhala – skúšame znova",
+    "syncFailed": "Synchronizácia schránky {{email}} zlyhala – správca bol upozornený",
     "syncProgress": "Načítava sa schránka… {{loaded}} / {{total}}",
     "loadMessageFailed": "Nepodarilo sa načítať správu.",
     "empty": "Priečinok je prázdny",

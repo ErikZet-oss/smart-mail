@@ -5,7 +5,8 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 ## [Unreleased] — Pilot #41: visible sync errors, isolated bad messages, first-sync progress
 
 - Any unexpected exception in a mailbox sync sets `sync_state = error` and `sync_error` = the exception class
-  (max 64 chars, never server text). W2 shows „Synchronizácia schránky zlyhala – skúšame znova“, the existing
+  (max 64 chars, never server text). `sync_error = "unexpected:<Class>"`; W2 shows „Synchronizácia schránky {email} zlyhala – správca bol
+  upozornený“ (Figma G6), an unreachable server keeps „Nepodarilo sa načítať priečinok“. The existing
   sync notification fires, the next good sync clears it.
 - Envelopes are committed before threading. Threading runs in batches of 500 inside a SAVEPOINT; a failing batch
   is retried one message per SAVEPOINT, so one bad message stays unthreaded (visible in Zoznam) and the rest go on.

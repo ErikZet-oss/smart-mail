@@ -55,10 +55,13 @@ test('#41 large first sync shows "Načítava sa schránka… 12 400 / 25 000" @m
   await shot(page, `issue41-sync-progress-${info.project.name}`);
 });
 
-test('#41 sync error shows the G6 banner "Synchronizácia schránky zlyhala" @mobile', async ({ page }, info) => {
-  await mockMail(page, { state: 'error', error: 'ValueError' });
+test('#41 unexpected sync error shows the G6 banner from Figma @mobile', async ({ page }, info) => {
+  await mockMail(page, { state: 'error', error: 'unexpected:ValueError' });
   await page.goto('/mail/default/inbox');
-  await expect(page.getByText('Synchronizácia schránky zlyhala – skúšame znova')).toBeVisible();
+  await expect(
+    page.getByText('Synchronizácia schránky pilot@smartmail.test zlyhala – správca bol upozornený'),
+  ).toBeVisible();
+  await expect(page.getByText('Nepodarilo sa načítať priečinok – skúšame znova.')).toHaveCount(0);
   await expect(page.getByTestId('sync-progress')).toHaveCount(0);
   await shot(page, `issue41-sync-error-${info.project.name}`);
 });
@@ -81,5 +84,7 @@ test('#41 a 500 on the message shows the error state with the ref code @mobile',
   await expect(error).toContainText('7F3A-21C9');
   await expect(error.getByRole('button', { name: 'Skúsiť znova' })).toBeVisible();
   await expect(page).not.toHaveURL(/\/500/);
+  // M3 header: no "(bez predmetu)" for a message that did not load
+  await expect(page.getByText('(bez predmetu)')).toHaveCount(0);
   await shot(page, `issue41-message-error-${info.project.name}`);
 });

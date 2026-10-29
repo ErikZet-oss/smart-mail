@@ -343,13 +343,14 @@ function ScreenW2Body({
     return <Navigate to={`/mail/${encodeURIComponent(mailboxRef)}/inbox`} replace />;
   }
 
-  const syncFailed = view?.sync.state === 'error';
+  // unexpected failure (exception class from the worker, #41) vs. an unreachable mail server (its own codes)
+  const syncFailed = view?.sync.state === 'error' && (view.sync.error ?? '').startsWith('unexpected:');
   const serverDown =
     error?.detail.code === 'mail_server_unavailable' ||
     (refresh.error instanceof ApiError &&
       refresh.error.detail.code === 'mail_server_unavailable' &&
       refresh.submittedAt >= folders.dataUpdatedAt) ||
-    syncFailed;
+    view?.sync.state === 'error';
   const syncProgress = firstSyncProgress(view?.sync);
   const label = aiView
     ? (categoryMeta?.label_sk ?? t(`ai.categories.${category}.label`, { defaultValue: category ?? '' }))
@@ -626,7 +627,7 @@ function ScreenW2Body({
           <div className="px-2 pb-2 pt-2">
             <Banner
               kind="danger"
-              message={syncFailed ? t('mail.syncFailed') : t('mail.loadFailed')}
+              message={syncFailed ? t('mail.syncFailed', { email: view?.mailbox.email ?? '' }) : t('mail.loadFailed')}
               action={{ label: t('system.retry'), onClick: () => refresh.mutate(), disabled: refresh.isPending }}
             />
           </div>

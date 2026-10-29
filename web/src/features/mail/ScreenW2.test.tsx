@@ -300,14 +300,27 @@ describe('W2 shell and folder column (1c)', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/404'));
   });
 
-  it('W2 sync error (#41): banner "Synchronizácia schránky zlyhala" with Skúsiť znova → refresh', async () => {
+  it('W2 IMAP error: banner "Nepodarilo sa načítať priečinok" with Skúsiť znova → refresh', async () => {
     const view = foldersView();
     view.sync = { state: 'error', error: 'unavailable', last_synced_at: null };
     const api = mockApi({ ...base(view), 'POST /api/mail/mailboxes/default/refresh': { body: foldersView() } });
     renderAt();
-    const banner = await screen.findByText('Synchronizácia schránky zlyhala – skúšame znova');
+    const banner = await screen.findByText('Nepodarilo sa načítať priečinok – skúšame znova.');
     fireEvent.click(within(banner.parentElement as HTMLElement).getByRole('button', { name: 'Skúsiť znova' }));
-    await waitFor(() => expect(screen.queryByText('Synchronizácia schránky zlyhala – skúšame znova')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Nepodarilo sa načítať priečinok – skúšame znova.')).toBeNull());
+    expect(api.calls.some((c) => c.key === 'POST /api/mail/mailboxes/default/refresh')).toBe(true);
+  });
+
+  it('W2 issue #41: an unexpected sync error shows the Figma G6 text with Skúsiť znova → refresh', async () => {
+    const view = foldersView();
+    view.sync = { state: 'error', error: 'unexpected:ValueError', last_synced_at: null };
+    const api = mockApi({ ...base(view), 'POST /api/mail/mailboxes/default/refresh': { body: foldersView() } });
+    renderAt();
+    const text = `Synchronizácia schránky ${view.mailbox.email} zlyhala – správca bol upozornený`;
+    const banner = await screen.findByText(text);
+    expect(screen.queryByText('Nepodarilo sa načítať priečinok – skúšame znova.')).toBeNull();
+    fireEvent.click(within(banner.parentElement as HTMLElement).getByRole('button', { name: 'Skúsiť znova' }));
+    await waitFor(() => expect(screen.queryByText(text)).toBeNull());
     expect(api.calls.some((c) => c.key === 'POST /api/mail/mailboxes/default/refresh')).toBe(true);
   });
 
