@@ -31,6 +31,8 @@ import { SecurityBanner } from '../../components/SecurityBanner';
 import { useToast } from '../../components/toastContext';
 import { ApiError, formatRef } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
+import { AiSuggestionCard } from '../ai/AiSuggestionCard';
+import { fetchSuggestions, suggestionsKey } from '../ai/suggestionsApi';
 import { fetchMe } from '../auth/authApi';
 import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
 import { useTheme } from '../prefs/ThemeProvider';
@@ -562,6 +564,15 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
 
           {classic ? null : <SecurityBanner notes={msg.security_notes ?? []} />}
 
+          {classic ? null : (
+            <SuggestionCards
+              mailbox={mailbox}
+              messageId={msg.id}
+              category={msg.ai_category ?? null}
+              readOnly={readOnly}
+            />
+          )}
+
           {previewIndex !== null ? (
             <AttachmentLightbox
               mailbox={mailbox}
@@ -681,5 +692,54 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
         />
       ) : null}
     </section>
+  );
+}
+
+const VISIBLE_CARDS = 2;
+
+/** W2c AI cards (#94): max 2 visible + „Ďalšie návrhy (n)“; shadow suggestions never reach the client. */
+function SuggestionCards({
+  mailbox,
+  messageId,
+  category,
+  readOnly,
+}: {
+  mailbox: string;
+  messageId: string;
+  category: string | null;
+  readOnly: boolean;
+}) {
+  const { t } = useTranslation();
+  const [all, setAll] = useState(false);
+  const cards = useQuery({
+    queryKey: suggestionsKey(mailbox, messageId),
+    queryFn: () => fetchSuggestions(mailbox, messageId),
+    retry: false,
+  });
+  const list = cards.data ?? [];
+  if (list.length === 0) return null;
+  const shown = all ? list : list.slice(0, VISIBLE_CARDS);
+  return (
+    <div className="flex flex-col gap-2 py-3" data-testid="ai-suggestions">
+      {shown.map((s) => (
+        <AiSuggestionCard
+          key={s.id}
+          suggestion={s}
+          mailbox={mailbox}
+          messageId={messageId}
+          category={category}
+          readOnly={readOnly}
+        />
+      ))}
+      {list.length > VISIBLE_CARDS && !all ? (
+        <button
+          type="button"
+          className="type-small self-start text-brand-primary-700 hover:underline"
+          onClick={() => setAll(true)}
+        >
+          {t('ai.card.moreCards', { count: list.length - VISIBLE_CARDS })}
+        </button>
+      ) : null}
+    </div>
   );
 }
