@@ -49,6 +49,7 @@ import {
   type MessageListItem,
   type ThreadListItem,
 } from './mailApi';
+import { applyActionLocally, REMOVING_ACTIONS } from './optimistic';
 import { CATEGORY_COLOR_TOKEN, categoryDotClass } from './categoryStyles';
 import { MessageRow, type RowItem } from './MessageRow';
 import { ReadingPane } from './ReadingPane';
@@ -274,23 +275,36 @@ function ScreenW2Body({
     },
   });
 
-  const bulk = useMutation({
-    mutationFn: ({ action, ids }: { action: 'mark_seen' | 'delete' | 'archive' | 'done'; ids?: string[] }) =>
-      bulkMessages(mailboxRef, { message_ids: ids ?? [...selectedIds], action }),
-    onSuccess: (_r, { action }) => {
-      toasts.success(t(`mail.toast.${action}`));
-      setSelectedIds(new Set());
-      setSelectMode(false);
-      void list.refetch();
-      void folders.refetch();
-    },
-    onError: () => toasts.error(t('mail.errors.generic')),
-  });
-
   const listBasePath =
     aiView && category
       ? `/mail/${encodeURIComponent(mailboxRef)}/view/${encodeURIComponent(category)}`
       : `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`;
+
+  const bulk = useMutation({
+    mutationFn: ({ action, ids }: { action: 'mark_seen' | 'delete' | 'archive' | 'done'; ids: string[] }) =>
+      bulkMessages(mailboxRef, { message_ids: ids, action }),
+    // #89: the rows go away at once; the server answer only confirms (or rolls back).
+    onMutate: async ({ action, ids }) => {
+      await queryClient.cancelQueries({ queryKey: ['mail', 'messages', mailboxRef] });
+      const rollback = applyActionLocally(queryClient, mailboxRef, ids, action);
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      if (REMOVING_ACTIONS.has(action) && activeMessageId && ids.includes(activeMessageId)) {
+        setPickedMessageId(null);
+        navigate(listBasePath, { replace: true });
+      }
+      return { rollback };
+    },
+    onSuccess: (_r, { action }) => toasts.success(t(`mail.toast.${action}`)),
+    onError: (_e, _v, context) => {
+      context?.rollback();
+      toasts.error(t('mail.errors.generic'));
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mail', 'messages', mailboxRef] });
+      void queryClient.invalidateQueries({ queryKey: foldersKey(mailboxRef) });
+    },
+  });
 
   const canMarkSeen = Boolean(me.data?.person && !me.data.read_only);
   const openMessage = useCallback(
@@ -446,7 +460,6 @@ function ScreenW2Body({
             onCleared={() => {
               setPickedMessageId(null);
               navigate(listBasePath);
-              void list.refetch();
             }}
           />
         </div>
@@ -481,14 +494,14 @@ function ScreenW2Body({
             <button
               type="button"
               className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate({ action: 'mark_seen' })}
+              onClick={() => bulk.mutate({ action: 'mark_seen', ids: [...selectedIds] })}
             >
               {t('mail.bulk.markRead')}
             </button>
             <button
               type="button"
               className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate({ action: 'done' })}
+              onClick={() => bulk.mutate({ action: 'done', ids: [...selectedIds] })}
             >
               <CircleCheck size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.toolbar.done')}
@@ -496,7 +509,7 @@ function ScreenW2Body({
             <button
               type="button"
               className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate({ action: 'archive' })}
+              onClick={() => bulk.mutate({ action: 'archive', ids: [...selectedIds] })}
             >
               <Archive size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.toolbar.archive')}
@@ -504,7 +517,7 @@ function ScreenW2Body({
             <button
               type="button"
               className="type-caption rounded-sm px-2 py-1 text-danger-600 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate({ action: 'delete' })}
+              onClick={() => bulk.mutate({ action: 'delete', ids: [...selectedIds] })}
             >
               <Trash2 size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.toolbar.delete')}
@@ -769,7 +782,6 @@ function ScreenW2Body({
           onCleared={() => {
             setPickedMessageId(null);
             navigate(listBasePath, { replace: true });
-            void list.refetch();
           }}
         />
       )}

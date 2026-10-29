@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, asc, desc, func, or_, select
 
 from app.ai.models import Classification
-from app.api.mail import _folder, _mailbox, _sync, fail
+from app.api.mail import _folder, _mailbox, _redis, fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep, client_ip
 from app.core.audit import audit
 from app.core.config import Settings
@@ -20,13 +22,15 @@ from app.core.content_disposition import content_disposition_attachment
 from app.mail import storage
 from app.mail.actions import MsgAction, MsgTarget, run_msg_action_async
 from app.mail.body import ensure_body, load_attachments
-from app.mail.flags import apply_local_flag, is_forwarded
+from app.mail.flags import is_forwarded
+from app.mail.local_apply import REMOVING, apply_action_locally
 from app.mail.models import Attachment, FolderMeta, Mailbox, Message, Thread
 from app.mail.prefs import ListPrefs, UiPrefs, get_list_prefs, get_ui_prefs, save_section
 from app.mail.sync import Credentials, SyncAuthError, SyncUnavailable, credentials_for, mark_auth_failed, server_of
-from app.mail.threads import refresh_thread_counts
+from app.mail.sync_schedule import schedule_sync
 
 router = APIRouter(prefix="/api/mail", tags=["mail-messages"])
+log = structlog.get_logger()
 
 FilterName = Literal["all", "unread", "flagged", "attachments"]
 MAX_BULK = 500
@@ -188,20 +192,21 @@ async def _run(
     mailbox: Mailbox,
     action: MsgAction,
     folder: FolderMeta,
-    uids: list[int],
+    messages: list[Message],
     *,
     dest: FolderMeta | None = None,
     audit_action: str,
     details: dict[str, object],
-    sync_after: bool = True,
 ) -> None:
+    """IMAP action, then the same change in the local copy, commit, and a scheduled (not awaited) sync (#89)."""
     creds = await _creds(db, mailbox, settings)
+    started = time.monotonic()
     try:
         await run_msg_action_async(
             server_of(mailbox, settings),
             creds,
             action,
-            MsgTarget(folder.name, tuple(uids)),
+            MsgTarget(folder.name, tuple(m.uid for m in messages)),
             dest_folder=dest.name if dest else None,
         )
     except SyncAuthError:
@@ -210,10 +215,21 @@ async def _run(
         raise HTTPException(status_code=401, detail={"code": "unauthenticated", "reason": "password_changed"}) from None
     except SyncUnavailable:
         raise fail(503, "mail_server_unavailable") from None
+    imap_ms = int((time.monotonic() - started) * 1000)
+    await apply_action_locally(db, action, folder, messages, dest=dest)
     audit(db, audit_action, object_type="mailbox", object_id=str(mailbox.id), ip=client_ip(request), details=details)
     await db.commit()
-    if sync_after:
-        await _sync(request, db, mailbox, settings)
+    if action in REMOVING:
+        # Flags are exact locally already; moved messages need their new UIDs in the destination folder.
+        await schedule_sync(_redis(request), mailbox.id)
+    log.info(
+        "mail.action_done",
+        mailbox_id=str(mailbox.id),
+        action=str(action),
+        n=len(messages),
+        imap_ms=imap_ms,
+        ms=int((time.monotonic() - started) * 1000),
+    )
 
 
 def _sort_col(prefs: ListPrefs) -> Any:
@@ -437,19 +453,10 @@ async def get_message(
                     mailbox,
                     MsgAction.mark_seen,
                     folder,
-                    [message.uid],
+                    [message],
                     audit_action="mail.message_seen",
                     details={"uid": message.uid, "folder": folder.name},
-                    # Opening a message must not wait for a sync of every folder (pilot: 5-10 s on a
-                    # 30,000-message mailbox). Record the flag locally; IDLE/poll picks up the rest.
-                    sync_after=False,
                 )
-                message.seen = True
-                apply_local_flag(message, "\\Seen")
-                folder.unread = max(0, (folder.unread or 0) - 1)
-                if message.thread_id is not None:
-                    await refresh_thread_counts(db, message.thread_id)
-                await db.commit()
             except HTTPException:
                 pass
 
@@ -627,7 +634,7 @@ async def patch_flags(
             mailbox,
             MsgAction.mark_seen,
             folder,
-            [message.uid],
+            [message],
             audit_action="mail.message_seen",
             details={"uid": message.uid},
         )
@@ -639,7 +646,7 @@ async def patch_flags(
             mailbox,
             MsgAction.mark_unseen,
             folder,
-            [message.uid],
+            [message],
             audit_action="mail.message_unseen",
             details={"uid": message.uid},
         )
@@ -651,7 +658,7 @@ async def patch_flags(
             mailbox,
             MsgAction.flag,
             folder,
-            [message.uid],
+            [message],
             audit_action="mail.message_flagged",
             details={"uid": message.uid},
         )
@@ -663,7 +670,7 @@ async def patch_flags(
             mailbox,
             MsgAction.unflag,
             folder,
-            [message.uid],
+            [message],
             audit_action="mail.message_unflagged",
             details={"uid": message.uid},
         )
@@ -763,7 +770,7 @@ async def bulk(
             mailbox,
             folder_action,
             folder,
-            [m.uid for m in group],
+            group,
             dest=folder_dest,
             audit_action=f"mail.bulk_{body.action}",
             details={"n": len(group), "folder": folder.name},

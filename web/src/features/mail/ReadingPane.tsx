@@ -33,11 +33,13 @@ import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
 import { useTheme } from '../prefs/ThemeProvider';
 import { AttachmentLightbox } from './AttachmentLightbox';
 import { formatMailDate } from './formatMailDate';
+import { applyActionLocally, REMOVING_ACTIONS } from './optimistic';
 import { previewKind } from './previewKind';
 import {
   applyAttachmentFlagLocally,
   attachmentUrl,
   bulkMessages,
+  foldersKey,
   fetchMessage,
   messageKey,
   patchFlags,
@@ -140,29 +142,54 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
       if (!messageId) return Promise.reject(new Error('message missing'));
       return patchFlags(mailbox, messageId, body);
     },
+    // #89: the row icon changes at once; a failed request puts it back.
+    onMutate: (body) => {
+      if (!messageId) return { rollback: () => undefined };
+      const action =
+        body.seen === true
+          ? 'mark_seen'
+          : body.seen === false
+            ? 'mark_unseen'
+            : body.flagged === true
+              ? 'flag'
+              : 'unflag';
+      return { rollback: applyActionLocally(queryClient, mailbox, [messageId], action) };
+    },
     onSuccess: (data) => {
       queryClient.setQueryData(messageKey(mailbox, data.id), data);
-      invalidate();
     },
-    onError: (error) => {
+    onError: (error, _body, context) => {
+      context?.rollback();
       if (!(error instanceof ApiError) || error.detail.code !== 'mail_server_unavailable') {
         toast({ message: t('mail.errors.generic') });
       }
     },
+    onSettled: invalidate,
   });
 
   const bulk = useMutation({
-    mutationFn: (action: 'delete' | 'junk' | 'archive' | 'done') => {
-      if (!messageId) return Promise.reject(new Error('message missing'));
-      return bulkMessages(mailbox, { message_ids: [messageId], action });
+    mutationFn: ({ action, id }: { action: 'delete' | 'junk' | 'archive' | 'done'; id: string }) =>
+      bulkMessages(mailbox, { message_ids: [id], action }),
+    // #89: the row disappears and the pane closes at once; a failed request brings the row back.
+    onMutate: async ({ action, id }) => {
+      await queryClient.cancelQueries({ queryKey: ['mail', 'messages', mailbox] });
+      const rollback = applyActionLocally(queryClient, mailbox, [id], action);
+      if (REMOVING_ACTIONS.has(action)) onCleared();
+      return { rollback };
     },
-    onSuccess: (_r, action) => {
-      toast({ message: t(`mail.toast.${action}`) });
-      invalidate();
-      if (action === 'delete' || action === 'junk' || action === 'archive') onCleared();
+    onSuccess: (_r, { action }) => toast({ message: t(`mail.toast.${action}`) }),
+    onError: (_e, _v, context) => {
+      context?.rollback();
+      toast({ message: t('mail.errors.generic') });
     },
-    onError: () => toast({ message: t('mail.errors.generic') }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mail', 'messages', mailbox] });
+      void queryClient.invalidateQueries({ queryKey: foldersKey(mailbox) });
+    },
   });
+  const runBulk = (action: 'delete' | 'junk' | 'archive' | 'done') => {
+    if (messageId) bulk.mutate({ action, id: messageId });
+  };
 
   const snooze = useMutation({
     mutationFn: (until: string | null) => {
@@ -254,7 +281,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           icon: <Archive size={16} />,
           onSelect: () => {
             setMoreMenu(null);
-            bulk.mutate('archive');
+            runBulk('archive');
           },
         },
         {
@@ -371,13 +398,13 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
         <ToolBtn
           icon={<Trash2 size={18} />}
           label={t('mail.toolbar.delete')}
-          onClick={() => bulk.mutate('delete')}
+          onClick={() => runBulk('delete')}
           busy={bulk.isPending}
         />
         <ToolBtn
           icon={<Flame size={18} />}
           label={t('mail.toolbar.junk')}
-          onClick={() => bulk.mutate('junk')}
+          onClick={() => runBulk('junk')}
           busy={bulk.isPending}
         />
         <ToolBtn
@@ -392,7 +419,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
         />
         <span aria-hidden="true" className="mx-1 h-8 w-px bg-border-default" />
         <ToolBtn icon={<UserPlus size={18} />} label={t('mail.toolbar.assign')} disabled />
-        <ToolBtn icon={<CircleCheck size={18} />} label={t('mail.toolbar.done')} onClick={() => bulk.mutate('done')} />
+        <ToolBtn icon={<CircleCheck size={18} />} label={t('mail.toolbar.done')} onClick={() => runBulk('done')} />
         <ToolBtn
           icon={<AlarmClock size={18} />}
           label={t('mail.toolbar.snooze')}
