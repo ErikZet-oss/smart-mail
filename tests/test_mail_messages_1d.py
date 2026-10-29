@@ -8,6 +8,7 @@ from __future__ import annotations
 import uuid
 from datetime import timedelta
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -255,3 +256,44 @@ async def test_1d_old_fallback_threads_of_the_same_day_share_one_thread(db: Asyn
     threads = list((await db.execute(select(Thread).where(Thread.mailbox_id == mailbox.id))).scalars())
     assert len(threads) == 3
     assert all(len(t.thread_key) <= 80 for t in threads)
+
+
+async def test_1d_opening_an_unread_message_marks_it_read_without_a_full_sync(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pilot (eshop@, ~30,000 messages): every open of an unread message ran a sync of all folders (5-10 s)."""
+    import app.api.messages as messages_api
+
+    mailbox = await _signed_in(client, db, mail_server)
+    folder = await _seed_inbox(db, mailbox, env(1, subject="Neprečítaná"))
+    msg = await db.scalar(select(Message).where(Message.folder_id == folder.id))
+    assert msg is not None and not msg.seen
+    msg.body_text = "Telo"
+    msg.body_fetched_at = NOW
+    msg.raw_storage_key = "mail/x/raw/ab/cd/fake"
+    await db.commit()
+    unread_before = folder.unread
+
+    stored: list[object] = []
+
+    async def fake_action(*args: object, **kwargs: object) -> None:
+        stored.append(args[2])
+
+    async def fake_creds(*args: object, **kwargs: object) -> object:
+        return object()
+
+    async def no_full_sync(*args: object, **kwargs: object) -> None:
+        raise AssertionError("opening a message must not run a full mailbox sync")
+
+    monkeypatch.setattr(messages_api, "run_msg_action_async", fake_action)
+    monkeypatch.setattr(messages_api, "_creds", fake_creds)
+    monkeypatch.setattr(messages_api, "_sync", no_full_sync)
+
+    r = await client.get(f"/api/mail/mailboxes/default/messages/{msg.id}")
+    assert r.status_code == 200
+    assert stored, "\\Seen must still be stored on the IMAP server"
+    await db.refresh(msg)
+    await db.refresh(folder)
+    assert msg.seen
+    assert "\\Seen" in (msg.flags or [])
+    assert folder.unread == max(0, unread_before - 1)

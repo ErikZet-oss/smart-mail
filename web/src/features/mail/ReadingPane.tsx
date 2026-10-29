@@ -279,7 +279,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   ];
 
   return (
-    <section aria-label={t('mail.readingPane')} className="flex min-w-0 flex-1 flex-col bg-bg-canvas">
+    <section aria-label={t('mail.readingPane')} className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg-canvas">
       {mobile ? (
         <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border-default px-1">
           <button
@@ -373,7 +373,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           <div className="mt-6 h-40 rounded-xs bg-bg-muted" />
         </div>
       ) : (
-        <div className={`min-h-0 flex-1 overflow-y-auto ${mobile ? 'px-4 py-3' : 'px-7 py-4'}`}>
+        <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${mobile ? 'px-4 py-3' : 'px-7 py-4'}`}>
           <div className="mb-4 flex items-start gap-2">
             <h2 className={`${mobile ? 'type-heading' : 'type-title'} min-w-0 flex-1 break-words text-text-primary`}>
               {msg.subject || t('mail.noSubject')}
@@ -488,7 +488,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
             </pre>
           ) : (
             <div
-              className="type-body-lg max-w-none text-text-primary [&_a]:text-brand-primary-600 [&_img]:max-w-full"
+              className="type-body-lg max-w-none overflow-x-auto text-text-primary [&_a]:text-brand-primary-600 [&_img]:h-auto [&_img]:max-w-full"
               // sanitized on the server (nh3); remote images stay blocked until the user opts in
               dangerouslySetInnerHTML={{ __html: bodyHtml }}
             />
