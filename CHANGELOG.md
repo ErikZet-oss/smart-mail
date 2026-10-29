@@ -11,6 +11,18 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   be company addresses (`INTERNAL_DOMAINS`, 422 `identity_email_not_internal`); the branch identity's signature HTML is
   not touched. Audit `settings.identity_saved` with before/after (names and addresses, never the signature).
 - `signature-context`: `{email_pobocky}` in the preview is the default identity's e-mail, as in compose.
+## [Unreleased] — Pilot #52: paperclip before the first open (BODYSTRUCTURE)
+
+- The envelope sync also fetches `BODYSTRUCTURE`; `has_attachments` is set at insert, so unopened messages show the
+  paperclip and „S prílohou“ finds them (Roundcube parity). Rule as #51 / B9: an attachment disposition, a forwarded
+  `.eml`, or a named non-body part counts; `multipart/related` images with a Content-ID and inline images do not;
+  unknown or broken structures → no paperclip. `ensure_body` stays authoritative on the first open.
+- One-off backfill for mailboxes synced before: worker job `backfill_attachment_flags` (minute 5 and 35, one mailbox
+  per run) fetches `BODYSTRUCTURE` of unopened messages in batches of 500 with a pause, under the mailbox sync lock;
+  a Redis marker makes it run once per mailbox. No schema change. One run holds the sync lock at most 120 s (budget
+  checked before each batch); an interrupted run stores the last checked UID per folder and the next run continues;
+  the marker is set only when every folder is done.
+- After the first open the list row gets the paperclip from the detail at once (`applyAttachmentFlagLocally`), no F5.
 
 ## [Unreleased] — Pilot #65: signature person in compose („Odpovedá: … ▾“)
 

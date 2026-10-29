@@ -1,0 +1,1 @@
+4 (UID 4 BODYSTRUCTURE (("text" "plain" ("charset" "utf-8") NIL NIL "base64" 30 1 NIL NIL NIL NIL)("text" "xml" ("charset" "utf-8" "name" "Faktura_2611452.isdoc") NIL NIL "base64" 46 1 NIL NIL NIL NIL) "mixed" ("boundary" "===============0501261527472566226==") NIL NIL NIL))

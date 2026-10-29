@@ -203,6 +203,21 @@ async def shutdown(ctx: dict[str, Any]) -> None:
         await ctx["engine"].dispose()
 
 
+async def backfill_attachment_flags(ctx: dict[str, Any]) -> dict[str, int | None]:
+    """#52: paperclip for messages synced before BODYSTRUCTURE was fetched — one mailbox per run, once per mailbox."""
+    from app.mail.attachment_backfill import backfill_mailbox, done_key
+
+    settings: Settings = ctx["settings"]
+    if not settings.mail_sync_enabled:
+        return {}
+    async with ctx["sessionmaker"]() as db:
+        for mailbox in (await db.execute(select(Mailbox).where(Mailbox.sync_state == "ok"))).scalars():
+            if await ctx["redis"].exists(done_key(mailbox.id)):
+                continue
+            return {str(mailbox.id): await backfill_mailbox(db, ctx["redis"], mailbox, settings)}
+    return {}
+
+
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
     # keep_result=0 frees the job id at once, so the next IDLE push or poll can enqueue the same sync again
@@ -214,6 +229,7 @@ class WorkerSettings:
         func(flush_scheduled_sends, keep_result=0),
         func(rescan_clamav_attachments, keep_result=0),
         func(reparse_attachment_messages, keep_result=0),
+        func(backfill_attachment_flags, keep_result=0),
     ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, minute=set(range(60)), run_at_startup=True),
@@ -223,6 +239,8 @@ class WorkerSettings:
         cron(rescan_clamav_attachments, minute={0, 15, 30, 45}, unique=True),
         # nightly re-parse of stored raw with attachments (pilot #18 B9/B10)
         cron(reparse_attachment_messages, hour={3}, minute={15}, unique=True),
+        # #52 one-off paperclip backfill: one mailbox per run until every mailbox is done
+        cron(backfill_attachment_flags, minute={5, 35}, unique=True),
     ]
     on_startup = startup
     on_shutdown = shutdown
