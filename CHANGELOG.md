@@ -19,6 +19,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — #94 Phase 2c PR 1: reply suggestions (backend)
 
+### Fixed
+- Mobile: opening a message from AI triedenie showed a blank screen when the message lives outside Doručená pošta (e.g. Sieve files supplier invoices into Faktúry). The message now opens in its own folder, and `?m=` names it so the pane loads it even when it is not on that folder's current page.
+
 **Reply step** (`app/ai/reply.py`):
 - Runs after classify in `process_mailbox_ai_job`, for a message that:
   - is classified `done` with `needs_reply`;

@@ -242,3 +242,60 @@ test.describe('Phase 2b — W2f AI triage', () => {
     await expect(page.getByTestId('security-security_dmarc_fail')).toBeVisible();
   });
 });
+
+test.describe('Pilot: open from AI triedenie on mobile', () => {
+  test('a message filed into Faktúry opens in its own folder, not a blank screen @mobile', async ({ page }, info) => {
+    // desktop opens the message in the side pane (no navigation); the blank screen was the phone's full-screen view
+    test.skip(info.project.name !== 'mobile', 'mobile only');
+    const handlers: Parameters<typeof mockApi>[1] = mailShell();
+    const invoice = {
+      ...INQUIRY_MSG,
+      id: 'm-inv-1',
+      thread_id: 't-inv-1',
+      folder_id: 'f-8', // Faktúry in foldersView(): Sieve filed the supplier invoice there
+      subject: 'Faktura E3/2026/00001',
+      from_name: 'Fiktívny Dodávateľ',
+      from_email: 'fakturacia@dodavatel.example',
+      preview: 'Vždy sa riaďte bankovými údajmi na faktúre.',
+      ai_category: 'invoice_request',
+      ai_summary: 'Faktúra od dodávateľa',
+    };
+    handlers['GET /api/mail/mailboxes/default/ai/views/invoice_request/messages'] = {
+      body: { category: AI_CATEGORIES.categories[2], total: 1, page: 1, page_size: 50, messages: [invoice] },
+    };
+    // The Faktúry page does not contain the message (older mail, other page): the pane must still open it.
+    handlers['GET /api/mail/mailboxes/default/folders/f-8/messages'] = {
+      body: {
+        mode: 'list',
+        total: 0,
+        page: 1,
+        page_size: 50,
+        messages: [],
+        threads: [],
+        prefs: DEFAULT_PREFS.list,
+      },
+    };
+    handlers['GET /api/mail/mailboxes/default/messages/m-inv-1'] = {
+      body: {
+        ...invoice,
+        message_id: '<inv@example.test>',
+        to: [{ name: null, email: 'pilot@smartmail.test' }],
+        cc: [],
+        body_text: 'Vždy sa riaďte bankovými údajmi na faktúre.',
+        body_html_sanitized: '<p>Vždy sa riaďte bankovými údajmi na faktúre.</p>',
+        attachments: [],
+        auth_results: { dmarc: 'pass', spf: 'pass' },
+        thread_status: 'open',
+        snoozed_until: null,
+        assignee_id: null,
+        security_notes: [] as string[],
+      },
+    };
+    await mockApi(page, handlers);
+    await page.goto('/mail/default/view/invoice_request');
+    await page.getByText('Faktura E3/2026/00001').click();
+    await expect(page).toHaveURL(/\/mail\/default\/f-8\/t-inv-1\?m=m-inv-1$/);
+    await expect(page.getByTestId('mobile-thread')).toBeVisible();
+    await expect(page.getByText('Vždy sa riaďte bankovými údajmi na faktúre.').last()).toBeVisible();
+  });
+});

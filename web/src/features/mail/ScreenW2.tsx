@@ -43,6 +43,7 @@ import {
   fetchFolders,
   fetchMessages,
   findFolder,
+  folderRef as folderSegment,
   foldersKey,
   formatCount,
   markSeenLocally,
@@ -244,8 +245,9 @@ function ScreenW2Body({
       return { messageId: th?.latest_message_id ?? null, threadId: th?.id ?? threadParam };
     }
     const msg = list.data.messages.find((row) => row.thread_id === threadParam || row.id === threadParam);
-    return { messageId: msg?.id ?? null, threadId: msg?.thread_id ?? threadParam };
-  }, [threadParam, list.data]);
+    // Opened from AI triedenie (mobile / full view): the message may not be on this folder page — `?m=` names it.
+    return { messageId: msg?.id ?? search.get('m'), threadId: msg?.thread_id ?? threadParam };
+  }, [threadParam, list.data, search]);
 
   const activeMessageId = pickedMessageId ?? fromUrl.messageId;
   const activeThreadId = fromUrl.threadId;
@@ -324,13 +326,18 @@ function ScreenW2Body({
         navigate(listBasePath, { replace: true });
         return;
       }
-      const folderForThread =
-        aiView && list.data?.messages.find((m) => m.id === messageId)?.folder_id ? 'inbox' : folderParam;
-      const path = `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderForThread)}/${encodeURIComponent(tid)}`;
+      // AI triedenie lists messages of every folder: open the message in its own folder (Sieve files e.g. invoices
+      // into Faktúry), never a guessed Doručená pošta — the pilot got a blank screen on mobile.
+      const sourceFolder = aiView
+        ? view?.folders.find((f) => f.id === list.data?.messages.find((m) => m.id === messageId)?.folder_id)
+        : undefined;
+      const folderForThread = aiView ? (sourceFolder ? folderSegment(sourceFolder) : 'inbox') : folderParam;
+      const query = aiView ? `?m=${encodeURIComponent(messageId)}` : '';
+      const path = `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderForThread)}/${encodeURIComponent(tid)}${query}`;
       if (full) navigate(path);
       else navigate(path, { replace: true });
     },
-    [mailboxRef, folderParam, navigate, aiView, listBasePath, list.data?.messages],
+    [mailboxRef, folderParam, navigate, aiView, listBasePath, list.data?.messages, view?.folders],
   );
 
   // The reading pane GET marks the message read on the server; show it in the list now (only when we may act).
