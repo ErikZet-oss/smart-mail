@@ -806,6 +806,7 @@
       "fileinto": "Presunúť do priečinka",
       "mailboxScope": "Filter platí pre celú schránku – osobnú aj pobočkovú.",
       "notDefaults": "Filtre nie sú predvolené. Každá schránka má vlastné pravidlá (rovnaké ako v Roundcube).",
+      "ruleName": "Názov pravidla",
       "roundcubeReadonly": "Pravidlo z Roundcube (len na čítanie)",
       "scopeKind": "Typ schránky",
       "conditionField": "Pole",
