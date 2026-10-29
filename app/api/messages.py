@@ -147,7 +147,9 @@ class FlagIn(BaseModel):
 
 class BulkIn(BaseModel):
     message_ids: list[uuid.UUID] = Field(max_length=MAX_BULK)
-    action: Literal["mark_seen", "mark_unseen", "flag", "unflag", "delete", "purge", "junk", "archive", "move", "done"]
+    action: Literal[
+        "mark_seen", "mark_unseen", "flag", "unflag", "delete", "purge", "junk", "archive", "move", "copy", "done"
+    ]
     dest_folder_id: uuid.UUID | None = None
 
 
@@ -219,8 +221,8 @@ async def _run(
     await apply_action_locally(db, action, folder, messages, dest=dest)
     audit(db, audit_action, object_type="mailbox", object_id=str(mailbox.id), ip=client_ip(request), details=details)
     await db.commit()
-    if action in REMOVING:
-        # Flags are exact locally already; moved messages need their new UIDs in the destination folder.
+    if action in REMOVING or action is MsgAction.copy:
+        # Flags are exact locally already; moved/copied messages need their new UIDs in the destination folder.
         await schedule_sync(_redis(request), mailbox.id)
     log.info(
         "mail.action_done",
@@ -747,8 +749,9 @@ async def bulk(
         dest = await _own_named(db, mailbox, "Archív") or await _own_named(db, mailbox, "Archive")
         if dest is None:
             raise fail(409, "folder_not_found")
-    elif body.action == "move":
-        action = MsgAction.move
+    elif body.action in ("move", "copy"):
+        # Presunúť do… / Kopírovať do… (#96): any folder of this mailbox the user picks, private ones included.
+        action = MsgAction.move if body.action == "move" else MsgAction.copy
         if body.dest_folder_id is None:
             raise fail(422, "dest_required")
         dest = await _folder(db, mailbox, body.dest_folder_id)
@@ -766,6 +769,8 @@ async def bulk(
         if action is MsgAction.delete and dest is not None and folder.id == dest.id:
             # Already in Kôš: delete permanently (a MOVE to the same folder is refused by the server).
             folder_action, folder_dest = MsgAction.expunge, None
+        elif action in (MsgAction.move, MsgAction.copy) and dest is not None and folder.id == dest.id:
+            continue  # into the folder it is already in: nothing to do
         await _run(
             request,
             db,

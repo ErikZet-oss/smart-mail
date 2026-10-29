@@ -4,7 +4,18 @@
  */
 
 export type MailShortcut =
-  'up' | 'down' | 'open' | 'delete' | 'purge' | 'selectAll' | 'unread' | 'junk' | 'reply' | 'replyAll' | 'forward';
+  | 'up'
+  | 'down'
+  | 'open'
+  | 'delete'
+  | 'purge'
+  | 'selectAll'
+  | 'unread'
+  | 'junk'
+  | 'reply'
+  | 'replyAll'
+  | 'forward'
+  | 'moveTo';
 
 export type ShortcutId = 'help' | 'compose' | 'search' | MailShortcut;
 
@@ -19,6 +30,7 @@ export const ACTION_SHORTCUTS: ReadonlySet<MailShortcut> = new Set([
   'reply',
   'replyAll',
   'forward',
+  'moveTo',
 ]);
 
 export function isEditable(el: EventTarget | null): boolean {
@@ -70,6 +82,8 @@ export function matchShortcut(e: KeyLike): ShortcutId | null {
       return 'reply';
     case 'f':
       return 'forward';
+    case 'l':
+      return 'moveTo';
     default:
       return null;
   }

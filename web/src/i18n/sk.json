@@ -639,6 +639,13 @@
       "tomorrow": "Zajtra ráno (8:00)",
       "clear": "Zrušiť odloženie"
     },
+    "moveTo": {
+      "move": "Presunúť do…",
+      "copy": "Kopírovať do…",
+      "moved": "Presunuté do priečinka {{folder}}.",
+      "copied": "Skopírované do priečinka {{folder}}.",
+      "bulkMove": "Presunúť"
+    },
     "purge": {
       "title": "Vymazať natrvalo ({{count}})?",
       "body": "Správy sa nepresunú do Koša a nedajú sa obnoviť.",

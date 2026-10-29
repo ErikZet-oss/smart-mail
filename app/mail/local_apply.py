@@ -54,6 +54,10 @@ async def apply_action_locally(
         if dest is not None:
             dest.total = (dest.total or 0) + len(messages)
             dest.unread = (dest.unread or 0) + unread
+    elif action is MsgAction.copy and dest is not None:
+        # The source keeps its rows; the destination gets the copies (new UIDs) on the scheduled sync.
+        dest.total = (dest.total or 0) + len(messages)
+        dest.unread = (dest.unread or 0) + sum(1 for m in messages if not m.seen)
     elif action in _FLAG:
         flag, on = _FLAG[action]
         changed = [m for m in messages if (m.seen if flag == "\\Seen" else m.flagged) != on]

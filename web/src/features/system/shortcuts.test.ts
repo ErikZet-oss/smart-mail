@@ -30,6 +30,7 @@ describe('#93 matchShortcut', () => {
     [key('r'), 'reply'],
     [key('R', { shiftKey: true }), 'replyAll'],
     [key('f'), 'forward'],
+    [key('l'), 'moveTo'],
     [key('c'), 'compose'],
     [key('/'), 'search'],
     [key('?', { shiftKey: true }), 'help'],
@@ -37,7 +38,7 @@ describe('#93 matchShortcut', () => {
     expect(matchShortcut(e)).toBe(id);
   });
 
-  it.each([key('a'), key('e'), key('l'), key('['), key('Delete', { altKey: true }), key('u', { metaKey: true })])(
+  it.each([key('a'), key('e'), key('['), key('Delete', { altKey: true }), key('u', { metaKey: true })])(
     'ignores %o',
     (e) => {
       expect(matchShortcut(e)).toBeNull();

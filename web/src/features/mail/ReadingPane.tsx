@@ -5,9 +5,11 @@ import {
   ArrowLeft,
   CircleCheck,
   Code,
+  Copy,
   Ellipsis,
   Flame,
   Flag,
+  FolderInput,
   Forward,
   Mail,
   Paperclip,
@@ -29,17 +31,21 @@ import { SecurityBanner } from '../../components/SecurityBanner';
 import { useToast } from '../../components/toastContext';
 import { ApiError, formatRef } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
+import { fetchMe } from '../auth/authApi';
 import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
 import { useTheme } from '../prefs/ThemeProvider';
 import { AttachmentLightbox } from './AttachmentLightbox';
 import { formatMailDate } from './formatMailDate';
+import { FolderPicker } from './FolderPicker';
 import { applyActionLocally, REMOVING_ACTIONS } from './optimistic';
+import { useFolderLabel } from './useFolderLabel';
 import { previewKind } from './previewKind';
 import {
   applyAttachmentFlagLocally,
   attachmentUrl,
   bulkMessages,
   foldersKey,
+  type Folder,
   fetchMessage,
   messageKey,
   patchFlags,
@@ -101,6 +107,8 @@ function menuAt(event: MouseEvent<HTMLButtonElement>) {
 }
 
 /** W2c reading pane: Roundcube toolbar order; Reply/Forward open W4 (Phase 1e). */
+type PaneAction = 'delete' | 'junk' | 'archive' | 'done' | 'move' | 'copy';
+
 export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared }: Props) {
   const mobile = useMediaQuery(MOBILE_QUERY);
   const { t } = useTranslation();
@@ -112,6 +120,9 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   const [plain, setPlain] = useState(false);
   const [markMenu, setMarkMenu] = useState<{ x: number; y: number } | null>(null);
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
+  const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
+  const readOnly = !me.data?.person || Boolean(me.data.read_only);
+  const labelOf = useFolderLabel();
   const [snoozeMenu, setSnoozeMenu] = useState<{ x: number; y: number } | null>(null);
 
   const detail = useQuery({
@@ -168,8 +179,8 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   });
 
   const bulk = useMutation({
-    mutationFn: ({ action, id }: { action: 'delete' | 'junk' | 'archive' | 'done'; id: string }) =>
-      bulkMessages(mailbox, { message_ids: [id], action }),
+    mutationFn: ({ action, id, dest }: { action: PaneAction; id: string; dest?: Folder }) =>
+      bulkMessages(mailbox, { message_ids: [id], action, dest_folder_id: dest?.id }),
     // #89: the row disappears and the pane closes at once; a failed request brings the row back.
     onMutate: async ({ action, id }) => {
       await queryClient.cancelQueries({ queryKey: ['mail', 'messages', mailbox] });
@@ -177,7 +188,12 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
       if (REMOVING_ACTIONS.has(action)) onCleared();
       return { rollback };
     },
-    onSuccess: (_r, { action }) => toast({ message: t(`mail.toast.${action}`) }),
+    onSuccess: (_r, { action, dest }) =>
+      toast({
+        message: dest
+          ? t(action === 'copy' ? 'mail.moveTo.copied' : 'mail.moveTo.moved', { folder: labelOf(dest) })
+          : t(`mail.toast.${action}`),
+      }),
     onError: (_e, _v, context) => {
       context?.rollback();
       toast({ message: t('mail.errors.generic') });
@@ -187,9 +203,10 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
       void queryClient.invalidateQueries({ queryKey: foldersKey(mailbox) });
     },
   });
-  const runBulk = (action: 'delete' | 'junk' | 'archive' | 'done') => {
-    if (messageId) bulk.mutate({ action, id: messageId });
+  const runBulk = (action: PaneAction, dest?: Folder) => {
+    if (messageId) bulk.mutate({ action, id: messageId, dest });
   };
+  const [picker, setPicker] = useState<{ mode: 'move' | 'copy'; at: { x: number; y: number } } | null>(null);
 
   const snooze = useMutation({
     mutationFn: (until: string | null) => {
@@ -284,6 +301,31 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
             runBulk('archive');
           },
         },
+        {
+          kind: 'item',
+          id: 'move',
+          label: t('mail.moveTo.move'),
+          icon: <FolderInput size={16} />,
+          disabled: readOnly,
+          onSelect: () => {
+            const at = moreMenu ?? { x: 0, y: 0 };
+            setMoreMenu(null);
+            setPicker({ mode: 'move', at });
+          },
+        },
+        {
+          kind: 'item',
+          id: 'copy',
+          label: t('mail.moveTo.copy'),
+          icon: <Copy size={16} />,
+          disabled: readOnly,
+          onSelect: () => {
+            const at = moreMenu ?? { x: 0, y: 0 };
+            setMoreMenu(null);
+            setPicker({ mode: 'copy', at });
+          },
+        },
+        { kind: 'divider', id: 'd-move' },
         {
           kind: 'item',
           id: 'print',
@@ -614,6 +656,19 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           at={moreMenu}
           width={240}
           onClose={() => setMoreMenu(null)}
+        />
+      ) : null}
+      {picker && msg ? (
+        <FolderPicker
+          mailbox={mailbox}
+          mode={picker.mode}
+          currentFolderId={msg.folder_id}
+          at={picker.at}
+          onPick={(folder) => {
+            setPicker(null);
+            runBulk(picker.mode, folder);
+          }}
+          onClose={() => setPicker(null)}
         />
       ) : null}
       {snoozeMenu ? (

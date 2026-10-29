@@ -195,7 +195,7 @@ export type MessageDetail = {
 };
 
 export type BulkAction =
-  'mark_seen' | 'mark_unseen' | 'flag' | 'unflag' | 'delete' | 'purge' | 'junk' | 'archive' | 'move' | 'done';
+  'mark_seen' | 'mark_unseen' | 'flag' | 'unflag' | 'delete' | 'purge' | 'junk' | 'archive' | 'move' | 'copy' | 'done';
 
 export const messagesKey = (mailbox: string, folderId: string, page: number, filter: MessageFilter) =>
   ['mail', 'messages', mailbox, folderId, page, filter] as const;
