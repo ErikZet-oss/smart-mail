@@ -352,7 +352,11 @@ def preview_signature_html(
 ) -> str:
     """Same as render, but the logo CID points at the app logo so the settings preview can show it."""
     rendered = render_signature(person=person, branch=branch, identity=identity, email=email, language=language)
-    return rendered.replace(f"cid:{LOGO_CID}", "/logo-smart.svg")
+    logo = f"/api/settings/branches/{branch.id}/logo" if branch is not None and branch.logo_key else "/logo-smart.svg"
+    rendered = rendered.replace(f"cid:{LOGO_CID}", logo)
+    if person is not None and person.photo_key:
+        rendered = rendered.replace(f"cid:{PHOTO_CID}", f"/api/settings/people/{person.id}/photo")
+    return rendered
 
 
 def html_to_text(html_body: str) -> str:

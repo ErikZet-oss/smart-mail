@@ -9,12 +9,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.admin_accounts import AccountRuleError, convert_to_branch, create_account, ensure_admin_remains
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep, client_ip
-from app.auth.models import Account, AccountKind, Branch, Person, Role
+from app.auth.models import Account, AccountKind, Branch, Person, PersonBranch, Role
 from app.auth.persons import own_login_person_ids
 from app.auth.security import decrypt
 from app.core.audit import AuditLog, audit
@@ -22,7 +22,7 @@ from app.mail import storage
 from app.mail.clamav import scan_bytes
 from app.mail.compose_models import CannedResponse, ComposeDraft, Identity
 from app.mail.image_proxy import proxy_path
-from app.mail.models import Mailbox, MailboxAccess, SieveScriptBackup
+from app.mail.models import FolderMeta, Mailbox, MailboxAccess, SieveScriptBackup
 from app.mail.prefs import get_list_prefs, get_ui_prefs, save_section
 from app.mail.sanitize import sanitize_html
 from app.mail.sieve import (
@@ -56,7 +56,9 @@ from app.mail.signature_images import (
     MAX_SIGNATURE_IMAGES,
     SignatureImageError,
     image_dicts,
+    normalize_person_photo,
     normalize_signature_image,
+    sniff_image_type,
 )
 from app.settings.schema import SECTION_PATHS, schema_document
 
@@ -1054,7 +1056,7 @@ async def patch_user(account_id: uuid.UUID, body: UserPatch, request: Request, c
 # ----- admin 11 branches -----
 
 
-def _admin_person(p: Person) -> dict[str, Any]:
+def _admin_person(p: Person, covers: list[str] | None = None) -> dict[str, Any]:
     return {
         "id": str(p.id),
         "first_name": p.first_name,
@@ -1066,7 +1068,17 @@ def _admin_person(p: Person) -> dict[str, Any]:
         "phone": p.phone,
         "mobile": p.mobile,
         "personal_email": p.personal_email,
+        "photo_url": f"/api/settings/people/{p.id}/photo?v={p.updated_at.timestamp():.0f}" if p.photo_key else None,
+        # „Pôsobí aj na pobočkách“ (person_branches, #55)
+        "cover_branch_ids": covers or [],
     }
+
+
+async def _covers(db: DB) -> dict[uuid.UUID, list[str]]:
+    out: dict[uuid.UUID, list[str]] = {}
+    for person_id, branch_id in (await db.execute(select(PersonBranch.person_id, PersonBranch.branch_id))).all():
+        out.setdefault(person_id, []).append(str(branch_id))
+    return out
 
 
 @router.get("/admin/personal-people")
@@ -1092,6 +1104,7 @@ async def admin_personal_people(ctx: Auth, db: DB) -> list[dict[str, Any]]:
 async def admin_branches(ctx: Auth, db: DB) -> list[dict[str, Any]]:
     require_admin(ctx)
     rows = (await db.scalars(select(Branch).order_by(Branch.name))).all()
+    covers = await _covers(db)
     out = []
     for b in rows:
         # persons with an own login are listed under „Osobné účty“, their branch only feeds the signature (#71)
@@ -1126,7 +1139,10 @@ async def admin_branches(ctx: Auth, db: DB) -> list[dict[str, Any]]:
                 "money_centre_id": b.money_centre_id,
                 "money_price_list_id": b.money_price_list_id,
                 "money_warehouse_id": b.money_warehouse_id,
-                "people": [_admin_person(p) for p in people],
+                "people": [_admin_person(p, covers.get(p.id)) for p in people],
+                "logo_url": f"/api/settings/branches/{b.id}/logo?v={b.updated_at.timestamp():.0f}"
+                if b.logo_key
+                else None,
             }
         )
     return out
@@ -1237,6 +1253,8 @@ class PersonAdminIn(BaseModel):
     personal_email: str | None = None
     # „Pobočka (pre podpis)“ — only for the person of a personal account; omitted = unchanged, null = no branch (#71)
     branch_id: uuid.UUID | None = None
+    # „Pôsobí aj na pobočkách“ (#55): the person also shows in „Kto ste?“ of these branches; omitted = unchanged
+    cover_branch_ids: list[uuid.UUID] | None = None
 
 
 @router.post("/admin/branches/{branch_id}/people")
@@ -1263,6 +1281,8 @@ async def add_person(branch_id: uuid.UUID, body: PersonAdminIn, request: Request
     )
     db.add(person)
     await db.flush()
+    if body.cover_branch_ids:
+        await _set_covers(db, person, body.cover_branch_ids)
     audit(
         db,
         "settings.person_created",
@@ -1277,6 +1297,37 @@ async def add_person(branch_id: uuid.UUID, body: PersonAdminIn, request: Request
     return {"id": str(person.id), "first_name": person.first_name, "last_name": person.last_name}
 
 
+async def _keep_one_active(db: DB, person: Person) -> None:
+    """SETTINGS 11b: at least one active person stays on a branch (people with an own login only borrow the branch
+    for their signature, #71)."""
+    if await db.scalar(select(Account.id).where(Account.person_id == person.id)) is not None:
+        return
+    others = await db.scalar(
+        select(func.count())
+        .select_from(Person)
+        .where(
+            Person.branch_id == person.branch_id,
+            Person.active.is_(True),
+            Person.id != person.id,
+            Person.id.not_in(own_login_person_ids()),
+        )
+    )
+    if not others:
+        raise fail(409, "last_active_person")
+
+
+async def _set_covers(db: DB, person: Person, branch_ids: list[uuid.UUID]) -> list[str]:
+    wanted = {b for b in branch_ids if b != person.branch_id}
+    if wanted:
+        known = set((await db.scalars(select(Branch.id).where(Branch.id.in_(wanted)))).all())
+        if known != wanted:
+            raise fail(404, "branch_not_found")
+    await db.execute(delete(PersonBranch).where(PersonBranch.person_id == person.id))
+    db.add_all(PersonBranch(person_id=person.id, branch_id=b) for b in wanted)
+    await db.flush()
+    return sorted(str(b) for b in wanted)
+
+
 @router.put("/admin/people/{person_id}")
 async def update_person_admin(
     person_id: uuid.UUID, body: PersonAdminIn, request: Request, ctx: Auth, db: DB
@@ -1286,6 +1337,9 @@ async def update_person_admin(
     if person is None:
         raise fail(404, "person_not_found")
     before = _person_state(person)
+    covers_before = sorted((await _covers(db)).get(person.id, []))
+    if person.active and not body.active and person.branch_id is not None:
+        await _keep_one_active(db, person)
     person.first_name = body.first_name.strip()[:50]
     person.last_name = body.last_name.strip()[:50]
     person.function = body.function
@@ -1307,6 +1361,9 @@ async def update_person_admin(
         if body.branch_id is not None and await db.get(Branch, body.branch_id) is None:
             raise fail(404, "branch_not_found")
         person.branch_id = body.branch_id
+    covers_after = covers_before
+    if body.cover_branch_ids is not None:
+        covers_after = await _set_covers(db, person, body.cover_branch_ids)
     try:
         await ensure_admin_remains(db)
     except AccountRuleError as exc:
@@ -1320,7 +1377,10 @@ async def update_person_admin(
         object_type="person",
         object_id=str(person.id),
         ip=client_ip(request),
-        details={"before": before, "after": _person_state(person)},
+        details={
+            "before": {**before, "cover_branch_ids": covers_before},
+            "after": {**_person_state(person), "cover_branch_ids": covers_after},
+        },
     )
     await db.commit()
     return {"id": str(person.id), "active": person.active, "role": person.role.value}
@@ -1678,6 +1738,198 @@ async def get_signature_image(image_id: str, ctx: Auth, db: DB, settings: Settin
         raise fail(404, "not_found")
     media = str(found.get("content_type") or "image/png")
     return Response(content=data, media_type=media)
+
+
+# ----- 11a logo, 11b photo, „Vymazať pobočku“ (#55) -----
+
+
+def _image_file(data: bytes | None) -> Response:
+    if not data:
+        raise fail(404, "not_found")
+    return Response(content=data, media_type=sniff_image_type(data), headers={"Cache-Control": "private, max-age=300"})
+
+
+@router.get("/branches/{branch_id}/logo")
+async def branch_logo(branch_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep) -> Response:
+    del ctx
+    branch = await db.get(Branch, branch_id)
+    if branch is None or not branch.logo_key:
+        raise fail(404, "not_found")
+    return _image_file(storage.get_bytes(settings, branch.logo_key))
+
+
+@router.post("/admin/branches/{branch_id}/logo")
+async def upload_branch_logo(
+    branch_id: uuid.UUID,
+    request: Request,
+    ctx: Auth,
+    db: DB,
+    settings: SettingsDep,
+    file: Annotated[UploadFile, File()],
+) -> dict[str, Any]:
+    """„Logo do podpisu“: PNG (SVG is converted to PNG in the browser), max 200 kB — the {logo} variable."""
+    admin = require_admin(ctx)
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        raise fail(404, "branch_not_found")
+    try:
+        payload, _ctype = normalize_signature_image(await file.read())
+    except SignatureImageError as exc:
+        raise fail(422, exc.code) from exc
+    if await scan_bytes(settings, payload) == "infected":
+        raise fail(422, "attachment_infected")
+    branch.logo_key, _digest = storage.put_bytes(settings, payload, prefix="branch-logos")
+    audit(
+        db,
+        "settings.branch_logo_saved",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="branch",
+        object_id=str(branch.id),
+        ip=client_ip(request),
+    )
+    await db.commit()
+    await db.refresh(branch)
+    return {"logo_url": f"/api/settings/branches/{branch.id}/logo?v={branch.updated_at.timestamp():.0f}"}
+
+
+@router.delete("/admin/branches/{branch_id}/logo")
+async def delete_branch_logo(branch_id: uuid.UUID, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+    admin = require_admin(ctx)
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        raise fail(404, "branch_not_found")
+    branch.logo_key = None
+    audit(
+        db,
+        "settings.branch_logo_removed",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="branch",
+        object_id=str(branch.id),
+        ip=client_ip(request),
+    )
+    await db.commit()
+    return {"logo_url": None}
+
+
+@router.get("/people/{person_id}/photo")
+async def person_photo(person_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep) -> Response:
+    del ctx
+    person = await db.get(Person, person_id)
+    if person is None or not person.photo_key:
+        raise fail(404, "not_found")
+    return _image_file(storage.get_bytes(settings, person.photo_key))
+
+
+@router.post("/admin/people/{person_id}/photo")
+async def upload_person_photo(
+    person_id: uuid.UUID,
+    request: Request,
+    ctx: Auth,
+    db: DB,
+    settings: SettingsDep,
+    file: Annotated[UploadFile, File()],
+) -> dict[str, Any]:
+    """„Fotka“ (SETTINGS 11b): JPG/PNG up to 5 MB, cropped to a square — {fotka} in the signature."""
+    admin = require_admin(ctx)
+    person = await db.get(Person, person_id)
+    if person is None:
+        raise fail(404, "person_not_found")
+    try:
+        payload, _ctype = normalize_person_photo(await file.read())
+    except SignatureImageError as exc:
+        raise fail(422, exc.code) from exc
+    if await scan_bytes(settings, payload) == "infected":
+        raise fail(422, "attachment_infected")
+    person.photo_key, _digest = storage.put_bytes(settings, payload, prefix="person-photos")
+    audit(
+        db,
+        "settings.person_photo_saved",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="person",
+        object_id=str(person.id),
+        ip=client_ip(request),
+    )
+    await db.commit()
+    await db.refresh(person)
+    return {"photo_url": f"/api/settings/people/{person.id}/photo?v={person.updated_at.timestamp():.0f}"}
+
+
+@router.delete("/admin/people/{person_id}/photo")
+async def delete_person_photo(person_id: uuid.UUID, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+    admin = require_admin(ctx)
+    person = await db.get(Person, person_id)
+    if person is None:
+        raise fail(404, "person_not_found")
+    person.photo_key = None
+    audit(
+        db,
+        "settings.person_photo_removed",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="person",
+        object_id=str(person.id),
+        ip=client_ip(request),
+    )
+    await db.commit()
+    return {"photo_url": None}
+
+
+@router.get("/admin/branch-folders")
+async def branch_folders(ctx: Auth, db: DB) -> list[dict[str, Any]]:
+    """„Priečinky pobočky“ (SETTINGS 11a, D21): the customer's own folders of all mailboxes (no special folders)."""
+    require_admin(ctx)
+    rows = (
+        await db.execute(
+            select(FolderMeta.id, FolderMeta.name, Mailbox.email)
+            .join(Mailbox, Mailbox.id == FolderMeta.mailbox_id)
+            .where(FolderMeta.special_use.is_(None), FolderMeta.selectable.is_(True))
+            .order_by(Mailbox.email, FolderMeta.name)
+        )
+    ).all()
+    return [{"id": str(fid), "name": name, "mailbox_email": email} for fid, name, email in rows]
+
+
+@router.delete("/admin/branches/{branch_id}")
+async def delete_branch(branch_id: uuid.UUID, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+    """„Vymazať pobočku“: only an empty branch — no active person and no login of the branch (409 otherwise).
+    Inactive persons keep their name in history and lose the branch; covers go with the branch."""
+    admin = require_admin(ctx)
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        raise fail(404, "branch_not_found")
+    active = await db.scalar(
+        select(func.count())
+        .select_from(Person)
+        .where(Person.branch_id == branch.id, Person.active.is_(True), Person.id.not_in(own_login_person_ids()))
+    )
+    if active:
+        raise fail(409, "branch_has_people", count=int(active))
+    if await db.scalar(select(Account.id).where(Account.branch_id == branch.id)) is not None:
+        raise fail(409, "branch_has_login")
+    before = {"name": branch.name, "mailbox_id": str(branch.mailbox_id) if branch.mailbox_id else None}
+    await db.execute(update(Person).where(Person.branch_id == branch.id).values(branch_id=None))
+    try:
+        async with db.begin_nested():
+            await db.delete(branch)
+            await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise fail(409, "branch_in_use") from None
+    audit(
+        db,
+        "settings.branch_deleted",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="branch",
+        object_id=str(branch_id),
+        ip=client_ip(request),
+        details={"before": before, "after": None},
+    )
+    await db.commit()
+    return {"id": str(branch_id), "result": "deleted"}
 
 
 # ----- helpers -----

@@ -166,10 +166,10 @@ test('#33 W12-11b persons table and drawer: edit and remove a person @mobile', a
     'DELETE /api/settings/admin/people/p-marek': { body: { id: 'p-marek', result: 'deactivated' } },
   });
   await page.goto('/settings/branches/people');
-  await expect(page.getByRole('cell', { name: 'Peter Hudák' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Peter Hudák', exact: true })).toBeVisible();
   await shot(page, `issue33-W12-11b-${info.project.name}`);
 
-  await page.getByRole('button', { name: 'Jana Nováková' }).click();
+  await page.getByRole('button', { name: 'Upraviť osobu Jana Nováková' }).click();
   const drawer = page.getByTestId('person-drawer');
   await drawer.getByLabel('Funkcia').fill('vedúca predaja');
   await drawer.getByRole('switch', { name: 'Vedúci pobočky' }).click();
@@ -177,7 +177,7 @@ test('#33 W12-11b persons table and drawer: edit and remove a person @mobile', a
   await drawer.getByRole('button', { name: 'Uložiť' }).click();
   await expect.poll(() => saved).toMatchObject({ function: 'vedúca predaja', is_manager: true });
 
-  await page.getByRole('button', { name: 'Marek Kováč' }).click();
+  await page.getByRole('button', { name: 'Upraviť osobu Marek Kováč' }).click();
   await page.getByTestId('person-drawer').getByRole('button', { name: 'Odstrániť osobu' }).click();
   await page
     .getByRole('dialog', { name: 'Odstrániť osobu Marek Kováč' })
