@@ -27,6 +27,24 @@ def _key_str(kind: str, value: str) -> str:
     return f"{kind}:{value}"
 
 
+async def _thread_for(db: AsyncSession, mailbox_id: uuid.UUID, base: str, when: datetime) -> Thread | None:
+    """The newest thread of this key (plain or with a window suffix) whose last message is within WINDOW."""
+    candidates = (
+        await db.execute(
+            select(Thread)
+            .where(
+                Thread.mailbox_id == mailbox_id,
+                (Thread.thread_key == base) | Thread.thread_key.startswith(f"{base}:", autoescape=True),
+            )
+            .order_by(Thread.last_message_at.desc().nulls_last())
+        )
+    ).scalars()
+    for thread in candidates:
+        if thread.last_message_at is None or abs(when - thread.last_message_at) <= WINDOW:
+            return thread
+    return None
+
+
 async def link_message(db: AsyncSession, message: Message) -> Thread:
     to_emails = [str(a.get("email") or "") for a in (message.to_addrs or [])]
     key = thread_key_for(
@@ -41,14 +59,18 @@ async def link_message(db: AsyncSession, message: Message) -> Thread:
     stored = _key_str(key.kind, key.value)
     when = message.received_at or message.sent_at or datetime.now(UTC)
 
-    thread = await db.scalar(select(Thread).where(Thread.mailbox_id == message.mailbox_id, Thread.thread_key == stored))
-    if thread is None and key.kind == "fallback":
-        # join a recent fallback thread with the same key prefix… keys are exact; WINDOW checked on last_message_at
-        pass
-    if thread is not None and thread.last_message_at is not None and when - thread.last_message_at > WINDOW:
-        # too old — start a new thread with a disambiguated key
-        stored = f"{stored}:{when.date().isoformat()}"
-        thread = None
+    thread = await _thread_for(db, message.mailbox_id, stored, when)
+    if thread is None:
+        # No thread within WINDOW. The plain key is used first; later windows get a ":YYYY-MM-DD" suffix. Several
+        # messages of the same day share that suffixed thread (pilot: carrier notifications with one subject).
+        base_taken = await db.scalar(
+            select(Thread.id).where(Thread.mailbox_id == message.mailbox_id, Thread.thread_key == stored)
+        )
+        if base_taken is not None:
+            stored = f"{stored}:{when.date().isoformat()}"
+            thread = await db.scalar(
+                select(Thread).where(Thread.mailbox_id == message.mailbox_id, Thread.thread_key == stored)
+            )
 
     if thread is None:
         thread = Thread(
