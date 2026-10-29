@@ -52,6 +52,7 @@ import {
 import { CATEGORY_COLOR_TOKEN, categoryDotClass } from './categoryStyles';
 import { MessageRow, type RowItem } from './MessageRow';
 import { ReadingPane } from './ReadingPane';
+import { firstSyncProgress } from './syncProgress';
 import { useFolderLabel } from './useFolderLabel';
 
 export const FOLDERS_REFETCH_MS = 30_000;
@@ -342,12 +343,15 @@ function ScreenW2Body({
     return <Navigate to={`/mail/${encodeURIComponent(mailboxRef)}/inbox`} replace />;
   }
 
+  // unexpected failure (exception class from the worker, #41) vs. an unreachable mail server (its own codes)
+  const syncFailed = view?.sync.state === 'error' && (view.sync.error ?? '').startsWith('unexpected:');
   const serverDown =
     error?.detail.code === 'mail_server_unavailable' ||
     (refresh.error instanceof ApiError &&
       refresh.error.detail.code === 'mail_server_unavailable' &&
       refresh.submittedAt >= folders.dataUpdatedAt) ||
     view?.sync.state === 'error';
+  const syncProgress = firstSyncProgress(view?.sync);
   const label = aiView
     ? (categoryMeta?.label_sk ?? t(`ai.categories.${category}.label`, { defaultValue: category ?? '' }))
     : folder
@@ -623,10 +627,16 @@ function ScreenW2Body({
           <div className="px-2 pb-2 pt-2">
             <Banner
               kind="danger"
-              message={t('mail.loadFailed')}
+              message={syncFailed ? t('mail.syncFailed', { email: view?.mailbox.email ?? '' }) : t('mail.loadFailed')}
               action={{ label: t('system.retry'), onClick: () => refresh.mutate(), disabled: refresh.isPending }}
             />
           </div>
+        ) : null}
+
+        {syncProgress && !serverDown ? (
+          <p role="status" className="px-4 pb-2 pt-2 type-small text-text-secondary" data-testid="sync-progress">
+            {t('mail.syncProgress', syncProgress)}
+          </p>
         ) : null}
 
         <div

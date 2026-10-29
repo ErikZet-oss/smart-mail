@@ -55,7 +55,16 @@ export function onGlobalError(handler: GlobalHandler | undefined): void {
 export type RequestOptions = {
   /** false = the caller shows the error inline (login screens); maintenance is always global. */
   global?: boolean;
+  /** true = an unexpected server error (500 `server_error`) is shown inline by the caller, e.g. the reading pane
+   * (#41); sign-in, maintenance and permission errors stay global. */
+  inlineServerErrors?: boolean;
 };
+
+function isGlobal(error: ApiError, options: RequestOptions): boolean {
+  if (error.status === 503 && error.detail.code === 'maintenance') return true;
+  if (options.global === false) return false;
+  return !(options.inlineServerErrors && error.status >= 500);
+}
 
 export async function api<T>(method: string, path: string, body?: unknown, options: RequestOptions = {}): Promise<T> {
   const send = async (csrf: string | undefined): Promise<Response> =>
@@ -84,8 +93,7 @@ export async function api<T>(method: string, path: string, body?: unknown, optio
   }
 
   const error = await toError(response);
-  const isMaintenance = error.status === 503 && error.detail.code === 'maintenance';
-  if (globalHandler && (isMaintenance || options.global !== false)) globalHandler(error);
+  if (globalHandler && isGlobal(error, options)) globalHandler(error);
   throw error;
 }
 

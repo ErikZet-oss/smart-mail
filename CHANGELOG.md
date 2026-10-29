@@ -2,6 +2,20 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #41: visible sync errors, isolated bad messages, first-sync progress
+
+- Any unexpected exception in a mailbox sync sets `sync_state = error` and `sync_error` = the exception class
+  (max 64 chars, never server text). `sync_error = "unexpected:<Class>"`; W2 shows „Synchronizácia schránky {email} zlyhala – správca bol
+  upozornený“ (Figma G6), an unreachable server keeps „Nepodarilo sa načítať priečinok“. The existing
+  sync notification fires, the next good sync clears it.
+- Envelopes are committed before threading. Threading runs in batches of 500 inside a SAVEPOINT; a failing batch
+  is retried one message per SAVEPOINT, so one bad message stays unthreaded (visible in Zoznam) and the rest go on.
+- Threading no longer queries per message (thread index in memory, bulk insert/update, one aggregate count update):
+  20,000 envelopes thread in ~25 s instead of ~460 s. Load test in CI.
+- `GET …/folders` returns `sync.loaded` / `sync.total`; W2/M2 show „Načítava sa schránka… 12 400 / 25 000“.
+- Reading pane (W2c/M3): a 500 on the message shows the error state „Nepodarilo sa načítať správu.“ with the
+  reference code and „Skúsiť znova“ instead of an endless skeleton (no redirect to W16c).
+
 ## [Unreleased] — Pilot #30: forward keeps the original attachments
 
 - Poslať ďalej copies the original message's ordinary attachments onto the draft
