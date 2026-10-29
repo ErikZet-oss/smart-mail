@@ -324,3 +324,74 @@ async def test_1d_remote_images_bar_is_offered_for_unknown_senders(
     assert body["remote_images_auto"] is False
     assert "/api/mail/image-proxy" in body["body_html_sanitized"]
     assert "cdn.example" not in body["body_html_sanitized"].split("data-remote-src")[0]
+
+
+async def test_1d_delete_inside_trash_is_permanent_not_a_move_to_trash(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pilot (eshop@): Vymazať in Kôš tried MOVE Kôš -> Kôš, which the server refuses. Roundcube deletes for good."""
+    import app.api.messages as messages_api
+    from app.mail.actions import MsgAction
+
+    mailbox = await _signed_in(client, db, mail_server)
+    await _seed_inbox(db, mailbox, env(1, subject="V doručenej"))
+    trash = await db.scalar(select(FolderMeta).where(FolderMeta.mailbox_id == mailbox.id, FolderMeta.name == "Trash"))
+    assert trash is not None and trash.special_use == "trash"
+    inbox_msg = await db.scalar(select(Message).where(Message.mailbox_id == mailbox.id, Message.uid == 1))
+    assert inbox_msg is not None
+    trashed = Message(mailbox_id=mailbox.id, folder_id=trash.id, uid=7, subject="V koši", flags=[])
+    db.add(trashed)
+    await db.commit()
+
+    calls: list[tuple[object, str, tuple[int, ...], object]] = []
+
+    async def fake_action(server: object, creds: object, action: object, target: object, **kw: object) -> None:
+        calls.append((action, target.folder, target.uids, kw.get("dest_folder")))  # type: ignore[attr-defined]
+
+    async def fake_creds(*args: object, **kwargs: object) -> object:
+        return object()
+
+    async def no_sync(*args: object, **kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(messages_api, "run_msg_action_async", fake_action)
+    monkeypatch.setattr(messages_api, "_creds", fake_creds)
+    monkeypatch.setattr(messages_api, "_sync", no_sync)
+
+    r = await client.send_json(
+        "POST",
+        "/api/mail/mailboxes/default/messages/bulk",
+        {"message_ids": [str(trashed.id), str(inbox_msg.id)], "action": "delete"},
+    )
+    assert r.status_code == 200, r.text
+    by_folder = {folder: (action, uids, dest) for action, folder, uids, dest in calls}
+    assert by_folder["Trash"] == (MsgAction.expunge, (7,), None)
+    assert by_folder["INBOX"] == (MsgAction.delete, (1,), "Trash")
+
+
+def test_1d_expunge_action_deletes_only_the_given_uids() -> None:
+    from app.mail.actions import MsgAction, MsgTarget, _act
+
+    class FakeClient:
+        def __init__(self, caps: tuple[bytes, ...]) -> None:
+            self.caps = caps
+            self.log: list[tuple[str, object]] = []
+
+        def select_folder(self, name: str) -> None:
+            self.log.append(("select", name))
+
+        def add_flags(self, uids: list[int], flags: list[bytes], silent: bool = False) -> None:
+            self.log.append(("flags", (tuple(uids), tuple(flags))))
+
+        def capabilities(self) -> tuple[bytes, ...]:
+            return self.caps
+
+        def expunge(self, messages: list[int] | None = None) -> None:
+            self.log.append(("expunge", tuple(messages) if messages else None))
+
+    uidplus = FakeClient((b"IMAP4REV1", b"UIDPLUS"))
+    _act(uidplus, MsgAction.expunge, MsgTarget("Trash", (7, 9)), None)  # type: ignore[arg-type]
+    assert uidplus.log == [("select", "Trash"), ("flags", ((7, 9), (b"\\Deleted",))), ("expunge", (7, 9))]
+    plain = FakeClient((b"IMAP4REV1",))
+    _act(plain, MsgAction.expunge, MsgTarget("Trash", (7,)), None)  # type: ignore[arg-type]
+    assert plain.log[-1] == ("expunge", None)

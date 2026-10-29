@@ -752,15 +752,19 @@ async def bulk(
     done = 0
     for folder_id, group in by_folder.items():
         folder = await _folder(db, mailbox, folder_id)
+        folder_action, folder_dest = action, dest
+        if action is MsgAction.delete and dest is not None and folder.id == dest.id:
+            # Already in Kôš: delete permanently (a MOVE to the same folder is refused by the server).
+            folder_action, folder_dest = MsgAction.expunge, None
         await _run(
             request,
             db,
             settings,
             mailbox,
-            action,
+            folder_action,
             folder,
             [m.uid for m in group],
-            dest=dest,
+            dest=folder_dest,
             audit_action=f"mail.bulk_{body.action}",
             details={"n": len(group), "folder": folder.name},
         )
