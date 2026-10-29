@@ -13,8 +13,10 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - Settings 11 (W12-11): „Pridať pobočku“; Údaje form (name, branch mailbox, address, phone, hours) shows which
   login uses the branch mailbox and offers „Prepojiť prihlásenie s pobočkou“ (creates the branch login when the
   mailbox has none). Osoby: table + drawer to add/edit (meno, priezvisko, funkcia, telefón, mobil, rola, vedúci,
-  aktívna) and „Odstrániť osobu“ — a person with history is deactivated; the last active person stays (409).
-- Audit for every change (`settings.user_created|user_patched|branch_login_linked|person_deleted|deactivated`).
+  aktívna) and „Odstrániť osobu“ — a person with history (audit, own login, compose draft) is deactivated; any other
+  reference (e.g. a session) also falls back to deactivation instead of a 500; the last active person stays (409).
+- Audit for every change with `before` / `after` (kind, branch, role, active; person fields), never secrets
+  (`settings.user_created|user_patched|branch_login_linked|person_created|person_saved|person_deleted|deactivated`).
 - CLI: `app.models` registers every table (fixes `NoReferencedTableError` for `branches.mailbox_id` in
   `add-person` / `add-account --branch`); `add-account … --branch NAME --convert` converts an existing personal
   login. Alembic uses the same registry.

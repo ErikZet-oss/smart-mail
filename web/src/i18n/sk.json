@@ -866,7 +866,14 @@
       "link": "Prepojiť prihlásenie s pobočkou",
       "linked": "Prihlásenie je prepojené s pobočkou.",
       "peopleHint": "Klik na meno vyberie osobu v „Kto ste?“ – bez PIN-u (D9).",
-      "columns": { "name": "Meno", "function": "Funkcia", "mobile": "Mobil", "role": "Rola", "manager": "Vedúci", "active": "Aktívna" },
+      "columns": {
+        "name": "Meno",
+        "function": "Funkcia",
+        "mobile": "Mobil",
+        "role": "Rola",
+        "manager": "Vedúci",
+        "active": "Aktívna"
+      },
       "person": {
         "new": "Nová osoba",
         "firstName": "Meno",

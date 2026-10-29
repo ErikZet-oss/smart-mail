@@ -280,3 +280,59 @@ async def test_cli_add_account_convert_existing_personal(
         await db.execute(select(Account).where(Account.id == fa.id).execution_options(populate_existing=True))
     ).scalar_one()
     assert fa.kind == AccountKind.branch and fa.person_id is None
+
+
+async def test_33_delete_person_with_a_draft_or_session_deactivates_instead_of_500(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    """Review #53: any reference (a session's active person, a compose draft) must not turn the delete into a 500."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.auth.models import Session
+    from app.mail.compose_models import ComposeDraft
+
+    await _admin(client, db, mail_server)
+    branch, branch_acc = await make_branch(db, "Nitra", people=3)
+    a, b, _ = (await db.execute(select(Person).where(Person.branch_id == branch.id))).scalars().all()
+    now = datetime.now(UTC)
+    db.add(
+        Session(
+            account_id=branch_acc.id,
+            token_hash="f" * 64,
+            active_person_id=a.id,
+            created_at=now,
+            last_seen_at=now,
+            expires_at=now + timedelta(hours=1),
+        )
+    )
+    mailbox = Mailbox(email=branch_acc.email, imap_host="localhost", imap_port=143, imap_security="none")
+    db.add(mailbox)
+    await db.flush()
+    db.add(ComposeDraft(mailbox_id=mailbox.id, account_id=branch_acc.id, person_id=b.id))
+    await db.commit()
+
+    for person in (a, b):
+        r = await client.send_json("DELETE", f"/api/settings/admin/people/{person.id}")
+        assert r.status_code == 200, r.text
+        assert r.json()["result"] == "deactivated"
+        kept = await db.get(Person, person.id, populate_existing=True)
+        assert kept is not None and kept.active is False
+
+
+async def test_33_admin_changes_are_audited_with_before_and_after(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    await _admin(client, db, mail_server)
+    branch = await _senica(db)
+    eva = await make_personal(db, email="eva@smartsro.sk", role=Role.viewer)
+    r = await client.send_json(
+        "PATCH", f"/api/settings/admin/users/{eva.id}", {"kind": "branch", "branch_id": str(branch.id)}
+    )
+    assert r.status_code == 200, r.text
+    row = (
+        await db.execute(
+            select(AuditLog).where(AuditLog.action == "settings.user_patched").execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    assert row.details["before"] == {"kind": "personal", "branch_id": None, "role": "viewer", "active": True}
+    assert row.details["after"] == {"kind": "branch", "branch_id": str(branch.id), "role": None, "active": True}
