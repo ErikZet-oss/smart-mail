@@ -2,6 +2,20 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #77 PR 2: enforce „Vyžadovať 2FA“, admin reset
+
+- Login of a personal account with `require_2fa` and no TOTP → `next: "2fa-setup"`: an `mfa_pending` session plus a
+  Redis flag (`smartmail:mfa-setup:<session>`, 10 min; B1, no schema change). It reaches only `me` and the 2FA setup
+  (`/api/settings/security/2fa`, `…/start`, `…/confirm`); everything else answers 403 `mfa_setup_required`; logout
+  works. The typed password counts as the re-auth for `start`. After `confirm` the session becomes a normal one.
+  The flag is removed on logout and, after the commit, for revoked sessions (as the re-auth of #54).
+- W1a setup mode (`/login/2fa?setup=1`): „Nastavte dvojstupňové overenie“ with the Settings 09 dialog; a 403
+  `mfa_setup_required` anywhere routes there.
+- W12-10 (personal accounts only, C1): „Vyžadovať 2FA“ switch (PATCH `require_2fa`, re-auth, audit before/after
+  incl. `require_2fa` / `totp_enabled`; branch login → 422 `personal_only`) and „Resetovať 2FA“
+  (`POST /api/settings/admin/users/{id}/reset-2fa`, re-auth, confirm): removes TOTP and backup codes and signs the
+  login out everywhere. Nothing is switched on automatically (D1).
+
 ## [Unreleased] — #77 PR 1: turn two-factor authentication on / off (Settings 09)
 
 - New dependency (approved on #77, A1): `qrcode.react` **4.2.0** (exact pin, ISC licence) — renders the QR code in

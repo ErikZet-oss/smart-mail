@@ -923,6 +923,7 @@ async def _user_out(db: DB, a: Account) -> dict[str, Any]:
         "active": a.active,
         "last_login_at": a.last_login_at.isoformat() if a.last_login_at else None,
         "require_2fa": a.require_2fa,
+        "totp_enabled": a.totp_enabled,
         "branch_id": str(branch.id) if branch else None,
         "branch_name": branch.name if branch else None,
         "person": {
@@ -945,6 +946,8 @@ async def _account_state(db: DB, a: Account) -> dict[str, Any]:
         "branch_id": str(a.branch_id) if a.branch_id else None,
         "role": person.role.value if person else None,
         "active": a.active,
+        "require_2fa": a.require_2fa,
+        "totp_enabled": a.totp_enabled,
     }
 
 
@@ -1017,6 +1020,7 @@ class UserPatch(BaseModel):
     kind: AccountKind | None = None
     branch_id: uuid.UUID | None = None
     role: Role | None = None  # applied to the person of a personal account
+    require_2fa: bool | None = None  # „Vyžadovať 2FA“ (#77): personal accounts only, enforced at the next login
 
 
 @router.patch("/admin/users/{account_id}")
@@ -1042,6 +1046,10 @@ async def patch_user(
         elif account.kind == AccountKind.branch:
             # a personal login needs its own person: create it as a new account instead
             raise AccountRuleError(422, "person_required")
+        if body.require_2fa is not None and body.require_2fa != account.require_2fa:
+            if account.kind != AccountKind.personal:
+                raise AccountRuleError(422, "personal_only")
+            account.require_2fa = body.require_2fa
         if body.role is not None and account.kind == AccountKind.personal and account.person_id:
             person = await db.get(Person, account.person_id)
             if person is not None and person.role != body.role:
@@ -1106,6 +1114,35 @@ async def verify_user_login(
     if result is LoginResult.invalid_credentials:
         raise fail(422, "verify_failed")
     return {"result": "ok"}
+
+
+@router.post("/admin/users/{account_id}/reset-2fa")
+async def reset_user_2fa(account_id: uuid.UUID, request: Request, ctx: RecentReauth, db: DB) -> dict[str, Any]:
+    """„Resetovať 2FA“ (#77): the user lost the phone and the backup codes. TOTP and backup codes are removed and the
+    login is signed out everywhere; with „Vyžadovať 2FA“ the next login sets 2FA up again."""
+    admin = require_admin(ctx)
+    account = await db.get(Account, account_id)
+    if account is None:
+        raise fail(404, "account_not_found")
+    before = await _account_state(db, account)
+    account.totp_secret_enc = None
+    account.totp_enabled = False
+    account.totp_last_step = None
+    account.backup_code_hashes = []
+    revoked = await revoke_account_sessions(db, account.id, RevokeReason.admin_logout, now=datetime.now(UTC))
+    audit(
+        db,
+        "settings.user_2fa_reset",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="account",
+        object_id=str(account.id),
+        ip=client_ip(request),
+        details={"before": before, "after": await _account_state(db, account), "revoked_sessions": revoked},
+    )
+    await db.commit()
+    await forget_revoked_reauth(db, request.app.state.redis, account.id)
+    return await _user_out(db, account)
 
 
 @router.post("/admin/users/{account_id}/logout-all")

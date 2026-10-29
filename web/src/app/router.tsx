@@ -56,6 +56,8 @@ export function routeForError(error: ApiError, currentPath: string): string | nu
   if ((status === 409 && detail.code === 'person_inactive') || (status === 403 && detail.code === 'person_required')) {
     return ROUTES.W1b.path;
   }
+  // „Vyžadovať 2FA“: the session may only set up two-factor authentication (#77)
+  if (status === 403 && detail.code === 'mfa_setup_required') return `${ROUTES.W1a.path}?setup=1`;
   if (status === 403 && detail.code !== 'csrf') return ROUTES.W16a.path;
   if (status >= 500 && detail.code === 'server_error') {
     return `${ROUTES.W16c.path}?ref=${encodeURIComponent(String(detail.ref ?? ''))}`;

@@ -84,7 +84,7 @@ export function TwoFactorRow() {
 const groups = (secret: string) => secret.match(/.{1,4}/g)?.join(' ') ?? secret;
 
 /** Figma `67:58896`: 1. QR (or the key by hand), 2. the code from the app, 3. backup codes (each once) + download. */
-function EnableTwoFactorDialog({ onClose }: { onClose: () => void }) {
+export function EnableTwoFactorDialog({ onClose, onEnabled }: { onClose: () => void; onEnabled?: () => void }) {
   const { t } = useTranslation();
   const toasts = useToasts();
   const qc = useQueryClient();
@@ -103,7 +103,8 @@ function EnableTwoFactorDialog({ onClose }: { onClose: () => void }) {
     onSuccess: () => {
       toasts.success(t('settings.twoFactor.enabled'));
       void qc.invalidateQueries({ queryKey: KEY });
-      onClose();
+      if (onEnabled) onEnabled();
+      else onClose();
     },
     onError: (e) => {
       const errorCode = e instanceof ApiError ? e.detail.code : 'generic';

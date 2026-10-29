@@ -40,6 +40,12 @@
     }
   },
   "mfa": {
+    "setup": {
+      "title": "Nastavte dvojstupňové overenie",
+      "body": "Správca vyžaduje pre váš účet dvojstupňové overenie. Pred pokračovaním si ho nastavte v aplikácii Authenticator.",
+      "start": "Nastaviť",
+      "logout": "Odhlásiť sa"
+    },
     "title": "Overenie (2FA)",
     "subtitle": "Zadajte 6-miestny kód z aplikácie na mobile.",
     "subtitleBackup": "Zadajte jeden zo záložných kódov (napr. abcd-efgh).",
@@ -941,6 +947,13 @@
         "no": "nie"
       },
       "unsaved": "Neuložené zmeny",
+      "twoFactor": "Dvojstupňové overenie",
+      "twoFactorHelp": "Vyžadované sa vynúti pri ďalšom prihlásení – bez nastavenia sa nedá pokračovať.",
+      "require2fa": "Vyžadovať 2FA",
+      "reset2fa": "Resetovať 2FA",
+      "reset2faTitle": "Resetovať dvojstupňové overenie pre {{email}}?",
+      "reset2faBody": "Kľúč aj záložné kódy sa zmažú a účet sa odhlási zo všetkých zariadení. Ak je 2FA vyžadované, pri ďalšom prihlásení si ho nastaví znova.",
+      "twoFactorReset": "Dvojstupňové overenie bolo resetované.",
       "active": "Aktívny",
       "inactive": "neaktívny",
       "persons_one": "{{count}} osoba",

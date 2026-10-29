@@ -137,6 +137,8 @@ export type AdminUser = {
   branch_id: string | null;
   branch_name: string | null;
   persons_count?: number | null;
+  require_2fa?: boolean;
+  totp_enabled?: boolean;
   person: { id: string; first_name: string; last_name: string; role: RoleId; active: boolean } | null;
 };
 
@@ -147,6 +149,8 @@ export const saveMailboxAccess = (id: string, body: { mailbox_id: string; read: 
   api<MailboxAccessRow[]>('PUT', `/api/settings/admin/users/${id}/mailbox-access`, body);
 export const verifyUserLogin = (id: string, password: string) =>
   api<{ result: 'ok' }>('POST', `/api/settings/admin/users/${id}/verify`, { password });
+export const resetUserTwoFactor = (id: string) =>
+  api<AdminUser>('POST', `/api/settings/admin/users/${id}/reset-2fa`, {});
 export const logoutUserEverywhere = (id: string) =>
   api<{ revoked_sessions: number }>('POST', `/api/settings/admin/users/${id}/logout-all`, {});
 
@@ -199,7 +203,13 @@ export const createUser = (body: {
 }) => api<AdminUser>('POST', '/api/settings/admin/users', body);
 export const patchUser = (
   id: string,
-  body: { active?: boolean; kind?: 'personal' | 'branch'; branch_id?: string | null; role?: RoleId },
+  body: {
+    active?: boolean;
+    kind?: 'personal' | 'branch';
+    branch_id?: string | null;
+    role?: RoleId;
+    require_2fa?: boolean;
+  },
 ) => api<AdminUser>('PATCH', `/api/settings/admin/users/${id}`, body);
 export const deletePersonAdmin = (id: string) =>
   api<{ id: string; result: 'deleted' | 'deactivated' }>('DELETE', `/api/settings/admin/people/${id}`);

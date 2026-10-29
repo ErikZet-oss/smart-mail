@@ -22,10 +22,10 @@ from sqlalchemy import select
 
 from app.auth import totp
 from app.auth.deps import DB, Auth, AuthContext, SettingsDep, client_ip, now_utc
-from app.auth.models import Account, Branch, Person, Session
+from app.auth.models import Account, AccountKind, Branch, Person, Session
 from app.auth.provisioning import provision_account, remember_mailbox_password
 from app.auth.ratelimit import LoginRateLimiter
-from app.auth.reauth_store import REAUTH_TTL_S, forget_reauth, mark_reauth
+from app.auth.reauth_store import REAUTH_TTL_S, forget_session_keys, mark_mfa_setup, mark_reauth
 from app.auth.security import csrf_token, decrypt, mfa_trust_cookie, mfa_trust_valid
 from app.auth.sessions import (
     Invalid,
@@ -112,10 +112,12 @@ class MeOut(BaseModel):
     person: PersonOut | None
     needs_person: bool
     read_only: bool
+    # „Vyžadovať 2FA“ (#77): this session may only set up two-factor authentication
+    mfa_setup_required: bool = False
 
 
 class LoginOut(BaseModel):
-    next: Literal["2fa", "who", "app"]
+    next: Literal["2fa", "2fa-setup", "who", "app"]
     me: MeOut | None = None
 
 
@@ -154,6 +156,7 @@ async def me_for(db: DB, ctx: AuthContext) -> MeOut:
         person=person_out(person) if person else None,
         needs_person=person is None,
         read_only=ctx.read_only,
+        mfa_setup_required=ctx.mfa_setup,
     )
 
 
@@ -243,6 +246,8 @@ async def login(
     needs_mfa = account.totp_enabled and not mfa_trust_valid(
         settings, request.cookies.get(MFA_TRUST_COOKIE), str(account.id)
     )
+    # „Vyžadovať 2FA“ without TOTP yet: a session limited to the 2FA setup (#77, personal accounts only)
+    needs_setup = account.kind == AccountKind.personal and account.require_2fa and not account.totp_enabled
     person_id = None if needs_mfa else await automatic_person(db, account)
     session, token = await create_session(
         db,
@@ -250,13 +255,22 @@ async def login(
         settings,
         now=now,
         remember=body.remember,
-        mfa_pending=needs_mfa,
+        mfa_pending=needs_mfa or needs_setup,
         device_id=device_id,
         ip=ip,
         user_agent=request.headers.get("user-agent"),
         active_person_id=person_id,
     )
     _issue_session_cookies(response, settings, session, token)
+    if needs_setup:
+        audit(db, "auth.login_mfa_setup_required", account_id=account.id, ip=ip)
+        await db.commit()
+        if password_changed:
+            await forget_revoked_reauth(db, request.app.state.redis, account.id)
+        await mark_mfa_setup(request.app.state.redis, session.id)
+        # the password was typed a moment ago: it counts as the re-auth that `start` needs
+        await mark_reauth(request.app.state.redis, session.id, account.id, person_id)
+        return LoginOut(next="2fa-setup")
     if needs_mfa:
         audit(db, "auth.login_mfa_required", account_id=account.id, ip=ip)
         await db.commit()
@@ -377,7 +391,7 @@ async def logout(request: Request, response: Response, db: DB, settings: Setting
     found = await resolve(db, request.cookies.get(SESSION_COOKIE), now=now)
     if not isinstance(found, Invalid):
         revoke(found, RevokeReason.logout, now=now)
-        await forget_reauth(request.app.state.redis, [found.id])
+        await forget_session_keys(request.app.state.redis, [found.id])
         audit(
             db,
             "auth.logout",

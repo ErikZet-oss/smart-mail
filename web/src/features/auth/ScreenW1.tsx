@@ -98,6 +98,7 @@ export function ScreenW1() {
       rememberAfterLogin(result.me);
       const from = returnTo(location.state);
       if (result.next === '2fa') navigate('/login/2fa', { replace: true, state: { from, remember } });
+      else if (result.next === '2fa-setup') navigate('/login/2fa?setup=1', { replace: true });
       else if (result.next === 'who') navigate('/who', { replace: true, state: { from } });
       else navigate(from, { replace: true });
     } catch (error) {

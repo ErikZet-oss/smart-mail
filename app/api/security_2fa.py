@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from datetime import timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -20,7 +21,9 @@ from app.auth import totp
 from app.auth.deps import DB, Auth, AuthContext, SettingsDep, client_ip
 from app.auth.models import AccountKind
 from app.auth.reauth import ReauthedSession, require_reauthed_session
+from app.auth.reauth_store import mfa_setup_key
 from app.auth.security import decrypt, encrypt
+from app.auth.sessions import remember_days
 from app.core.audit import audit
 
 router = APIRouter(prefix="/api/settings/security/2fa", tags=["settings"])
@@ -117,8 +120,19 @@ async def confirm(body: ConfirmIn, request: Request, ctx: Auth, db: DB, settings
         object_id=str(account.id),
         ip=client_ip(request),
     )
+    if ctx.mfa_setup:
+        # „Vyžadovať 2FA“ is fulfilled: the limited login session becomes a normal one (#77)
+        ctx.session.mfa_pending = False
+        lifetime = (
+            timedelta(days=await remember_days(db, account, settings))
+            if ctx.session.remember
+            else timedelta(hours=settings.session_idle_hours)
+        )
+        ctx.session.expires_at = ctx.session.created_at + lifetime
     await db.commit()
     await redis.delete(key)
+    if ctx.mfa_setup:
+        await redis.delete(mfa_setup_key(ctx.session.id))
     return {"enabled": True}
 
 

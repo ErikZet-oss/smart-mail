@@ -15,6 +15,7 @@ import {
   fetchMailboxAccess,
   fetchUsers,
   logoutUserEverywhere,
+  resetUserTwoFactor,
   patchUser,
   ROLES,
   saveMailboxAccess,
@@ -255,6 +256,7 @@ function UserDetail({ user }: { user: AdminUser }) {
     branchId: user.branch_id ?? '',
     role: (user.person?.role ?? 'sales') as RoleId,
     active: user.active,
+    require2fa: Boolean(user.require_2fa),
   });
   const [form, setForm] = useState(initial);
   const [accessEdits, setAccessEdits] = useState<Record<string, Pick<Access, 'read' | 'send'>>>({});
@@ -262,12 +264,26 @@ function UserDetail({ user }: { user: AdminUser }) {
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [resetting2fa, setResetting2fa] = useState(false);
+  const reset2fa = useMutation({
+    mutationFn: () => resetUserTwoFactor(user.id),
+    onSuccess: () => {
+      setResetting2fa(false);
+      toasts.success(t('settings.users.twoFactorReset'));
+      void qc.invalidateQueries({ queryKey: ['settings', 'users'] });
+    },
+    onError: (error) => {
+      setResetting2fa(false);
+      toasts.error(adminErrorText(t, error));
+    },
+  });
   const rows: Access[] = (access.data ?? []).map((r) => ({ ...r, ...(accessEdits[r.mailbox_id] ?? {}) }));
   const dirty =
     form.kind !== user.kind ||
     form.branchId !== (user.branch_id ?? '') ||
     (form.kind === 'personal' && form.role !== (user.person?.role ?? 'sales')) ||
     form.active !== user.active ||
+    form.require2fa !== Boolean(user.require_2fa) ||
     Object.keys(accessEdits).length > 0;
 
   const save = useMutation({
@@ -277,6 +293,9 @@ function UserDetail({ user }: { user: AdminUser }) {
         kind: form.kind,
         branch_id: form.kind === 'branch' ? form.branchId || null : null,
         ...(form.kind === 'personal' ? { role: form.role } : {}),
+        ...(user.kind === 'personal' && form.require2fa !== Boolean(user.require_2fa)
+          ? { require_2fa: form.require2fa }
+          : {}),
       });
       if (Object.keys(accessEdits).length) {
         await saveMailboxAccess(
@@ -372,6 +391,33 @@ function UserDetail({ user }: { user: AdminUser }) {
           </select>
         </FormRow>
       )}
+      {user.kind === 'personal' ? (
+        <FormRow label={t('settings.users.twoFactor')} help={t('settings.users.twoFactorHelp')}>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2" data-testid="user-2fa">
+            <Switch
+              checked={form.require2fa}
+              onChange={(require2fa) => setForm((prev) => ({ ...prev, require2fa }))}
+              label={t('settings.users.require2fa')}
+            />
+            <span
+              className={`type-caption rounded-full px-2 py-0.5 ${
+                user.totp_enabled ? 'bg-success-50 text-success-700' : 'bg-bg-muted text-text-secondary'
+              }`}
+            >
+              {user.totp_enabled ? t('settings.twoFactor.on') : t('settings.twoFactor.off')}
+            </span>
+            {user.totp_enabled ? (
+              <button
+                type="button"
+                onClick={() => setResetting2fa(true)}
+                className="type-label rounded-xs text-brand-primary-700 hover:underline"
+              >
+                {t('settings.users.reset2fa')}
+              </button>
+            ) : null}
+          </div>
+        </FormRow>
+      ) : null}
       <FormRow label={t('settings.users.status')} help={t('settings.users.statusHelp')}>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <Switch
@@ -513,6 +559,16 @@ function UserDetail({ user }: { user: AdminUser }) {
           busy={logoutAll.isPending}
           onConfirm={() => logoutAll.mutate()}
           onClose={() => setLoggingOut(false)}
+        />
+      ) : null}
+      {resetting2fa ? (
+        <ConfirmDialog
+          title={t('settings.users.reset2faTitle', { email: user.email })}
+          body={t('settings.users.reset2faBody')}
+          confirmLabel={t('settings.users.reset2fa')}
+          busy={reset2fa.isPending}
+          onConfirm={() => reset2fa.mutate()}
+          onClose={() => setResetting2fa(false)}
         />
       ) : null}
       {verifying ? (
