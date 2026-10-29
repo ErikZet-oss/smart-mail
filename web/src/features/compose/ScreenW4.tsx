@@ -204,6 +204,13 @@ export function ScreenW4() {
     }
   }, [draftId, localId, bootstrap]);
 
+  // Fields are editable only once the draft is there (#56): typing during `POST /compose` was overwritten by
+  // `applyDraft` when the new draft arrived (slow network / CI runner).
+  const ready = bootstrap.isSuccess || draftQuery.data !== undefined;
+  useEffect(() => {
+    editor?.setEditable(ready, false); // no update event: it would mark the draft dirty
+  }, [editor, ready]);
+
   useEffect(() => {
     // Do not clobber in-progress edits when a late GET/hydrate arrives (pilot #18 B7 e2e).
     if (draftQuery.data && !dirty) applyDraft(draftQuery.data);
@@ -544,6 +551,7 @@ export function ScreenW4() {
                       : 'type-body h-9 flex-1 rounded-sm border border-border-default px-3'
                   }
                   aria-label={t('compose.to')}
+                  disabled={!ready}
                 />
                 <button
                   type="button"
@@ -568,6 +576,7 @@ export function ScreenW4() {
                         : 'type-body h-9 rounded-sm border border-border-default px-3'
                     }
                     aria-label={t('compose.cc')}
+                    disabled={!ready}
                   />
                 </>
               ) : null}
@@ -584,6 +593,7 @@ export function ScreenW4() {
                     : 'type-body h-9 rounded-sm border border-border-default px-3'
                 }
                 aria-label={t('compose.subject')}
+                disabled={!ready}
               />
             </div>
 
