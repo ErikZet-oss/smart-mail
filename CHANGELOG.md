@@ -4,6 +4,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — #85 react-router 6 for the pilot (ADR-013)
 
+### Fixed
+- „Kto ste?“ (W1b/M0), the PersonChip and Viac (M18) show the person's uploaded photo instead of the initials (UX_SPEC W1b: photo or initials). `PersonOut.photo_url` is added; `Avatar` takes an optional `photoUrl`.
+
 - Decision (Erik, B): stay on react-router 6.x; upgrade to 7.x in Phase 7. Recorded in `docs/adr/013-react-router-6-pilot.md`, including the advisory IDs.
 - `safeInternalPath` guards every navigation target taken from router state or server data:
   - accepts only paths that start with `/`;

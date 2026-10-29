@@ -9,6 +9,7 @@ export type Person = {
   role: string;
   function: string | null;
   is_manager: boolean;
+  photo_url?: string | null;
 };
 
 export type Me = {
