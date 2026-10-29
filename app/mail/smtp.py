@@ -23,6 +23,17 @@ log = structlog.get_logger(__name__)
 Security = Literal["ssl", "starttls", "none"]
 
 
+REPLY_MAX = 200
+
+
+def server_reply_reason(exc: SMTPResponseException) -> tuple[str, str]:
+    """`<Class>:<code>:<server text>` for the UI (#69) and the one-line server text for the log. Only the server's
+    reply — never the message — single line, at most REPLY_MAX characters (= compose_drafts.send_error)."""
+    text = " ".join(str(exc.message or "").split())
+    reason = f"{type(exc).__name__}:{exc.code}:{text}" if text else f"{type(exc).__name__}:{exc.code}"
+    return reason[:REPLY_MAX], text[:REPLY_MAX]
+
+
 class SmtpError(Exception):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
@@ -82,8 +93,9 @@ async def send_message(
         if exc.code == 535:
             log.warning("smtp.auth_failed", smtp_code=exc.code)
             raise SmtpError("auth_failed") from exc
-        log.warning("smtp.send_failed", error_type=type(exc).__name__, smtp_code=exc.code)
-        raise SmtpError(type(exc).__name__) from exc
+        reason, text = server_reply_reason(exc)
+        log.warning("smtp.send_failed", error_type=type(exc).__name__, smtp_code=exc.code, smtp_message=text)
+        raise SmtpError(reason) from exc
     except aiosmtplib.SMTPException as exc:
         log.warning("smtp.send_failed", error_type=type(exc).__name__)
         raise SmtpError(type(exc).__name__) from exc

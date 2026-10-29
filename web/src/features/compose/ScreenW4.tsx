@@ -42,7 +42,7 @@ import {
 } from './composeApi';
 import { ComposeToolbar } from './ComposeToolbar';
 import { composeExtensions, signatureHtmlOf } from './composeExtensions';
-import { sendErrorMessage } from './sendCopy';
+import { sendErrorMessage, sendErrorServerReply } from './sendCopy';
 import { watchSend } from './sendWatch';
 import { PreSendDialog } from './PreSendDialog';
 import { ResponsesPicker } from './ResponsesPicker';
@@ -619,7 +619,11 @@ export function ScreenW4() {
               </div>
             ) : draft?.status === 'failed' ? (
               <div className="px-4 pt-3" data-testid="compose-send-error">
-                <Banner kind="danger" message={sendErrorMessage(t, draft?.send_error)} />
+                <Banner
+                  kind="danger"
+                  message={sendErrorMessage(t, draft?.send_error)}
+                  details={sendErrorServerReply(t, draft?.send_error)}
+                />
               </div>
             ) : null}
             <div

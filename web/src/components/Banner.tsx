@@ -40,13 +40,15 @@ const STYLE: Record<BannerKind, { box: string; icon: ReactNode; text: string; ac
 type Props = {
   kind: BannerKind;
   message: string;
+  /** Secondary lines under the message (e.g. the mail server's reply, #69). */
+  details?: string[];
   action?: { label: string; onClick: () => void; disabled?: boolean };
   secondaryAction?: { label: string; onClick: () => void; disabled?: boolean };
   onClose?: () => void;
 };
 
 /** G6 Banner (top of the content area, 3 px left border). */
-export function Banner({ kind, message, action, secondaryAction, onClose }: Props) {
+export function Banner({ kind, message, details, action, secondaryAction, onClose }: Props) {
   const { t } = useTranslation();
   const style = STYLE[kind];
   return (
@@ -55,7 +57,18 @@ export function Banner({ kind, message, action, secondaryAction, onClose }: Prop
       className={`flex items-center gap-2.5 border-l-[3px] px-4 py-2.5 ${style.box}`}
     >
       {style.icon}
-      <p className={`type-small min-w-0 flex-1 ${style.text}`}>{message}</p>
+      {details?.length ? (
+        <div className={`type-small min-w-0 flex-1 ${style.text}`}>
+          <p>{message}</p>
+          {details.map((line) => (
+            <p key={line} className="break-words text-text-secondary">
+              {line}
+            </p>
+          ))}
+        </div>
+      ) : (
+        <p className={`type-small min-w-0 flex-1 ${style.text}`}>{message}</p>
+      )}
       {action ? (
         <button
           type="button"
