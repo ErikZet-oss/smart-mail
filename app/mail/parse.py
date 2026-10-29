@@ -268,3 +268,9 @@ def parse_date_header(value: str | None) -> str | None:
         return parsedate_to_datetime(value).isoformat()
     except (TypeError, ValueError, IndexError):
         return None
+
+
+def has_file_attachments(parsed: ParsedMessage) -> bool:
+    """Paperclip in the list: only parts the user sees as files. Images shown inside the body (signature logos,
+    banners, social icons referenced by cid:) are not attachments, as in Roundcube."""
+    return any(not part.is_inline for part in parsed.attachments)

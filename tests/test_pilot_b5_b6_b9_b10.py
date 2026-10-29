@@ -489,3 +489,12 @@ async def test_b6_resolve_uses_async_getaddrinfo(settings) -> None:
         target = await pin_http_url("https://cdn.example/a.png")
     assert str(target.ip) == "93.184.216.34"
     mocked.assert_awaited()
+
+
+def test_b9_signature_images_alone_do_not_show_the_paperclip() -> None:
+    """Pilot (eshop@, a supplier mail with logo, banner and social icons in the signature): the list showed a paperclip
+    although Roundcube shows no attachment. Images referenced by cid: in the body are not file attachments."""
+    from app.mail.parse import has_file_attachments
+
+    assert has_file_attachments(parse_rfc822((FIXTURES / "outlook_signature_cid.eml").read_bytes())) is False
+    assert has_file_attachments(parse_rfc822((FIXTURES / "gmail_attachment_with_cid.eml").read_bytes())) is True

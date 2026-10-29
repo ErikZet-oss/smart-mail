@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.mail import storage
 from app.mail.models import Attachment, FolderMeta, Mailbox, Message
-from app.mail.parse import parse_rfc822
+from app.mail.parse import has_file_attachments, parse_rfc822
 from app.mail.sync import Credentials, SyncAuthError, SyncUnavailable, connect, logout_quietly, server_of
 
 # Never include RFC822: that fetch marks the message \\Seen on many servers.
@@ -67,7 +67,7 @@ async def ensure_body(
     message.body_html_sanitized = parsed.body_html_sanitized
     message.preview = parsed.preview
     message.auth_results = parsed.auth_results
-    message.has_attachments = bool(parsed.attachments)
+    message.has_attachments = has_file_attachments(parsed)
     message.body_fetched_at = datetime.now(UTC)
 
     from app.mail.clamav import scan_bytes
