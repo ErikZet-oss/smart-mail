@@ -20,6 +20,7 @@ from app.mail.sieve_async import (
     mark_sieve_unavailable,
     sieve_marked_unavailable,
 )
+from app.main import READYZ_BUDGET_S
 from tests.conftest import Client, FakeMailServer, make_personal
 
 BLACKHOLE = "192.0.2.1"  # TEST-NET-1 — packets should never answer
@@ -60,6 +61,13 @@ async def test_b1_blackhole_sieve_connect_times_out_fast() -> None:
     assert elapsed < SIEVE_CONNECT_TIMEOUT_S + 2.0
 
 
+# /readyz may take up to READYZ_BUDGET_S (2 s) by design, and a slow CI runner's first DB connect can pass 1 s, so
+# a 1 s bound flaked. The limit stays well below the 5 s a black-holed ManageSieve connect hangs
+# (SIEVE_CONNECT_TIMEOUT_S): if /readyz ever waits for Sieve again, it takes ≥ 5 s and these tests still fail.
+READYZ_LIMIT_S = READYZ_BUDGET_S + 1.0
+assert READYZ_LIMIT_S < SIEVE_CONNECT_TIMEOUT_S
+
+
 @pytest.mark.asyncio
 async def test_b1_sieve_hang_does_not_block_readyz_or_messages(
     client: Client,
@@ -69,7 +77,7 @@ async def test_b1_sieve_hang_does_not_block_readyz_or_messages(
     settings: Settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """While ManageSieve hangs on a black hole, /readyz and folders stay fast (< 1 s)."""
+    """While ManageSieve hangs on a black hole, /readyz stays under READYZ_LIMIT_S and folders under 1 s."""
     monkeypatch.setattr(settings, "mail_sync_allow_real_server", True)
     email = "pilot-sieve@smartmail.test"
     mail_server.passwords[email] = PASSWORD
@@ -89,7 +97,7 @@ async def test_b1_sieve_hang_does_not_block_readyz_or_messages(
     ready = await client.get("/readyz")
     ready_ms = (time.perf_counter() - t0) * 1000
     assert ready.status_code == 200, ready.text
-    assert ready_ms < 1000, f"/readyz took {ready_ms:.0f} ms while Sieve hangs"
+    assert ready_ms < READYZ_LIMIT_S * 1000, f"/readyz took {ready_ms:.0f} ms while Sieve hangs"
 
     t1 = time.perf_counter()
     folders = await client.get("/api/mail/mailboxes/default/folders")
@@ -146,4 +154,4 @@ async def test_b4_readyz_fast_when_ok(client: Client) -> None:
     t0 = time.perf_counter()
     r = await client.get("/readyz")
     assert r.status_code == 200
-    assert (time.perf_counter() - t0) < 1.0
+    assert (time.perf_counter() - t0) < READYZ_LIMIT_S
