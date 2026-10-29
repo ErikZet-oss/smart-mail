@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #38: body search also on the IMAP server (Roundcube parity)
+
+- `GET /api/search?server=true`: for Telo (`BODY`) and Celá správa (`TEXT`) the backend also runs `UID SEARCH CHARSET
+  UTF-8` on the IMAP server for the folders in scope and merges the UIDs with the local hits, so text in the body of
+  messages that were never opened is found (ADR-012). Terms are reduced to safe characters (no IMAP injection), 15 s
+  timeout, `server_search: ok|partial|timeout|unavailable`; the local hits are always returned.
+- W10/M8: local results first, then „Hľadá sa aj na serveri…“ and the merged result; a timeout or an unreachable
+  server is explained. Subject / sender fields never ask the server.
+
 ## [Unreleased] — Pilot #46: W2l attachment preview (PDF, images, ISDOC/XML)
 
 - Clicking a PDF, raster image (not SVG) or XML/ISDOC attachment opens W2l, a full-screen dark lightbox, instead of

@@ -9,8 +9,8 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from app.auth.deps import DB, Auth, SignedInPerson
-from app.mail.search import SearchScope, oldest_downloaded_at, search_messages
+from app.auth.deps import DB, Auth, SettingsDep, SignedInPerson
+from app.mail.search import SearchScope, oldest_downloaded_at, search_messages, server_uid_hits
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -34,6 +34,8 @@ class SearchOut(BaseModel):
     total: int
     messages: list[MessageHitOut]
     oldest_downloaded_at: datetime | None = None
+    # #38: None = the server was not asked; ok | partial | timeout | unavailable
+    server_search: str | None = None
 
 
 @router.get("")
@@ -41,6 +43,7 @@ async def search(
     ctx: Auth,
     person: SignedInPerson,
     db: DB,
+    settings: SettingsDep,
     q: Annotated[str, Query(min_length=1, max_length=500)],
     scope: Annotated[SearchScope, Query()] = "all",
     fields: Annotated[list[str] | None, Query()] = None,
@@ -48,7 +51,23 @@ async def search(
     mailbox: Annotated[str, Query()] = "default",
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    server: bool = False,
 ) -> SearchOut:
+    server_uids: dict[uuid.UUID, set[int]] = {}
+    server_state: str | None = None
+    if server:
+        # Telo / Celá správa also on the IMAP server: bodies of unopened messages are not indexed locally (#38)
+        server_uids, server_state = await server_uid_hits(
+            db,
+            settings,
+            ctx.account,
+            q=q,
+            scope=scope,
+            fields=fields,
+            folder_id=folder_id,
+            mailbox_ref=mailbox,
+            person_id=person.id,
+        )
     hits, total = await search_messages(
         db,
         ctx.account,
@@ -60,6 +79,7 @@ async def search(
         person_id=person.id,
         limit=limit,
         offset=offset,
+        server_uids=server_uids,
     )
     oldest = await oldest_downloaded_at(db, ctx.account, person_id=person.id)
     field_list = fields or ["full"]
@@ -69,6 +89,7 @@ async def search(
         fields=field_list,
         total=total,
         oldest_downloaded_at=oldest if isinstance(oldest, datetime) else None,
+        server_search=server_state,
         messages=[
             MessageHitOut(
                 id=str(h.id),

@@ -68,6 +68,17 @@ export function ScreenW10() {
     enabled,
   });
 
+  // Telo / Celá správa: then also on the IMAP server — bodies of unopened messages are not indexed locally (#38)
+  const askServer = enabled && (field === 'body' || field === 'full') && result.isSuccess;
+  const serverResult = useQuery({
+    queryKey: searchKey({ q: qParam, scope, fields: [field], folder_id: folderId, mailbox, server: true }),
+    queryFn: () => runSearch({ q: qParam, scope, fields: [field], folder_id: folderId, mailbox, server: true }),
+    enabled: askServer,
+    retry: false,
+  });
+  const shown = serverResult.data ?? result.data;
+  const serverState = serverResult.isError ? 'unavailable' : serverResult.data?.server_search;
+
   const oldestLabel = useMemo(
     () => formatSkDate(result.data?.oldest_downloaded_at ?? null),
     [result.data?.oldest_downloaded_at],
@@ -94,8 +105,8 @@ export function ScreenW10() {
     setParams(next, { replace: true });
   }
 
-  const messages = result.data?.messages ?? [];
-  const empty = enabled && result.isSuccess && messages.length === 0;
+  const messages = shown?.messages ?? [];
+  const empty = enabled && result.isSuccess && !serverResult.isFetching && messages.length === 0;
 
   return (
     <AppShell section="mail">
@@ -173,6 +184,15 @@ export function ScreenW10() {
             </fieldset>
           </div>
         </header>
+        {askServer && serverResult.isFetching ? (
+          <p role="status" className="type-small px-4 pt-3 text-text-secondary sm:px-6" data-testid="search-server">
+            {t('search.serverSearching')}
+          </p>
+        ) : serverState && serverState !== 'ok' ? (
+          <p role="status" className="type-small px-4 pt-3 text-warning-700 sm:px-6" data-testid="search-server">
+            {t(serverState === 'partial' ? 'search.serverPartial' : 'search.serverUnavailable')}
+          </p>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {!enabled ? (
@@ -224,7 +244,7 @@ export function ScreenW10() {
           ) : (
             <section className="m-4 overflow-hidden rounded-md border border-border-default sm:mx-6">
               <h2 className="type-heading flex h-11 items-center border-b border-border-default px-3.5 text-text-primary">
-                {t('search.emailsGroup', { count: result.data?.total ?? 0 })}
+                {t('search.emailsGroup', { count: shown?.total ?? 0 })}
               </h2>
               <ul className="divide-y divide-border-default">
                 {messages.map((m) => (

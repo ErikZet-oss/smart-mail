@@ -22,6 +22,8 @@ export type SearchResult = {
   total: number;
   messages: MessageHit[];
   oldest_downloaded_at: string | null;
+  /** #38: null = the IMAP server was not asked; otherwise ok | partial | timeout | unavailable */
+  server_search?: 'ok' | 'partial' | 'timeout' | 'unavailable' | null;
 };
 
 export type SearchParams = {
@@ -32,6 +34,8 @@ export type SearchParams = {
   mailbox?: string;
   limit?: number;
   offset?: number;
+  /** Also search bodies on the IMAP server (Telo / Celá správa; unopened messages are not indexed locally, #38). */
+  server?: boolean;
 };
 
 export function searchKey(params: SearchParams) {
@@ -46,6 +50,9 @@ export function runSearch(params: SearchParams) {
   if (params.mailbox) qs.set('mailbox', params.mailbox);
   if (params.limit) qs.set('limit', String(params.limit));
   if (params.offset) qs.set('offset', String(params.offset));
+  if (params.server) qs.set('server', 'true');
   for (const f of params.fields ?? ['full']) qs.append('fields', f);
-  return api<SearchResult>('GET', `/api/search?${qs.toString()}`);
+  return api<SearchResult>('GET', `/api/search?${qs.toString()}`, undefined, {
+    inlineServerErrors: params.server,
+  });
 }

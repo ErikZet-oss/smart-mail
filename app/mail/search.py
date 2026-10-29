@@ -6,18 +6,29 @@ Prefix FTS (to_tsquery + :*), address substring LIKE for Od/Komu/Kópia, weighte
 
 from __future__ import annotations
 
+import asyncio
 import re
 import unicodedata
 import uuid
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from sqlalchemy import ColumnElement, String, and_, func, literal, or_, select
+from sqlalchemy import ARRAY, BigInteger, ColumnElement, String, and_, any_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import Account
+from app.core.config import Settings
 from app.mail.mailboxes import accessible_mailbox, accessible_mailboxes
 from app.mail.models import FolderMeta, Message
+from app.mail.server_search import (
+    ServerSearchResult,
+    ServerSearchState,
+    search_criteria,
+    search_folders_async,
+    server_terms,
+)
+from app.mail.sync import credentials_for, server_of
 
 SearchScope = Literal["current", "subfolders", "all"]
 SearchField = Literal["subject", "from", "to", "cc", "body", "full"]
@@ -214,6 +225,7 @@ async def search_messages(
     person_id: uuid.UUID | None = None,
     limit: int = 50,
     offset: int = 0,
+    server_uids: dict[uuid.UUID, set[int]] | None = None,
 ) -> tuple[list[SearchHit], int]:
     q = q.strip()
     if not q:
@@ -240,6 +252,14 @@ async def search_messages(
     if not field_conds_ok:
         return [], 0
     match = or_(*field_conds_ok)
+    server_conds = [
+        and_(Message.folder_id == fid, Message.uid == any_(literal(sorted(uids), ARRAY(BigInteger))))
+        for fid, uids in (server_uids or {}).items()
+        if uids and fid in folder_ids
+    ]
+    if server_conds:
+        # body text found by the IMAP server in messages whose body is not downloaded yet (#38)
+        match = or_(match, *server_conds)
     base = (
         select(Message)
         .join(FolderMeta, FolderMeta.id == Message.folder_id)
@@ -302,3 +322,67 @@ async def oldest_downloaded_at(
             visible,
         )
     )
+
+
+MAX_SERVER_UIDS = 5000
+
+
+async def server_uid_hits(
+    db: AsyncSession,
+    settings: Settings,
+    account: Account,
+    *,
+    q: str,
+    scope: SearchScope,
+    fields: list[str] | None,
+    folder_id: uuid.UUID | None,
+    mailbox_ref: str,
+    person_id: uuid.UUID | None,
+) -> tuple[dict[uuid.UUID, set[int]], ServerSearchState | None]:
+    """IMAP `UID SEARCH` for Telo / Celá správa on the folders in scope (#38). Returns folder id → UIDs and the state;
+    state None when the server is not asked (other fields, no usable terms, sync off)."""
+    field_set = normalize_fields(fields)
+    if not field_set & {"body", "full"} or not settings.mail_sync_enabled:
+        return {}, None
+    terms = server_terms(q)
+    if not terms:
+        return {}, None
+    if scope == "all":
+        mailboxes = await accessible_mailboxes(db, account.id)
+    else:
+        one = await accessible_mailbox(db, account, mailbox_ref)
+        mailboxes = [one] if one is not None else []
+    folder_ids = await folder_ids_for_scope(
+        db, mailbox_ids=[m.id for m in mailboxes], scope=scope, folder_id=folder_id, person_id=person_id
+    )
+    if not folder_ids:
+        return {}, None
+    folders = list(
+        (await db.execute(select(FolderMeta).where(FolderMeta.id.in_(folder_ids), FolderMeta.selectable))).scalars()
+    )
+    criteria = search_criteria(terms, key="TEXT" if "full" in field_set else "BODY")
+    jobs: list[tuple[dict[str, uuid.UUID], Awaitable[ServerSearchResult]]] = []
+    for mailbox in mailboxes:
+        names = {f.name: f.id for f in folders if f.mailbox_id == mailbox.id}
+        if not names or not settings.sync_host_allowed(mailbox.imap_host):
+            continue
+        creds = await credentials_for(db, mailbox, settings)
+        if creds is None:
+            continue
+        jobs.append((names, search_folders_async(server_of(mailbox, settings), creds, list(names), criteria)))
+    if not jobs:
+        return {}, "unavailable"
+    results = await asyncio.gather(*(job for _, job in jobs))
+    out: dict[uuid.UUID, set[int]] = {}
+    states: set[ServerSearchState] = set()
+    for (names, _), result in zip(jobs, results, strict=True):
+        states.add(result.state)
+        for name, uids in result.uids.items():
+            # newest first: the highest UIDs, so a very common word cannot flood the query
+            out[names[name]] = set(sorted(uids)[-MAX_SERVER_UIDS:])
+    state: ServerSearchState = "ok"
+    for worst in ("unavailable", "timeout", "partial"):
+        if worst in states:
+            state = "partial" if out and worst != "partial" else worst  # some mailboxes answered
+            break
+    return out, state
