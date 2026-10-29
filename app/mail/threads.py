@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -14,7 +15,15 @@ from app.mail.threading import thread_key_for
 WINDOW = timedelta(days=30)
 
 
+# threads.thread_key is varchar(80). A Message-ID may be up to 998 characters (bulk senders use long ones), and a
+# thread older than WINDOW gets an ":YYYY-MM-DD" suffix (11 characters). Long values are stored as a stable hash,
+# so a reply with the same long id still finds the same thread: "msgid:" (6) + 48 + 11 <= 80.
+MAX_KEY_VALUE = 48
+
+
 def _key_str(kind: str, value: str) -> str:
+    if len(value) > MAX_KEY_VALUE:
+        value = "h" + hashlib.sha256(value.encode()).hexdigest()[:40]
     return f"{kind}:{value}"
 
 
