@@ -42,6 +42,7 @@ import {
   findFolder,
   foldersKey,
   formatCount,
+  markSeenLocally,
   messagesKey,
   refreshMailbox,
   type MessageFilter,
@@ -290,6 +291,7 @@ function ScreenW2Body({
       ? `/mail/${encodeURIComponent(mailboxRef)}/view/${encodeURIComponent(category)}`
       : `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`;
 
+  const canMarkSeen = Boolean(me.data?.person && !me.data.read_only);
   const openMessage = useCallback(
     (messageId: string, threadId: string | null, full = false) => {
       setPickedMessageId(messageId);
@@ -307,6 +309,12 @@ function ScreenW2Body({
     },
     [mailboxRef, folderParam, navigate, aiView, listBasePath, list.data?.messages],
   );
+
+  // The reading pane GET marks the message read on the server; show it in the list now (only when we may act).
+  const openAndMarkSeen = (messageId: string, threadId: string | null, full = false) => {
+    if (canMarkSeen) markSeenLocally(queryClient, mailboxRef, messageId, threadId, aiView ? null : (folderId ?? null));
+    openMessage(messageId, threadId, full);
+  };
 
   const rows: RowItem[] = useMemo(() => {
     if (!list.data) return [];
@@ -676,7 +684,7 @@ function ScreenW2Body({
                   categoryColorToken={
                     catId ? (colorByCategory.get(catId) ?? CATEGORY_COLOR_TOKEN[catId] ?? null) : null
                   }
-                  onSelect={() => openMessage(id, tid, mobile)}
+                  onSelect={() => openAndMarkSeen(id, tid, mobile)}
                   onCheck={(checked) => {
                     setSelectMode(true);
                     setSelectedIds((prev) => {

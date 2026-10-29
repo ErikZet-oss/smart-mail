@@ -1,3 +1,5 @@
+import type { QueryClient } from '@tanstack/react-query';
+
 import { api } from '../../lib/api';
 import type { ListPrefs } from '../prefs/prefsApi';
 
@@ -263,4 +265,52 @@ export async function fetchSourceText(mailbox: string, messageId: string): Promi
   const response = await fetch(sourceUrl(mailbox, messageId), { credentials: 'same-origin' });
   if (!response.ok) throw new Error(`source ${response.status}`);
   return response.text();
+}
+
+/** Show "prečítané" at once when an unread message is opened (Roundcube does). The GET that opens the message
+ * stores \Seen on the server; this only updates what is already on screen so the list does not wait for it. */
+export function markSeenLocally(
+  client: QueryClient,
+  mailbox: string,
+  messageId: string,
+  threadId: string | null,
+  currentFolderId: string | null = null,
+) {
+  let folderId: string | null = currentFolderId;
+  const lists = [
+    ...client.getQueriesData<MessagesList>({ queryKey: ['mail', 'messages', mailbox] }),
+    ...client.getQueriesData<MessagesList>({ queryKey: ['mail', 'ai-view', mailbox] }),
+  ];
+  let wasUnread = false;
+  for (const [key, data] of lists) {
+    if (!data) continue;
+    if (data.mode === 'list') {
+      const hit = data.messages.find((m) => m.id === messageId);
+      if (!hit || hit.seen) continue;
+      wasUnread = true;
+      folderId = hit.folder_id || folderId;
+      client.setQueryData<MessagesList>(key, {
+        ...data,
+        messages: data.messages.map((m) => (m.id === messageId ? { ...m, seen: true } : m)),
+      });
+    } else if (threadId) {
+      const hit = data.threads.find((th) => th.id === threadId);
+      if (!hit || hit.unread_count <= 0) continue;
+      wasUnread = true;
+      client.setQueryData<MessagesList>(key, {
+        ...data,
+        threads: data.threads.map((th) =>
+          th.id === threadId ? { ...th, unread_count: Math.max(0, th.unread_count - 1) } : th,
+        ),
+      });
+    }
+  }
+  if (!wasUnread || !folderId) return;
+  const view = client.getQueryData<FoldersView>(foldersKey(mailbox));
+  if (!view) return;
+  client.setQueryData<FoldersView>(foldersKey(mailbox), {
+    ...view,
+    mailbox: { ...view.mailbox, unread: Math.max(0, view.mailbox.unread - 1) },
+    folders: view.folders.map((f) => (f.id === folderId ? { ...f, unread: Math.max(0, f.unread - 1) } : f)),
+  });
 }
