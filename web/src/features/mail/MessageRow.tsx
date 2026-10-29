@@ -1,9 +1,10 @@
 import { Flag, Forward, Paperclip, Reply, Sparkles } from 'lucide-react';
-import { useRef, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Checkbox } from '../../components/Checkbox';
 import { categoryDotClass } from './categoryStyles';
+import { endMessageDrag } from './dragMessages';
 import { formatMailDate } from './formatMailDate';
 import type { MessageListItem, ThreadListItem } from './mailApi';
 
@@ -22,6 +23,8 @@ type Props = {
   onCheck: (checked: boolean) => void;
   /** M1 long-press → multi-select (optional). */
   onLongPress?: () => void;
+  /** Desktop drag to a folder (#96); absent = not draggable. */
+  onDragStart?: (dt: DataTransfer) => void;
 };
 
 function senderLabel(name: string | null, email: string | null): string {
@@ -41,10 +44,12 @@ export function MessageRow({
   onSelect,
   onCheck,
   onLongPress,
+  onDragStart,
 }: Props) {
   const { t } = useTranslation();
   const pressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
+  const [dragging, setDragging] = useState(false);
   const unread = item.kind === 'message' ? !item.data.seen : item.data.unread_count > 0;
   const subject = item.data.subject || t('mail.noSubject');
   const date = formatMailDate(item.kind === 'message' ? item.data.received_at : item.data.last_message_at);
@@ -101,9 +106,19 @@ export function MessageRow({
       onTouchEnd={clearPress}
       onTouchMove={clearPress}
       onTouchCancel={clearPress}
+      draggable={Boolean(onDragStart)}
+      onDragStart={(event) => {
+        if (!onDragStart) return;
+        onDragStart(event.dataTransfer);
+        setDragging(true);
+      }}
+      onDragEnd={() => {
+        setDragging(false);
+        endMessageDrag();
+      }}
       className={`relative flex cursor-pointer gap-2.5 border-b border-border-default px-3 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary-500 ${
         density === 'comfortable' || showSummary ? 'min-h-[84px] py-2.5' : 'h-[52px] py-2'
-      } ${selected ? 'bg-brand-primary-50' : 'bg-bg-canvas hover:bg-bg-subtle'} ${flagged ? 'text-danger-600' : ''}`}
+      } ${selected ? 'bg-brand-primary-50' : 'bg-bg-canvas hover:bg-bg-subtle'} ${flagged ? 'text-danger-600' : ''} ${dragging ? 'opacity-50' : ''}`}
     >
       {selected ? <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-brand-primary-400" /> : null}
       {showCheckbox ? (

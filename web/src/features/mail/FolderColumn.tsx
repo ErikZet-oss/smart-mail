@@ -15,7 +15,7 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react';
-import { useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import { useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -44,6 +44,7 @@ import {
   type SpecialUse,
 } from './mailApi';
 import { categoryDotClass } from './categoryStyles';
+import { canDropOn, droppedIds } from './dragMessages';
 import { useFolderLabel } from './useFolderLabel';
 
 const SPECIAL_ICON: Record<SpecialUse, ReactNode> = {
@@ -71,6 +72,8 @@ type Props = {
   classic?: boolean;
   aiCategories?: AiCategory[];
   activeCategory?: string | null;
+  /** Message rows dropped on a folder (#96); absent = folders are no drop targets (read-only). */
+  onDropMessages?: (folder: Folder, ids: string[]) => void;
 };
 
 /** G3 folder column (232 px): mailbox header with ⋮, folders in Roundcube order with counts, quota + Money status. */
@@ -82,6 +85,7 @@ export function FolderColumn({
   classic = false,
   aiCategories = [],
   activeCategory = null,
+  onDropMessages,
 }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -313,6 +317,7 @@ export function FolderColumn({
                 active={!activeCategory && folderRef(folder) === activeRef}
                 onContextMenu={(event) => onItemContext(event, folder)}
                 onKeyDown={(event) => onItemKey(event, folder)}
+                onDropMessages={onDropMessages ? (ids) => onDropMessages(folder, ids) : undefined}
               />
             </li>
           ))}
@@ -465,15 +470,40 @@ type ItemProps = {
   active: boolean;
   onContextMenu: (event: MouseEvent<HTMLElement>) => void;
   onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  onDropMessages?: (ids: string[]) => void;
 };
 
 /** Figma `FolderItem` (32 px): icon, label (semibold with unread), blue count pill. */
-function FolderItem({ folder, label, to, active, onContextMenu, onKeyDown }: ItemProps) {
+function FolderItem({ folder, label, to, active, onContextMenu, onKeyDown, onDropMessages }: ItemProps) {
   const { t } = useTranslation();
   const unread = folder.unread > 0;
+  const [dropOver, setDropOver] = useState(false);
+  // Figma FolderItem „drop target“ / „drag-over“ state (#96)
   const className = `flex h-8 items-center gap-2.5 rounded-sm pr-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary-500 ${
-    active ? 'bg-brand-primary-50 text-brand-primary-700' : 'text-text-primary hover:bg-bg-muted'
+    dropOver
+      ? 'bg-brand-primary-50 text-brand-primary-700 outline outline-2 -outline-offset-2 outline-brand-primary-500'
+      : active
+        ? 'bg-brand-primary-50 text-brand-primary-700'
+        : 'text-text-primary hover:bg-bg-muted'
   }`;
+  const drop = onDropMessages
+    ? {
+        onDragOver: (event: DragEvent<HTMLElement>) => {
+          if (!canDropOn(event.dataTransfer, folder.id)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          setDropOver(true);
+        },
+        onDragLeave: () => setDropOver(false),
+        onDrop: (event: DragEvent<HTMLElement>) => {
+          setDropOver(false);
+          if (!canDropOn(event.dataTransfer, folder.id)) return;
+          event.preventDefault();
+          const ids = droppedIds(event.dataTransfer);
+          if (ids.length > 0) onDropMessages(ids);
+        },
+      }
+    : {};
   const body = (
     <>
       <span aria-hidden="true" className={`flex shrink-0 ${active ? '' : 'text-text-secondary'}`}>
@@ -515,6 +545,8 @@ function FolderItem({ folder, label, to, active, onContextMenu, onKeyDown }: Ite
       className={className}
       onContextMenu={onContextMenu}
       onKeyDown={onKeyDown}
+      data-folder-id={folder.id}
+      {...drop}
     >
       {body}
     </Link>
