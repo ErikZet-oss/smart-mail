@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #96 PR 2: drag & drop onto folders
+
+- Desktop: drag a message row onto a folder in the G3 column to move it.
+- If the dragged row is selected, the whole selection moves.
+- Folders show the Figma drop-target highlight while dragging; the dragged row is dimmed.
+- The folder the messages are in is not a drop target.
+- A drop uses the same optimistic `move` as Presunúť do… (#89). Read-only: rows are not draggable.
+
 ## [Unreleased] — #96 PR 1: Presunúť do… / Kopírovať do…
 
 - New bulk action `copy` (IMAP UID COPY):
