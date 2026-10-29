@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #56: stable send e2e, compose fields wait for the draft
+
+- W4/M4: Komu, Kópia, Predmet and the editor are disabled until the new draft exists. Text typed during a slow
+  `POST /compose` was overwritten when the draft arrived (found as the flaky `phase1-issue23` desktop failure).
+- `e2e/phase1-issue23.spec.ts`: deterministic send mock (first GET after send = queued, every later GET = sent /
+  failed, independent of poll count), waits on the draft response and on the final payload instead of timing;
+  new regression test for the race. 30× per test in both projects: 180/180 (also with 8 workers on 4 cores).
+
 ## [Unreleased] — Pilot #33: branch logins and persons in Settings 10/11
 
 - Settings 10 (W12-10): account list with search, „Vytvoriť“ (e-mail + Osobný: meno, priezvisko, rola /
