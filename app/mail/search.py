@@ -10,25 +10,30 @@ import asyncio
 import re
 import unicodedata
 import uuid
-from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+import structlog
+from redis.asyncio import Redis
 from sqlalchemy import ARRAY, BigInteger, ColumnElement, String, and_, any_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import Account
 from app.core.config import Settings
+from app.mail.imap import ImapServer
 from app.mail.mailboxes import accessible_mailbox, accessible_mailboxes
 from app.mail.models import FolderMeta, Message
 from app.mail.server_search import (
+    SERVER_SEARCH_TIMEOUT_S,
     ServerSearchResult,
     ServerSearchState,
     search_criteria,
     search_folders_async,
     server_terms,
 )
-from app.mail.sync import credentials_for, server_of
+from app.mail.sync import Credentials, credentials_for, server_of
+
+log = structlog.get_logger(__name__)
 
 SearchScope = Literal["current", "subfolders", "all"]
 SearchField = Literal["subject", "from", "to", "cc", "body", "full"]
@@ -338,6 +343,7 @@ async def server_uid_hits(
     folder_id: uuid.UUID | None,
     mailbox_ref: str,
     person_id: uuid.UUID | None,
+    redis: Redis,
 ) -> tuple[dict[uuid.UUID, set[int]], ServerSearchState | None]:
     """IMAP `UID SEARCH` for Telo / Celá správa on the folders in scope (#38). Returns folder id → UIDs and the state;
     state None when the server is not asked (other fields, no usable terms, sync off)."""
@@ -361,7 +367,7 @@ async def server_uid_hits(
         (await db.execute(select(FolderMeta).where(FolderMeta.id.in_(folder_ids), FolderMeta.selectable))).scalars()
     )
     criteria = search_criteria(terms, key="TEXT" if "full" in field_set else "BODY")
-    jobs: list[tuple[dict[str, uuid.UUID], Awaitable[ServerSearchResult]]] = []
+    jobs: list[tuple[uuid.UUID, dict[str, uuid.UUID], ImapServer, Credentials]] = []
     for mailbox in mailboxes:
         names = {f.name: f.id for f in folders if f.mailbox_id == mailbox.id}
         if not names or not settings.sync_host_allowed(mailbox.imap_host):
@@ -369,19 +375,36 @@ async def server_uid_hits(
         creds = await credentials_for(db, mailbox, settings)
         if creds is None:
             continue
-        jobs.append((names, search_folders_async(server_of(mailbox, settings), creds, list(names), criteria)))
+        jobs.append((mailbox.id, names, server_of(mailbox, settings), creds))
     if not jobs:
         return {}, "unavailable"
-    results = await asyncio.gather(*(job for _, job in jobs))
+
+    async def search_one(
+        mailbox_id: uuid.UUID, names: dict[str, uuid.UUID], server: ImapServer, creds: Credentials
+    ) -> Any:
+        # At most one server search per mailbox at a time (review #60): Dovecot limits sessions per user/IP and the
+        # sync, IDLE and Roundcube share them. Not blocking: a held lock answers `busy` with the local hits.
+        lock = redis.lock(f"smartmail:server-search:{mailbox_id}", timeout=SERVER_SEARCH_TIMEOUT_S + 5, blocking=False)
+        if not await lock.acquire():
+            return ServerSearchResult(state="busy")
+        try:
+            return await search_folders_async(server, creds, list(names), criteria)
+        finally:
+            try:
+                await lock.release()
+            except Exception as exc:  # expired meanwhile; nothing to undo
+                log.warning("mail.server_search_lock_release_failed", error=type(exc).__name__)
+
+    results: list[ServerSearchResult] = await asyncio.gather(*(search_one(*job) for job in jobs))
     out: dict[uuid.UUID, set[int]] = {}
     states: set[ServerSearchState] = set()
-    for (names, _), result in zip(jobs, results, strict=True):
+    for (_, names, _, _), result in zip(jobs, results, strict=True):
         states.add(result.state)
         for name, uids in result.uids.items():
             # newest first: the highest UIDs, so a very common word cannot flood the query
             out[names[name]] = set(sorted(uids)[-MAX_SERVER_UIDS:])
     state: ServerSearchState = "ok"
-    for worst in ("unavailable", "timeout", "partial"):
+    for worst in ("unavailable", "timeout", "busy", "partial"):
         if worst in states:
             state = "partial" if out and worst != "partial" else worst  # some mailboxes answered
             break

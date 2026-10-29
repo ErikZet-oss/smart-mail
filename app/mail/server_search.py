@@ -10,7 +10,9 @@ terms go out as literals (imapclient).
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import re
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal
@@ -28,7 +30,8 @@ MAX_TERMS = 10
 MAX_TERM_LEN = 100
 _UNSAFE = re.compile(r"[^\w@.+\-]", re.UNICODE)
 
-ServerSearchState = Literal["ok", "partial", "timeout", "unavailable"]
+# busy = another server search of the same mailbox is still running (one IMAP session per mailbox at a time)
+ServerSearchState = Literal["ok", "partial", "timeout", "unavailable", "busy"]
 
 
 def server_terms(q: str) -> list[str]:
@@ -60,12 +63,19 @@ def search_folders(
     creds: Credentials,
     folders: list[str],
     criteria: list[str],
+    *,
+    deadline: float | None = None,
 ) -> ServerSearchResult:
-    """Blocking: one login, `SELECT` read-only + `UID SEARCH` per folder. A folder that fails is skipped."""
+    """Blocking: one login, `SELECT` read-only + `UID SEARCH` per folder. A folder that fails is skipped. Stops before
+    the next folder once `deadline` (time.monotonic) has passed, so the thread and the IMAP session end on their own
+    even when the request has already timed out."""
     result = ServerSearchResult()
     client = connect(server, creds)
     try:
         for name in folders:
+            if deadline is not None and time.monotonic() >= deadline:
+                result.state = "partial"
+                break
             try:
                 client.select_folder(name, readonly=True)
                 result.uids[name] = {int(uid) for uid in client.search(criteria, charset="UTF-8")}
@@ -85,10 +95,13 @@ async def search_folders_async(
     *,
     timeout_s: float = SERVER_SEARCH_TIMEOUT_S,
 ) -> ServerSearchResult:
-    """Never raises: a slow or unreachable server gives `timeout` / `unavailable` and the local hits still show."""
+    """Never raises: a slow or unreachable server gives `timeout` / `unavailable` and the local hits still show.
+    The socket timeout and the per-folder deadline bound the thread to about `timeout_s` (review #60)."""
+    bounded = dataclasses.replace(server, timeout_s=max(1, int(timeout_s)))
+    deadline = time.monotonic() + timeout_s
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(search_folders, server, creds, folders, criteria), timeout=timeout_s
+            asyncio.to_thread(search_folders, bounded, creds, folders, criteria, deadline=deadline), timeout=timeout_s
         )
     except TimeoutError:
         return ServerSearchResult(state="timeout")

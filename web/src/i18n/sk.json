@@ -173,6 +173,7 @@
     "serverSearching": "Hľadá sa aj na serveri…",
     "serverUnavailable": "Mailový server neodpovedal – telo neotvorených správ sa neprehľadalo.",
     "serverPartial": "Niektoré priečinky sa na serveri nepodarilo prehľadať.",
+    "serverBusy": "Prehľadávanie servera ešte beží – skúste o chvíľu.",
     "scopeLabel": "Rozsah",
     "fieldLabel": "Pole",
     "emailsGroup": "E-maily ({{count}})",

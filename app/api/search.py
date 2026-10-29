@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
 
 from app.auth.deps import DB, Auth, SettingsDep, SignedInPerson
@@ -34,12 +34,13 @@ class SearchOut(BaseModel):
     total: int
     messages: list[MessageHitOut]
     oldest_downloaded_at: datetime | None = None
-    # #38: None = the server was not asked; ok | partial | timeout | unavailable
+    # #38: None = the server was not asked; ok | partial | timeout | unavailable | busy
     server_search: str | None = None
 
 
 @router.get("")
 async def search(
+    request: Request,
     ctx: Auth,
     person: SignedInPerson,
     db: DB,
@@ -67,6 +68,7 @@ async def search(
             folder_id=folder_id,
             mailbox_ref=mailbox,
             person_id=person.id,
+            redis=request.app.state.redis,
         )
     hits, total = await search_messages(
         db,

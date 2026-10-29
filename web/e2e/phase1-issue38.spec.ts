@@ -81,3 +81,14 @@ test('#38 W10 subject search never asks the server', async ({ page }) => {
   await expect(page.getByText('Otvorená správa')).toBeVisible();
   expect(asked).toEqual(['local']);
 });
+
+test('#38 W10 a server search that is still running answers „busy“ with its own text', async ({ page }) => {
+  await mockApi(page, { ...SIGNED_IN });
+  await page.route('**/api/search?*', async (route) => {
+    const server = new URL(route.request().url()).searchParams.get('server') === 'true';
+    await route.fulfill({ json: result([hit('m-2', 'Otvorená správa')], server ? 'busy' : null) });
+  });
+  await page.goto('/search?q=paletov%C3%BD&field=body&scope=all');
+  await expect(page.getByTestId('search-server')).toHaveText('Prehľadávanie servera ešte beží – skúste o chvíľu.');
+  await expect(page.getByText('Otvorená správa')).toBeVisible();
+});

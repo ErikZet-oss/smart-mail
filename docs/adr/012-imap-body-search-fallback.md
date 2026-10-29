@@ -20,6 +20,12 @@
 4. **Limits**: 15 s timeout (`server_search: "timeout"`), a failing folder is skipped (`"partial"`), an unreachable
    server or missing stored password gives `"unavailable"`; the local hits are always returned. At most 5 000 UIDs
    (the newest) per folder are merged. Same host guard as the sync (`sync_host_allowed`).
+5. **One IMAP session per mailbox** (review #60): Dovecot limits sessions per user and IP
+   (`mail_max_userip_connections`, default 10) and the sync, IDLE and Roundcube share them. A non-blocking Redis lock
+   `smartmail:server-search:<mailbox>` (TTL = timeout + 5 s) allows one server search per mailbox; a second one gets
+   `server_search: "busy"` („Prehľadávanie servera ešte beží – skúste o chvíľu.“) with the local hits. The thread is
+   bounded: the IMAP socket timeout is the search timeout, and before each folder the remaining time is checked
+   (`partial` when it is used up), so the session ends on its own soon after a request timed out.
 
 ## Consequences
 - Accent folding differs between the two: on the local test Dovecot `paletovy` finds `paletový` but `trencin` does not

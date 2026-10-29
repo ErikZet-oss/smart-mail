@@ -22,8 +22,8 @@ export type SearchResult = {
   total: number;
   messages: MessageHit[];
   oldest_downloaded_at: string | null;
-  /** #38: null = the IMAP server was not asked; otherwise ok | partial | timeout | unavailable */
-  server_search?: 'ok' | 'partial' | 'timeout' | 'unavailable' | null;
+  /** #38: null = the IMAP server was not asked; busy = another server search of the mailbox is still running */
+  server_search?: 'ok' | 'partial' | 'timeout' | 'unavailable' | 'busy' | null;
 };
 
 export type SearchParams = {

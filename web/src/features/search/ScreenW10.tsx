@@ -190,7 +190,13 @@ export function ScreenW10() {
           </p>
         ) : serverState && serverState !== 'ok' ? (
           <p role="status" className="type-small px-4 pt-3 text-warning-700 sm:px-6" data-testid="search-server">
-            {t(serverState === 'partial' ? 'search.serverPartial' : 'search.serverUnavailable')}
+            {t(
+              serverState === 'busy'
+                ? 'search.serverBusy'
+                : serverState === 'partial'
+                  ? 'search.serverPartial'
+                  : 'search.serverUnavailable',
+            )}
           </p>
         ) : null}
 
