@@ -13,6 +13,8 @@ from sqlalchemy import or_, select
 from app.api.mail import _mailbox, fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
 from app.auth.models import Branch, Person
+from app.auth.persons import is_eligible
+from app.core.audit import audit
 from app.mail import storage
 from app.mail.compose import (
     Mode,
@@ -54,6 +56,10 @@ class DraftPatch(BaseModel):
     body_html: str | None = None
     include_signature: bool | None = None
     signature_html_override: str | None = None
+    # „Odpovedá: … ▾“ (#65): the person whose signature the draft carries; must be eligible for this login
+    signature_person_id: uuid.UUID | None = None
+    # „Prepísať upravený podpis?“: a one-off edited signature is replaced only after this confirmation
+    replace_signature_override: bool = False
     priority: Literal["low", "normal", "high"] | None = None
     request_mdn: bool | None = None
     request_dsn: bool | None = None
@@ -94,6 +100,7 @@ class DraftOut(BaseModel):
     include_signature: bool
     signature_html_override: str | None
     signature_person_id: str | None
+    signature_person_name: str | None = None
     priority: str
     request_mdn: bool
     request_dsn: bool
@@ -177,6 +184,11 @@ async def _sent_location(db: DB, draft: ComposeDraft) -> tuple[str | None, str |
     return str(message.id), thread, ref
 
 
+async def _person_name(db: DB, person_id: uuid.UUID | None) -> str | None:
+    person = await db.get(Person, person_id) if person_id else None
+    return person.full_name if person else None
+
+
 async def _draft_out(db: DB, draft: ComposeDraft, atts: list[ComposeAttachment], settings: Any) -> DraftOut:
     sent_message_id, sent_thread_id, sent_folder_ref = await _sent_location(db, draft)
     statuses = await live_av_statuses(db, atts)
@@ -194,6 +206,7 @@ async def _draft_out(db: DB, draft: ComposeDraft, atts: list[ComposeAttachment],
         include_signature=draft.include_signature,
         signature_html_override=draft.signature_html_override,
         signature_person_id=str(draft.signature_person_id) if draft.signature_person_id else None,
+        signature_person_name=await _person_name(db, draft.signature_person_id or draft.person_id),
         priority=draft.priority,
         request_mdn=draft.request_mdn,
         request_dsn=draft.request_dsn,
@@ -331,6 +344,27 @@ async def patch_draft(
         draft.body_html = body.body_html
     if body.include_signature is not None:
         draft.include_signature = body.include_signature
+    if body.signature_person_id is not None and body.signature_person_id != draft.signature_person_id:
+        # Only a person of this login (the „Kto ste?“ list) may sign; never change a signature silently (#65).
+        if not await is_eligible(db, ctx.account, body.signature_person_id):
+            raise fail(422, "signature_person_not_allowed")
+        if draft.signature_html_override and not body.replace_signature_override:
+            raise fail(409, "signature_override_confirm")
+        before = draft.signature_person_id
+        draft.signature_person_id = body.signature_person_id
+        draft.signature_html_override = None
+        audit(
+            db,
+            action="mail.compose_signature_person",
+            account_id=ctx.account.id,
+            person_id=person.id,
+            object_type="compose_draft",
+            object_id=str(draft.id),
+            details={
+                "before": str(before) if before else None,
+                "after": str(body.signature_person_id),
+            },
+        )
     if body.signature_html_override is not None:
         cleaned, _gone = sanitize_signature_html(body.signature_html_override)
         if len(cleaned.encode("utf-8")) > SIGNATURE_MAX_BYTES:

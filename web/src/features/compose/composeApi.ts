@@ -30,6 +30,8 @@ export type ComposeDraft = {
   include_signature: boolean;
   signature_html_override: string | null;
   signature_person_id: string | null;
+  /** Name of the person whose signature the draft carries (#65) — the „Odpovedá“ chip shows this, not the active person. */
+  signature_person_name?: string | null;
   priority: 'low' | 'normal' | 'high';
   request_mdn: boolean;
   request_dsn: boolean;
@@ -92,6 +94,8 @@ export const patchDraft = (
     body_html: string;
     include_signature: boolean;
     signature_html_override: string | null;
+    signature_person_id: string;
+    replace_signature_override: boolean;
     priority: ComposeDraft['priority'];
     request_mdn: boolean;
     request_dsn: boolean;

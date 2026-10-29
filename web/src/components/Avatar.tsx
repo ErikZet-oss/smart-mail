@@ -1,8 +1,9 @@
 import { avatarTone } from '../lib/avatarTone';
 
-type Size = 32 | 56;
+type Size = 20 | 32 | 56;
 
 const SIZE: Record<Size, string> = {
+  20: 'size-5 text-[11px] font-semibold leading-none',
   32: 'size-8 text-[13px] font-semibold leading-[18px]',
   56: 'size-14 type-heading',
 };

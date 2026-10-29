@@ -2,6 +2,17 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #65: signature person in compose („Odpovedá: … ▾“)
+
+- W4/M4: own row „Odpovedá“ with a chip of the **draft's** signature person (`signature_person_name`), never just the
+  active person. On a branch login it is a dropdown with the persons of „Kto ste?“; choosing one swaps only the
+  signature block (typed text and quote stay).
+- After a person switch with a draft open: warning „Podpis: {draft} – zmeniť na {active}?“ [Zmeniť] [Ponechať]; the
+  signature never changes silently.
+- `PATCH /compose/{id}`: `signature_person_id` must be eligible for the login (else 422
+  `signature_person_not_allowed`); an edited one-off signature needs `replace_signature_override` (else 409
+  `signature_override_confirm`, UI „Prepísať upravený podpis?“); audit `mail.compose_signature_person` with
+  before/after. Send keeps `signature_person_id or person_id`.
 ## [Unreleased] — #62: flaky W12-11a e2e (red main)
 
 - Cause: since #53 the W12-11a Údaje tab loads `GET /api/settings/admin/mailboxes`; `phase1-visual.spec.ts` did not mock
