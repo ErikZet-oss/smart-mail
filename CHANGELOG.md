@@ -2,6 +2,42 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #81 Phase 1 close-out
+
+**Done in Phase 1:**
+- mailbox login (IMAP) with 2FA for personal accounts and re-auth for admin changes;
+- branches, persons, „Kto ste?“ and branch signatures;
+- folders and sync, list, reading pane, compose (drafts, undo send);
+- search and contacts;
+- Settings 01–06, 09, 10–12; Filtre and Mimo kancelárie via ManageSieve;
+- system screens W13–W17;
+- installable PWA and mobile;
+- Klasické zobrazenie;
+- Roundcube import tool.
+
+**Not done / deliberately different:**
+- 2FA and OIDC are hidden in W12-10;
+- „Vymazať účet“ is omitted;
+- the 11d unhandled-mail alert is deferred to Phase 5;
+- the permission matrix follows PRODUCT_SPEC.
+
+**Open risks:**
+- ManageSieve availability at nameserver.sk;
+- the per-country SMTP block for new mailboxes (enable DE);
+- the acceptance days have not run yet (eshop@ full day, Nitra branch day);
+- `APP_ENV=prod` on the test server;
+- avatar initials contrast (#83);
+- react-router 6 moderate advisories (#85).
+
+**This PR:**
+- Review package `docs/phase1-review.md` (35 screen IDs, desktop and mobile screenshots, Figma links, gate results). The Figma MCP was unreachable (proxy 403) in this run.
+- `web/e2e/phase1-review.spec.ts`: a screenshot and an axe check (wcag2a/aa, no serious or critical findings) for every listed screen, on desktop and mobile.
+- Trivial a11y fixes:
+  - darker text tokens for the status page caption, the message date and the notification group heading;
+  - a label on the filter name input;
+  - focusable scroll regions in W12-10.
+- Lighthouse 11.7.1 on the production build: installable, PWA 100.
+
 ## [Unreleased] — #77 PR 2: enforce „Vyžadovať 2FA“, admin reset
 
 - Login of a personal account with `require_2fa` and no TOTP → `next: "2fa-setup"`: an `mfa_pending` session plus a

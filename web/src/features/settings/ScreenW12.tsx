@@ -767,6 +767,7 @@ function FiltersPanel() {
             ) : null}
             <input
               className="type-body mb-2 h-9 w-full rounded-sm border border-border-default px-3"
+              aria-label={t('settings.filters.ruleName')}
               value={String(rule.name ?? '')}
               disabled={!editable}
               onChange={(event) => patchRule(index, { name: event.target.value })}

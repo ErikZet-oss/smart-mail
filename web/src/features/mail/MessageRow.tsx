@@ -124,7 +124,7 @@ export function MessageRow({
             {senderLabel(fromName, fromEmail)}
             {threadCount > 1 ? <span className="text-text-tertiary"> · {threadCount}</span> : null}
           </span>
-          <span className="type-caption shrink-0 text-brand-primary-600">{date}</span>
+          <span className="type-caption shrink-0 text-brand-primary-700">{date}</span>
         </div>
         <div className="flex items-center gap-1.5">
           {aiCategory && categoryColorToken ? (

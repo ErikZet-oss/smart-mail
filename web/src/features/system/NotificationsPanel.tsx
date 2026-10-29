@@ -140,7 +140,7 @@ export function NotificationsPanel({ onClose }: Props) {
         ) : (
           groups.map(([label, rows]) => (
             <section key={label}>
-              <h2 className="type-caption bg-bg-subtle px-4 py-1.5 text-text-tertiary">{label}</h2>
+              <h2 className="type-caption bg-bg-subtle px-4 py-1.5 text-text-secondary">{label}</h2>
               <ul>
                 {rows.map((item) => (
                   <li key={item.id}>

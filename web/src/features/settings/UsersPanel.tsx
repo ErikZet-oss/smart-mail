@@ -436,7 +436,12 @@ function UserDetail({ user }: { user: AdminUser }) {
       </FormRow>
 
       <h2 className="type-heading mt-2 text-text-primary">{t('settings.users.accessTitle')}</h2>
-      <div className="relative max-w-[700px] overflow-x-auto rounded-md border border-border-default">
+      <div
+        className="relative max-w-[700px] overflow-x-auto rounded-md border border-border-default"
+        tabIndex={0}
+        role="region"
+        aria-label={t('settings.users.accessTitle')}
+      >
         <table className="w-full min-w-[420px] border-collapse" data-testid="mailbox-access">
           <thead className="bg-bg-subtle">
             <tr className="type-label text-left text-text-secondary">
@@ -481,7 +486,12 @@ function UserDetail({ user }: { user: AdminUser }) {
       </div>
 
       <h2 className="type-heading mt-2 text-text-primary">{t('settings.users.matrixTitle')}</h2>
-      <div className="relative overflow-x-auto rounded-md border border-border-default">
+      <div
+        className="relative overflow-x-auto rounded-md border border-border-default"
+        tabIndex={0}
+        role="region"
+        aria-label={t('settings.users.matrixTitle')}
+      >
         <table className="w-full min-w-[640px] border-collapse" data-testid="permission-matrix">
           <thead className="bg-bg-subtle">
             <tr className="type-label text-left text-text-secondary">

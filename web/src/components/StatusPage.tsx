@@ -39,7 +39,7 @@ export function StatusPage({
       <div aria-hidden="true" className={`flex h-24 w-24 items-center justify-center rounded-full ${CIRCLE[tone]}`}>
         {icon}
       </div>
-      {code ? <p className="type-caption text-text-tertiary">{code}</p> : null}
+      {code ? <p className="type-caption text-text-secondary">{code}</p> : null}
       <h1 className="type-title text-text-primary">{title}</h1>
       <p className="type-body text-text-secondary" style={{ maxWidth: textWidth }}>
         {text}

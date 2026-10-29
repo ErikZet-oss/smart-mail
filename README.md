@@ -131,6 +131,34 @@ pridelenie/odovzdanie pobočke — bez Web Push); W15 klávesové skratky (`?`);
 zobrazenie (`data-classic`). Produkčné nasadenie čaká na výslovný súhlas (Hyper-V / Cloudflare Tunnel /
 443 — ešte nerozhodnuté).
 
+### Fáza 1 – stav (uzávierka #81)
+Podklady na kontrolu: [`docs/phase1-review.md`](docs/phase1-review.md) obsahuje každú obrazovku fázy 1 s odkazom do Figmy, snímkami z počítača a mobilu a známymi rozdielmi. Výsledky kontrol (testy, axe, Lighthouse) sú v tom istom súbore.
+
+**Hotové:**
+- prihlásenie schránkou, 2FA pre osobné účty, opätovné zadanie hesla pri zmenách správcu;
+- „Kto ste?“, pobočky, osoby a podpisy;
+- priečinky a synchronizácia, zoznam, čítanie, písanie (koncepty, Späť pri odosielaní);
+- hľadanie a kontakty;
+- Nastavenia 01–06, 09, 10–12; Filtre a Mimo kancelárie cez ManageSieve;
+- systémové obrazovky W13–W17;
+- PWA (inštalovateľná) a mobil;
+- Klasické zobrazenie;
+- `tools/roundcube_import.py`.
+
+**Zámerne inak (rozhodol Erik):**
+- 2FA a OIDC sú v W12-10 skryté;
+- „Vymazať účet“ nie je;
+- upozornenie na nevybavenú poštu (11d) prichádza vo fáze 5;
+- matica oprávnení je podľa PRODUCT_SPEC.
+
+**Otvorené / riziká:**
+- Či je ManageSieve dostupný na `nameserver.sk`. Bez neho nefungujú Filtre ani Mimo kancelárie.
+- Blokovanie SMTP podľa krajiny pri nových schránkach: treba povoliť DE.
+- Akceptačné dni ešte nebežali: eshop@ celý deň a jeden deň pobočky Nitra.
+- Na testovacom serveri treba nastaviť `APP_ENV=prod`.
+- Kontrast iniciálok v avatare (#83).
+- Upozornenia `npm audit` pre react-router 6 (#85).
+
 ### Dokončenie fázy 1 (1h-e)
 `tools/roundcube_import.py` načíta vCard + identity + Odpovede (bez filtrov; fiktívne fixtures `@smartmail.test`).
 Mimo kancelárie: jeden vacation text (SK + EN + DE) v tom istom ManageSieve skripte; predmet cez `variables`
