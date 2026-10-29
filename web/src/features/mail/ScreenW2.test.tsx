@@ -6,7 +6,7 @@ import { App } from '../../app/App';
 import { ROUTER_FUTURE, routeObjects } from '../../app/router';
 import { useToast } from '../../components/toastContext';
 import { ToastProvider } from '../../components/Toasts';
-import { foldersView, mailHandlers } from '../../test/mailFixtures';
+import { foldersView, mailHandlers, messageDetail } from '../../test/mailFixtures';
 import { clearCookies, mockApi } from '../../test/mockApi';
 import type { FoldersView } from './mailApi';
 
@@ -45,6 +45,11 @@ function renderAt(path = '/mail/default/inbox') {
   const router = createMemoryRouter(routeObjects, { future: ROUTER_FUTURE, initialEntries: [path] });
   render(<App router={router} />);
   return router;
+}
+
+function renderWith(handlers: Parameters<typeof mockApi>[0]) {
+  mockApi(handlers);
+  return renderAt();
 }
 
 const folderNav = async () => screen.findByRole('navigation', { name: 'Priečinky' });
@@ -295,15 +300,66 @@ describe('W2 shell and folder column (1c)', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/404'));
   });
 
-  it('W2 IMAP error: banner "Nepodarilo sa načítať priečinok" with Skúsiť znova → refresh', async () => {
+  it('W2 sync error (#41): banner "Synchronizácia schránky zlyhala" with Skúsiť znova → refresh', async () => {
     const view = foldersView();
     view.sync = { state: 'error', error: 'unavailable', last_synced_at: null };
     const api = mockApi({ ...base(view), 'POST /api/mail/mailboxes/default/refresh': { body: foldersView() } });
     renderAt();
-    const banner = await screen.findByText('Nepodarilo sa načítať priečinok – skúšame znova.');
+    const banner = await screen.findByText('Synchronizácia schránky zlyhala – skúšame znova');
     fireEvent.click(within(banner.parentElement as HTMLElement).getByRole('button', { name: 'Skúsiť znova' }));
-    await waitFor(() => expect(screen.queryByText('Nepodarilo sa načítať priečinok – skúšame znova.')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Synchronizácia schránky zlyhala – skúšame znova')).toBeNull());
     expect(api.calls.some((c) => c.key === 'POST /api/mail/mailboxes/default/refresh')).toBe(true);
+  });
+
+  it('W2 IMAP down on refresh: banner "Nepodarilo sa načítať priečinok"', async () => {
+    mockApi({
+      ...base(),
+      'POST /api/mail/mailboxes/default/refresh': {
+        status: 503,
+        body: { detail: { code: 'mail_server_unavailable' } },
+      },
+    });
+    renderAt();
+    fireEvent.click(await screen.findByRole('button', { name: 'Obnoviť' }));
+    expect(await screen.findByText('Nepodarilo sa načítať priečinok – skúšame znova.')).toBeInTheDocument();
+  });
+
+  it('W2 issue #41: a large first sync shows "Načítava sa schránka… 12 400 / 25 000"', async () => {
+    const view = foldersView();
+    view.sync = { state: 'ok', error: null, last_synced_at: null, loaded: 12400, total: 25000 };
+    mockApi(base(view));
+    renderAt();
+    const progress = await screen.findByTestId('sync-progress');
+    expect(progress.textContent?.replace(/\s/g, ' ')).toBe('Načítava sa schránka… 12 400 / 25 000');
+  });
+
+  it('W2 issue #41: no progress line once the local copy is complete', async () => {
+    const view = foldersView();
+    view.sync = { state: 'ok', error: null, last_synced_at: null, loaded: 25000, total: 25000 };
+    mockApi(base(view));
+    renderAt();
+    expect(await screen.findByText('Kópia faktúry 2026123')).toBeInTheDocument();
+    expect(screen.queryByTestId('sync-progress')).toBeNull();
+  });
+
+  it('W3 issue #41: a 500 on the message shows the error state with the ref code instead of the skeleton', async () => {
+    let fail = true;
+    const router = renderWith({
+      ...base(),
+      'GET /api/mail/mailboxes/default/messages/m-1': () =>
+        fail
+          ? { status: 500, body: { detail: { code: 'server_error', ref: '7f3a21c9' } } }
+          : { body: messageDetail('m-1') },
+    });
+    fireEvent.click(await screen.findByText('Kópia faktúry 2026123'));
+    const error = await screen.findByTestId('message-load-error');
+    expect(error.textContent).toContain('Nepodarilo sa načítať správu.');
+    expect(error.textContent).toContain('7F3A-21C9');
+    expect(router.state.location.pathname).not.toBe('/500');
+    fail = false;
+    fireEvent.click(within(error).getByRole('button', { name: 'Skúsiť znova' }));
+    expect(await screen.findByRole('heading', { name: 'Kópia faktúry 2026123' })).toBeInTheDocument();
+    expect(screen.queryByTestId('message-load-error')).toBeNull();
   });
 
   it('W1c a sync that finds a changed password logs out to W1c', async () => {

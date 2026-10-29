@@ -27,7 +27,7 @@ import { Banner } from '../../components/Banner';
 import { Menu, type MenuEntry } from '../../components/Menu';
 import { SecurityBanner } from '../../components/SecurityBanner';
 import { useToast } from '../../components/toastContext';
-import { ApiError } from '../../lib/api';
+import { ApiError, formatRef } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
 import { useTheme } from '../prefs/ThemeProvider';
@@ -110,6 +110,8 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
     },
     enabled: Boolean(messageId),
   });
+  const loadErrorRef =
+    detail.error instanceof ApiError && detail.error.detail.ref ? formatRef(String(detail.error.detail.ref)) : '';
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['mail', 'messages', mailbox] });
@@ -381,17 +383,20 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
         />
       </div>
 
-      {detail.isError ? (
-        <div className="p-4">
+      {detail.isError && !msg ? (
+        // G-state error instead of an endless skeleton (#41), with the support code of a 500.
+        <div className="p-4" data-testid="message-load-error">
           <Banner
             kind="danger"
-            message={t('mail.loadMessageFailed')}
-            action={{ label: t('system.retry'), onClick: () => void detail.refetch() }}
+            message={
+              loadErrorRef
+                ? `${t('mail.loadMessageFailed')} ${t('system.error.code', { ref: loadErrorRef })}`
+                : t('mail.loadMessageFailed')
+            }
+            action={{ label: t('system.retry'), onClick: () => void detail.refetch(), disabled: detail.isFetching }}
           />
         </div>
-      ) : null}
-
-      {detail.isLoading || !msg ? (
+      ) : detail.isLoading || !msg ? (
         <div aria-busy="true" className="flex flex-1 flex-col gap-3 p-7">
           <div className="h-6 w-2/3 rounded-xs bg-bg-muted" />
           <div className="h-4 w-1/2 rounded-xs bg-bg-muted" />

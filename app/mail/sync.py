@@ -490,6 +490,19 @@ async def mark_auth_failed(db: AsyncSession, mailbox: Mailbox, *, now: datetime)
     )
 
 
+async def _mark_unexpected_error(db: AsyncSession, mailbox: Mailbox, exc: Exception) -> str:
+    """Any unexpected failure becomes a visible state (#41): G-state banner + notification, never an endless
+    "loading". Only the exception class is stored — never server text or mail data. The next good sync clears it."""
+    mailbox_id = mailbox.id  # read before the rollback expires the instance
+    await db.rollback()
+    error = type(exc).__name__[:64]
+    await db.execute(update(Mailbox).where(Mailbox.id == mailbox_id).values(sync_state="error", sync_error=error))
+    await db.commit()
+    await db.refresh(mailbox)
+    log.error("mail.sync_unexpected_error", mailbox_id=str(mailbox_id), error=error)
+    return "error"
+
+
 async def sync_mailbox(
     db: AsyncSession,
     mailbox: Mailbox,
@@ -544,12 +557,19 @@ async def sync_mailbox(
             await db.commit()
             log.warning("mail.sync_failed", mailbox_id=str(mailbox.id), error=str(exc))
             return mailbox.sync_state
-        await apply_snapshot(db, mailbox, snapshot, now=now or datetime.now(UTC))
+        except Exception as exc:
+            return await _mark_unexpected_error(db, mailbox, exc)
         from app.mail.threads import link_unthreaded
 
-        linked = await link_unthreaded(db, mailbox.id)
+        try:
+            await apply_snapshot(db, mailbox, snapshot, now=now or datetime.now(UTC))
+            # Envelopes are committed before threading (#41): a threading problem never loses the folder.
+            await db.commit()
+            linked = await link_unthreaded(db, mailbox.id)
+            await db.commit()
+        except Exception as exc:
+            return await _mark_unexpected_error(db, mailbox, exc)
         new_count = sum(len(d.new) for d in snapshot.folders)
-        await db.commit()
         log.info(
             "mail.synced",
             mailbox_id=str(mailbox.id),

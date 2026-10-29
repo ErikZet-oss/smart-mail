@@ -33,7 +33,14 @@ export type FoldersView = {
   mailbox: MailboxSummary;
   folders: Folder[];
   quota: Quota | null;
-  sync: { state: string; error: string | null; last_synced_at: string | null };
+  sync: {
+    state: string;
+    error: string | null;
+    last_synced_at: string | null;
+    /** first-sync progress (#41): envelopes stored locally vs. messages on the server */
+    loaded?: number;
+    total?: number;
+  };
 };
 
 export type FolderAction = 'mark-read' | 'empty' | 'compact';
@@ -235,7 +242,9 @@ export const fetchCategoryMessages = (
 };
 
 export const fetchMessage = (mailbox: string, id: string, markRead = true) =>
-  api<MessageDetail>('GET', `${base(mailbox)}/messages/${id}${markRead ? '' : '?mark_read=false'}`);
+  api<MessageDetail>('GET', `${base(mailbox)}/messages/${id}${markRead ? '' : '?mark_read=false'}`, undefined, {
+    inlineServerErrors: true,
+  });
 
 export const patchFlags = (mailbox: string, id: string, body: { seen?: boolean; flagged?: boolean }) =>
   api<MessageDetail>('PATCH', `${base(mailbox)}/messages/${id}/flags`, body);

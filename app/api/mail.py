@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep, client_ip
 from app.core.audit import audit
@@ -38,7 +38,7 @@ from app.mail.folders import (
     validate_folder_name,
 )
 from app.mail.mailboxes import accessible_mailbox, accessible_mailboxes
-from app.mail.models import FolderMeta, Mailbox
+from app.mail.models import FolderMeta, Mailbox, Message
 from app.mail.sync import SyncAuthError, SyncUnavailable, credentials_for, mark_auth_failed, server_of, sync_mailbox
 
 router = APIRouter(prefix="/api/mail", tags=["mail"])
@@ -78,6 +78,9 @@ class SyncOut(BaseModel):
     state: str
     error: str | None
     last_synced_at: datetime | None
+    # progress of a large first sync (#41): envelopes stored locally vs. messages the server reports (STATUS)
+    loaded: int = 0
+    total: int = 0
 
 
 class FoldersOut(BaseModel):
@@ -163,7 +166,15 @@ async def folders_out(db: DB, mailbox: Mailbox, settings: Settings | None = None
         quota=QuotaOut(used_kb=quota.used_kb, limit_kb=quota.limit_kb, percent=quota.percent, level=quota.level)
         if quota
         else None,
-        sync=SyncOut(state=mailbox.sync_state, error=mailbox.sync_error, last_synced_at=mailbox.last_synced_at),
+        sync=SyncOut(
+            state=mailbox.sync_state,
+            error=mailbox.sync_error,
+            last_synced_at=mailbox.last_synced_at,
+            loaded=int(
+                await db.scalar(select(func.count()).select_from(Message).where(Message.mailbox_id == mailbox.id)) or 0
+            ),
+            total=sum(m.total or 0 for m in metas if m.selectable),
+        ),
     )
 
 

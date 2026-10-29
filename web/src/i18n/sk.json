@@ -528,7 +528,9 @@
       "source": "Zdroj"
     },
     "loadFailed": "Nepodarilo sa načítať priečinok – skúšame znova.",
-    "loadMessageFailed": "Správu sa nepodarilo načítať.",
+    "syncFailed": "Synchronizácia schránky zlyhala – skúšame znova",
+    "syncProgress": "Načítava sa schránka… {{loaded}} / {{total}}",
+    "loadMessageFailed": "Nepodarilo sa načítať správu.",
     "empty": "Priečinok je prázdny",
     "emptyText": "V priečinku {{name}} zatiaľ nie je žiadna pošta.",
     "emptyFilter": "Žiadne správy podľa filtra.",
