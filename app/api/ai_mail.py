@@ -297,15 +297,23 @@ async def get_message_suggestions(ref: str, message_id: uuid.UUID, ctx: Auth, db
     message = await db.get(Message, message_id)
     if message is None or message.mailbox_id != mailbox.id:
         raise fail(404, "message_not_found")
-    # The same e-mail copied into several folders/mailboxes shares one set of suggestions (§2, once per Message-ID).
+    # Copies of the same e-mail in other folders share one set of suggestions (§2, once per Message-ID) — but only
+    # inside this mailbox: a suggestion made for a mailbox the caller cannot open must never show here (#99 review).
     header = normalize_message_id_header(message.message_id)
     same_mail = AiSuggestion.message_id == message.id
     if header:
-        copies = select(Classification.message_id).where(Classification.message_id_header == header)
+        copies = select(Classification.message_id).where(
+            Classification.message_id_header == header, Classification.mailbox_id == mailbox.id
+        )
         same_mail = or_(same_mail, AiSuggestion.message_id.in_(copies))
     rows = await db.execute(
         select(AiSuggestion)
-        .where(same_mail, AiSuggestion.status == "pending", AiSuggestion.shadow.is_(False))
+        .where(
+            same_mail,
+            AiSuggestion.mailbox_id == mailbox.id,
+            AiSuggestion.status == "pending",
+            AiSuggestion.shadow.is_(False),
+        )
         .order_by(AiSuggestion.created_at)
     )
     return [suggestion_out(row) for row in rows.scalars()]

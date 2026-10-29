@@ -113,6 +113,8 @@ Not all items block 2a; call out blockers explicitly.
 - `AI_DAILY_BUDGET_USD` = **5**.
 - AI is enabled first for **eshop@** only, and only for mail received after `ai_enabled_at` (addition A). Branches come later.
 - **Shadow week:** the first week after enabling, suggestions are created but hidden (`ai_shadow_mode`). Measure first, then switch them on.
+  - Shadow mode is **on by default (fail-safe)**: with no `feature_flags` row, suggestions stay hidden.
+  - Only an explicit row with `enabled=false` makes them visible. The admin toggle comes in 2f.
 - Models (env, never „latest“, D31):
   - `LLM_MODEL_CLASSIFY=claude-haiku-5-5`
   - `LLM_MODEL_DRAFT=claude-sonnet-5-5`

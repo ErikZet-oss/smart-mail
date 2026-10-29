@@ -17,7 +17,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - Once per message and per Message-ID across copies.
 - The daily budget applies: a paid call is always an `ai_runs` row with purpose `draft`.
 - Errors or invalid output leave no row, so the next run retries.
-- The `ai_shadow_mode` flag sets `shadow`.
+- The `ai_shadow_mode` flag sets `shadow`. It is **on by default**: without a flag row, suggestions stay hidden.
 - Audit: `ai.suggestion_created` (actor ai, no body).
 
 **Guards** (`app/ai/guards.py`, AI_ASSISTANT §9 without Money):
@@ -34,7 +34,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - The recipient always comes from the message, never from the model.
 
 **Endpoint:**
-- `GET /api/mail/mailboxes/{ref}/messages/{id}/suggestions` returns the pending, non-shadow suggestions of a message and its copies, with checks and `blocked`.
+- `GET /api/mail/mailboxes/{ref}/messages/{id}/suggestions` returns the pending, non-shadow suggestions of a message and its copies **in the same mailbox**, with checks and `blocked`.
 - The card UI and approve/reject follow in the next PRs.
 
 **Docs:** `docs/plans/phase-2.md` records Erik's decisions of 29 Oct (budget 5 USD, eshop@ first, shadow week, model ids).

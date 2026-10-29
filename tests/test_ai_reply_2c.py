@@ -328,3 +328,52 @@ async def test_2c_endpoint_lists_pending_and_hides_shadow(
     assert card["id"] == str(visible.id)
     assert card["blocked"] is True and card["checks"][0]["id"] == "placeholder"
     assert card["to"] == ["novak@abcstav.example"] and card["confidence"] == 0.8
+
+
+# --- #99 review: shadow on by default, copies only inside the caller's mailbox -------------------------------------
+
+
+async def test_2c_shadow_mode_is_on_without_a_flag_row(
+    db: AsyncSession, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.ai.reply as reply_mod
+    from app.ai.models import FeatureFlag
+    from app.ai.service import SHADOW_FLAG, shadow_mode_enabled, suggest_replies_for_mailbox
+
+    assert await shadow_mode_enabled(db) is True  # no row: fail-safe, the shadow week starts hidden
+    mailbox, message = await _seed(db)
+    monkeypatch.setattr(reply_mod, "get_llm_provider", lambda _s: ScriptedAnthropic([_draft_response()]))
+    await suggest_replies_for_mailbox(db, mailbox, _settings(settings))
+    [row] = await _replies(db, message)
+    assert row.shadow is True
+
+    db.add(FeatureFlag(key=SHADOW_FLAG, person_id=None, enabled=False, data={}))
+    await db.flush()
+    assert await shadow_mode_enabled(db) is False  # only an explicit row makes suggestions visible
+
+
+async def test_2c_endpoint_never_shows_a_copy_from_another_mailbox(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    mine = await _signed_in(client, db, mail_server)
+    other, other_msg = await _seed(db)  # same e-mail in a mailbox the user has no access to
+    db.add(
+        AiSuggestion(
+            mailbox_id=other.id,
+            message_id=other_msg.id,
+            suggestion_type="reply",
+            payload={"to": ["novak@abcstav.example"], "subject": "Re: x", "body": "tajné", "language": "sk"},
+        )
+    )
+    folder = FolderMeta(mailbox_id=mine.id, name="Kópie", subscribed=True, selectable=True)
+    db.add(folder)
+    await db.flush()
+    copy = Message(mailbox_id=mine.id, folder_id=folder.id, uid=9, message_id=other_msg.message_id, flags=[])
+    db.add(copy)
+    await db.flush()
+    # one classification per Message-ID across mailboxes (it lives in the other mailbox) — the leak path
+    await db.commit()
+
+    r = await client.get(f"/api/mail/mailboxes/default/messages/{copy.id}/suggestions")
+    assert r.status_code == 200, r.text
+    assert r.json() == []
