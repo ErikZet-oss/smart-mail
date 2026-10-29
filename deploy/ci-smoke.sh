@@ -90,5 +90,8 @@ grep -q 'ci-smoke marker' "$ROOT/deploy/nginx-active.conf" \
   || { echo "update.sh neprepísal nginx-active.conf z šablóny"; exit 1; }
 AFTER_ACTIVE="$(sha256sum "$ROOT/deploy/nginx-active.conf" | awk '{print $1}')"
 [[ "$BEFORE_ACTIVE" != "$AFTER_ACTIVE" ]] || { echo "nginx-active.conf sa nezmenil"; exit 1; }
+# The running nginx must serve the new config, not only the file on disk (pilot #59: .mjs MIME rule ignored).
+LIVE_NGINX="$(docker compose --env-file "$SMARTMAIL_ENV_FILE" -f "$ROOT/deploy/docker-compose.yml" exec -T web nginx -T 2>/dev/null)"
+grep -q 'ci-smoke marker' <<<"$LIVE_NGINX" || { echo "bežiaci nginx nenačítal novú konfiguráciu"; exit 1; }
 
 echo "CI smoke OK"
