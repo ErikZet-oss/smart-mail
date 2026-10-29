@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #69: SMTP server reply on a refused send
+
+- `send_message`: an SMTP refusal keeps the server's reply in `SmtpError.reason` / `send_error`
+  (`SMTPSenderRefused:550:Sending mail from your country (de) is not allowed` — one line, max 200 characters, only
+  the server's text, never the message). Log `smtp.send_failed` carries `smtp_code` + `smtp_message`.
+- W4/M4 send error banner: „Odpoveď servera: …“ under the Slovak message; for 550 with „country“ the hint to allow
+  sending from abroad in the mailbox administration.
+
 ## [Unreleased] — Pilot #68: sender of a branch identity (nitra@ vs smartsronitra@)
 
 - Nastavenia › Identity on a branch login: section „Identita“ (Zobrazované meno, E-mail, Organizácia, Odpovedať na)

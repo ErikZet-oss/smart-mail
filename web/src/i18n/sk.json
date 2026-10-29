@@ -496,6 +496,8 @@
     "sendErrorAuth": "Odoslanie zlyhalo – prihlásenie na mailový server neprešlo. Skontrolujte heslo schránky.",
     "sendErrorServer": "Odoslanie zlyhalo – mailový server neodpovedá. Skúste znova.",
     "sendErrorRejected": "Odoslanie zlyhalo – server odmietol príjemcu alebo správu. Skúste znova.",
+    "sendErrorServerReply": "Odpoveď servera: {{reply}}",
+    "sendErrorCountryBlocked": "Poskytovateľ pošty blokuje odosielanie z krajiny servera. Povoľte odosielanie zo zahraničia v administrácii schránky.",
     "sendErrorNoCredentials": "Odoslanie zlyhalo – chýbajú prihlasovacie údaje schránky. Prihláste sa znova.",
     "viewerBlocked": "Rola viewer nemôže odosielať.",
     "preSendTitle": "Kontrola pred odoslaním",

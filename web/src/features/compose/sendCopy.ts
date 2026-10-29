@@ -21,3 +21,14 @@ export function sendErrorMessage(t: Translate, sendError: string | null | undefi
   }
   return t('compose.sendFailed');
 }
+
+/** Extra lines under the banner (#69): the SMTP server's own reply, e.g. `SMTPSenderRefused:550:Sending mail from …`,
+ * plus a Slovak hint for the provider's country block. Empty for every other send_error. */
+export function sendErrorServerReply(t: Translate, sendError: string | null | undefined): string[] {
+  const match = /^SMTP\w+:(\d{3}):(.+)$/.exec(sendError ?? '');
+  if (!match) return [];
+  const [, smtpCode = '', text = ''] = match;
+  const lines = [t('compose.sendErrorServerReply', { reply: `${smtpCode} ${text.trim()}` })];
+  if (smtpCode === '550' && /country/i.test(text)) lines.push(t('compose.sendErrorCountryBlocked'));
+  return lines;
+}
