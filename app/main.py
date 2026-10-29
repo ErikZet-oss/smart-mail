@@ -19,6 +19,7 @@ from app.api import (
     ai_mail,
     auth,
     compose,
+    compose_ai,
     contacts,
     mail,
     messages,
@@ -119,6 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ai_mail.router)
     app.include_router(suggestions.router)
     app.include_router(compose.router)
+    app.include_router(compose_ai.router)
     app.include_router(settings_api.router)
     app.include_router(contacts.router)
     app.include_router(search.router)

@@ -193,7 +193,7 @@ async def _reply_exists_for_header(db: AsyncSession, header: str | None) -> bool
     return found is not None
 
 
-async def _thread_messages(db: AsyncSession, message: Message) -> list[Message]:
+async def thread_messages(db: AsyncSession, message: Message) -> list[Message]:
     if message.thread_id is None:
         return [message]
     rows = await db.execute(
@@ -259,7 +259,7 @@ async def suggest_replies(
                 await load_body(message)
             except Exception as exc:  # body fetch is best effort; the preview still gives context
                 log.warning("ai.reply_body_unavailable", message_id=str(message.id), error=type(exc).__name__)
-        thread = await _thread_messages(db, message)
+        thread = await thread_messages(db, message)
         context = thread_block(thread)
         language = cls.language or "other"
         system = render_prompt("system_base", company_name=COMPANY_NAME, style_guide="(zatiaľ nenastavený — Phase 2e)")
@@ -386,7 +386,7 @@ async def recheck_reply(
     recipient = message.from_email
     return reply_checks(
         body=body,
-        context=thread_block(await _thread_messages(db, message)),
+        context=thread_block(await thread_messages(db, message)),
         recipient=recipient,
         recipient_known=bool(recipient) and await _recipient_known(db, mailbox, recipient or "", message),
         internal_domains=settings.internal_domain_list,

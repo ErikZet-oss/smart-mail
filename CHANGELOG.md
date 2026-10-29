@@ -2,6 +2,26 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2d PR 1: compose AI endpoint (W4a / M17 backend)
+
+**`POST /api/compose/{draft_id}/ai`** handles these actions:
+- `write` (Napíš za mňa, with an instruction);
+- `shorter` / `formal` / `friendly` / `grammar`;
+- `translate` (sk/cs/en/de/pl/hu);
+- `answer_all` (Doplniť odpoveď na všetky otázky, returns the unanswered questions).
+
+**What the model gets and returns:**
+- Only the person's own text, plus the quoted thread of a reply wrapped as untrusted.
+- **Never the signature:** the signature and the quote are added by the program.
+- Returns a proposal only: nothing is saved or sent; the editor shows it as a diff („Použiť“ / „Zahodiť“).
+- `[[DOPLNIŤ…]]` placeholders are reported.
+
+**Guards:**
+- Needs an active person, AI enabled on the mailbox, and `LLM_MODEL_DRAFT` + key; otherwise 409 `ai_unavailable`.
+- The daily budget applies (429 `ai_budget_exceeded`).
+- Every call is an `ai_runs` row.
+- Audit `ai.compose_assist` (action and status, no text).
+
 ## [Unreleased] — #94 Phase 2c PR 3: AiSuggestionCard in the reading pane
 
 **Card** (`features/ai/AiSuggestionCard.tsx`, UX_SPEC §3.1, type `reply`):
