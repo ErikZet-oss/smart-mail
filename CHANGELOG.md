@@ -2,6 +2,21 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #96 PR 1: Presunúť do… / Kopírovať do…
+
+- New bulk action `copy` (IMAP UID COPY):
+  - the source is untouched, and the destination count rises at once;
+  - the destination gets the copies on the scheduled sync;
+  - audit `mail.bulk_copy`.
+- `move`/`copy` into the folder the message is already in is a no-op.
+- Folder picker (`FolderPicker`, Roundcube order: special folders, Archív, then customer folders alphabetically; the current folder is disabled; on a phone it docks at the bottom like a sheet). It is used by:
+  - Viac › Presunúť do… / Kopírovať do… in the reading pane;
+  - Presunúť in the W2e bulk bar;
+  - shortcut `L` (shown in W15 again).
+- Move goes through the optimistic path (#89). Read-only (no active person): disabled.
+- Menus scroll when longer than the window.
+- Drag & drop onto a folder follows in PR 2.
+
 ## [Unreleased] — #94 Phase 2c PR 1: reply suggestions (backend)
 
 ### Fixed

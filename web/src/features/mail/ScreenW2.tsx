@@ -3,6 +3,7 @@ import {
   Archive,
   CircleCheck,
   Folder as FolderIcon,
+  FolderInput,
   List,
   MessagesSquare,
   MousePointer2,
@@ -48,10 +49,12 @@ import {
   markSeenLocally,
   messagesKey,
   refreshMailbox,
+  type Folder,
   type MessageFilter,
   type MessageListItem,
   type ThreadListItem,
 } from './mailApi';
+import { FolderPicker } from './FolderPicker';
 import { applyActionLocally, REMOVING_ACTIONS } from './optimistic';
 import { CATEGORY_COLOR_TOKEN, categoryDotClass } from './categoryStyles';
 import { MessageRow, type RowItem } from './MessageRow';
@@ -113,7 +116,7 @@ function EmptyState({ icon, title, text }: { icon: ReactNode; title: string; tex
 const FILTERS: MessageFilter[] = ['all', 'unread', 'flagged', 'attachments'];
 
 /** W2 E-mail — list + reading (Phase 1d). W2f when `category` is set. Remounts per folder/view. */
-type ListAction = 'mark_seen' | 'mark_unseen' | 'delete' | 'purge' | 'junk' | 'archive' | 'done';
+type ListAction = 'mark_seen' | 'mark_unseen' | 'delete' | 'purge' | 'junk' | 'archive' | 'move' | 'done';
 
 export function ScreenW2() {
   const params = useParams();
@@ -287,8 +290,8 @@ function ScreenW2Body({
       : `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`;
 
   const bulk = useMutation({
-    mutationFn: ({ action, ids }: { action: ListAction; ids: string[] }) =>
-      bulkMessages(mailboxRef, { message_ids: ids, action }),
+    mutationFn: ({ action, ids, dest }: { action: ListAction; ids: string[]; dest?: Folder }) =>
+      bulkMessages(mailboxRef, { message_ids: ids, action, dest_folder_id: dest?.id }),
     // #89: the rows go away at once; the server answer only confirms (or rolls back).
     onMutate: async ({ action, ids }) => {
       await queryClient.cancelQueries({ queryKey: ['mail', 'messages', mailboxRef] });
@@ -301,7 +304,8 @@ function ScreenW2Body({
       }
       return { rollback };
     },
-    onSuccess: (_r, { action }) => toasts.success(t(`mail.toast.${action}`)),
+    onSuccess: (_r, { action, dest }) =>
+      toasts.success(dest ? t('mail.moveTo.moved', { folder: labelOf(dest) }) : t(`mail.toast.${action}`)),
     onError: (_e, _v, context) => {
       context?.rollback();
       toasts.error(t('mail.errors.generic'));
@@ -352,6 +356,8 @@ function ScreenW2Body({
 
   // UX_SPEC §6 list keys (#93): the central listener in useGlobalShortcuts calls these.
   const [purgeIds, setPurgeIds] = useState<string[] | null>(null);
+  // Presunúť do… for the selection / open message (#96): bulk bar button and `L`.
+  const [movePicker, setMovePicker] = useState<{ ids: string[]; at: { x: number; y: number } } | null>(null);
   const shortcutHandlers = useRef<MailShortcutHandlers>({ readOnly: true });
   const rowRefs = rows.map((r) =>
     r.kind === 'message'
@@ -390,6 +396,9 @@ function ScreenW2Body({
     delete: () => act('delete'),
     purge: () => {
       if (targets.length > 0) setPurgeIds(targets);
+    },
+    moveTo: () => {
+      if (targets.length > 0) setMovePicker({ ids: targets, at: { x: window.innerWidth / 2 - 130, y: 120 } });
     },
     selectAll: () => {
       setSelectMode(true);
@@ -580,6 +589,18 @@ function ScreenW2Body({
             >
               <Archive size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.toolbar.archive')}
+            </button>
+            <button
+              type="button"
+              className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
+              disabled={!canMarkSeen}
+              onClick={(event) => {
+                const box = event.currentTarget.getBoundingClientRect();
+                setMovePicker({ ids: [...selectedIds], at: { x: box.left, y: box.bottom + 4 } });
+              }}
+            >
+              <FolderInput size={14} className="mr-1 inline" aria-hidden="true" />
+              {t('mail.moveTo.bulkMove')}
             </button>
             <button
               type="button"
@@ -854,6 +875,20 @@ function ScreenW2Body({
       )}
 
       {mobile && !mobileThread ? <LinkFab mailbox={mailboxRef} /> : null}
+
+      {movePicker ? (
+        <FolderPicker
+          mailbox={mailboxRef}
+          mode="move"
+          currentFolderId={aiView ? null : (folderId ?? null)}
+          at={movePicker.at}
+          onPick={(dest) => {
+            bulk.mutate({ action: 'move', ids: movePicker.ids, dest });
+            setMovePicker(null);
+          }}
+          onClose={() => setMovePicker(null)}
+        />
+      ) : null}
 
       {purgeIds ? (
         <ConfirmDialog
