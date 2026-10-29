@@ -89,6 +89,7 @@ async def create_draft(
     branch: Branch | None,
     mode: Mode = "new",
     source: Message | None = None,
+    user_html: str = "<p></p>",
 ) -> ComposeDraft:
     identity = await ensure_default_identity(db, mailbox, person.full_name if person else None)
     to: list[dict[str, str | None]] = []
@@ -110,7 +111,7 @@ async def create_draft(
     quoted = quote_html_for_message(settings, source) if source and mode in ("reply", "reply_all", "forward") else None
     signature = render_signature(person=person, branch=branch, identity=identity, email=identity.email, language="sk")
     body_html = assemble_outgoing_html(
-        user_html="<p></p>",
+        user_html=user_html,
         quote_html=quoted,
         signature_html=signature or None,
         mode=mode,
