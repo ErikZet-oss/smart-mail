@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '../toastContext';
 
 function hasFiles(event: DragEvent): boolean {
+  if (document.querySelector('[data-compose-dropzone]')) return false; // W4/M4 attaches dropped files itself
   return Array.from(event.dataTransfer?.types ?? []).includes('Files');
 }
 
