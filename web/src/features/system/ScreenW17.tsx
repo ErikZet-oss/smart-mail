@@ -7,6 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/Button';
 import { Logo } from '../../components/Logo';
 import { StatusPage } from '../../components/StatusPage';
+import { safeInternalPath } from '../../lib/safePath';
 import { api } from '../../lib/api';
 
 type Maintenance = { active: boolean; until: string | null };
@@ -27,7 +28,7 @@ export function ScreenW17() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/';
+  const from = safeInternalPath((location.state as { from?: unknown } | null)?.from);
   const status = useQuery({
     queryKey: ['maintenance'],
     queryFn: () => api<Maintenance>('GET', '/api/system/maintenance', undefined, { global: false }),

@@ -1,3 +1,4 @@
+import { safeInternalPath } from '../../lib/safePath';
 import { api } from '../../lib/api';
 
 export type Person = {
@@ -42,5 +43,6 @@ export function rememberAfterLogin(me: Me | null): void {
 /** Where to go after signing in: the route the user was on (W1c), or the inbox. */
 export function returnTo(state: unknown): string {
   const from = (state as { from?: unknown } | null)?.from;
-  return typeof from === 'string' && from.startsWith('/') && !from.startsWith('/login') ? from : '/';
+  const path = safeInternalPath(from);
+  return path.startsWith('/login') ? '/' : path;
 }

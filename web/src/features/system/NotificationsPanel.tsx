@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
+import { safeInternalPath } from '../../lib/safePath';
 import {
   dismissNotifications,
   fetchNotifications,
@@ -150,7 +151,7 @@ export function NotificationsPanel({ onClose }: Props) {
                       onClick={() => {
                         if (item.unread) dismiss.mutate({ ids: [item.id] });
                         onClose();
-                        if (item.href) navigate(item.href);
+                        if (item.href) navigate(safeInternalPath(item.href));
                       }}
                     >
                       <KindIcon kind={item.kind} />
