@@ -287,7 +287,9 @@ async def test_1d_opening_an_unread_message_marks_it_read_without_a_full_sync(
 
     monkeypatch.setattr(messages_api, "run_msg_action_async", fake_action)
     monkeypatch.setattr(messages_api, "_creds", fake_creds)
-    monkeypatch.setattr(messages_api, "_sync", no_full_sync)
+    import app.api.mail as mail_api
+
+    monkeypatch.setattr(mail_api, "sync_mailbox", no_full_sync)
 
     r = await client.get(f"/api/mail/mailboxes/default/messages/{msg.id}")
     assert r.status_code == 200
@@ -356,7 +358,7 @@ async def test_1d_delete_inside_trash_is_permanent_not_a_move_to_trash(
 
     monkeypatch.setattr(messages_api, "run_msg_action_async", fake_action)
     monkeypatch.setattr(messages_api, "_creds", fake_creds)
-    monkeypatch.setattr(messages_api, "_sync", no_sync)
+    monkeypatch.setattr(messages_api, "schedule_sync", no_sync)
 
     r = await client.send_json(
         "POST",

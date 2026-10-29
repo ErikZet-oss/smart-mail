@@ -2,6 +2,29 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #89 fast delete / move / flags (no sync inside the request)
+
+**Backend:**
+- Toolbar actions (bulk `delete`/`junk`/`archive`/`move`, delete inside Kôš = expunge, flags, the read mark when a message is opened) now handle the request in this order:
+  1. run the IMAP command;
+  2. apply the same change locally in the same request (`app/mail/local_apply.py`):
+     - removed rows are deleted from the source folder;
+     - flags and the `seen`/`flagged` columns are set;
+     - folder `total`/`unread` and the thread counts are updated;
+  3. commit.
+- A full `sync_mailbox` no longer runs inside the request.
+- Moving actions **schedule** a sync instead (`app/mail/sync_schedule.py`):
+  - an ARQ `sync_mailbox_job`, 3 s deferred, with the poll's job id;
+  - quick actions in a row give one sync;
+  - flag actions schedule nothing.
+- New log line `mail.action_done` with `action`, `n`, `imap_ms` and `ms`. It contains no message data.
+
+**Web (optimistic UI, `features/mail/optimistic.ts`):**
+- On delete/junk/archive/move, the rows and folder counts change at once and the reading pane closes.
+- Flags change the row icon at once.
+- A failed request rolls back with the error toast.
+- The list is invalidated after the request settles instead of being refetched right away.
+
 ## [Unreleased] — #85 react-router 6 for the pilot (ADR-013)
 
 ### Fixed
