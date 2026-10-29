@@ -312,3 +312,25 @@ test.describe('Phase 1h-a: PWA + mobile shell M0–M4', () => {
     });
   });
 });
+
+test.describe('pilot: long message on mobile', () => {
+  test('M3 long message scrolls to the end @mobile', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame');
+    const long = detail();
+    long.body_html_sanitized =
+      Array.from({ length: 120 }, (_, i) => `<p>Riadok ${i + 1} dlhej objednávky.</p>`).join('') +
+      '<p id="koniec">Koniec správy</p><table width="600"><tr><td>Široká tabuľka newslettera</td></tr></table>';
+    await mockMail(page, { 'GET /api/mail/mailboxes/default/messages/m-1': { body: long } });
+    await page.goto('/mail/default/inbox');
+    await page.getByText('Kópia faktúry 2026123').click();
+    await expect(page.getByTestId('mobile-thread')).toBeVisible();
+    const end = page.getByText('Koniec správy');
+    await expect(end).not.toBeInViewport();
+    await page.mouse.move(195, 500);
+    for (let i = 0; i < 40; i += 1) await page.mouse.wheel(0, 600);
+    await expect(end).toBeInViewport();
+    // no horizontal page overflow from a fixed-width newsletter table
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+});
