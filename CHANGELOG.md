@@ -2,6 +2,23 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #94 Phase 2c PR 3: AiSuggestionCard in the reading pane
+
+**Card** (`features/ai/AiSuggestionCard.tsx`, UX_SPEC §3.1, type `reply`):
+- In W2c below the security banner: at most 2 cards, plus „Ďalšie návrhy (n)“.
+- Header: ✦ „Návrh odpovede“, with the category and language as a subline.
+- `CheckRow`s: blocking, then warnings, then the green rows; up to 4 shown, plus „Ďalšie kontroly (n)“.
+- Draft preview, clamped with „Zobraziť celý text“, and the „Prečo“ rationale.
+- State border: ready green, attention amber, blocked red, low confidence grey with „AI si nie je istá“.
+- Footer: „Návrh AI – nič sa neodošle ani nezapíše bez vášho schválenia.“
+
+**Actions:**
+- **Pripraviť koncept** → approve (#105) and open the draft in W4. Nothing is sent from the card.
+- **Upraviť** edits the text inline; the approve then sends the edited text. A blocked card becomes approvable after an edit, since the server re-checks.
+- **Zamietnuť** → reason chips (zlá kategória / nesprávne údaje / tón / netreba) plus an optional note.
+- Read-only: all actions disabled.
+- Klasické zobrazenie hides the cards. Shadow-mode suggestions never reach the client.
+
 ## [Unreleased] — #94 Phase 2c PR 2: approve / reject reply suggestions (backend)
 
 **`POST /api/suggestions/{id}/approve`** (optional edited `body`). Needs an active person (viewer → 403). Order of work:

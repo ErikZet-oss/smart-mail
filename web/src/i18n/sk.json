@@ -1096,6 +1096,62 @@
     }
   },
   "ai": {
+    "card": {
+      "replyTitle": "Návrh odpovede",
+      "subline": "{{category}} · {{language}}",
+      "approve": "Pripraviť koncept",
+      "approveEdited": "Pripraviť upravený koncept",
+      "edit": "Upraviť",
+      "editDone": "Hotovo",
+      "reject": "Zamietnuť",
+      "rejectConfirm": "Zamietnuť návrh",
+      "rejectCancel": "Späť",
+      "rejectTitle": "Prečo návrh nesedí? (nepovinné)",
+      "rejectNote": "Poznámka (nepovinné)",
+      "reasons": {
+        "wrong_category": "zlá kategória",
+        "wrong_data": "nesprávne údaje",
+        "tone": "tón",
+        "not_needed": "netreba"
+      },
+      "footer": "Návrh AI – nič sa neodošle ani nezapíše bez vášho schválenia.",
+      "lowconf": "AI si nie je istá – skontrolujte údaje",
+      "showAll": "Zobraziť celý text",
+      "showLess": "Skryť",
+      "moreChecks": "Ďalšie kontroly ({{count}})",
+      "moreCards": "Ďalšie návrhy ({{count}})",
+      "rationale": "Prečo: {{text}}",
+      "editLabel": "Text odpovede",
+      "drafted": "Koncept je pripravený v Konceptoch.",
+      "rejected": "Návrh je zamietnutý.",
+      "blockedToast": "Návrh sa nedá schváliť – skontrolujte zvýraznené kontroly.",
+      "languages": {
+        "sk": "slovenčina",
+        "cs": "čeština",
+        "en": "angličtina",
+        "de": "nemčina",
+        "pl": "poľština",
+        "hu": "maďarčina",
+        "other": "iný jazyk"
+      },
+      "checks": {
+        "recipient_ok": "Príjemca = odosielateľ",
+        "placeholder_ok": "Bez [[DOPLNIŤ]]",
+        "numbers_ok": "Čísla a dátumy sú z vlákna",
+        "placeholder": "Doplňte zvýraznené údaje [[DOPLNIŤ]]",
+        "empty_body": "Návrh je prázdny",
+        "unverified_number": "Čísla, ktoré vo vlákne nie sú: {{numbers}}",
+        "no_recipient": "Chýba príjemca",
+        "new_recipient": "Nový príjemca: {{address}}",
+        "attachment_missing": "Text spomína prílohu, ale návrh žiadnu nemá",
+        "language_mismatch": "Návrh je v inom jazyku ako e-mail",
+        "security_dmarc_fail": "Odosielateľ neprešiel overením DMARC",
+        "security_spf_fail": "Odosielateľ neprešiel overením SPF",
+        "security_display_spoof": "Meno odosielateľa sa vydáva za našu firmu",
+        "security_iban_change": "E-mail mení bankové údaje – overte telefonicky",
+        "unknown": "Kontrola: {{id}}"
+      }
+    },
     "triage": {
       "title": "AI triedenie",
       "emptyTitle": "Žiadne {{name}}",
