@@ -2,6 +2,17 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #46: W2l attachment preview (PDF, images, ISDOC/XML)
+
+- Clicking a PDF, raster image (not SVG) or XML/ISDOC attachment opens W2l, a full-screen dark lightbox, instead of
+  downloading. Other types download as before. Infected files never open; „not scanned“ asks first, as before.
+- PDF via `pdfjs-dist` 4.10.38 (lazy-loaded, worker bundled by Vite, same origin, `isEvalSupported: false`, no
+  `<embed>`/`<iframe>`): canvas + selectable text layer, „Strana 1 / 2“, previous/next page (PageUp/PageDown),
+  zoom ±, the whole page in the window on desktop, fit width on phones. Images: zoom, rotate. XML/ISDOC: table of
+  leaf values. Toolbar: Stiahnuť, Tlačiť (prints the rendered pages, never the PDF), ←/→ and swipe between
+  attachments, Esc closes. „Pripraviť dodací list prijatý“ / „Importovať…“ stay hidden until Phase 4.
+- `web/nginx.conf`: `.mjs` served as `text/javascript` (module worker) with the strict CSP.
+
 ## [Unreleased] — #56: stable send e2e, compose fields wait for the draft
 
 - W4/M4: Komu, Kópia, Predmet and the editor are disabled until the new draft exists. Text typed during a slow

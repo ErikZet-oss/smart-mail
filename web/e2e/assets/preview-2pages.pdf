@@ -1,0 +1,43 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 145 >>
+stream
+BT /F1 16 Tf 72 770 Td 22 TL (FAKTURA 2611452 (fiktivna)) Tj T* (Fixtech CZ - testovaci doklad) Tj T* (Sroub ISO 4017 M10x30 A2  25 bal) Tj T* ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 75 >>
+stream
+BT /F1 16 Tf 72 770 Td 22 TL (Strana 2) Tj T* (Celkem: 373,20 EUR) Tj T* ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000443 00000 n 
+0000000569 00000 n 
+0000000694 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+764
+%%EOF

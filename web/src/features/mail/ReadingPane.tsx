@@ -31,7 +31,9 @@ import { ApiError, formatRef } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
 import { useTheme } from '../prefs/ThemeProvider';
+import { AttachmentLightbox } from './AttachmentLightbox';
 import { formatMailDate } from './formatMailDate';
+import { previewKind } from './previewKind';
 import { attachmentUrl, bulkMessages, fetchMessage, messageKey, patchFlags, snoozeThread } from './mailApi';
 
 type Props = {
@@ -110,6 +112,10 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
     },
     enabled: Boolean(messageId),
   });
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const previewable = (detail.data?.attachments ?? []).filter(
+    (a) => !a.is_inline && a.av_status !== 'infected' && previewKind(a) !== null,
+  );
   const loadErrorRef =
     detail.error instanceof ApiError && detail.error.detail.ref ? formatRef(String(detail.error.detail.ref)) : '';
 
@@ -476,6 +482,17 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
 
           {classic ? null : <SecurityBanner notes={msg.security_notes ?? []} />}
 
+          {previewIndex !== null ? (
+            <AttachmentLightbox
+              mailbox={mailbox}
+              attachments={previewable}
+              index={previewIndex}
+              onIndex={setPreviewIndex}
+              onClose={() => setPreviewIndex(null)}
+              formatSize={formatSize}
+            />
+          ) : null}
+
           {msg.attachments.filter((a) => !a.is_inline).length > 0 ? (
             <ul className="mb-4 flex flex-wrap gap-2">
               {msg.attachments
@@ -506,6 +523,13 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
                           }
                           if (unscanned && !window.confirm(t('mail.attachmentUnscannedConfirm'))) {
                             event.preventDefault();
+                            return;
+                          }
+                          // PDF, images and XML/ISDOC open in W2l first (#46); everything else downloads
+                          const at = previewable.findIndex((p) => p.id === a.id);
+                          if (at >= 0) {
+                            event.preventDefault();
+                            setPreviewIndex(at);
                           }
                         }}
                         download={infected ? undefined : a.filename}

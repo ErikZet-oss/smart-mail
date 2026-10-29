@@ -109,3 +109,43 @@ body {
   max-width: 100%;
   height: auto;
 }
+
+/* W2l PDF text layer (pdf.js 4, subset of web/pdf_viewer.css): selectable text over the canvas, invisible glyphs. */
+.pdf-text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+}
+.pdf-text-layer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+.pdf-text-layer ::selection {
+  background: var(--brand-primary-100);
+}
+
+/* W2l Tlačiť: only the rendered pages of the open PDF are printed. */
+.print-pages {
+  display: none;
+}
+@media print {
+  body.printing-pages > * {
+    display: none !important;
+  }
+  body.printing-pages > .print-pages {
+    display: block !important;
+  }
+  .print-pages img {
+    display: block;
+    width: 100%;
+    break-after: page;
+  }
+}
