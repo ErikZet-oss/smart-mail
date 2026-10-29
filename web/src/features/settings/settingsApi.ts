@@ -127,8 +127,19 @@ export type AdminUser = {
   last_login_at: string | null;
   branch_id: string | null;
   branch_name: string | null;
+  persons_count?: number | null;
   person: { id: string; first_name: string; last_name: string; role: RoleId; active: boolean } | null;
 };
+
+export type MailboxAccessRow = { mailbox_id: string; email: string; read: boolean; send: boolean; own: boolean };
+export const fetchMailboxAccess = (id: string) =>
+  api<MailboxAccessRow[]>('GET', `/api/settings/admin/users/${id}/mailbox-access`);
+export const saveMailboxAccess = (id: string, body: { mailbox_id: string; read: boolean; send: boolean }[]) =>
+  api<MailboxAccessRow[]>('PUT', `/api/settings/admin/users/${id}/mailbox-access`, body);
+export const verifyUserLogin = (id: string, password: string) =>
+  api<{ result: 'ok' }>('POST', `/api/settings/admin/users/${id}/verify`, { password });
+export const logoutUserEverywhere = (id: string) =>
+  api<{ revoked_sessions: number }>('POST', `/api/settings/admin/users/${id}/logout-all`, {});
 
 export type AdminPerson = {
   id: string;

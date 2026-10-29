@@ -27,6 +27,7 @@ class RevokeReason(enum.StrEnum):
     mfa_failed = "mfa_failed"
     rotated = "rotated"
     account_changed = "account_changed"  # admin converted the login (e.g. to a branch login, #33)
+    admin_logout = "admin_logout"  # „Odhlásiť zo všetkých zariadení“ in Settings 10 (#55)
 
 
 class InvalidReason(enum.StrEnum):

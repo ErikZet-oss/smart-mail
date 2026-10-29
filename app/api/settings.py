@@ -12,16 +12,19 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
+from app.api.auth import Authenticator, Limiter
 from app.auth.admin_accounts import AccountRuleError, convert_to_branch, create_account, ensure_admin_remains
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep, client_ip
 from app.auth.models import Account, AccountKind, Branch, Person, PersonBranch, Role
-from app.auth.persons import own_login_person_ids
+from app.auth.persons import eligible_persons, own_login_person_ids
 from app.auth.security import decrypt
+from app.auth.sessions import RevokeReason, revoke_account_sessions
 from app.core.audit import AuditLog, audit
 from app.mail import storage
 from app.mail.clamav import scan_bytes
 from app.mail.compose_models import CannedResponse, ComposeDraft, Identity
 from app.mail.image_proxy import proxy_path
+from app.mail.imap import LoginResult
 from app.mail.models import FolderMeta, Mailbox, MailboxAccess, SieveScriptBackup
 from app.mail.prefs import get_list_prefs, get_ui_prefs, save_section
 from app.mail.sanitize import sanitize_html
@@ -911,6 +914,8 @@ async def _user_out(db: DB, a: Account) -> dict[str, Any]:
     person = await db.get(Person, a.person_id) if a.person_id else None
     branch = await db.get(Branch, a.branch_id) if a.branch_id else None
     return {
+        # „Osoby“ of a branch login in the list (W12-10, #55): who appears in its „Kto ste?“
+        "persons_count": len(await eligible_persons(db, a)) if a.kind == AccountKind.branch else None,
         "id": str(a.id),
         "email": a.email,
         "kind": a.kind.value,
@@ -1002,6 +1007,10 @@ async def create_user(body: UserIn, request: Request, ctx: Auth, db: DB) -> dict
     return await _user_out(db, account)
 
 
+class VerifyIn(BaseModel):
+    password: str = Field(min_length=1, max_length=512)
+
+
 class UserPatch(BaseModel):
     active: bool | None = None
     kind: AccountKind | None = None
@@ -1051,6 +1060,153 @@ async def patch_user(account_id: uuid.UUID, body: UserPatch, request: Request, c
     )
     await db.commit()
     return await _user_out(db, account)
+
+
+@router.post("/admin/users/{account_id}/verify")
+async def verify_user_login(
+    account_id: uuid.UUID,
+    body: VerifyIn,
+    request: Request,
+    ctx: Auth,
+    db: DB,
+    authenticator: Authenticator,
+    limiter: Limiter,
+) -> dict[str, Any]:
+    """„Overiť“ (W12-10): test the login on the mail server with a password typed by the admin. The password is
+    neither stored nor logged; failures count towards the login rate limit of that address."""
+    admin = require_admin(ctx)
+    account = await db.get(Account, account_id)
+    if account is None:
+        raise fail(404, "account_not_found")
+    ip = client_ip(request)
+    lock = await limiter.check(account.email, ip)
+    if lock.locked:
+        raise fail(429, "rate_limited", retry_after=lock.retry_after_s)
+    result = await authenticator.verify(account.email, body.password)
+    if result is LoginResult.invalid_credentials:
+        await limiter.fail(account.email, ip)
+    audit(
+        db,
+        "settings.user_verified",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="account",
+        object_id=str(account.id),
+        ip=ip,
+        details={"result": result.value},
+    )
+    await db.commit()
+    if result is LoginResult.server_unavailable:
+        raise fail(503, "mail_server_unavailable")
+    if result is LoginResult.invalid_credentials:
+        raise fail(422, "verify_failed")
+    return {"result": "ok"}
+
+
+@router.post("/admin/users/{account_id}/logout-all")
+async def logout_user_everywhere(account_id: uuid.UUID, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+    """„Odhlásiť zo všetkých zariadení“: revokes every session of the login (the admin's own too, if theirs)."""
+    admin = require_admin(ctx)
+    account = await db.get(Account, account_id)
+    if account is None:
+        raise fail(404, "account_not_found")
+    revoked = await revoke_account_sessions(db, account.id, RevokeReason.admin_logout, now=datetime.now(UTC))
+    audit(
+        db,
+        "settings.user_logged_out_everywhere",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="account",
+        object_id=str(account.id),
+        ip=client_ip(request),
+        details={"revoked_sessions": revoked},
+    )
+    await db.commit()
+    return {"revoked_sessions": revoked}
+
+
+async def _access_rows(db: DB, account: Account) -> list[dict[str, Any]]:
+    own = await db.scalar(select(Mailbox.id).where(Mailbox.email == account.email))
+    granted = {
+        row.mailbox_id: row
+        for row in (await db.scalars(select(MailboxAccess).where(MailboxAccess.account_id == account.id))).all()
+    }
+    mailboxes = (await db.scalars(select(Mailbox).order_by(Mailbox.email))).all()
+    return [
+        {
+            "mailbox_id": str(m.id),
+            "email": m.email,
+            "read": m.id in granted,
+            "send": bool(granted[m.id].can_send) if m.id in granted else False,
+            # the login's own mailbox is granted again at every login, so it is not editable here
+            "own": m.id == own,
+        }
+        for m in mailboxes
+    ]
+
+
+@router.get("/admin/users/{account_id}/mailbox-access")
+async def user_mailbox_access(account_id: uuid.UUID, ctx: Auth, db: DB) -> list[dict[str, Any]]:
+    require_admin(ctx)
+    account = await db.get(Account, account_id)
+    if account is None:
+        raise fail(404, "account_not_found")
+    return await _access_rows(db, account)
+
+
+class AccessIn(BaseModel):
+    mailbox_id: uuid.UUID
+    read: bool
+    send: bool = False
+
+
+@router.put("/admin/users/{account_id}/mailbox-access")
+async def save_user_mailbox_access(
+    account_id: uuid.UUID, body: list[AccessIn], request: Request, ctx: Auth, db: DB
+) -> list[dict[str, Any]]:
+    """„Prístup k schránkam“: Čítať / Odosielať ako per mailbox (Odosielať needs Čítať). The own mailbox stays."""
+    admin = require_admin(ctx)
+    account = await db.get(Account, account_id)
+    if account is None:
+        raise fail(404, "account_not_found")
+    before = await _access_rows(db, account)
+    own = {r["mailbox_id"] for r in before if r["own"]}
+    known = {r["mailbox_id"] for r in before}
+    for item in body:
+        key = str(item.mailbox_id)
+        if key not in known:
+            raise fail(404, "mailbox_not_found")
+        if key in own:
+            continue
+        row = await db.scalar(
+            select(MailboxAccess).where(
+                MailboxAccess.account_id == account.id, MailboxAccess.mailbox_id == item.mailbox_id
+            )
+        )
+        if not item.read:
+            if row is not None:
+                await db.delete(row)
+        elif row is None:
+            db.add(MailboxAccess(account_id=account.id, mailbox_id=item.mailbox_id, can_send=item.send))
+        else:
+            row.can_send = item.send
+    await db.flush()
+    after = await _access_rows(db, account)
+    audit(
+        db,
+        "settings.user_mailbox_access_saved",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="account",
+        object_id=str(account.id),
+        ip=client_ip(request),
+        details={
+            "before": [{k: r[k] for k in ("email", "read", "send")} for r in before],
+            "after": [{k: r[k] for k in ("email", "read", "send")} for r in after],
+        },
+    )
+    await db.commit()
+    return after
 
 
 # ----- admin 11 branches -----

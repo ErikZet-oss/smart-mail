@@ -220,6 +220,16 @@ export function ScreenW12() {
     activeItem?.title ?? title,
     ...(subItem && current?.path !== 'identity' ? [subItem.title] : []),
   ];
+  if (activeSection === 'users' && me.data?.person?.role === 'admin') {
+    return (
+      <AppShell section="settings">
+        <div className="flex h-full min-w-0 flex-1">
+          <SettingsNav sections={sections} activeSection={activeSection} sub={sub} />
+          <UsersPanel crumbs={crumbs.slice(0, 2)} mobile={false} />
+        </div>
+      </AppShell>
+    );
+  }
   if (activeSection === 'branches' && me.data?.person?.role === 'admin') {
     return (
       <AppShell section="settings">
