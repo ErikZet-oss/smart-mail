@@ -15,7 +15,19 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from app import __version__
-from app.api import ai_mail, auth, compose, contacts, mail, messages, notifications, persons, search, system
+from app.api import (
+    ai_mail,
+    auth,
+    compose,
+    contacts,
+    mail,
+    messages,
+    notifications,
+    persons,
+    search,
+    security_2fa,
+    system,
+)
 from app.api import settings as settings_api
 from app.core import middleware
 from app.core.config import Settings, get_settings
@@ -100,6 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=settings.forwarded_allow_ips)
     app.include_router(auth.router)
     app.include_router(persons.router)
+    app.include_router(security_2fa.router)
     app.include_router(mail.router)
     app.include_router(messages.router)
     app.include_router(ai_mail.router)

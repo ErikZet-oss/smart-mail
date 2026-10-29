@@ -38,8 +38,9 @@ export function App({ router: given }: { router?: Router }) {
           <SystemUiProvider>
             <ToastProvider>
               <SendTracker router={router} />
-              <ReauthDialogHost />
               <RouterProvider router={router} future={{ v7_startTransition: true }} />
+              {/* after the router: the password prompt stacks above a confirm dialog that triggered it (#77) */}
+              <ReauthDialogHost />
             </ToastProvider>
           </SystemUiProvider>
         </ThemeProvider>

@@ -847,6 +847,36 @@
       "current": "táto relácia",
       "revoke": "Odhlásiť"
     },
+    "twoFactor": {
+      "title": "Dvojstupňové overenie",
+      "help": "Len pre osobné účty.",
+      "on": "zapnuté",
+      "off": "vypnuté",
+      "enable": "Zapnúť",
+      "disable": "Vypnúť",
+      "dialogTitle": "Zapnúť dvojstupňové overenie",
+      "step1": "1. Naskenujte QR kód v aplikácii (Microsoft Authenticator, Google Authenticator).",
+      "qr": "QR kód pre aplikáciu na overovanie",
+      "manual": "Alebo zadajte kľúč ručne:",
+      "copy": "Kopírovať",
+      "step2": "2. Overovací kód z aplikácie",
+      "codePlaceholder": "6 číslic",
+      "step3": "3. Záložné kódy (každý platí raz)",
+      "download": "Stiahnuť kódy",
+      "fileTitle": "Smart Mail – záložné kódy pre dvojstupňové overenie (každý platí raz)",
+      "enabled": "Dvojstupňové overenie je zapnuté.",
+      "disabled": "Dvojstupňové overenie je vypnuté.",
+      "disableTitle": "Vypnúť dvojstupňové overenie?",
+      "disableBody": "Pri prihlásení sa už nebude pýtať kód z aplikácie. Najprv potvrdíte heslom.",
+      "requiredHint": "Správca vyžaduje dvojstupňové overenie – vypnúť ho nemôžete.",
+      "errors": {
+        "totp_invalid": "Nesprávny kód. Skontrolujte čas v telefóne a skúste znova.",
+        "totp_setup_expired": "Nastavenie vypršalo. Naskenujte nový QR kód.",
+        "totp_required": "Správca vyžaduje dvojstupňové overenie – vypnúť ho nemôžete.",
+        "personal_only": "Dvojstupňové overenie je len pre osobné účty.",
+        "generic": "Nepodarilo sa. Skúste to znova."
+      }
+    },
     "roles": {
       "admin": "Správca",
       "sales": "Obchod",

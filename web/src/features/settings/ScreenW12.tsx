@@ -16,6 +16,7 @@ import { BranchDetails, BranchList, BranchLoginSettings, BranchPeople, PersonalA
 import { adminErrorText } from './adminUi';
 import { BranchIdentityForm } from './BranchIdentityForm';
 import { SettingsFieldControl } from './Field';
+import { TwoFactorRow } from './TwoFactor';
 import { UsersPanel } from './UsersPanel';
 import { HtmlSignatureEditor, SanitizedHtml } from './HtmlSignatureEditor';
 import { fillSignature, type SignatureLang } from './signatureHtml';
@@ -1119,6 +1120,7 @@ function SecurityPanel() {
   return (
     <div className="flex max-w-2xl flex-col gap-3">
       <p className="type-small text-text-secondary">{t('settings.security.loginInfo')}</p>
+      <TwoFactorRow />
       <ul className="flex flex-col gap-2">
         {(sessions.data ?? []).map((s) => (
           <li

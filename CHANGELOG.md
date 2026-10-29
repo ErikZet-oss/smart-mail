@@ -2,6 +2,21 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #77 PR 1: turn two-factor authentication on / off (Settings 09)
+
+- New dependency (approved on #77, A1): `qrcode.react` **4.2.0** (exact pin, ISC licence) — renders the QR code in
+  the browser.
+- `GET /api/settings/security/2fa`, `POST …/start` (new secret + 10 backup codes, shown once; until confirmed kept in
+  Redis for 15 min — secret Fernet-encrypted, codes as hashes; a new `start` replaces an unconfirmed one),
+  `POST …/confirm {code}` (±1 time step, the confirming step cannot be reused at login, 5 wrong codes end the setup),
+  `POST …/disable` (re-auth of this session and person; 409 `totp_required` while an admin requires 2FA).
+  `start` needs the same re-auth and the pending setup is bound to the session that started it (#79 review).
+  Personal accounts only (403 `personal_only`). Audit `auth.totp_enabled` / `auth.totp_disabled` without secrets.
+- W12-09 Bezpečnosť: „Dvojstupňové overenie“ row (vypnuté / zapnuté, Zapnúť / Vypnúť) and the dialog of Figma
+  `67:58896` (QR, key by hand + Kopírovať, code from the app, 10 backup codes + Stiahnuť kódy).
+- The re-auth dialog now renders after the router, so it stacks above a confirm dialog that triggered it.
+- Enforcement („Vyžadovať 2FA“, admin reset) follows in PR 2.
+
 ## [Unreleased] — #54 re-auth (password) for ⚠ admin changes
 
 - `POST /api/auth/reauth {password}`: the mailbox password of the signed-in login, checked on the mail server like
