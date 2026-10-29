@@ -18,7 +18,7 @@ export type UiPrefs = {
   prefer_html: boolean;
 };
 
-export type Prefs = { list: ListPrefs; ui: UiPrefs };
+export type Prefs = { list: ListPrefs; ui: UiPrefs; shortcuts?: { enabled: boolean } };
 
 export const PREFS_KEY = ['mail', 'prefs'] as const;
 

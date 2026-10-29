@@ -639,12 +639,19 @@
       "tomorrow": "Zajtra ráno (8:00)",
       "clear": "Zrušiť odloženie"
     },
+    "purge": {
+      "title": "Vymazať natrvalo ({{count}})?",
+      "body": "Správy sa nepresunú do Koša a nedajú sa obnoviť.",
+      "confirm": "Vymazať natrvalo"
+    },
     "toast": {
       "delete": "Správa je v Koši.",
       "junk": "Správa je v Nevyžiadanej pošte.",
       "archive": "Správa je archivovaná.",
       "done": "Vlákno je vybavené.",
       "mark_seen": "Označené ako prečítané.",
+      "mark_unseen": "Označené ako neprečítané.",
+      "purge": "Správa je natrvalo vymazaná.",
       "snooze": "Vlákno je odložené."
     },
     "options": {

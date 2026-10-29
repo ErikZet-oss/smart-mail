@@ -15,9 +15,10 @@ import {
   SquareArrowOutUpRight,
   X,
 } from 'lucide-react';
-import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { modalOpen } from '../system/shortcuts';
 
 import { Button } from '../../components/Button';
 import { Avatar } from '../../components/Avatar';
@@ -279,6 +280,19 @@ export function ScreenW4() {
       toasts.error(t('compose.signaturePersonFailed'));
     },
   });
+
+  // UX_SPEC §6 Ctrl+Enter = Odoslať (#93): the same click as the button, so every pre-send check still runs. Capture
+  // phase, because the editor would otherwise take the Enter; not while a dialog (pre-send check, …) is open.
+  const sendButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.key !== 'Enter' || event.altKey || event.shiftKey || modalOpen()) return;
+      event.preventDefault();
+      sendButton.current?.click();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
 
   const send = useMutation({
     mutationFn: async (force: boolean) => {
@@ -775,6 +789,7 @@ export function ScreenW4() {
             >
               <div className="relative flex">
                 <Button
+                  ref={sendButton}
                   type="button"
                   className="rounded-r-none"
                   onClick={() => {

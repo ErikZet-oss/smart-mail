@@ -5,7 +5,11 @@ import { Link } from 'react-router-dom';
 import { Dialog } from '../../components/Dialog';
 import { Button } from '../../components/Button';
 
-/** Phase-1 shortcuts only (UX_SPEC §6 — no AI / Doklady / Asistent / Dnes). */
+/**
+ * Phase-1 shortcuts only (UX_SPEC §6 — no AI / Doklady / Asistent / Dnes). Keys whose feature is not built yet stay
+ * out, like the menu items (#93): E vybavené, # priradiť (Phase 5), L presunúť do… and [ skryť priečinky (no folder
+ * picker / collapsible folder column yet).
+ */
 const GROUPS: { id: string; keys: { keys: string; actionKey: string }[] }[] = [
   {
     id: 'list',
@@ -16,7 +20,6 @@ const GROUPS: { id: string; keys: { keys: string; actionKey: string }[] }[] = [
       { keys: 'Shift+Delete', actionKey: 'shortcuts.actions.purge' },
       { keys: 'Ctrl+A', actionKey: 'shortcuts.actions.selectAll' },
       { keys: 'U', actionKey: 'shortcuts.actions.unread' },
-      { keys: 'E', actionKey: 'shortcuts.actions.done' },
       { keys: '!', actionKey: 'shortcuts.actions.junk' },
     ],
   },
@@ -26,8 +29,6 @@ const GROUPS: { id: string; keys: { keys: string; actionKey: string }[] }[] = [
       { keys: 'R', actionKey: 'shortcuts.actions.reply' },
       { keys: 'Shift+R', actionKey: 'shortcuts.actions.replyAll' },
       { keys: 'F', actionKey: 'shortcuts.actions.forward' },
-      { keys: '#', actionKey: 'shortcuts.actions.assign' },
-      { keys: 'L', actionKey: 'shortcuts.actions.moveTo' },
     ],
   },
   {
@@ -44,7 +45,6 @@ const GROUPS: { id: string; keys: { keys: string; actionKey: string }[] }[] = [
       { keys: 'Ctrl+K', actionKey: 'shortcuts.actions.palette' },
       { keys: 'Ctrl+Shift+P', actionKey: 'shortcuts.actions.switchPerson' },
       { keys: 'G I', actionKey: 'shortcuts.actions.gotoInbox' },
-      { keys: '[', actionKey: 'shortcuts.actions.toggleFolders' },
       { keys: '?', actionKey: 'shortcuts.actions.help' },
     ],
   },

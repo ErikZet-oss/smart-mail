@@ -79,6 +79,7 @@ export function MessageRow({
     <div
       role="option"
       aria-selected={selected}
+      data-message-id={item.kind === 'message' ? item.data.id : (item.data.latest_message_id ?? item.data.id)}
       tabIndex={0}
       onClick={() => {
         if (longPressed.current) {

@@ -25,7 +25,7 @@ from app.mail.body import ensure_body, load_attachments
 from app.mail.flags import is_forwarded
 from app.mail.local_apply import REMOVING, apply_action_locally
 from app.mail.models import Attachment, FolderMeta, Mailbox, Message, Thread
-from app.mail.prefs import ListPrefs, UiPrefs, get_list_prefs, get_ui_prefs, save_section
+from app.mail.prefs import ListPrefs, UiPrefs, get_list_prefs, get_ui_prefs, save_section, shortcuts_enabled
 from app.mail.sync import Credentials, SyncAuthError, SyncUnavailable, credentials_for, mark_auth_failed, server_of
 from app.mail.sync_schedule import schedule_sync
 
@@ -147,7 +147,7 @@ class FlagIn(BaseModel):
 
 class BulkIn(BaseModel):
     message_ids: list[uuid.UUID] = Field(max_length=MAX_BULK)
-    action: Literal["mark_seen", "mark_unseen", "flag", "unflag", "delete", "junk", "archive", "move", "done"]
+    action: Literal["mark_seen", "mark_unseen", "flag", "unflag", "delete", "purge", "junk", "archive", "move", "done"]
     dest_folder_id: uuid.UUID | None = None
 
 
@@ -734,6 +734,9 @@ async def bulk(
         dest = await _special_folder(db, mailbox, "trash")
         if dest is None:
             raise fail(409, "folder_not_found")
+    elif body.action == "purge":
+        # Shift+Delete (Roundcube): \Deleted + UID EXPUNGE of these messages, no copy in Kôš; the UI confirms first.
+        action = MsgAction.expunge
     elif body.action == "junk":
         action = MsgAction.junk
         dest = await _special_folder(db, mailbox, "junk")
@@ -919,7 +922,12 @@ async def image_proxy(
 @router.get("/prefs")
 async def get_prefs(ctx: Auth, db: DB) -> dict[str, Any]:
     pid = ctx.session.active_person_id
-    return {"list": (await get_list_prefs(db, pid)).model_dump(), "ui": (await get_ui_prefs(db, pid)).model_dump()}
+    return {
+        "list": (await get_list_prefs(db, pid)).model_dump(),
+        "ui": (await get_ui_prefs(db, pid)).model_dump(),
+        # Settings 01e „Klávesové skratky zapnuté“ (#93); the shell reads it with the other mail prefs.
+        "shortcuts": {"enabled": await shortcuts_enabled(db, pid)},
+    }
 
 
 @router.put("/prefs")
