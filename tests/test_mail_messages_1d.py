@@ -225,3 +225,33 @@ async def test_1d_long_message_ids_fit_the_thread_key_and_replies_still_join(db:
     assert by_uid[1] == by_uid[2]
     assert by_uid[3] != by_uid[1]
     assert len(threads) == 2
+
+
+async def test_1d_old_fallback_threads_of_the_same_day_share_one_thread(db: AsyncSession) -> None:
+    """Pilot (eshop@): two carrier notifications on one day, >30 days after the first, tried to insert the same
+    suffixed thread key twice -> UniqueViolation -> opening an unread message returned 500."""
+    from dataclasses import replace
+
+    from tests.test_mail_sync_1c import make_mailbox
+
+    mailbox = await make_mailbox(db, await make_personal(db))
+
+    def note(uid: int, offset: timedelta) -> Envelope:
+        base = env(uid, subject="Automatische generierte Sendungsinformation")
+        return replace(base, message_id=None, in_reply_to=None, references=None, received_at=NOW + offset)
+
+    first = note(1, timedelta(0))
+    soon = note(2, timedelta(days=5))  # within the window: same thread as 1
+    later_a = note(3, timedelta(days=60))  # window expired: new thread
+    later_b = note(4, timedelta(days=60, hours=2))  # same day as 3: must join it, not collide
+    much_later = note(5, timedelta(days=200))  # yet another window
+    await _seed_inbox(db, mailbox, first, soon, later_a, later_b, much_later)
+
+    by_uid = {m.uid: m.thread_id for m in (await db.execute(select(Message))).scalars()}
+    assert None not in by_uid.values()
+    assert by_uid[1] == by_uid[2]
+    assert by_uid[3] == by_uid[4] != by_uid[1]
+    assert by_uid[5] not in {by_uid[1], by_uid[3]}
+    threads = list((await db.execute(select(Thread).where(Thread.mailbox_id == mailbox.id))).scalars())
+    assert len(threads) == 3
+    assert all(len(t.thread_key) <= 80 for t in threads)
