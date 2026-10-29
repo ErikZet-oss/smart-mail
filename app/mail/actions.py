@@ -24,6 +24,7 @@ class MsgAction(StrEnum):
     archive = "archive"
     move = "move"
     copy = "copy"
+    expunge = "expunge"  # Vymazať inside Kôš: \Deleted + UID EXPUNGE of these messages only (Roundcube)
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,12 @@ def _act(client: IMAPClient, action: MsgAction, source: MsgTarget, dest: str | N
         if not dest:
             raise SyncUnavailable("dest_required")
         client.move(uids, dest)
+    elif action is MsgAction.expunge:
+        client.add_flags(uids, [b"\\Deleted"], silent=True)
+        if b"UIDPLUS" in client.capabilities():
+            client.expunge(uids)  # UID EXPUNGE: never removes other \Deleted messages in the folder
+        else:
+            client.expunge()
     elif action is MsgAction.copy:
         if not dest:
             raise SyncUnavailable("dest_required")
