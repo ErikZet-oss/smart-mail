@@ -39,7 +39,7 @@ function PersonTile({ person, selected, mobile, disabled, onChoose }: TileProps)
             : 'border border-border-default bg-bg-canvas hover:bg-bg-subtle'
         }`}
       >
-        <Avatar initials={initials(person, mobile ? 2 : 1)} seed={person.id} size={56} />
+        <Avatar initials={initials(person, mobile ? 2 : 1)} seed={person.id} size={56} photoUrl={person.photo_url} />
         <span className="flex w-full flex-col items-center gap-0.5">
           <span className={`text-text-primary ${mobile ? 'type-body-strong' : 'type-heading w-[116px]'}`}>
             {person.full_name}

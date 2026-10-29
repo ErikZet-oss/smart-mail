@@ -90,6 +90,8 @@ class PersonOut(BaseModel):
     function: str | None
     is_manager: bool
     role: str
+    # W1b / PersonChip avatar: the uploaded photo, else initials (UX_SPEC W1b)
+    photo_url: str | None = None
 
 
 def person_out(person: Person) -> PersonOut:
@@ -101,7 +103,15 @@ def person_out(person: Person) -> PersonOut:
         function=person.function,
         is_manager=person.is_manager,
         role=str(person.role),
+        photo_url=person_photo_url(person),
     )
+
+
+def person_photo_url(person: Person) -> str | None:
+    """Same URL as Settings 11b; `v` busts the cache after a new upload."""
+    if not person.photo_key:
+        return None
+    return f"/api/settings/people/{person.id}/photo?v={person.updated_at.timestamp():.0f}"
 
 
 class MeOut(BaseModel):

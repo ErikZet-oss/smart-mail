@@ -23,3 +23,21 @@ describe('Avatar colour', () => {
     expect(used.size).toBe(AVATAR_TONES.length);
   });
 });
+
+describe('Avatar photo (pilot: W1b showed initials although a photo was uploaded)', () => {
+  it('shows the photo when there is one', () => {
+    const { container } = render(
+      <Avatar initials="JN" seed="p-jana" size={56} photoUrl="/api/settings/people/p-jana/photo?v=1" />,
+    );
+    const img = container.querySelector('img');
+    expect(img).toHaveAttribute('src', '/api/settings/people/p-jana/photo?v=1');
+    expect(img).toHaveClass('size-14', 'rounded-full');
+    expect(container).not.toHaveTextContent('JN');
+  });
+
+  it('falls back to initials without a photo', () => {
+    const { container } = render(<Avatar initials="JN" seed="p-jana" size={32} photoUrl={null} />);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container).toHaveTextContent('JN');
+  });
+});

@@ -67,14 +67,14 @@ export function ScreenM18({ onClose, onLogout }: Props) {
         <h1 className="type-heading min-w-0 flex-1 truncate text-text-primary">{t('mobile.more')}</h1>
         {person ? (
           <span className="mr-2" aria-hidden="true">
-            <Avatar initials={initials(person, 1)} seed={person.id} size={32} />
+            <Avatar initials={initials(person, 1)} seed={person.id} size={32} photoUrl={person.photo_url} />
           </span>
         ) : null}
       </header>
 
       {person ? (
         <div className="flex items-center gap-3 border-b border-border-default px-4 py-4">
-          <Avatar initials={initials(person, 2)} seed={person.id} size={56} />
+          <Avatar initials={initials(person, 2)} seed={person.id} size={56} photoUrl={person.photo_url} />
           <div className="min-w-0 flex-1">
             <p className="type-heading truncate text-text-primary">{person.full_name}</p>
             {branchLabel ? <p className="type-caption truncate text-text-secondary">{branchLabel}</p> : null}
@@ -107,7 +107,7 @@ export function ScreenM18({ onClose, onLogout }: Props) {
                 onClick={() => switchPerson.mutate(p.id)}
                 className="flex w-full items-center gap-3 rounded-sm px-2 py-2.5 text-left hover:bg-bg-canvas"
               >
-                <Avatar initials={initials(p, 1)} seed={p.id} size={32} />
+                <Avatar initials={initials(p, 1)} seed={p.id} size={32} photoUrl={p.photo_url} />
                 <span className="type-body text-text-primary">{p.full_name}</span>
               </button>
             </li>

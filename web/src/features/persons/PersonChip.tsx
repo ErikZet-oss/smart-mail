@@ -141,7 +141,7 @@ export function PersonChip({ onLogout, extras = [] }: Props) {
               <LoaderCircle size={18} className="animate-spin" aria-hidden="true" />
             </span>
           ) : (
-            <Avatar initials={initials(current, 1)} seed={current.id} size={32} />
+            <Avatar initials={initials(current, 1)} seed={current.id} size={32} photoUrl={current.photo_url} />
           )}
           <ChevronDown size={12} aria-hidden="true" />
         </span>
@@ -175,7 +175,7 @@ export function PersonChip({ onLogout, extras = [] }: Props) {
                         isCurrent ? 'bg-brand-primary-50' : 'hover:bg-bg-subtle'
                       }`}
                     >
-                      <Avatar initials={initials(person, 1)} seed={person.id} size={32} />
+                      <Avatar initials={initials(person, 1)} seed={person.id} size={32} photoUrl={person.photo_url} />
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className={`truncate text-text-primary ${isCurrent ? 'type-label' : 'type-body'}`}>
                           {person.full_name}
@@ -195,7 +195,7 @@ export function PersonChip({ onLogout, extras = [] }: Props) {
             </>
           ) : (
             <div className="flex items-center gap-2.5 px-1.5">
-              <Avatar initials={initials(current, 1)} seed={current.id} size={32} />
+              <Avatar initials={initials(current, 1)} seed={current.id} size={32} photoUrl={current.photo_url} />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="type-label truncate text-text-primary">{current.full_name}</span>
                 {current.function ? (
