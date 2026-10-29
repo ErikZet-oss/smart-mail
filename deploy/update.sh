@@ -65,8 +65,10 @@ trap 'rollback' ERR
 
 # Re-render nginx/Caddy from DEPLOY_MODE (vps strips CF-Connecting-IP; tunnel keeps it).
 # Bind-mounted configs are not re-read by a running container, so remember whether they changed (pilot #59).
-NGINX_BEFORE="$(sha256sum "$DEPLOY_DIR/nginx-active.conf" 2>/dev/null | awk '{print $1}')"
-CADDY_BEFORE="$(sha256sum "$DEPLOY_DIR/Caddyfile" 2>/dev/null | awk '{print $1}')"
+# A missing file (first run, or no Caddyfile in ci/tunnel mode) is an empty hash, not an error under pipefail.
+file_hash() { if [[ -f "$1" ]]; then sha256sum "$1" | awk '{print $1}'; fi; }
+NGINX_BEFORE="$(file_hash "$DEPLOY_DIR/nginx-active.conf")"
+CADDY_BEFORE="$(file_hash "$DEPLOY_DIR/Caddyfile")"
 render_edge_configs
 
 # Backup before migrations (alembic runs in the app container entrypoint).
