@@ -2,6 +2,26 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2d PR 2: W4a compose AI panel + M17 sheet
+
+**Panel:**
+- W4 right panel gets the tabs „Možnosti a prílohy | ✦ AI“, plus a ✦ AI toolbar button.
+- On the phone, the button opens the M17 bottom sheet.
+- Shown only where AI runs for the mailbox (`ai_available`), and not in Klasické zobrazenie.
+
+**Contents:**
+- „Napíš za mňa“;
+- chips Kratšie / Formálnejšie / Priateľskejšie / Opraviť gramatiku / Doplniť odpoveď na všetky otázky;
+- „Preložiť do“ (sk/cs/en/de/pl/hu).
+
+**Result:**
+- Every result is a **word diff** of the person's own text, with „Použiť“ / „Zahodiť“.
+- „Použiť“ replaces only the text before the quote and the signature; those blocks are never sent to the model nor replaced.
+- Unanswered questions and `[[DOPLNIŤ]]` placeholders are listed.
+- Read-only: disabled.
+
+**API:** the endpoint moved to `/api/mail/compose/{draft_id}/ai`, next to the rest of the compose API.
+
 ## [Unreleased] — Phase 2d PR 1: compose AI endpoint (W4a / M17 backend)
 
 **`POST /api/compose/{draft_id}/ai`** handles these actions:

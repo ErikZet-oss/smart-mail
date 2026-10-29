@@ -1,4 +1,4 @@
-"""Phase 2d compose AI panel: POST /api/compose/{draft}/ai — proposal only, the person's own text only, scripted LLM."""
+"""Phase 2d compose AI panel: POST /api/mail/compose/{draft}/ai — proposal only, own text only, scripted LLM."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ async def test_2d_rewrite_returns_a_proposal_and_records_the_run(
 ) -> None:
     draft_id = await _reply_draft(client, db, mail_server)
     r = await client.send_json(
-        "POST", f"/api/compose/{draft_id}/ai", {"action": "formal", "text": "ahoj, posielam ponuku"}
+        "POST", f"/api/mail/compose/{draft_id}/ai", {"action": "formal", "text": "ahoj, posielam ponuku"}
     )
     assert r.status_code == 200, r.text
     assert r.json() == {
@@ -116,7 +116,7 @@ async def test_2d_answer_all_and_placeholders(
         _response(text="Cena M8: [[DOPLNIŤ: cena]]. Dodáme do 3 dní.", unanswered=["Koľko stoja skrutky M8?"])
     ]
     draft_id = await _reply_draft(client, db, mail_server)
-    r = await client.send_json("POST", f"/api/compose/{draft_id}/ai", {"action": "answer_all", "text": "Dodáme."})
+    r = await client.send_json("POST", f"/api/mail/compose/{draft_id}/ai", {"action": "answer_all", "text": "Dodáme."})
     assert r.status_code == 200, r.text
     assert r.json()["unanswered"] == ["Koľko stoja skrutky M8?"]
     assert r.json()["placeholders"] == ["[[DOPLNIŤ: cena]]"]
@@ -140,7 +140,7 @@ async def test_2d_input_rules(
     code: str,
 ) -> None:
     draft_id = await _reply_draft(client, db, mail_server)
-    r = await client.send_json("POST", f"/api/compose/{draft_id}/ai", payload)
+    r = await client.send_json("POST", f"/api/mail/compose/{draft_id}/ai", payload)
     assert r.status_code == 422 and r.json()["detail"]["code"] == code
     assert llm.calls == []
 
@@ -149,7 +149,7 @@ async def test_2d_ai_off_budget_and_errors(
     client: Client, db: AsyncSession, mail_server: FakeMailServer, llm: ScriptedLLM, app: FastAPI
 ) -> None:
     draft_id = await _reply_draft(client, db, mail_server, ai=False)
-    r = await client.send_json("POST", f"/api/compose/{draft_id}/ai", {"action": "grammar", "text": "Ahoj"})
+    r = await client.send_json("POST", f"/api/mail/compose/{draft_id}/ai", {"action": "grammar", "text": "Ahoj"})
     assert r.status_code == 409 and r.json()["detail"]["code"] == "ai_unavailable"
 
     mailbox = await db.scalar(select(Mailbox).limit(1))
@@ -157,12 +157,12 @@ async def test_2d_ai_off_budget_and_errors(
     mailbox.ai_enabled, mailbox.ai_enabled_at = True, datetime(2026, 10, 1, tzinfo=UTC)
     await db.commit()
     app.state.settings = app.state.settings.model_copy(update={"ai_daily_budget_usd": 0.0})
-    r = await client.send_json("POST", f"/api/compose/{draft_id}/ai", {"action": "grammar", "text": "Ahoj"})
+    r = await client.send_json("POST", f"/api/mail/compose/{draft_id}/ai", {"action": "grammar", "text": "Ahoj"})
     assert r.status_code == 429 and r.json()["detail"]["code"] == "ai_budget_exceeded"
 
     app.state.settings = app.state.settings.model_copy(update={"ai_daily_budget_usd": 5.0})
     llm._responses = [TimeoutError()]
-    r = await client.send_json("POST", f"/api/compose/{draft_id}/ai", {"action": "grammar", "text": "Ahoj"})
+    r = await client.send_json("POST", f"/api/mail/compose/{draft_id}/ai", {"action": "grammar", "text": "Ahoj"})
     assert r.status_code == 502 and r.json()["detail"]["code"] == "ai_failed"
     assert llm.calls and all(c.purpose == "draft" for c in llm.calls)
 
