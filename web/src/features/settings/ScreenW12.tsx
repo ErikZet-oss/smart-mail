@@ -1,3 +1,4 @@
+import { PREFS_KEY } from '../prefs/prefsApi';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
@@ -88,6 +89,11 @@ const PREF_FIELDS_UI: SettingsField[] = [
     default: false,
     help: 'Skryje AI triedenie, zhrnutia a asistenta – vyzerá ako Roundcube.',
   },
+];
+
+// 01e — the list of keys is W15 (`?`), linked below the switch.
+const PREF_FIELDS_SHORTCUTS: SettingsField[] = [
+  { id: 'shortcuts_enabled', label: 'Klávesové skratky zapnuté', control: 'switch', default: true },
 ];
 
 const PREF_FIELDS_LIST: SettingsField[] = [
@@ -357,11 +363,13 @@ function FoldersHint() {
 function PreferencesPanel({ sub }: { sub?: string }) {
   const { t } = useTranslation();
   const toasts = useToasts();
+  const queryClient = useQueryClient();
   const prefs = useQuery({ queryKey: ['settings', 'prefs'], queryFn: fetchPreferences });
   const [draft, setDraft] = useState<{
     ui?: Record<string, unknown>;
     list?: Record<string, unknown>;
     composing?: Record<string, unknown>;
+    shortcuts?: Record<string, unknown>;
   } | null>(null);
   const ui = draft?.ui ?? prefs.data?.ui ?? {};
   const list = draft?.list ?? {
@@ -369,6 +377,9 @@ function PreferencesPanel({ sub }: { sub?: string }) {
     page_size: String(prefs.data?.list?.page_size ?? 50),
   };
   const composing = draft?.composing ?? prefs.data?.composing ?? {};
+  const shortcuts = draft?.shortcuts ?? {
+    shortcuts_enabled: prefs.data?.shortcuts?.shortcuts_enabled ?? true,
+  };
 
   const save = useMutation({
     mutationFn: () =>
@@ -377,26 +388,32 @@ function PreferencesPanel({ sub }: { sub?: string }) {
         list: { ...list, page_size: Number(list.page_size ?? 50) },
         composing,
         reading: prefs.data?.reading ?? {},
-        shortcuts: prefs.data?.shortcuts ?? {},
+        shortcuts,
       }),
-    onSuccess: () => toasts.success(t('settings.saved')),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PREFS_KEY });
+      toasts.success(t('settings.saved'));
+    },
   });
 
   const which = sub ?? 'ui';
   const mobile = useMediaQuery(MOBILE_QUERY);
   // M9: Vzhľad page also exposes Oneskorenie odoslania (SETTINGS_SPEC §M9 / 01d).
   const showMobileUndo = mobile && which === 'ui';
-  const fields =
-    which === 'mailbox-view' || which === 'list'
-      ? PREF_FIELDS_LIST
-      : which === 'composing'
-        ? PREF_FIELDS_COMPOSING
+  const isList = which === 'mailbox-view' || which === 'list';
+  const fields = isList
+    ? PREF_FIELDS_LIST
+    : which === 'composing'
+      ? PREF_FIELDS_COMPOSING
+      : which === 'shortcuts'
+        ? PREF_FIELDS_SHORTCUTS
         : PREF_FIELDS_UI;
-  const state = which === 'mailbox-view' || which === 'list' ? list : which === 'composing' ? composing : ui;
+  const state = isList ? list : which === 'composing' ? composing : which === 'shortcuts' ? shortcuts : ui;
   const patch = (value: Record<string, unknown>) => {
-    if (which === 'mailbox-view' || which === 'list') setDraft({ ui, list: value, composing });
-    else if (which === 'composing') setDraft({ ui, list, composing: value });
-    else setDraft({ ui: value, list, composing });
+    if (isList) setDraft({ ui, list: value, composing, shortcuts });
+    else if (which === 'composing') setDraft({ ui, list, composing: value, shortcuts });
+    else if (which === 'shortcuts') setDraft({ ui, list, composing, shortcuts: value });
+    else setDraft({ ui: value, list, composing, shortcuts });
   };
   const undoField = PREF_FIELDS_COMPOSING.find((f) => f.id === 'undo_send_seconds');
 
@@ -415,7 +432,7 @@ function PreferencesPanel({ sub }: { sub?: string }) {
           key={undoField.id}
           field={undoField}
           value={composing[undoField.id]}
-          onChange={(value) => setDraft({ ui, list, composing: { ...composing, [undoField.id]: value } })}
+          onChange={(value) => setDraft({ ui, list, composing: { ...composing, [undoField.id]: value }, shortcuts })}
         />
       ) : null}
       <Button

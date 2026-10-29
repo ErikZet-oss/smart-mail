@@ -13,12 +13,13 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
-import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { ROUTES } from '../../app/routes';
 import { Banner } from '../../components/Banner';
+import { ConfirmDialog } from '../../components/Dialog';
 import { Menu, type MenuEntry } from '../../components/Menu';
 import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
@@ -26,6 +27,7 @@ import { ApiError } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
 import { savePrefs } from '../prefs/prefsApi';
+import { registerMailShortcuts, type MailShortcutHandlers } from '../system/shortcuts';
 import { useTheme } from '../prefs/ThemeProvider';
 import { FolderColumn } from './FolderColumn';
 import { ListOptionsDialog } from './ListOptionsDialog';
@@ -110,6 +112,8 @@ function EmptyState({ icon, title, text }: { icon: ReactNode; title: string; tex
 const FILTERS: MessageFilter[] = ['all', 'unread', 'flagged', 'attachments'];
 
 /** W2 E-mail — list + reading (Phase 1d). W2f when `category` is set. Remounts per folder/view. */
+type ListAction = 'mark_seen' | 'mark_unseen' | 'delete' | 'purge' | 'junk' | 'archive' | 'done';
+
 export function ScreenW2() {
   const params = useParams();
   const mailboxRef = params.mailbox ?? 'default';
@@ -281,7 +285,7 @@ function ScreenW2Body({
       : `/mail/${encodeURIComponent(mailboxRef)}/${encodeURIComponent(folderParam)}`;
 
   const bulk = useMutation({
-    mutationFn: ({ action, ids }: { action: 'mark_seen' | 'delete' | 'archive' | 'done'; ids: string[] }) =>
+    mutationFn: ({ action, ids }: { action: ListAction; ids: string[] }) =>
       bulkMessages(mailboxRef, { message_ids: ids, action }),
     // #89: the rows go away at once; the server answer only confirms (or rolls back).
     onMutate: async ({ action, ids }) => {
@@ -338,6 +342,62 @@ function ScreenW2Body({
     }
     return list.data.messages.map((data: MessageListItem) => ({ kind: 'message' as const, data }));
   }, [list.data]);
+
+  // UX_SPEC §6 list keys (#93): the central listener in useGlobalShortcuts calls these.
+  const [purgeIds, setPurgeIds] = useState<string[] | null>(null);
+  const shortcutHandlers = useRef<MailShortcutHandlers>({ readOnly: true });
+  const rowRefs = rows.map((r) =>
+    r.kind === 'message'
+      ? { id: r.data.id, tid: r.data.thread_id }
+      : { id: r.data.latest_message_id ?? r.data.id, tid: r.data.id },
+  );
+  const targets = selectedIds.size > 0 ? [...selectedIds] : activeMessageId ? [activeMessageId] : [];
+  const step = (delta: number) => {
+    if (rowRefs.length === 0) return;
+    const at = rowRefs.findIndex((r) => r.id === activeMessageId);
+    const next = at < 0 ? (delta > 0 ? 0 : rowRefs.length - 1) : Math.min(rowRefs.length - 1, Math.max(0, at + delta));
+    const row = rowRefs[next];
+    if (!row || next === at) return;
+    openAndMarkSeen(row.id, row.tid, false);
+    window.requestAnimationFrame(() =>
+      document.querySelector(`[data-message-id="${CSS.escape(row.id)}"]`)?.scrollIntoView({ block: 'nearest' }),
+    );
+  };
+  const compose = (mode: 'reply' | 'reply_all' | 'forward') => {
+    if (!activeMessageId) return;
+    navigate(
+      `/compose?mode=${mode}&mailbox=${encodeURIComponent(mailboxRef)}&m=${encodeURIComponent(activeMessageId)}`,
+    );
+  };
+  const act = (action: ListAction) => {
+    if (targets.length > 0) bulk.mutate({ action, ids: targets });
+  };
+  const handlers: MailShortcutHandlers = {
+    readOnly: !canMarkSeen,
+    up: () => step(-1),
+    down: () => step(1),
+    open: () => {
+      const row = rowRefs.find((r) => r.id === activeMessageId) ?? rowRefs[0];
+      if (row) openAndMarkSeen(row.id, row.tid, true);
+    },
+    delete: () => act('delete'),
+    purge: () => {
+      if (targets.length > 0) setPurgeIds(targets);
+    },
+    selectAll: () => {
+      setSelectMode(true);
+      setSelectedIds(new Set(rowRefs.map((r) => r.id)));
+    },
+    unread: () => act('mark_unseen'),
+    junk: () => act('junk'),
+    reply: () => compose('reply'),
+    replyAll: () => compose('reply_all'),
+    forward: () => compose('forward'),
+  };
+  useEffect(() => {
+    shortcutHandlers.current = handlers;
+  });
+  useEffect(() => registerMailShortcuts(() => shortcutHandlers.current), []);
 
   const colorByCategory = useMemo(() => {
     const map = new Map<string, string>();
@@ -787,6 +847,19 @@ function ScreenW2Body({
       )}
 
       {mobile && !mobileThread ? <LinkFab mailbox={mailboxRef} /> : null}
+
+      {purgeIds ? (
+        <ConfirmDialog
+          title={t('mail.purge.title', { count: purgeIds.length })}
+          body={t('mail.purge.body')}
+          confirmLabel={t('mail.purge.confirm')}
+          onConfirm={() => {
+            bulk.mutate({ action: 'purge', ids: purgeIds });
+            setPurgeIds(null);
+          }}
+          onClose={() => setPurgeIds(null)}
+        />
+      ) : null}
 
       {selectMenu ? (
         <Menu

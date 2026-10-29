@@ -2,7 +2,7 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import { foldersKey, type BulkAction, type FoldersView, type MessagesList } from './mailApi';
 
 /** Actions that take the message out of the folder on screen (#89). */
-export const REMOVING_ACTIONS: ReadonlySet<BulkAction> = new Set(['delete', 'junk', 'archive', 'move']);
+export const REMOVING_ACTIONS: ReadonlySet<BulkAction> = new Set(['delete', 'purge', 'junk', 'archive', 'move']);
 
 /**
  * #89: show the result of a toolbar action at once, before the server answers. Updates every cached message list of

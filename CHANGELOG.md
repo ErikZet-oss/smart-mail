@@ -2,6 +2,28 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #93 list keyboard shortcuts (UX_SPEC §6)
+
+**Central handler:**
+- One handler: `features/system/shortcuts.ts` (matcher + registry) and `useGlobalShortcuts` (the only keydown listener).
+- The mail screen registers what each key does.
+- Never while typing (inputs, contenteditable/TipTap) or while a modal is open.
+- Read-only (no active person) ignores the action keys.
+- Settings 01e „Klávesové skratky zapnuté“ is now a real switch (`prefs.shortcuts.shortcuts_enabled`); `GET /api/mail/prefs` returns `shortcuts.enabled`.
+
+**New keys:**
+- ↑/↓ open the previous/next message (and scroll it into view).
+- Enter opens the message.
+- **Delete** = Vymazať (same optimistic path as the toolbar, #89).
+- **Shift+Delete** = Vymazať natrvalo after a confirm dialog: new bulk action `purge` (`\Deleted` + UID EXPUNGE in place, no copy in Kôš).
+- Ctrl+A selects every row on the page.
+- U = neprečítané, ! = nevyžiadané.
+- R / Shift+R / F = odpovedať / všetkým / poslať ďalej.
+- Compose: Ctrl+Enter = Odoslať (same click as the button, so the pre-send checks still run).
+
+**W15 help dialog:**
+- E, #, L and [ are hidden until their features exist: vybavené and priradiť come in Phase 5; there is no folder picker and no collapsible folder column yet.
+
 ## [Unreleased] — #89 fast delete / move / flags (no sync inside the request)
 
 **Backend:**

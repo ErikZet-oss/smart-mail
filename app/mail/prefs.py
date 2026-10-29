@@ -59,6 +59,14 @@ async def get_ui_prefs(db: AsyncSession, person_id: uuid.UUID | None) -> UiPrefs
     return UiPrefs.model_validate({**DEFAULT_UI.model_dump(), **(await _load(db, person_id, "prefs.ui"))})
 
 
+async def shortcuts_enabled(db: AsyncSession, person_id: uuid.UUID | None) -> bool:
+    """Settings 01e `shortcuts_enabled` (default on), stored in the `prefs.shortcuts` section."""
+    if person_id is None:
+        return True
+    data = await _load(db, person_id, "prefs.shortcuts")
+    return data.get("shortcuts_enabled", data.get("enabled", True)) is not False
+
+
 async def save_section(db: AsyncSession, person_id: uuid.UUID, section: str, data: dict[str, Any]) -> dict[str, Any]:
     row = await db.scalar(
         select(UserSettings).where(UserSettings.person_id == person_id, UserSettings.section == section)
