@@ -92,9 +92,9 @@ test.describe('Issue 24 — signature editor', () => {
       'GET /api/settings/mailboxes/default/identities': { body: [] },
     });
     await page.goto('/settings/identity/list');
-    await expect(page.getByText('Podpis pobočky – mení správca')).toBeVisible();
+    await expect(page.getByText(/Podpis pobočky – mení správca/)).toBeVisible();
     await expect(page.getByText('Peter Hudák')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Upraviť šablónu pobočky' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Otvoriť šablónu' })).toHaveAttribute(
       'href',
       '/settings/branches/signature',
     );

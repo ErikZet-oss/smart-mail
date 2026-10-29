@@ -225,24 +225,52 @@ async def list_identities_settings(mailbox_ref: str, ctx: Auth, db: DB) -> list[
     return [_identity_out(i) for i in rows]
 
 
+def _identity_state(i: Identity) -> dict[str, Any]:
+    """Audited before/after of an identity — addresses and names only, never the signature HTML."""
+    return {
+        "display_name": i.display_name,
+        "email": i.email,
+        "reply_to": i.reply_to,
+        "organization": i.organization,
+        "is_default": i.is_default,
+    }
+
+
 @router.put("/identities/{identity_id}")
 async def update_identity(
-    identity_id: uuid.UUID, body: IdentityIn, request: Request, ctx: Auth, person: ActivePerson, db: DB
+    identity_id: uuid.UUID,
+    body: IdentityIn,
+    request: Request,
+    ctx: Auth,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
 ) -> dict[str, Any]:
     identity = await db.get(Identity, identity_id)
     if identity is None:
         raise fail(404, "identity_not_found")
-    await _mailbox_by_id(db, ctx, identity.mailbox_id)
+    mailbox = await _mailbox_by_id(db, ctx, identity.mailbox_id)
+    managed = _branch_managed(mailbox, ctx.account)
+    if managed:
+        # A branch mailbox sends for everybody of the branch: only an admin sets its sender (#68). The sender must be a
+        # company address (the alias the SMTP server accepts, e.g. nitra@ for the login smartsronitra@).
+        require_admin(ctx)
+        for address in (body.email, body.reply_to):
+            if address and not settings.is_internal_address(address.strip().lower()):
+                raise fail(422, "identity_email_not_internal")
+    before = _identity_state(identity)
     identity.display_name = body.display_name.strip()[:100]
     identity.email = body.email.strip().lower()
     identity.organization = (body.organization or "").strip()[:100] or None
     identity.reply_to = (body.reply_to or "").strip().lower() or None
     identity.bcc = [a.strip().lower() for a in body.bcc if a.strip()]
-    try:
-        cleaned, stripped = apply_signature_languages(body.signature_html, require_sk=False)
-    except SignatureError as exc:
-        raise fail(422, exc.code, **exc.extra) from exc
-    identity.signature_html = cleaned
+    stripped: dict[str, list[str]] = {}
+    if not managed:  # the signature of a branch identity stays the branch template (Pobočky a osoby › Podpis)
+        try:
+            cleaned, stripped = apply_signature_languages(body.signature_html, require_sk=False)
+        except SignatureError as exc:
+            raise fail(422, exc.code, **exc.extra) from exc
+        identity.signature_html = cleaned
     if body.is_default:
         others = (
             await db.scalars(
@@ -260,6 +288,7 @@ async def update_identity(
         object_type="identity",
         object_id=str(identity.id),
         ip=client_ip(request),
+        details={"before": before, "after": _identity_state(identity)},
     )
     await db.commit()
     await db.refresh(identity)
@@ -1471,11 +1500,18 @@ async def signature_context(mailbox_ref: str, ctx: Auth, db: DB) -> dict[str, An
     managed = _branch_managed(mailbox, ctx.account)
     preview = ""
     if managed:
+        # {email_pobocky} as in compose: the sender of the default identity, not the login mailbox (#68)
+        default = await db.scalar(
+            select(Identity)
+            .where(Identity.mailbox_id == mailbox.id)
+            .order_by(Identity.is_default.desc(), Identity.created_at)
+            .limit(1)
+        )
         preview = preview_signature_html(
             person=ctx.person,
             branch=branch,
             identity=None,
-            email=mailbox.email,
+            email=default.email if default else mailbox.email,
             language="sk",
         )
     return {

@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #68: sender of a branch identity (nitra@ vs smartsronitra@)
+
+- Nastavenia › Identity on a branch login: section „Identita“ (Zobrazované meno, E-mail, Organizácia, Odpovedať na)
+  above the branch signature preview, as in Figma W12-03a. An admin edits it, everybody else sees it read-only. The
+  signature stays the branch template.
+- `PUT /api/settings/identities/{id}` on a branch mailbox: admin only (403 `admin_required`); sender and reply-to must
+  be company addresses (`INTERNAL_DOMAINS`, 422 `identity_email_not_internal`); the branch identity's signature HTML is
+  not touched. Audit `settings.identity_saved` with before/after (names and addresses, never the signature).
+- `signature-context`: `{email_pobocky}` in the preview is the default identity's e-mail, as in compose.
 ## [Unreleased] — Pilot #52: paperclip before the first open (BODYSTRUCTURE)
 
 - The envelope sync also fetches `BODYSTRUCTURE`; `has_attachments` is set at insert, so unopened messages show the
