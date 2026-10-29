@@ -2,6 +2,7 @@
 
     python -m app.cli add-account jana@smartsro.sk --first-name Jana --last-name Nováková --role admin
     python -m app.cli add-account senica@smartsro.sk --branch "Pobočka Senica"
+    python -m app.cli add-account senica@smartsro.sk --branch "Pobočka Senica" --convert   # existing personal login
     python -m app.cli add-person "Pobočka Senica" --first-name Peter --last-name Hudák --manager
     python -m app.cli maintenance on --until 2026-10-27T08:00:00+01:00
     python -m app.cli maintenance off
@@ -19,6 +20,8 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import app.models  # noqa: F401  (register every table, e.g. mailboxes for branches.mailbox_id)
+from app.auth.admin_accounts import AccountRuleError, convert_to_branch, ensure_admin_remains
 from app.auth.models import Account, AccountKind, Branch, Person, Role
 from app.core import maintenance
 from app.core.audit import audit
@@ -36,8 +39,25 @@ async def _branch(db: AsyncSession, name: str) -> Branch:
 
 async def add_account(db: AsyncSession, args: argparse.Namespace) -> str:
     email = args.email.strip().lower()
-    if (await db.execute(select(Account).where(Account.email == email))).scalar_one_or_none():
-        return f"account {email} already exists"
+    existing = (await db.execute(select(Account).where(Account.email == email))).scalar_one_or_none()
+    if existing is not None:
+        if not (args.branch and args.convert):
+            hint = " (use --branch NAME --convert to make it the branch login)" if args.branch else ""
+            return f"account {email} already exists{hint}"
+        branch = await _branch(db, args.branch)
+        revoked = await convert_to_branch(db, existing, branch)
+        try:
+            await ensure_admin_remains(db)
+        except AccountRuleError as exc:
+            await db.rollback()
+            raise SystemExit(f"refused: {exc.code}") from None
+        audit(
+            db,
+            "admin.account_converted_to_branch",
+            account_id=existing.id,
+            details={"branch_id": str(branch.id), "revoked_sessions": revoked, "via": "cli"},
+        )
+        return f"converted {email} to the branch login of {branch.name}"
     if args.branch:
         branch = await _branch(db, args.branch)
         account = Account(email=email, kind=AccountKind.branch, branch_id=branch.id)
@@ -79,6 +99,7 @@ async def main(argv: list[str] | None = None) -> None:
     acc.add_argument("--first-name")
     acc.add_argument("--last-name")
     acc.add_argument("--role", default="sales", choices=[r.value for r in Role])
+    acc.add_argument("--convert", action="store_true", help="with --branch: convert an existing personal login")
     per = sub.add_parser("add-person")
     per.add_argument("branch")
     per.add_argument("--first-name", required=True)

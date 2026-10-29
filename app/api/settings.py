@@ -9,15 +9,17 @@ from typing import Annotated, Any
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 
+from app.auth.admin_accounts import AccountRuleError, convert_to_branch, create_account, ensure_admin_remains
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep, client_ip
 from app.auth.models import Account, AccountKind, Branch, Person, Role
 from app.auth.security import decrypt
 from app.core.audit import AuditLog, audit
 from app.mail import storage
 from app.mail.clamav import scan_bytes
-from app.mail.compose_models import CannedResponse, Identity
+from app.mail.compose_models import CannedResponse, ComposeDraft, Identity
 from app.mail.image_proxy import proxy_path
 from app.mail.models import Mailbox, MailboxAccess, SieveScriptBackup
 from app.mail.prefs import get_list_prefs, get_ui_prefs, save_section
@@ -869,27 +871,109 @@ async def revoke_session(session_id: uuid.UUID, request: Request, ctx: Auth, db:
 # ----- admin 10 users -----
 
 
+def _rule(exc: AccountRuleError) -> HTTPException:
+    return fail(exc.status, exc.code)
+
+
+async def _user_out(db: DB, a: Account) -> dict[str, Any]:
+    person = await db.get(Person, a.person_id) if a.person_id else None
+    branch = await db.get(Branch, a.branch_id) if a.branch_id else None
+    return {
+        "id": str(a.id),
+        "email": a.email,
+        "kind": a.kind.value,
+        "active": a.active,
+        "last_login_at": a.last_login_at.isoformat() if a.last_login_at else None,
+        "require_2fa": a.require_2fa,
+        "branch_id": str(branch.id) if branch else None,
+        "branch_name": branch.name if branch else None,
+        "person": {
+            "id": str(person.id),
+            "first_name": person.first_name,
+            "last_name": person.last_name,
+            "role": person.role.value,
+            "active": person.active,
+        }
+        if person
+        else None,
+    }
+
+
+async def _account_state(db: DB, a: Account) -> dict[str, Any]:
+    """Audited before/after of an account (SETTINGS_SPEC: admin changes with before/after) — never secrets."""
+    person = await db.get(Person, a.person_id) if a.person_id else None
+    return {
+        "kind": a.kind.value,
+        "branch_id": str(a.branch_id) if a.branch_id else None,
+        "role": person.role.value if person else None,
+        "active": a.active,
+    }
+
+
+def _person_state(p: Person) -> dict[str, Any]:
+    return {
+        "first_name": p.first_name,
+        "last_name": p.last_name,
+        "function": p.function,
+        "role": p.role.value,
+        "is_manager": p.is_manager,
+        "active": p.active,
+    }
+
+
 @router.get("/admin/users")
 async def admin_users(ctx: Auth, db: DB) -> list[dict[str, Any]]:
     require_admin(ctx)
     accounts = (await db.scalars(select(Account).order_by(Account.email))).all()
-    return [
-        {
-            "id": str(a.id),
-            "email": a.email,
-            "kind": a.kind.value,
-            "active": a.active,
-            "last_login_at": a.last_login_at.isoformat() if a.last_login_at else None,
-            "require_2fa": a.require_2fa,
-        }
-        for a in accounts
-    ]
+    return [await _user_out(db, a) for a in accounts]
+
+
+class UserIn(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    kind: AccountKind = AccountKind.personal
+    branch_id: uuid.UUID | None = None
+    first_name: str | None = Field(default=None, max_length=50)
+    last_name: str | None = Field(default=None, max_length=50)
+    role: Role = Role.sales
+
+
+@router.post("/admin/users")
+async def create_user(body: UserIn, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+    admin = require_admin(ctx)
+    if "@" not in body.email:
+        raise fail(422, "email_invalid")
+    try:
+        account = await create_account(
+            db,
+            body.email,
+            kind=body.kind,
+            branch_id=body.branch_id,
+            first_name=body.first_name,
+            last_name=body.last_name,
+            role=body.role,
+        )
+    except AccountRuleError as exc:
+        await db.rollback()
+        raise _rule(exc) from None
+    audit(
+        db,
+        "settings.user_created",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="account",
+        object_id=str(account.id),
+        ip=client_ip(request),
+        details={"before": None, "after": await _account_state(db, account)},
+    )
+    await db.commit()
+    return await _user_out(db, account)
 
 
 class UserPatch(BaseModel):
     active: bool | None = None
-    kind: str | None = None
-    role: str | None = None  # applied to linked personal person when present
+    kind: AccountKind | None = None
+    branch_id: uuid.UUID | None = None
+    role: Role | None = None  # applied to the person of a personal account
 
 
 @router.patch("/admin/users/{account_id}")
@@ -898,11 +982,30 @@ async def patch_user(account_id: uuid.UUID, body: UserPatch, request: Request, c
     account = await db.get(Account, account_id)
     if account is None:
         raise fail(404, "account_not_found")
-    if body.active is not None:
-        account.active = body.active
-    if body.kind is not None and body.kind in {"personal", "branch"}:
-        account.kind = AccountKind(body.kind)
-    await db.commit()
+    details: dict[str, Any] = {"before": await _account_state(db, account)}
+    try:
+        if body.active is not None and body.active != account.active:
+            account.active = body.active
+        target_kind = body.kind or account.kind
+        if target_kind == AccountKind.branch:
+            branch_id = body.branch_id or account.branch_id
+            branch = await db.get(Branch, branch_id) if branch_id else None
+            if branch is None:
+                raise AccountRuleError(422, "branch_required")
+            if account.kind != AccountKind.branch or account.branch_id != branch.id:
+                details["revoked_sessions"] = await convert_to_branch(db, account, branch)
+        elif account.kind == AccountKind.branch:
+            # a personal login needs its own person: create it as a new account instead
+            raise AccountRuleError(422, "person_required")
+        if body.role is not None and account.kind == AccountKind.personal and account.person_id:
+            person = await db.get(Person, account.person_id)
+            if person is not None and person.role != body.role:
+                person.role = body.role
+        await ensure_admin_remains(db)
+        details["after"] = await _account_state(db, account)
+    except AccountRuleError as exc:
+        await db.rollback()
+        raise _rule(exc) from None
     audit(
         db,
         "settings.user_patched",
@@ -911,9 +1014,10 @@ async def patch_user(account_id: uuid.UUID, body: UserPatch, request: Request, c
         object_type="account",
         object_id=str(account.id),
         ip=client_ip(request),
+        details=details,
     )
     await db.commit()
-    return {"id": str(account.id), "email": account.email, "kind": account.kind.value, "active": account.active}
+    return await _user_out(db, account)
 
 
 # ----- admin 11 branches -----
@@ -927,6 +1031,7 @@ async def admin_branches(ctx: Auth, db: DB) -> list[dict[str, Any]]:
     for b in rows:
         people = (await db.scalars(select(Person).where(Person.branch_id == b.id))).all()
         mailbox = await db.get(Mailbox, b.mailbox_id) if b.mailbox_id else None
+        login = await db.scalar(select(Account).where(Account.email == mailbox.email)) if mailbox else None
         out.append(
             {
                 "id": str(b.id),
@@ -936,6 +1041,15 @@ async def admin_branches(ctx: Auth, db: DB) -> list[dict[str, Any]]:
                 "hours": b.hours,
                 "mailbox_id": str(b.mailbox_id) if b.mailbox_id else None,
                 "mailbox_email": mailbox.email if mailbox else None,
+                # the login that uses the branch mailbox; "Prepojiť prihlásenie s pobočkou" when not linked (#33)
+                "login_account": {
+                    "id": str(login.id),
+                    "email": login.email,
+                    "kind": login.kind.value,
+                    "linked": login.kind == AccountKind.branch and login.branch_id == b.id,
+                }
+                if login
+                else None,
                 "idle_ask_minutes": b.idle_ask_minutes,
                 "remember_days": b.remember_days,
                 "signature_template_html": b.signature_template_html,
@@ -1101,6 +1215,7 @@ async def add_person(branch_id: uuid.UUID, body: PersonAdminIn, request: Request
         object_type="person",
         object_id=str(person.id),
         ip=client_ip(request),
+        details={"before": None, "after": _person_state(person)},
     )
     await db.commit()
     return {"id": str(person.id), "first_name": person.first_name, "last_name": person.last_name}
@@ -1114,6 +1229,7 @@ async def update_person_admin(
     person = await db.get(Person, person_id)
     if person is None:
         raise fail(404, "person_not_found")
+    before = _person_state(person)
     person.first_name = body.first_name.strip()[:50]
     person.last_name = body.last_name.strip()[:50]
     person.function = body.function
@@ -1126,6 +1242,11 @@ async def update_person_admin(
     person.is_manager = body.is_manager
     person.active = body.active
     person.personal_email = body.personal_email
+    try:
+        await ensure_admin_remains(db)
+    except AccountRuleError as exc:
+        await db.rollback()
+        raise _rule(exc) from None
     audit(
         db,
         "settings.person_saved",
@@ -1134,9 +1255,103 @@ async def update_person_admin(
         object_type="person",
         object_id=str(person.id),
         ip=client_ip(request),
+        details={"before": before, "after": _person_state(person)},
     )
     await db.commit()
     return {"id": str(person.id), "active": person.active, "role": person.role.value}
+
+
+@router.delete("/admin/people/{person_id}")
+async def delete_person_admin(person_id: uuid.UUID, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+    """ "Odstrániť osobu": a person with history (audit, sent mail, own login) is only deactivated, so history keeps
+    the name; the last active person of a branch stays (SETTINGS_SPEC 11b)."""
+    admin = require_admin(ctx)
+    person = await db.get(Person, person_id)
+    if person is None:
+        raise fail(404, "person_not_found")
+    if person.branch_id is not None and person.active:
+        others = await db.scalar(
+            select(func.count())
+            .select_from(Person)
+            .where(Person.branch_id == person.branch_id, Person.active.is_(True), Person.id != person.id)
+        )
+        if not others:
+            raise fail(409, "last_active_person")
+    before = _person_state(person)
+    drafts = select(func.count()).select_from(ComposeDraft)
+    has_history = bool(
+        await db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.person_id == person.id))
+        or await db.scalar(select(func.count()).select_from(Account).where(Account.person_id == person.id))
+        or await db.scalar(
+            drafts.where(or_(ComposeDraft.person_id == person.id, ComposeDraft.signature_person_id == person.id))
+        )
+    )
+    if not has_history:
+        # any other reference (a session, settings, …) makes the delete fail: then the person is only deactivated
+        try:
+            async with db.begin_nested():
+                await db.delete(person)
+                await db.flush()
+        except IntegrityError:
+            has_history = True
+            person = await db.get(Person, person_id, populate_existing=True)
+    if has_history and person is not None:
+        person.active = False
+    try:
+        await ensure_admin_remains(db)
+    except AccountRuleError as exc:
+        await db.rollback()
+        raise _rule(exc) from None
+    outcome = "deactivated" if has_history else "deleted"
+    audit(
+        db,
+        f"settings.person_{outcome}",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="person",
+        object_id=str(person_id),
+        ip=client_ip(request),
+        details={"before": before, "after": _person_state(person) if has_history and person else None},
+    )
+    await db.commit()
+    return {"id": str(person_id), "result": outcome}
+
+
+@router.post("/admin/branches/{branch_id}/link-login")
+async def link_branch_login(branch_id: uuid.UUID, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+    """ "Prepojiť prihlásenie s pobočkou": the login of the branch mailbox becomes the branch login (created when the
+    mailbox has none yet), so its next login shows "Kto ste?" (#33)."""
+    admin = require_admin(ctx)
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        raise fail(404, "branch_not_found")
+    mailbox = await db.get(Mailbox, branch.mailbox_id) if branch.mailbox_id else None
+    if mailbox is None:
+        raise fail(422, "mailbox_required")
+    account = await db.scalar(select(Account).where(Account.email == mailbox.email))
+    before = await _account_state(db, account) if account else None
+    try:
+        if account is None:
+            account = await create_account(db, mailbox.email, kind=AccountKind.branch, branch_id=branch.id)
+            revoked = 0
+        else:
+            revoked = await convert_to_branch(db, account, branch)
+        await ensure_admin_remains(db)
+    except AccountRuleError as exc:
+        await db.rollback()
+        raise _rule(exc) from None
+    audit(
+        db,
+        "settings.branch_login_linked",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="account",
+        object_id=str(account.id),
+        ip=client_ip(request),
+        details={"before": before, "after": await _account_state(db, account), "revoked_sessions": revoked},
+    )
+    await db.commit()
+    return await _user_out(db, account)
 
 
 # ----- admin 12 mailboxes -----

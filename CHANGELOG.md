@@ -2,6 +2,25 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot #33: branch logins and persons in Settings 10/11
+
+- Settings 10 (W12-10): account list with search, „Vytvoriť“ (e-mail + Osobný: meno, priezvisko, rola /
+  Pobočkový: pobočka), detail with Typ účtu, Pobočka, Rola, Stav. `kind=branch` without a branch → 422
+  `branch_required`. Converting a personal login („Zmeniť na prihlásenie pobočky“, confirm) deactivates the
+  placeholder person (never deletes it) and logs the account out everywhere, so the next login shows „Kto ste?“.
+- No change may leave no active admin who can sign in → 409 `last_admin` (account kind/active/role, person
+  role/active, person removal, link).
+- Settings 11 (W12-11): „Pridať pobočku“; Údaje form (name, branch mailbox, address, phone, hours) shows which
+  login uses the branch mailbox and offers „Prepojiť prihlásenie s pobočkou“ (creates the branch login when the
+  mailbox has none). Osoby: table + drawer to add/edit (meno, priezvisko, funkcia, telefón, mobil, rola, vedúci,
+  aktívna) and „Odstrániť osobu“ — a person with history (audit, own login, compose draft) is deactivated; any other
+  reference (e.g. a session) also falls back to deactivation instead of a 500; the last active person stays (409).
+- Audit for every change with `before` / `after` (kind, branch, role, active; person fields), never secrets
+  (`settings.user_created|user_patched|branch_login_linked|person_created|person_saved|person_deleted|deactivated`).
+- CLI: `app.models` registers every table (fixes `NoReferencedTableError` for `branches.mailbox_id` in
+  `add-person` / `add-account --branch`); `add-account … --branch NAME --convert` converts an existing personal
+  login. Alembic uses the same registry.
+
 ## [Unreleased] — Pilot #41: visible sync errors, isolated bad messages, first-sync progress
 
 - Any unexpected exception in a mailbox sync sets `sync_state = error` and `sync_error` = the exception class

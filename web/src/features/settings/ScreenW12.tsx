@@ -12,7 +12,9 @@ import { AppShell } from '../../components/shell/AppShell';
 import { useToasts } from '../../components/toastContext';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
+import { BranchDetails, BranchList, BranchPeople } from './BranchAdmin';
 import { SettingsFieldControl } from './Field';
+import { UsersPanel } from './UsersPanel';
 import { HtmlSignatureEditor, SanitizedHtml } from './HtmlSignatureEditor';
 import { fillSignature, type SignatureLang } from './signatureHtml';
 import { MobileSettingsIndex } from './MobileSettingsIndex';
@@ -20,12 +22,10 @@ import { SettingsBreadcrumb, SettingsNav, SettingsSubList, SettingsSubTabs } fro
 import { buildNavItems, isItemActive, TABBED_SECTIONS } from './settingsNavModel';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
-  addPersonAdmin,
   createResponse,
   deleteResponse,
   fetchAdminBranches,
   fetchAdminMailboxes,
-  fetchAdminUsers,
   fetchFilters,
   fetchIdentities,
   fetchPreferences,
@@ -1102,19 +1102,6 @@ function SecurityPanel() {
   );
 }
 
-function UsersPanel() {
-  const users = useQuery({ queryKey: ['settings', 'users'], queryFn: fetchAdminUsers });
-  return (
-    <ul className="flex max-w-2xl flex-col gap-2">
-      {(users.data ?? []).map((u) => (
-        <li key={String(u.id)} className="rounded-sm border border-border-default px-3 py-2 type-body">
-          {String(u.email)} · {String(u.kind)} · {u.active ? 'aktívny' : 'neaktívny'}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 type BranchPerson = {
   id: string;
   first_name?: string;
@@ -1213,32 +1200,23 @@ function BranchesPanel({ sub }: { sub?: string }) {
     onError: (error) => toasts.error(signatureErrorText(t, error)),
   });
 
-  if (!current) return <p className="type-body text-text-secondary">{t('settings.branches.empty')}</p>;
+  const list = <BranchList branches={branches.data ?? []} currentId={branchId} onSelect={(id) => setSelectedId(id)} />;
+  if (!current) {
+    return (
+      <div className="flex flex-col gap-4 lg:flex-row">
+        {list}
+        <p className="type-body text-text-secondary">{t('settings.branches.empty')}</p>
+      </div>
+    );
+  }
 
   if (sub === 'people' || sub === 'osoby') {
     return (
-      <div className="flex flex-col gap-3">
-        <ul>
-          {((current.people as Record<string, unknown>[]) ?? []).map((p) => (
-            <li key={String(p.id)} className="type-body border-b border-border-default py-2">
-              {String(p.first_name)} {String(p.last_name)} · {String(p.role)}
-              {!p.active ? ' (neaktívna)' : ''}
-            </li>
-          ))}
-        </ul>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() =>
-            void addPersonAdmin(String(current.id), {
-              first_name: 'Nová',
-              last_name: 'Osoba',
-              role: 'sales',
-            }).then(() => void qc.invalidateQueries({ queryKey: ['settings', 'branches'] }))
-          }
-        >
-          {t('settings.branches.addPerson')}
-        </Button>
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {list}
+        <div className="min-w-0 flex-1">
+          <BranchPeople branch={current} />
+        </div>
       </div>
     );
   }
@@ -1338,30 +1316,10 @@ function BranchesPanel({ sub }: { sub?: string }) {
   }
 
   return (
-    <div className="flex gap-6">
-      <ul className="w-48 shrink-0">
-        {(branches.data ?? []).map((b) => (
-          <li key={String(b.id)}>
-            <button
-              type="button"
-              className={`type-body w-full rounded-sm px-2 py-1.5 text-left ${
-                String(b.id) === String(current.id) ? 'bg-brand-primary-50' : 'hover:bg-bg-subtle'
-              }`}
-              onClick={() => setSelectedId(String(b.id))}
-            >
-              {String(b.name)}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className="flex flex-col gap-2 type-body">
-        <p>
-          <strong>{String(current.name)}</strong>
-        </p>
-        <p className="type-small text-text-secondary">{String(current.mailbox_email ?? '—')}</p>
-        <p className="type-small">{String(current.address ?? '')}</p>
-        <p className="type-small">{String(current.phone ?? '')}</p>
-        <p className="type-small">{String(current.hours ?? '')}</p>
+    <div className="flex flex-col gap-6 lg:flex-row">
+      {list}
+      <div className="min-w-0 flex-1">
+        <BranchDetails key={branchId} branch={current} />
       </div>
     </div>
   );

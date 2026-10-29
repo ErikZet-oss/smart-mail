@@ -26,6 +26,7 @@ class RevokeReason(enum.StrEnum):
     password_changed = "password_changed"  # noqa: S105 - revoke reason, not a secret
     mfa_failed = "mfa_failed"
     rotated = "rotated"
+    account_changed = "account_changed"  # admin converted the login (e.g. to a branch login, #33)
 
 
 class InvalidReason(enum.StrEnum):
