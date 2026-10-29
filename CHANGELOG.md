@@ -10,6 +10,16 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - `e2e/fixtures.ts`: Settings 10/11 admin endpoints in `SETTINGS_DEFAULTS`; every unmocked API call is logged as
   `[mockApi] unmocked … → 401`. The two other unmocked calls of the suite (settings preferences in the axe test,
   image proxy) are mocked; the full suite now has none.
+## [Unreleased] — Pilot #38: body search also on the IMAP server (Roundcube parity)
+
+- `GET /api/search?server=true`: for Telo (`BODY`) and Celá správa (`TEXT`) the backend also runs `UID SEARCH CHARSET
+  UTF-8` on the IMAP server for the folders in scope and merges the UIDs with the local hits, so text in the body of
+  messages that were never opened is found (ADR-012). Terms are reduced to safe characters (no IMAP injection), 15 s
+  timeout, `server_search: ok|partial|timeout|unavailable|busy`; the local hits are always returned. At most one
+  server search per mailbox at a time (Redis lock; a second one answers `busy`), and the IMAP socket timeout plus a
+  per-folder deadline end the session soon after a timeout.
+- W10/M8: local results first, then „Hľadá sa aj na serveri…“ and the merged result; a timeout or an unreachable
+  server is explained. Subject / sender fields never ask the server.
 
 ## [Unreleased] — Pilot #46: W2l attachment preview (PDF, images, ISDOC/XML)
 
