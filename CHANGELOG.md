@@ -4,6 +4,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — #77 PR 2: enforce „Vyžadovať 2FA“, admin reset
 
+### Fixed
+- Settings 11: the last active person of a branch **without a branch login** can be deactivated or deleted, so an unused (test) branch can be emptied and removed with „Vymazať pobočku“. A branch with a login still keeps one active person for „Kto ste?“.
+
 - Login of a personal account with `require_2fa` and no TOTP → `next: "2fa-setup"`: an `mfa_pending` session plus a
   Redis flag (`smartmail:mfa-setup:<session>`, 10 min; B1, no schema change). It reaches only `me` and the 2FA setup
   (`/api/settings/security/2fa`, `…/start`, `…/confirm`); everything else answers 403 `mfa_setup_required`; logout
