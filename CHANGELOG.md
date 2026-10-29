@@ -37,6 +37,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - audit `ai.suggestion_approved` / `ai.suggestion_rejected` (actor user, no body).
 
 The card UI follows in PR 3.
+
 ## [Unreleased] — #100 classify prompt with category descriptions
 
 **Problem:** a supplier's own invoice was triaged as „Žiadosť o faktúru“.
