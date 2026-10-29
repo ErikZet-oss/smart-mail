@@ -48,7 +48,14 @@ log = structlog.get_logger(__name__)
 Mode = Literal["new", "reply", "reply_all", "forward"]
 Priority = Literal["low", "normal", "high"]
 
-_PLACEHOLDER = re.compile(r"\[\[DOPLNIŤ\]\]", re.I)
+# Every [[DOPLNIŤ…]] form, also [[DOPLNIŤ: cena]] as AI drafts write it (2d: the bare form alone let those through).
+_PLACEHOLDER = re.compile(r"\[\[\s*DOPLNI[TŤ][^\]]*\]\]", re.I)
+_PROTECTED_HTML = re.compile(
+    r'<blockquote data-sm-quote="1">.*?</blockquote>|<div data-sm-signature="1">.*$', re.S | re.I
+)
+# A Slovak reply to a Czech customer is normal; other pairs are worth a look (W4a „cudzí jazyk“).
+_COMPATIBLE_LANGUAGES = ({"sk", "cs"},)
+_LANGUAGE_MIN_CHARS = 40
 _ATTACH_MENTION = re.compile(r"\b(príloh|priloh|attachment|attach|pdf|docx?)\w*", re.I)
 
 
@@ -190,22 +197,41 @@ async def release_compose_storage(db: AsyncSession, settings: Settings, att: Com
         storage.delete_key(settings, att.storage_key)
 
 
-def pre_send_checks(draft: ComposeDraft, settings: Settings) -> list[dict[str, Any]]:
-    """W4b checks. Blocking items disable 'Odoslať aj tak'."""
+def user_text_of(draft: ComposeDraft) -> str:
+    """The person's own text: without the quoted mail and the signature (they must not trigger checks)."""
+    return html_to_text(_PROTECTED_HTML.sub("", draft.body_html or "")).strip()
+
+
+def pre_send_checks(draft: ComposeDraft, settings: Settings, *, has_attachments: bool = False) -> list[dict[str, Any]]:
+    """W4b checks (also the live W4a checklist). Blocking items disable 'Odoslať aj tak'."""
     issues: list[dict[str, Any]] = []
     if not draft.to_addrs:
         issues.append({"code": "no_recipients", "blocking": True, "message": "missing_to"})
     if _PLACEHOLDER.search(draft.body_html or "") or _PLACEHOLDER.search(draft.body_text or ""):
         issues.append({"code": "placeholder", "blocking": True, "message": "placeholder"})
-    body = f"{draft.subject}\n{draft.body_text}\n{draft.body_html}"
-    if _ATTACH_MENTION.search(body):
-        # attachment presence is checked by caller with attachment count
+    own = f"{draft.subject}\n{user_text_of(draft)}"
+    if _ATTACH_MENTION.search(own) and not has_attachments:
         issues.append({"code": "attachment_mentioned", "blocking": False, "message": "attachment_mentioned"})
-    domains = {(a.get("email") or "").rsplit("@", 1)[-1] for a in draft.to_addrs + draft.cc_addrs}
-    external = [d for d in domains if d and not settings.is_internal_address(f"x@{d}")]
+    domains = {(a.get("email") or "").rsplit("@", 1)[-1].lower() for a in draft.to_addrs + draft.cc_addrs}
+    external = sorted(d for d in domains if d and not settings.is_internal_address(f"x@{d}"))
     if external:
         issues.append({"code": "external_recipient", "blocking": False, "message": "external"})
+    if len(external) > 1:
+        # W4a „príjemcovia z jednej firmy“: one company per message, by domain until Money links them (Phase 3)
+        issues.append({"code": "multiple_companies", "blocking": False, "message": ", ".join(external[:5])})
     return issues
+
+
+def language_check(own_text: str, customer_language: str | None) -> dict[str, Any] | None:
+    """W4a „cudzí jazyk vs. jazyk zákazníka“ (warning only)."""
+    from app.ai.language import detect_language
+
+    if not customer_language or customer_language == "other" or len(own_text) < _LANGUAGE_MIN_CHARS:
+        return None
+    mine = detect_language(own_text)
+    if mine in ("other", customer_language) or any({mine, customer_language} <= pair for pair in _COMPATIBLE_LANGUAGES):
+        return None
+    return {"code": "language_mismatch", "blocking": False, "message": f"{mine}:{customer_language}"}
 
 
 class PreSendBlocked(Exception):
@@ -266,8 +292,21 @@ async def compose_checks(
     settings: Settings,
     atts: list[ComposeAttachment],
 ) -> list[dict[str, Any]]:
-    """``pre_send_checks`` plus a non-blocking warning when a file is still ``pending``."""
-    issues = pre_send_checks(draft, settings)
+    """``pre_send_checks`` plus a non-blocking warning when a file is still ``pending`` and the language check."""
+    issues = pre_send_checks(draft, settings, has_attachments=any(not a.is_inline for a in atts))
+    if draft.in_reply_to_message_id is not None:
+        source = await db.get(Message, draft.in_reply_to_message_id)
+        if source is not None:
+            from app.ai.language import detect_language
+            from app.ai.models import Classification
+
+            known = await db.scalar(
+                select(Classification.language).where(Classification.message_id == source.id).limit(1)
+            )
+            customer = known or detect_language(f"{source.subject or ''}\n{source.body_text or source.preview or ''}")
+            found = language_check(user_text_of(draft), customer)
+            if found:
+                issues.append(found)
     statuses = await live_av_statuses(db, atts)
     if any(not att.is_inline and statuses[att.id] == "pending" for att in atts):
         issues.append({"code": "attachment_pending", "blocking": False, "message": PENDING_AV_WARNING})
@@ -599,11 +638,11 @@ async def queue_send(
 ) -> ComposeDraft:
     atts = list((await db.execute(select(ComposeAttachment).where(ComposeAttachment.draft_id == draft.id))).scalars())
     checks = await compose_checks(db, draft, settings, atts)
-    if atts:
-        checks = [c for c in checks if c["code"] != "attachment_mentioned"]
-    # Pending is a warning the user confirms (force). It is not a hard block.
-    needs_stop = [c for c in checks if c["blocking"] or c["code"] == "attachment_pending"]
-    if needs_stop and not force:
+    # Blocking items ([[DOPLNIŤ]], no recipient) can never be forced — „Odoslať aj tak“ is only for warnings (W4b).
+    # Pending AV is a warning the user confirms (force).
+    if any(c["blocking"] for c in checks):
+        raise PreSendBlocked(checks)
+    if any(c["code"] == "attachment_pending" for c in checks) and not force:
         raise PreSendBlocked(checks)
     delay = settings.undo_send_seconds
     draft.status = "queued"

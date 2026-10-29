@@ -2,6 +2,23 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2d PR 3: live „Kontrola pred odoslaním“ + send-gate fixes
+
+**Live checklist** in the W4a panel / M17 sheet:
+- built from the draft's server checks, recomputed on every autosave;
+- problems first, then green rows for the four W4a items: bez [[DOPLNIŤ]], príjemcovia z jednej firmy, príloha, jazyk sedí so zákazníkom.
+
+**New checks:**
+- `multiple_companies` (warning): external recipients from more than one domain.
+- `language_mismatch` (warning): the person's text vs the customer's language.
+  - Classification or detection is used for the customer's language.
+  - Slovak ↔ Czech counts as compatible; short texts aren't judged.
+
+**Fixes:**
+- The placeholder check matched only the bare `[[DOPLNIŤ]]`. Now **every form**, e.g. `[[DOPLNIŤ: cena]]` as the AI writes it, blocks sending.
+- **Blocking checks can no longer be forced** through the send API; „Odoslať aj tak“ is only for warnings (W4b).
+- The attachment warning counts only the person's own text (not the quote or the signature), and not when a file is attached.
+
 ## [Unreleased] — Phase 2d PR 2: W4a compose AI panel + M17 sheet
 
 **Panel:**

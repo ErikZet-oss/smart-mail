@@ -1,25 +1,39 @@
 import type { Editor } from '@tiptap/core';
 import { useMutation } from '@tanstack/react-query';
-import { Sparkles } from 'lucide-react';
+import { CircleAlert, CircleCheck, Sparkles, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '../../components/Button';
 import { ApiError } from '../../lib/api';
 import { replaceUserText, userTextOf, wordDiff } from './aiText';
-import { composeAi, type AiAction, type AiLanguage, type AiProposal } from './composeApi';
+import { checklistRows } from './checklist';
+import { composeAi, type AiAction, type AiLanguage, type AiProposal, type ComposeCheck } from './composeApi';
 
 const CHIPS: AiAction[] = ['shorter', 'formal', 'friendly', 'grammar', 'answer_all'];
 const LANGUAGES: AiLanguage[] = ['sk', 'cs', 'en', 'de', 'pl', 'hu'];
 
-type Props = { draftId: string | null; editor: Editor | null; disabled: boolean; onApplied?: () => void };
+type Props = {
+  draftId: string | null;
+  editor: Editor | null;
+  disabled: boolean;
+  /** The draft's server checks, refreshed on every autosave (live checklist). */
+  checks?: readonly ComposeCheck[];
+  onApplied?: () => void;
+};
+
+const CHECK_ICON = {
+  ok: <CircleCheck size={16} aria-hidden="true" className="shrink-0 text-success-700" />,
+  warning: <TriangleAlert size={16} aria-hidden="true" className="shrink-0 text-warning-700" />,
+  blocking: <CircleAlert size={16} aria-hidden="true" className="shrink-0 text-danger-600" />,
+} as const;
 
 /**
  * W4a / M17 compose AI panel (Phase 2d): Napíš za mňa, rewrite chips, Preložiť do…, Doplniť odpoveď na všetky otázky.
  * Every result is a diff of the person's own text with „Použiť“ / „Zahodiť“; the quote and the signature are never
  * sent to the model nor replaced.
  */
-export function ComposeAiPanel({ draftId, editor, disabled, onApplied }: Props) {
+export function ComposeAiPanel({ draftId, editor, disabled, checks = [], onApplied }: Props) {
   const { t } = useTranslation();
   const [instruction, setInstruction] = useState('');
   const [language, setLanguage] = useState<AiLanguage>('en');
@@ -184,6 +198,22 @@ export function ComposeAiPanel({ draftId, editor, disabled, onApplied }: Props) 
           </div>
         </section>
       ) : null}
+
+      <section aria-label={t('ai.compose.checklist')} data-testid="compose-checklist" className="flex flex-col gap-1">
+        <h3 className="type-label text-text-secondary">{t('ai.compose.checklist')}</h3>
+        <ul className="flex flex-col">
+          {checklistRows(checks).map((row) => (
+            <li key={row.key} className="type-small flex min-h-7 items-center gap-2 text-text-primary">
+              {CHECK_ICON[row.level]}
+              <span>
+                {row.text.ns === 'ok'
+                  ? t(`ai.compose.checklistOk.${row.text.code}`)
+                  : t(`compose.checks.${row.text.code}`, { message: row.text.message, defaultValue: row.text.code })}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <p className="type-caption text-text-secondary">{t('ai.compose.footer')}</p>
     </div>

@@ -928,7 +928,12 @@ export function ScreenW4() {
               ) : null}
             </div>
             {sideTab === 'ai' && aiAvailable ? (
-              <ComposeAiPanel draftId={localId} editor={editor} disabled={Boolean(me.data?.read_only)} />
+              <ComposeAiPanel
+                draftId={localId}
+                editor={editor}
+                disabled={Boolean(me.data?.read_only)}
+                checks={draft?.checks}
+              />
             ) : (
               <>
                 <label className="mb-3 flex cursor-pointer flex-col items-center gap-3 rounded-md border border-dashed border-border-strong px-4 py-5 text-center">
@@ -1130,6 +1135,7 @@ export function ScreenW4() {
               draftId={localId}
               editor={editor}
               disabled={Boolean(me.data?.read_only)}
+              checks={draft?.checks}
               onApplied={() => setAiSheet(false)}
             />
           </div>

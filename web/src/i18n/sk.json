@@ -536,7 +536,9 @@
       "placeholder": "V texte ostáva [[DOPLNIŤ]].",
       "attachment_mentioned": "Spomínate prílohu – skontrolujte, či je priložená.",
       "attachment_pending": "Príloha ešte nebola skontrolovaná antivírusom",
-      "external_recipient": "Správa ide mimo firmu."
+      "external_recipient": "Správa ide mimo firmu.",
+      "multiple_companies": "Príjemcovia sú z viacerých firiem: {{message}}",
+      "language_mismatch": "Text je v inom jazyku ako e-mail zákazníka."
     }
   },
   "mail": {
@@ -1129,6 +1131,13 @@
       "placeholders": "Doplňte zvýraznené údaje [[DOPLNIŤ]] – inak sa správa neodošle.",
       "emptyText": "Najprv napíšte text, ktorý má AI upraviť.",
       "footer": "Podpis a citovanú správu AI nemení.",
+      "checklist": "Kontrola pred odoslaním",
+      "checklistOk": {
+        "placeholder": "Bez [[DOPLNIŤ]]",
+        "multiple_companies": "Príjemcovia z jednej firmy",
+        "attachment_mentioned": "Príloha – nič nechýba",
+        "language_mismatch": "Jazyk sedí so zákazníkom"
+      },
       "errors": {
         "ai_unavailable": "AI je pre túto schránku vypnutá.",
         "ai_budget_exceeded": "Denný rozpočet AI je vyčerpaný – skúste zajtra.",
