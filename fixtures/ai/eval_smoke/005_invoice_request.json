@@ -1,0 +1,11 @@
+{
+  "id": "fictional-005",
+  "subject": "Faktúra k objednávke 4471",
+  "from": "nakup@stavebniny-test.example",
+  "to": ["eshop@smartmail.test"],
+  "attachments": [],
+  "body_text": "Dobrý deň, prosím o zaslanie faktúry k objednávke 4471, nedostali sme ju. Ďakujem, Mária",
+  "language": "sk",
+  "category": "invoice_request",
+  "notes": "Fictional smoke fixture only — never replace with real mail. #100: a customer asks us for an invoice."
+}
