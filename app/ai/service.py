@@ -1,4 +1,4 @@
-"""AI pipeline after mail sync — classify (Phase 2b); no reply suggestion cards."""
+"""AI pipeline after mail sync — classify (Phase 2b), then reply suggestions (Phase 2c)."""
 
 from __future__ import annotations
 
@@ -318,3 +318,25 @@ async def category_counts(db: AsyncSession, mailbox_id: uuid.UUID) -> dict[str, 
         .group_by(Classification.category)
     )
     return {str(cat): int(cnt) for cat, cnt in rows.all() if cat}
+
+
+async def suggest_replies_for_mailbox(db: AsyncSession, mailbox: Mailbox, settings: Settings) -> dict[str, int]:
+    """Phase 2c step after classify: reply suggestions; bodies are fetched from IMAP only for these messages."""
+    from app.ai.reply import suggest_replies
+    from app.mail.body import ensure_body
+    from app.mail.sync import credentials_for
+
+    creds = await credentials_for(db, mailbox, settings)
+
+    async def load_body(message: Message) -> None:
+        if creds is not None and settings.sync_host_allowed(mailbox.imap_host):
+            await ensure_body(db, settings, mailbox, message, creds)
+
+    return await suggest_replies(
+        db,
+        mailbox,
+        settings,
+        spent_usd=await daily_spend_usd(db),
+        shadow=await shadow_mode_enabled(db),
+        load_body=load_body,
+    )

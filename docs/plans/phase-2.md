@@ -108,6 +108,19 @@ approval. Prefer small PRs. **Pilot bugs preempt** any in-flight Phase 2 PR.
 
 Not all items block 2a; call out blockers explicitly.
 
+**Erik's decisions of 29 October 2026 (#94):**
+- Phase 2 continues now, in parallel with the Phase 1 acceptance (pilot days, Figma review). This is a written waiver of the „Phase 1 accepted“ precondition. Pilot bug fixes keep priority.
+- `AI_DAILY_BUDGET_USD` = **5**.
+- AI is enabled first for **eshop@** only, and only for mail received after `ai_enabled_at` (addition A). Branches come later.
+- **Shadow week:** the first week after enabling, suggestions are created but hidden (`ai_shadow_mode`). Measure first, then switch them on.
+- Models (env, never „latest“, D31):
+  - `LLM_MODEL_CLASSIFY=claude-haiku-5-5`
+  - `LLM_MODEL_DRAFT=claude-sonnet-5-5`
+  - `LLM_MODEL_EXTRACT=claude-sonnet-5-5`
+  - `LLM_MODEL_ASSISTANT=claude-sonnet-5-5`
+  - `LLM_MODEL_EMBED` empty (the embeddings provider is decided at 2e).
+- Erik puts the API key into the server `.env` himself.
+
 | Need | Blocks | Notes |
 |---|---|---|
 | **Phase 1 pilot day on a real mailbox** (or written waiver) | Declaring Phase 1 accepted | Filtre/Mimo ↔ Roundcube; branch picker + signature in audit; real host `mail.nameserver.sk` / agreed mailbox |

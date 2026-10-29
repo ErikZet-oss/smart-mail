@@ -2,6 +2,43 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #94 Phase 2c PR 1: reply suggestions (backend)
+
+**Reply step** (`app/ai/reply.py`):
+- Runs after classify in `process_mailbox_ai_job`, for a message that:
+  - is classified `done` with `needs_reply`;
+  - is in a reply category (inquiry, order*, invoice_request, complaint, shipping, payment, document_request);
+  - is in an AI-eligible folder and arrived after `ai_enabled_at`;
+  - is not from our own mailbox.
+- The step gets one `reply` suggestion (draft model `LLM_MODEL_DRAFT`, `propose_reply` tool, no Money tools):
+  - the body is fetched from IMAP only for these messages;
+  - the last 5 thread messages go to the model, wrapped as `<untrusted_email>`;
+  - prompts are `app/ai/prompts/system_base.md` and `draft.md`.
+- Once per message and per Message-ID across copies.
+- The daily budget applies: a paid call is always an `ai_runs` row with purpose `draft`.
+- Errors or invalid output leave no row, so the next run retries.
+- The `ai_shadow_mode` flag sets `shadow`.
+- Audit: `ai.suggestion_created` (actor ai, no body).
+
+**Guards** (`app/ai/guards.py`, AI_ASSISTANT §9 without Money):
+- blocking:
+  - `[[DOPLNIŤ…]]` placeholder;
+  - empty body;
+  - a number/date in the draft that is not in the thread (fact check);
+  - missing recipient.
+- warnings:
+  - new recipient outside INTERNAL_DOMAINS;
+  - security notes from classification (DMARC/SPF fail, display-name spoof, IBAN change);
+  - „v prílohe“ without an attachment;
+  - language mismatch.
+- The recipient always comes from the message, never from the model.
+
+**Endpoint:**
+- `GET /api/mail/mailboxes/{ref}/messages/{id}/suggestions` returns the pending, non-shadow suggestions of a message and its copies, with checks and `blocked`.
+- The card UI and approve/reject follow in the next PRs.
+
+**Docs:** `docs/plans/phase-2.md` records Erik's decisions of 29 Oct (budget 5 USD, eshop@ first, shadow week, model ids).
+
 ## [Unreleased] — #93 list keyboard shortcuts (UX_SPEC §6)
 
 **Central handler:**
