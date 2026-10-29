@@ -13,7 +13,15 @@ from app.auth.deps import Auth, AuthContext
 from app.auth.models import Role
 from app.auth.reauth_store import REAUTH_TTL_S, forget_reauth, has_recent_reauth, mark_reauth, reauth_key
 
-__all__ = ["REAUTH_TTL_S", "RecentReauth", "forget_reauth", "has_recent_reauth", "mark_reauth", "reauth_key"]
+__all__ = [
+    "REAUTH_TTL_S",
+    "ReauthedSession",
+    "RecentReauth",
+    "forget_reauth",
+    "has_recent_reauth",
+    "mark_reauth",
+    "reauth_key",
+]
 
 
 async def require_recent_reauth(request: Request, ctx: Auth) -> AuthContext:
@@ -29,3 +37,16 @@ async def require_recent_reauth(request: Request, ctx: Auth) -> AuthContext:
 
 
 RecentReauth = Annotated[AuthContext, Depends(require_recent_reauth)]
+
+
+async def require_reauthed_session(request: Request, ctx: Auth) -> AuthContext:
+    """Re-auth of this session and person, for a user's own sensitive change (e.g. turning 2FA off, #77) —
+    no admin role needed."""
+    redis: Redis = request.app.state.redis
+    person_id = ctx.person.id if ctx.person else None
+    if not await has_recent_reauth(redis, ctx.session.id, ctx.account.id, person_id):
+        raise HTTPException(status_code=401, detail={"code": "reauth_required"})
+    return ctx
+
+
+ReauthedSession = Annotated[AuthContext, Depends(require_reauthed_session)]

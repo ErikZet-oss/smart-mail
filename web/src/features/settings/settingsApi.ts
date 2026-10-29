@@ -102,6 +102,15 @@ export const fetchProvider = (mailbox = 'default') =>
 export const fetchSessions = () => api<Record<string, unknown>[]>('GET', '/api/settings/security/sessions');
 export const revokeSession = (id: string) => api('POST', `/api/settings/security/sessions/${id}/revoke`);
 
+/** Settings 09 „Dvojstupňové overenie“ (#77). */
+export type TwoFactorStatus = { available: boolean; enabled: boolean; required: boolean; backup_codes_left: number };
+export const fetchTwoFactor = () => api<TwoFactorStatus>('GET', '/api/settings/security/2fa');
+export const startTwoFactor = () =>
+  api<{ secret: string; otpauth_uri: string; backup_codes: string[] }>('POST', '/api/settings/security/2fa/start', {});
+export const confirmTwoFactor = (code: string) =>
+  api<{ enabled: boolean }>('POST', '/api/settings/security/2fa/confirm', { code });
+export const disableTwoFactor = () => api<{ enabled: boolean }>('POST', '/api/settings/security/2fa/disable', {});
+
 export const fetchAdminBranches = () => api<Record<string, unknown>[]>('GET', '/api/settings/admin/branches');
 export const saveBranch = (id: string, body: Record<string, unknown>) =>
   api<Record<string, unknown>>('PUT', `/api/settings/admin/branches/${id}`, body);
