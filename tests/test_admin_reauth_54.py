@@ -10,10 +10,11 @@ from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.models import Account, Branch, Role, Session
-from app.auth.reauth_store import REAUTH_TTL_S, reauth_key
+from app.auth.models import Account, Branch, Person, Role, Session
+from app.auth.reauth_store import REAUTH_TTL_S, mark_reauth, reauth_key
 from app.core.audit import AuditLog
 from tests.conftest import Client, FakeMailServer, make_personal
+from tests.test_persons_1b import choose, login_branch, senica
 
 PASSWORD = "Spravne-Heslo-1"
 ADMIN = "admin@smartsro.sk"
@@ -156,3 +157,41 @@ async def test_54_non_admin_gets_403_not_a_password_prompt(
     assert (await client.login(jana.email, PASSWORD)).status_code == 200
     r = await _patch(client, jana, role="admin")
     assert r.status_code == 403 and r.json()["detail"]["code"] == "admin_required"
+
+
+async def test_54_person_switch_forgets_reauth(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, app: FastAPI
+) -> None:
+    """A branch login shares one session (PersonChip, no PIN — D9): the re-auth belongs to the person who typed it."""
+    branch, branch_login, people = await senica(db)
+    admin = Person(branch_id=branch.id, first_name="Erik", last_name="Správca", role=Role.admin)
+    db.add(admin)
+    await db.commit()
+    eva = await make_personal(db, email="eva@smartsro.sk")
+    await login_branch(client, mail_server, branch_login)
+    await choose(client, admin)
+    assert (await client.reauth(PASSWORD)).status_code == 200
+    assert (await _patch(client, eva, role="accounting")).status_code == 200
+
+    await choose(client, people["jana"])
+    await choose(client, admin)
+    r = await _patch(client, eva, role="sales")
+    assert r.status_code == 401 and r.json()["detail"]["code"] == "reauth_required"
+
+
+async def test_54_reauth_key_is_bound_to_the_person(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, app: FastAPI
+) -> None:
+    """Even a key that survived (e.g. written before a switch) does not count for another person of the session."""
+    branch, branch_login, _people = await senica(db)
+    admin = Person(branch_id=branch.id, first_name="Erik", last_name="Správca", role=Role.admin)
+    other_admin = Person(branch_id=branch.id, first_name="Iná", last_name="Správkyňa", role=Role.admin)
+    db.add_all([admin, other_admin])
+    await db.commit()
+    eva = await make_personal(db, email="eva@smartsro.sk")
+    await login_branch(client, mail_server, branch_login)
+    await choose(client, other_admin)
+    (session_id,) = await _session_ids(db, branch_login)
+    await mark_reauth(app.state.redis, session_id, branch_login.id, admin.id)  # someone else's re-auth
+    r = await _patch(client, eva, role="accounting")
+    assert r.status_code == 401 and r.json()["detail"]["code"] == "reauth_required"

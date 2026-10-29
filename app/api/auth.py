@@ -420,7 +420,9 @@ async def reauth(
     ok = result is LoginResult.ok
     if ok:
         await limiter.success(email)
-        await mark_reauth(request.app.state.redis, ctx.session.id, ctx.account.id)
+        await mark_reauth(
+            request.app.state.redis, ctx.session.id, ctx.account.id, ctx.person.id if ctx.person else None
+        )
     else:
         await limiter.fail(email, ip)
     audit(

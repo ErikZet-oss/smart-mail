@@ -14,14 +14,21 @@ def reauth_key(session_id: uuid.UUID) -> str:
     return f"smartmail:reauth:{session_id}"
 
 
-async def mark_reauth(redis: Redis, session_id: uuid.UUID, account_id: uuid.UUID) -> None:
-    await redis.set(reauth_key(session_id), str(account_id), ex=REAUTH_TTL_S)
+def _owner(account_id: uuid.UUID, person_id: uuid.UUID | None) -> str:
+    # the re-auth belongs to the person who typed the password: a branch login shares one session (PersonChip, D9)
+    return f"{account_id}:{person_id or '-'}"
 
 
-async def has_recent_reauth(redis: Redis, session_id: uuid.UUID, account_id: uuid.UUID) -> bool:
+async def mark_reauth(redis: Redis, session_id: uuid.UUID, account_id: uuid.UUID, person_id: uuid.UUID | None) -> None:
+    await redis.set(reauth_key(session_id), _owner(account_id, person_id), ex=REAUTH_TTL_S)
+
+
+async def has_recent_reauth(
+    redis: Redis, session_id: uuid.UUID, account_id: uuid.UUID, person_id: uuid.UUID | None
+) -> bool:
     raw: object = await redis.get(reauth_key(session_id))
     value = raw.decode() if isinstance(raw, bytes) else raw
-    return bool(value == str(account_id))
+    return bool(value == _owner(account_id, person_id))
 
 
 async def forget_reauth(redis: Redis | None, session_ids: Iterable[uuid.UUID]) -> None:

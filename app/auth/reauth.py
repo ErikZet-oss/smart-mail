@@ -17,13 +17,13 @@ __all__ = ["REAUTH_TTL_S", "RecentReauth", "forget_reauth", "has_recent_reauth",
 
 
 async def require_recent_reauth(request: Request, ctx: Auth) -> AuthContext:
-    """401 `reauth_required` unless this very session re-authenticated within REAUTH_TTL_S. The key is per session,
-    so another device of the same login cannot reuse it."""
+    """401 `reauth_required` unless this very session — and the same person in it — re-authenticated within
+    REAUTH_TTL_S. Another device of the same login, or another person picked in the PersonChip, cannot reuse it."""
     if ctx.person is None or ctx.person.role != Role.admin:
         # every ⚠ change is an admin change: a non-admin gets the usual 403, not a password prompt
         raise HTTPException(status_code=403, detail={"code": "admin_required"})
     redis: Redis = request.app.state.redis
-    if not await has_recent_reauth(redis, ctx.session.id, ctx.account.id):
+    if not await has_recent_reauth(redis, ctx.session.id, ctx.account.id, ctx.person.id):
         raise HTTPException(status_code=401, detail={"code": "reauth_required"})
     return ctx
 
