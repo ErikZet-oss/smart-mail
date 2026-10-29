@@ -132,3 +132,19 @@ export async function uploadAttachment(draftId: string, file: File, inline = fal
   if (!response.ok) throw new Error(`upload ${response.status}`);
   return (await response.json()) as ComposeDraft;
 }
+
+export type AiAction = 'write' | 'shorter' | 'formal' | 'friendly' | 'grammar' | 'translate' | 'answer_all';
+export type AiLanguage = 'sk' | 'cs' | 'en' | 'de' | 'pl' | 'hu';
+export type AiProposal = {
+  action: AiAction;
+  text: string;
+  language: string;
+  unanswered: string[];
+  placeholders: string[];
+};
+
+/** 2d compose AI panel: a proposal for the person's own text (never saved or sent by this call). */
+export const composeAi = (
+  draftId: string,
+  body: { action: AiAction; text: string; instruction?: string; language?: AiLanguage },
+) => api<AiProposal>('POST', `/api/mail/compose/${draftId}/ai`, body, { global: false });

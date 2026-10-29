@@ -1096,6 +1096,45 @@
     }
   },
   "ai": {
+    "compose": {
+      "tab": "AI",
+      "title": "AI pri písaní",
+      "open": "AI",
+      "writeLabel": "Napíš za mňa",
+      "writePlaceholder": "Napr. poďakuj za objednávku a potvrď dodanie do piatku",
+      "write": "Napísať",
+      "rewrite": "Prepísať text",
+      "actions": {
+        "shorter": "Kratšie",
+        "formal": "Formálnejšie",
+        "friendly": "Priateľskejšie",
+        "grammar": "Opraviť gramatiku",
+        "answer_all": "Doplniť odpoveď na všetky otázky"
+      },
+      "translateLabel": "Preložiť do",
+      "translate": "Preložiť",
+      "languages": {
+        "sk": "slovenčiny",
+        "cs": "češtiny",
+        "en": "angličtiny",
+        "de": "nemčiny",
+        "pl": "poľštiny",
+        "hu": "maďarčiny"
+      },
+      "loading": "AI pripravuje návrh…",
+      "proposal": "Návrh AI – zmeny oproti vášmu textu",
+      "apply": "Použiť",
+      "discard": "Zahodiť",
+      "unanswered": "Doteraz bez odpovede:",
+      "placeholders": "Doplňte zvýraznené údaje [[DOPLNIŤ]] – inak sa správa neodošle.",
+      "emptyText": "Najprv napíšte text, ktorý má AI upraviť.",
+      "footer": "Podpis a citovanú správu AI nemení.",
+      "errors": {
+        "ai_unavailable": "AI je pre túto schránku vypnutá.",
+        "ai_budget_exceeded": "Denný rozpočet AI je vyčerpaný – skúste zajtra.",
+        "generic": "AI teraz neodpovedá – skúste to znova."
+      }
+    },
     "card": {
       "replyTitle": "Návrh odpovede",
       "subline": "{{category}} · {{language}}",

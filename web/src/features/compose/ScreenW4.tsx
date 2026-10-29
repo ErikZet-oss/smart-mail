@@ -14,6 +14,7 @@ import {
   Signature,
   SquareArrowOutUpRight,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +31,8 @@ import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
+import { fetchFolders, foldersKey } from '../mail/mailApi';
+import { fetchPrefs, PREFS_KEY } from '../prefs/prefsApi';
 import { fetchPicker, PICKER_KEY } from '../persons/personsApi';
 import {
   createDraft,
@@ -42,6 +45,7 @@ import {
   type ComposeMode,
 } from './composeApi';
 import { ComposeToolbar } from './ComposeToolbar';
+import { ComposeAiPanel } from './ComposeAiPanel';
 import { composeExtensions, signatureHtmlOf } from './composeExtensions';
 import { sendErrorMessage, sendErrorServerReply } from './sendCopy';
 import { watchSend } from './sendWatch';
@@ -110,7 +114,7 @@ function formatAllowlistFailure(
   return t('compose.sendErrorRecipientNotAllowed', { email });
 }
 
-/** W4 Písanie — Roundcube-like compose (Phase 1e). AI tab deferred (no AI in Phase 1). */
+/** W4 Písanie — Roundcube-like compose (Phase 1e); ✦ AI tab W4a / sheet M17 (Phase 2d). */
 export function ScreenW4() {
   const { t, i18n } = useTranslation();
   const params = useParams();
@@ -440,6 +444,12 @@ export function ScreenW4() {
     keptSigner !== `${signerId}:${activePerson?.id ?? ''}` &&
     signers.some((p) => p.id === activePerson?.id);
   const mobile = useMediaQuery(MOBILE_QUERY);
+  // W4a / M17 (2d): only where AI runs for this mailbox and not in Klasické zobrazenie
+  const [sideTab, setSideTab] = useState<'options' | 'ai'>('options');
+  const [aiSheet, setAiSheet] = useState(false);
+  const aiFolders = useQuery({ queryKey: foldersKey(mailbox), queryFn: () => fetchFolders(mailbox) });
+  const prefs = useQuery({ queryKey: PREFS_KEY, queryFn: fetchPrefs });
+  const aiAvailable = Boolean(aiFolders.data?.mailbox.ai_available) && !prefs.data?.ui.classic;
 
   function openPopupWindow() {
     if (!localId) return;
@@ -573,6 +583,17 @@ export function ScreenW4() {
             <MessageSquare size={18} />
             <span className="type-micro">{t('compose.responses')}</span>
           </button>
+          {aiAvailable ? (
+            <button
+              type="button"
+              className="flex h-14 w-[72px] flex-col items-center justify-center gap-1 rounded-sm text-ai-600 hover:bg-bg-subtle"
+              onClick={() => (mobile ? setAiSheet(true) : setSideTab('ai'))}
+              aria-label={t('ai.compose.title')}
+            >
+              <Sparkles size={18} aria-hidden="true" />
+              <span className="type-micro">{t('ai.compose.open')}</span>
+            </button>
+          ) : null}
           <div className="flex-1" />
           {isPopup ? (
             <button
@@ -880,122 +901,151 @@ export function ScreenW4() {
             aria-label={t('compose.options')}
             className="hidden w-[380px] shrink-0 flex-col overflow-y-auto border-l border-border-default bg-bg-canvas px-4 lg:flex"
           >
-            <div className="mb-4 flex h-[var(--size-tab)] shrink-0 items-end gap-6 border-b border-border-default">
-              <h2 className="type-label -mb-px border-b-2 border-brand-primary-600 pb-2 text-brand-primary-700">
+            <div
+              role="tablist"
+              className="mb-4 flex h-[var(--size-tab)] shrink-0 items-end gap-6 border-b border-border-default"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={sideTab === 'options'}
+                onClick={() => setSideTab('options')}
+                className={`type-label -mb-px border-b-2 pb-2 ${sideTab === 'options' ? 'border-brand-primary-600 text-brand-primary-700' : 'border-transparent text-text-secondary'}`}
+              >
                 {t('compose.options')}
-              </h2>
-            </div>
-            <label className="mb-3 flex cursor-pointer flex-col items-center gap-3 rounded-md border border-dashed border-border-strong px-4 py-5 text-center">
-              <span className="type-small text-text-secondary">{t('compose.maxSize')}</span>
-              <span className="type-body-strong inline-flex h-8 items-center gap-2 rounded-sm border border-border-strong bg-bg-canvas px-3 text-text-primary hover:bg-bg-muted">
-                <Paperclip size={16} aria-hidden="true" />
-                {t('compose.attachFile')}
-              </span>
-              <Download size={24} aria-hidden="true" className="text-text-tertiary" />
-              <input
-                type="file"
-                className="sr-only"
-                multiple
-                onChange={(event) => {
-                  void attachFiles(event.target.files);
-                  event.target.value = '';
-                }}
-              />
-            </label>
-            {(draft?.attachments ?? []).some((a) => !a.is_inline) ? (
-              <ul aria-label={t('compose.attachments')} className="mb-3 flex flex-col gap-1.5">
-                {(draft?.attachments ?? [])
-                  .filter((a) => !a.is_inline)
-                  .map((a) => {
-                    const pending = a.av_status === 'pending';
-                    const unscanned = a.av_status === 'skipped' || a.av_status === 'error';
-                    const infected = a.av_status === 'infected';
-                    return (
-                      <li
-                        key={a.id}
-                        className="type-small flex flex-col justify-center gap-0.5 rounded-sm border border-border-default px-2.5 py-1 text-text-primary"
-                      >
-                        <span className="flex h-8 items-center gap-2">
-                          <FileText size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
-                          <span className="min-w-0 flex-1 truncate">{a.filename}</span>
-                          {unscanned ? (
-                            <span className="type-caption shrink-0 text-text-tertiary">
-                              ({t('mail.attachmentUnscanned')})
-                            </span>
-                          ) : null}
-                          {infected ? (
-                            <span className="type-caption shrink-0 text-danger-600">
-                              ({t('compose.attachmentInfectedChip')})
-                            </span>
-                          ) : null}
-                          <span className="type-caption shrink-0 text-text-secondary">
-                            {Math.round(a.size / 1024)} kB
-                          </span>
-                          <button
-                            type="button"
-                            className="shrink-0 rounded-xs text-text-secondary hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary-500"
-                            aria-label={`${t('compose.removeAttachment')} ${a.filename}`}
-                            onClick={() => removeAtt.mutate(a.id)}
-                          >
-                            <X size={14} aria-hidden="true" />
-                          </button>
-                        </span>
-                        {pending ? (
-                          <span className="type-caption pb-1 text-text-tertiary">{t('compose.attachmentPending')}</span>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-              </ul>
-            ) : null}
-            <div className="flex flex-col gap-3 border-t border-border-default pt-4">
-              <div className="flex items-center justify-between gap-3">
-                <span id="compose-mdn-label" className="type-small text-text-primary">
-                  {t('compose.mdn')}
-                </span>
+              </button>
+              {aiAvailable ? (
                 <button
                   type="button"
-                  role="switch"
-                  aria-checked={mdn}
-                  aria-labelledby="compose-mdn-label"
-                  onClick={() => {
-                    setMdn(!mdn);
-                    setDirty(true);
-                  }}
-                  className={`relative h-[18px] w-8 shrink-0 rounded-full transition-colors duration-[var(--motion-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary-500 ${
-                    mdn ? 'bg-brand-primary-600' : 'bg-border-strong'
-                  }`}
+                  role="tab"
+                  aria-selected={sideTab === 'ai'}
+                  onClick={() => setSideTab('ai')}
+                  className={`type-label -mb-px inline-flex items-center gap-1 border-b-2 pb-2 ${sideTab === 'ai' ? 'border-ai-600 text-ai-600' : 'border-transparent text-text-secondary'}`}
                 >
-                  <span
-                    className={`absolute top-0.5 size-3.5 rounded-full bg-bg-canvas transition-[left] duration-[var(--motion-hover)] ${
-                      mdn ? 'left-4' : 'left-0.5'
-                    }`}
-                  />
+                  <Sparkles size={14} aria-hidden="true" />
+                  {t('ai.compose.tab')}
                 </button>
-              </div>
-              <label className="flex items-center justify-between gap-3">
-                <span className="type-small text-text-primary">{t('compose.priority')}</span>
-                <span className="relative w-[180px]">
-                  <select
-                    value={priority}
-                    onChange={(event) => {
-                      setPriority(event.target.value as typeof priority);
-                      setDirty(true);
-                    }}
-                    className="type-body h-9 w-full appearance-none rounded-sm border border-border-default bg-bg-canvas pl-3 pr-8 text-text-primary"
-                  >
-                    <option value="low">{t('compose.priorityLow')}</option>
-                    <option value="normal">{t('compose.priorityNormal')}</option>
-                    <option value="high">{t('compose.priorityHigh')}</option>
-                  </select>
-                  <ChevronDown
-                    size={16}
-                    aria-hidden="true"
-                    className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary"
-                  />
-                </span>
-              </label>
+              ) : null}
             </div>
+            {sideTab === 'ai' && aiAvailable ? (
+              <ComposeAiPanel draftId={localId} editor={editor} disabled={Boolean(me.data?.read_only)} />
+            ) : (
+              <>
+                <label className="mb-3 flex cursor-pointer flex-col items-center gap-3 rounded-md border border-dashed border-border-strong px-4 py-5 text-center">
+                  <span className="type-small text-text-secondary">{t('compose.maxSize')}</span>
+                  <span className="type-body-strong inline-flex h-8 items-center gap-2 rounded-sm border border-border-strong bg-bg-canvas px-3 text-text-primary hover:bg-bg-muted">
+                    <Paperclip size={16} aria-hidden="true" />
+                    {t('compose.attachFile')}
+                  </span>
+                  <Download size={24} aria-hidden="true" className="text-text-tertiary" />
+                  <input
+                    type="file"
+                    className="sr-only"
+                    multiple
+                    onChange={(event) => {
+                      void attachFiles(event.target.files);
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
+                {(draft?.attachments ?? []).some((a) => !a.is_inline) ? (
+                  <ul aria-label={t('compose.attachments')} className="mb-3 flex flex-col gap-1.5">
+                    {(draft?.attachments ?? [])
+                      .filter((a) => !a.is_inline)
+                      .map((a) => {
+                        const pending = a.av_status === 'pending';
+                        const unscanned = a.av_status === 'skipped' || a.av_status === 'error';
+                        const infected = a.av_status === 'infected';
+                        return (
+                          <li
+                            key={a.id}
+                            className="type-small flex flex-col justify-center gap-0.5 rounded-sm border border-border-default px-2.5 py-1 text-text-primary"
+                          >
+                            <span className="flex h-8 items-center gap-2">
+                              <FileText size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
+                              <span className="min-w-0 flex-1 truncate">{a.filename}</span>
+                              {unscanned ? (
+                                <span className="type-caption shrink-0 text-text-tertiary">
+                                  ({t('mail.attachmentUnscanned')})
+                                </span>
+                              ) : null}
+                              {infected ? (
+                                <span className="type-caption shrink-0 text-danger-600">
+                                  ({t('compose.attachmentInfectedChip')})
+                                </span>
+                              ) : null}
+                              <span className="type-caption shrink-0 text-text-secondary">
+                                {Math.round(a.size / 1024)} kB
+                              </span>
+                              <button
+                                type="button"
+                                className="shrink-0 rounded-xs text-text-secondary hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary-500"
+                                aria-label={`${t('compose.removeAttachment')} ${a.filename}`}
+                                onClick={() => removeAtt.mutate(a.id)}
+                              >
+                                <X size={14} aria-hidden="true" />
+                              </button>
+                            </span>
+                            {pending ? (
+                              <span className="type-caption pb-1 text-text-tertiary">
+                                {t('compose.attachmentPending')}
+                              </span>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                  </ul>
+                ) : null}
+                <div className="flex flex-col gap-3 border-t border-border-default pt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span id="compose-mdn-label" className="type-small text-text-primary">
+                      {t('compose.mdn')}
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={mdn}
+                      aria-labelledby="compose-mdn-label"
+                      onClick={() => {
+                        setMdn(!mdn);
+                        setDirty(true);
+                      }}
+                      className={`relative h-[18px] w-8 shrink-0 rounded-full transition-colors duration-[var(--motion-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary-500 ${
+                        mdn ? 'bg-brand-primary-600' : 'bg-border-strong'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 size-3.5 rounded-full bg-bg-canvas transition-[left] duration-[var(--motion-hover)] ${
+                          mdn ? 'left-4' : 'left-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <label className="flex items-center justify-between gap-3">
+                    <span className="type-small text-text-primary">{t('compose.priority')}</span>
+                    <span className="relative w-[180px]">
+                      <select
+                        value={priority}
+                        onChange={(event) => {
+                          setPriority(event.target.value as typeof priority);
+                          setDirty(true);
+                        }}
+                        className="type-body h-9 w-full appearance-none rounded-sm border border-border-default bg-bg-canvas pl-3 pr-8 text-text-primary"
+                      >
+                        <option value="low">{t('compose.priorityLow')}</option>
+                        <option value="normal">{t('compose.priorityNormal')}</option>
+                        <option value="high">{t('compose.priorityHigh')}</option>
+                      </select>
+                      <ChevronDown
+                        size={16}
+                        aria-hidden="true"
+                        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary"
+                      />
+                    </span>
+                  </label>
+                </div>
+              </>
+            )}
           </aside>
         </div>
       </div>
@@ -1053,6 +1103,37 @@ export function ScreenW4() {
             setResponsesOpen(false);
           }}
         />
+      ) : null}
+      {aiSheet && aiAvailable ? (
+        // M17 AI pri písaní — bottom sheet on the phone
+        <div className="fixed inset-0 z-40 flex items-end bg-black/30" onClick={() => setAiSheet(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('ai.compose.title')}
+            data-testid="screen-m17"
+            className="max-h-[85vh] w-full overflow-y-auto rounded-t-lg bg-bg-canvas p-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="type-heading text-text-primary">{t('ai.compose.title')}</h2>
+              <button
+                type="button"
+                className="rounded-sm p-2 text-text-secondary hover:bg-bg-subtle"
+                aria-label={t('common.close')}
+                onClick={() => setAiSheet(false)}
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <ComposeAiPanel
+              draftId={localId}
+              editor={editor}
+              disabled={Boolean(me.data?.read_only)}
+              onApplied={() => setAiSheet(false)}
+            />
+          </div>
+        </div>
       ) : null}
       {signatureOpen && localId ? (
         <SignatureEditDialog

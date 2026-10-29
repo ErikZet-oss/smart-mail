@@ -22,7 +22,7 @@ from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
 from app.core.audit import audit
 from app.mail.models import Mailbox, Message
 
-router = APIRouter(prefix="/api/compose", tags=["compose-ai"])
+router = APIRouter(prefix="/api/mail/compose", tags=["compose-ai"])  # next to the compose API
 
 
 class AssistIn(BaseModel):
