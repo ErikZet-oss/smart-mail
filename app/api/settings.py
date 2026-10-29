@@ -17,8 +17,9 @@ from app.auth.admin_accounts import AccountRuleError, convert_to_branch, create_
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep, client_ip
 from app.auth.models import Account, AccountKind, Branch, Person, PersonBranch, Role
 from app.auth.persons import eligible_persons, own_login_person_ids
+from app.auth.reauth import RecentReauth, require_recent_reauth
 from app.auth.security import decrypt
-from app.auth.sessions import RevokeReason, revoke_account_sessions
+from app.auth.sessions import RevokeReason, forget_revoked_reauth, revoke_account_sessions
 from app.core.audit import AuditLog, audit
 from app.mail import storage
 from app.mail.clamav import scan_bytes
@@ -976,7 +977,7 @@ class UserIn(BaseModel):
 
 
 @router.post("/admin/users")
-async def create_user(body: UserIn, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+async def create_user(body: UserIn, request: Request, ctx: RecentReauth, db: DB) -> dict[str, Any]:
     admin = require_admin(ctx)
     if "@" not in body.email:
         raise fail(422, "email_invalid")
@@ -1019,7 +1020,9 @@ class UserPatch(BaseModel):
 
 
 @router.patch("/admin/users/{account_id}")
-async def patch_user(account_id: uuid.UUID, body: UserPatch, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+async def patch_user(
+    account_id: uuid.UUID, body: UserPatch, request: Request, ctx: RecentReauth, db: DB
+) -> dict[str, Any]:
     admin = require_admin(ctx)
     account = await db.get(Account, account_id)
     if account is None:
@@ -1059,6 +1062,8 @@ async def patch_user(account_id: uuid.UUID, body: UserPatch, request: Request, c
         details=details,
     )
     await db.commit()
+    if "revoked_sessions" in details:
+        await forget_revoked_reauth(db, request.app.state.redis, account.id)
     return await _user_out(db, account)
 
 
@@ -1067,7 +1072,7 @@ async def verify_user_login(
     account_id: uuid.UUID,
     body: VerifyIn,
     request: Request,
-    ctx: Auth,
+    ctx: RecentReauth,
     db: DB,
     authenticator: Authenticator,
     limiter: Limiter,
@@ -1104,7 +1109,7 @@ async def verify_user_login(
 
 
 @router.post("/admin/users/{account_id}/logout-all")
-async def logout_user_everywhere(account_id: uuid.UUID, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+async def logout_user_everywhere(account_id: uuid.UUID, request: Request, ctx: RecentReauth, db: DB) -> dict[str, Any]:
     """„Odhlásiť zo všetkých zariadení“: revokes every session of the login (the admin's own too, if theirs)."""
     admin = require_admin(ctx)
     account = await db.get(Account, account_id)
@@ -1122,6 +1127,7 @@ async def logout_user_everywhere(account_id: uuid.UUID, request: Request, ctx: A
         details={"revoked_sessions": revoked},
     )
     await db.commit()
+    await forget_revoked_reauth(db, request.app.state.redis, account.id)
     return {"revoked_sessions": revoked}
 
 
@@ -1162,7 +1168,7 @@ class AccessIn(BaseModel):
 
 @router.put("/admin/users/{account_id}/mailbox-access")
 async def save_user_mailbox_access(
-    account_id: uuid.UUID, body: list[AccessIn], request: Request, ctx: Auth, db: DB
+    account_id: uuid.UUID, body: list[AccessIn], request: Request, ctx: RecentReauth, db: DB
 ) -> list[dict[str, Any]]:
     """„Prístup k schránkam“: Čítať / Odosielať ako per mailbox (Odosielať needs Čítať). The own mailbox stays."""
     admin = require_admin(ctx)
@@ -1493,6 +1499,8 @@ async def update_person_admin(
     if person is None:
         raise fail(404, "person_not_found")
     before = _person_state(person)
+    if body.role != person.role.value or body.active != person.active:
+        await require_recent_reauth(request, ctx)  # ⚠ role / Aktívna (#54); names and phones need no re-auth
     covers_before = sorted((await _covers(db)).get(person.id, []))
     if person.active and not body.active and person.branch_id is not None:
         await _keep_one_active(db, person)
@@ -1543,7 +1551,7 @@ async def update_person_admin(
 
 
 @router.delete("/admin/people/{person_id}")
-async def delete_person_admin(person_id: uuid.UUID, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+async def delete_person_admin(person_id: uuid.UUID, request: Request, ctx: RecentReauth, db: DB) -> dict[str, Any]:
     """ "Odstrániť osobu": a person with history (audit, sent mail, own login) is only deactivated, so history keeps
     the name; the last active person of a branch stays (SETTINGS_SPEC 11b)."""
     admin = require_admin(ctx)
@@ -1606,7 +1614,7 @@ async def delete_person_admin(person_id: uuid.UUID, request: Request, ctx: Auth,
 
 
 @router.post("/admin/branches/{branch_id}/link-login")
-async def link_branch_login(branch_id: uuid.UUID, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+async def link_branch_login(branch_id: uuid.UUID, request: Request, ctx: RecentReauth, db: DB) -> dict[str, Any]:
     """ "Prepojiť prihlásenie s pobočkou": the login of the branch mailbox becomes the branch login (created when the
     mailbox has none yet), so its next login shows "Kto ste?" (#33)."""
     admin = require_admin(ctx)
@@ -1639,6 +1647,7 @@ async def link_branch_login(branch_id: uuid.UUID, request: Request, ctx: Auth, d
         details={"before": before, "after": await _account_state(db, account), "revoked_sessions": revoked},
     )
     await db.commit()
+    await forget_revoked_reauth(db, request.app.state.redis, account.id)
     return await _user_out(db, account)
 
 
@@ -1669,7 +1678,7 @@ class MailboxAdminIn(BaseModel):
 
 @router.put("/admin/mailboxes/{mailbox_id}")
 async def update_mailbox_admin(
-    mailbox_id: uuid.UUID, body: MailboxAdminIn, request: Request, ctx: Auth, db: DB
+    mailbox_id: uuid.UUID, body: MailboxAdminIn, request: Request, ctx: RecentReauth, db: DB
 ) -> dict[str, Any]:
     admin = require_admin(ctx)
     mailbox = await db.get(Mailbox, mailbox_id)
@@ -2049,7 +2058,7 @@ async def branch_folders(ctx: Auth, db: DB) -> list[dict[str, Any]]:
 
 
 @router.delete("/admin/branches/{branch_id}")
-async def delete_branch(branch_id: uuid.UUID, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
+async def delete_branch(branch_id: uuid.UUID, request: Request, ctx: RecentReauth, db: DB) -> dict[str, Any]:
     """„Vymazať pobočku“: only an empty branch — no active person and no login of the branch (409 otherwise).
     Inactive persons keep their name in history and lose the branch; covers go with the branch."""
     admin = require_admin(ctx)

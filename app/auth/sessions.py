@@ -10,11 +10,13 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from redis.asyncio import Redis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import Account, AccountKind, Branch, Session
 from app.auth.persons import eligible_persons
+from app.auth.reauth_store import forget_reauth
 from app.auth.security import new_token, sha256_hex
 from app.core.config import Settings
 
@@ -139,6 +141,15 @@ async def revoke_account_sessions(
         stmt = stmt.where(Session.id != except_session_id)
     result = await db.execute(stmt)
     return int(getattr(result, "rowcount", 0) or 0)
+
+
+async def forget_revoked_reauth(db: AsyncSession, redis: Redis, account_id: uuid.UUID) -> None:
+    """Drop the admin re-auth (#54) of every revoked session of the login. Call it after the commit that revoked
+    them, so a rolled-back change (e.g. 409 `last_admin`) never leaves a live session without its re-auth."""
+    ids = (
+        await db.execute(select(Session.id).where(Session.account_id == account_id, Session.revoked_at.is_not(None)))
+    ).scalars()
+    await forget_reauth(redis, list(ids))
 
 
 async def automatic_person(db: AsyncSession, account: Account) -> uuid.UUID | None:

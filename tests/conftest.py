@@ -179,6 +179,10 @@ class Client(httpx.AsyncClient):
             headers=headers,
         )
 
+    async def reauth(self, password: str) -> httpx.Response:
+        """Re-auth for ⚠ admin changes (#54)."""
+        return await self.send_json("POST", "/api/auth/reauth", {"password": password})
+
 
 @pytest.fixture
 async def client(app: FastAPI) -> AsyncIterator[Client]:

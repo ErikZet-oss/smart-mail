@@ -25,12 +25,14 @@ from app.auth.deps import DB, Auth, AuthContext, SettingsDep, client_ip, now_utc
 from app.auth.models import Account, Branch, Person, Session
 from app.auth.provisioning import provision_account, remember_mailbox_password
 from app.auth.ratelimit import LoginRateLimiter
+from app.auth.reauth_store import REAUTH_TTL_S, forget_reauth, mark_reauth
 from app.auth.security import csrf_token, decrypt, mfa_trust_cookie, mfa_trust_valid
 from app.auth.sessions import (
     Invalid,
     RevokeReason,
     automatic_person,
     create_session,
+    forget_revoked_reauth,
     resolve,
     revoke,
     revoke_account_sessions,
@@ -229,7 +231,8 @@ async def login(
 
     await limiter.success(email)
     now = now_utc()
-    if remember_mailbox_password(account, body.password, settings, now=now):
+    password_changed = remember_mailbox_password(account, body.password, settings, now=now)
+    if password_changed:
         revoked = await revoke_account_sessions(db, account.id, RevokeReason.password_changed, now=now)
         audit(db, "auth.password_changed", account_id=account.id, ip=ip, details={"sessions_revoked": revoked})
     await ensure_own_mailbox(db, account, settings)
@@ -257,6 +260,8 @@ async def login(
     if needs_mfa:
         audit(db, "auth.login_mfa_required", account_id=account.id, ip=ip)
         await db.commit()
+        if password_changed:
+            await forget_revoked_reauth(db, request.app.state.redis, account.id)
         return LoginOut(next="2fa")
 
     account.last_login_at = now
@@ -271,6 +276,8 @@ async def login(
         details={"remember": body.remember},
     )
     await db.commit()
+    if password_changed:
+        await forget_revoked_reauth(db, request.app.state.redis, account.id)
     person = await db.get(Person, person_id) if person_id else None
     me = await me_for(db, AuthContext(session, account, person))
     return LoginOut(next="app" if person else "who", me=me)
@@ -370,6 +377,7 @@ async def logout(request: Request, response: Response, db: DB, settings: Setting
     found = await resolve(db, request.cookies.get(SESSION_COOKIE), now=now)
     if not isinstance(found, Invalid):
         revoke(found, RevokeReason.logout, now=now)
+        await forget_reauth(request.app.state.redis, [found.id])
         audit(
             db,
             "auth.logout",
@@ -383,6 +391,54 @@ async def logout(request: Request, response: Response, db: DB, settings: Setting
     response.delete_cookie(SESSION_COOKIE, path="/")
     _set_cookie(response, settings, CSRF_COOKIE, csrf_token(settings, None), None, http_only=False)
     return {"ok": True}
+
+
+class ReauthIn(BaseModel):
+    password: str = Field(min_length=1, max_length=512)
+
+
+@router.post("/reauth")
+async def reauth(
+    body: ReauthIn,
+    request: Request,
+    ctx: Auth,
+    db: DB,
+    authenticator: Authenticator,
+    limiter: Limiter,
+) -> dict[str, int]:
+    """Re-auth for ⚠ admin changes (#54): the mailbox password of the signed-in login, checked on the mail server
+    like the login. Success only sets the Redis key of this session (nothing in the session is rotated); a wrong
+    password never logs out — it counts towards the login rate limit and answers 422 `reauth_failed`."""
+    ip = client_ip(request)
+    email = ctx.account.email
+    lock = await limiter.check(email, ip)
+    if lock.locked:
+        raise fail(429, "rate_limited", retry_after=lock.retry_after_s)
+    result = await authenticator.verify(email, body.password)
+    if result is LoginResult.server_unavailable:
+        raise fail(503, "mail_server_unavailable")
+    ok = result is LoginResult.ok
+    if ok:
+        await limiter.success(email)
+        await mark_reauth(
+            request.app.state.redis, ctx.session.id, ctx.account.id, ctx.person.id if ctx.person else None
+        )
+    else:
+        await limiter.fail(email, ip)
+    audit(
+        db,
+        "auth.reauth",
+        account_id=ctx.account.id,
+        person_id=ctx.person.id if ctx.person else None,
+        object_type="session",
+        object_id=str(ctx.session.id),
+        ip=ip,
+        details={"result": "ok" if ok else "failed"},
+    )
+    await db.commit()
+    if not ok:
+        raise fail(422, "reauth_failed")
+    return {"valid_s": REAUTH_TTL_S}
 
 
 @router.get("/me")

@@ -20,6 +20,7 @@ async def _admin(client: Client, db: AsyncSession, mail_server: FakeMailServer) 
     acc = await make_personal(db, email="admin@smartsro.sk", role=Role.admin)
     mail_server.passwords[acc.email] = PASSWORD
     assert (await client.login(acc.email, PASSWORD)).status_code == 200
+    assert (await client.reauth(PASSWORD)).status_code == 200  # ⚠ admin changes need a fresh re-auth (#54)
     return acc
 
 

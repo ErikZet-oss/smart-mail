@@ -52,12 +52,25 @@ export function onGlobalError(handler: GlobalHandler | undefined): void {
   globalHandler = handler;
 }
 
+/** Re-auth for ⚠ admin changes (#54): the dialog asks for the mailbox password; true = re-authenticated, retry. */
+type ReauthHandler = () => Promise<boolean>;
+let reauthHandler: ReauthHandler | undefined;
+export function onReauthRequired(handler: ReauthHandler | undefined): void {
+  reauthHandler = handler;
+}
+
+function needsReauth(error: ApiError): boolean {
+  return error.status === 401 && error.detail.code === 'reauth_required';
+}
+
 export type RequestOptions = {
   /** false = the caller shows the error inline (login screens); maintenance is always global. */
   global?: boolean;
   /** true = an unexpected server error (500 `server_error`) is shown inline by the caller, e.g. the reading pane
    * (#41); sign-in, maintenance and permission errors stay global. */
   inlineServerErrors?: boolean;
+  /** internal: the request already went through the re-auth dialog once */
+  retried?: boolean;
 };
 
 function isGlobal(error: ApiError, options: RequestOptions): boolean {
@@ -93,6 +106,13 @@ export async function api<T>(method: string, path: string, body?: unknown, optio
   }
 
   const error = await toError(response);
+  if (needsReauth(error)) {
+    // never a logout: ask for the password once and repeat the same request
+    if (reauthHandler && !options.retried && (await reauthHandler())) {
+      return api<T>(method, path, body, { ...options, retried: true });
+    }
+    throw error;
+  }
   if (globalHandler && isGlobal(error, options)) globalHandler(error);
   throw error;
 }
@@ -125,6 +145,12 @@ export async function apiForm<T>(
     return (text ? JSON.parse(text) : undefined) as T;
   }
   const error = await toError(response);
+  if (needsReauth(error)) {
+    if (reauthHandler && !options.retried && (await reauthHandler())) {
+      return apiForm<T>(method, path, body, { ...options, retried: true });
+    }
+    throw error;
+  }
   const isMaintenance = error.status === 503 && error.detail.code === 'maintenance';
   if (globalHandler && (isMaintenance || options.global !== false)) globalHandler(error);
   throw error;

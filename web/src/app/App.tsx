@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
 
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { ReauthDialogHost } from '../components/ReauthDialog';
 import { ToastProvider } from '../components/Toasts';
 import { SendTracker } from '../features/compose/SendTracker';
 import { ThemeProvider } from '../features/prefs/ThemeProvider';
@@ -37,6 +38,7 @@ export function App({ router: given }: { router?: Router }) {
           <SystemUiProvider>
             <ToastProvider>
               <SendTracker router={router} />
+              <ReauthDialogHost />
               <RouterProvider router={router} future={{ v7_startTransition: true }} />
             </ToastProvider>
           </SystemUiProvider>

@@ -15,6 +15,7 @@ from app.api.auth import DEVICE_COOKIE, MeOut, PersonOut, me_for, person_out
 from app.auth.deps import DB, Auth, AuthContext, client_ip
 from app.auth.models import Branch
 from app.auth.persons import eligible_persons, remember_person, remembered_person
+from app.auth.reauth_store import forget_reauth
 from app.core.audit import audit
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -74,4 +75,7 @@ async def choose_person(body: ChooseIn, request: Request, ctx: Auth, db: DB) -> 
             details=details,
         )
     await db.commit()
+    if previous != person.id:
+        # the admin re-auth belongs to the person who typed the password (#54 review)
+        await forget_reauth(request.app.state.redis, [ctx.session.id])
     return await me_for(db, AuthContext(ctx.session, ctx.account, person))

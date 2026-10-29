@@ -2,6 +2,20 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #54 re-auth (password) for ⚠ admin changes
+
+- `POST /api/auth/reauth {password}`: the mailbox password of the signed-in login, checked on the mail server like
+  the login; counts towards the login rate limit; a wrong password answers 422 `reauth_failed` and never logs out;
+  audit `auth.reauth` (ok / failed, never the password).
+- Re-auth time in Redis per session (`smartmail:reauth:<session_id>`, TTL 15 min, value = account) — no schema
+  change (Erik's answer on #54). Removed on logout and, after the commit, for revoked sessions (Odhlásiť zo všetkých
+  zariadení, conversion to a branch login, password change), so a rolled-back change keeps the session's re-auth.
+- `RecentReauth` (admin + re-auth of *this* session, else 403 `admin_required` / 401 `reauth_required`) on: users
+  create / PATCH / Overiť / Odhlásiť zo všetkých zariadení / Prístup k schránkam, link-login, delete branch, delete
+  person, mailbox server settings; person PUT only when Rola or Aktívna changes.
+- Web: „Potvrďte heslom“ dialog for `reauth_required` that repeats the original request (several requests share one
+  prompt); cancel = no change, never a logout. 2FA enforcement is a separate issue.
+
 ## [Unreleased] — #55 part 2: Settings 10 Používatelia a role to Figma (W12-10)
 
 - Layout: the accounts are a full-height column with „Hľadať účet“; the list shows Typ · Rola or „N osoby“ of a branch
