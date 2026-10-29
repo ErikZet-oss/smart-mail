@@ -29,6 +29,7 @@ import { SecurityBanner } from '../../components/SecurityBanner';
 import { useToast } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
+import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
 import { useTheme } from '../prefs/ThemeProvider';
 import { formatMailDate } from './formatMailDate';
 import { attachmentUrl, bulkMessages, fetchMessage, messageKey, patchFlags, snoozeThread } from './mailApi';
@@ -158,8 +159,32 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   const msg = detail.data;
   const remoteOffered = Boolean(msg?.remote_images_offered);
   const hasRemote = remoteOffered && Boolean(msg?.body_html_sanitized?.includes('smartmail-remote'));
-  // remote_images=always → show proxied images without an extra click (B6)
-  const imagesVisible = showImages || (msg?.remote_images_mode === 'always' && remoteOffered);
+  // Server decides: "always", or "known" and the sender is a contact / internal (B6). Otherwise the bar asks.
+  const imagesVisible = showImages || Boolean(msg?.remote_images_auto);
+  // Roundcube "Vždy povoliť od …": the sender goes to the personal address book, so "known" shows them next time.
+  const allowSender = useMutation({
+    mutationFn: async () => {
+      const email = msg?.from_email?.trim();
+      if (!email) throw new Error('no_sender');
+      const books = await queryClient.fetchQuery({ queryKey: booksKey, queryFn: fetchBooks });
+      const personal = books.find((b) => b.kind === 'personal');
+      if (!personal) throw new Error('no_personal_book');
+      await createContact(personal.id, {
+        display_name: msg?.from_name?.trim() || email,
+        emails: [{ email }],
+      });
+      return email;
+    },
+    onSuccess: (email) => {
+      setShowImages(true);
+      toast({ message: t('mail.remoteImagesAllowed', { email }) });
+      void queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+    onError: () => {
+      setShowImages(true);
+      toast({ message: t('mail.errors.generic') });
+    },
+  });
   const bodyHtml = useMemo(() => {
     if (!msg?.body_html_sanitized) return null;
     return imagesVisible ? showRemoteImages(msg.body_html_sanitized) : msg.body_html_sanitized;
@@ -430,6 +455,15 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
                 kind="info"
                 message={t('mail.remoteImages')}
                 action={{ label: t('mail.showImages'), onClick: () => setShowImages(true) }}
+                secondaryAction={
+                  msg.from_email
+                    ? {
+                        label: t('mail.showImagesAlways'),
+                        onClick: () => allowSender.mutate(),
+                        disabled: allowSender.isPending,
+                      }
+                    : undefined
+                }
               />
             </div>
           ) : null}

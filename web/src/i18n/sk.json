@@ -549,6 +549,8 @@
     "showHtml": "HTML",
     "remoteImages": "Vzdialené obrázky sú zablokované.",
     "showImages": "Zobraziť obrázky",
+    "showImagesAlways": "Vždy od tohto odosielateľa",
+    "remoteImagesAllowed": "{{email}} je v Kontaktoch – obrázky sa budú zobrazovať automaticky.",
     "attachmentUnscanned": "Ešte neskontrolované antivírusom",
     "attachmentUnscannedConfirm": "Táto príloha ešte nebola skontrolovaná antivírusom. Chcete ju aj tak stiahnuť?",
     "attachmentInfected": "Príloha obsahuje vírus a nie je dostupná na stiahnutie.",

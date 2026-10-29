@@ -131,6 +131,8 @@ class MessageDetail(BaseModel):
     security_notes: list[str] = []
     # Pilot #18 B6 — whether the "Zobraziť obrázky" bar may offer remote images
     remote_images_offered: bool = False
+    # True = show the proxied images without a click (mode "always", or "known" and the sender is known)
+    remote_images_auto: bool = False
     remote_images_mode: Literal["never", "known", "always"] = "known"
 
 
@@ -454,7 +456,7 @@ async def get_message(
     atts = await load_attachments(db, message.id)
     thread = await db.get(Thread, message.thread_id) if message.thread_id else None
     ui = await get_ui_prefs(db, ctx.session.active_person_id)
-    html, remote_offered = await _render_message_html(
+    html, remote_offered, remote_auto = await _render_message_html(
         db,
         settings,
         ref=ref,
@@ -498,6 +500,7 @@ async def get_message(
         snoozed_until=thread.snoozed_until if thread else None,
         assignee_id=str(thread.assignee_id) if thread and thread.assignee_id else None,
         remote_images_offered=remote_offered,
+        remote_images_auto=remote_auto,
         remote_images_mode=ui.remote_images,
         **(await _message_ai_fields(db, settings, message)),
     )
@@ -542,7 +545,7 @@ async def _render_message_html(
     atts: list[Attachment],
     remote_mode: Literal["never", "known", "always"],
     person_id: uuid.UUID | None,
-) -> tuple[str | None, bool]:
+) -> tuple[str | None, bool, bool]:
     """Rewrite cid: → inline URLs (B5) and sign remote images for the proxy (B6)."""
     from app.mail.cid_rewrite import normalize_cid, rewrite_cid_images
     from app.mail.remote_images import (
@@ -554,7 +557,7 @@ async def _render_message_html(
 
     html = message.body_html_sanitized
     if not html:
-        return None, False
+        return None, False, False
     cid_map = {
         normalize_cid(a.content_id): str(a.id)
         for a in atts
@@ -562,16 +565,19 @@ async def _render_message_html(
     }
     html = rewrite_cid_images(html, mailbox_ref=ref, cid_to_attachment_id=cid_map)
     html = proxy_signature_images(html, settings)
+    # Like Roundcube: blocked remote images always get the bar ("Zobraziť obrázky · Vždy od tohto odosielateľa").
+    # The setting only decides whether they load without a click.
+    offered = html_has_remote_placeholder(html)
     contacts = await _contact_emails_for_person(db, person_id)
-    offered = should_offer_remote_images(
+    auto = offered and should_offer_remote_images(
         remote_mode,
         from_email=message.from_email,
         contact_emails=contacts,
         internal_domains=list(settings.internal_domain_list),
-    ) and html_has_remote_placeholder(html)
+    )
     if offered:
         html = sign_remote_image_attrs(html, settings)
-    return html, offered
+    return html, offered, auto
 
 
 async def _message_ai_fields(db: DB, settings: Settings, message: Message) -> dict[str, Any]:
