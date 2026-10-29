@@ -15,7 +15,7 @@ import {
   SquareArrowOutUpRight,
   X,
 } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -322,6 +322,18 @@ export function ScreenW4() {
     },
     onSuccess: (d) => void qc.setQueryData(['compose', localId], d),
   });
+  // One after another: each response carries the whole attachment list, so parallel uploads could hide a chip.
+  const attachFiles = async (files: FileList | File[] | null | undefined) => {
+    for (const file of Array.from(files ?? [])) {
+      try {
+        await attach.mutateAsync(file);
+      } catch {
+        // the mutation shows its own error state; continue with the next file
+      }
+    }
+  };
+  const [dragOver, setDragOver] = useState(false);
+  const hasFiles = (event: DragEvent<HTMLDivElement>) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
 
   const removeAtt = useMutation({
     mutationFn: async (id: string) => {
@@ -411,7 +423,36 @@ export function ScreenW4() {
 
   return shell(
     <>
-      <div className="flex h-full min-w-0 flex-1 flex-col bg-bg-canvas" data-testid="compose-screen">
+      <div
+        className={`relative flex h-full min-w-0 flex-1 flex-col bg-bg-canvas ${dragOver ? 'outline-dashed outline-2 -outline-offset-4 outline-brand-primary-500' : ''}`}
+        data-testid="compose-screen"
+        data-compose-dropzone=""
+        // Dropping files on W4/M4 attaches them (Roundcube). Capture phase: before the editor and the global G7 zone.
+        onDragOverCapture={(event) => {
+          if (!hasFiles(event)) return;
+          event.preventDefault();
+          if (!dragOver) setDragOver(true);
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          setDragOver(false);
+        }}
+        onDropCapture={(event) => {
+          if (!hasFiles(event)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          setDragOver(false);
+          void attachFiles(event.dataTransfer.files);
+        }}
+      >
+        {dragOver ? (
+          <p
+            role="status"
+            className="type-body-strong pointer-events-none absolute inset-x-0 top-1/2 z-10 mx-auto w-fit rounded-md bg-bg-canvas px-4 py-2 text-brand-primary-700 shadow-e2"
+          >
+            {t('compose.dropHere')}
+          </p>
+        ) : null}
         {mobile ? (
           <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border-default px-2">
             <Link
@@ -451,9 +492,10 @@ export function ScreenW4() {
             <input
               type="file"
               className="sr-only"
+              multiple
               onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) attach.mutate(file);
+                void attachFiles(event.target.files);
+                event.target.value = '';
               }}
             />
           </label>
@@ -742,9 +784,10 @@ export function ScreenW4() {
               <input
                 type="file"
                 className="sr-only"
+                multiple
                 onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) attach.mutate(file);
+                  void attachFiles(event.target.files);
+                  event.target.value = '';
                 }}
               />
             </label>

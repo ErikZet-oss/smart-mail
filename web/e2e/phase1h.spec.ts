@@ -367,3 +367,47 @@ test.describe('pilot: remote images bar', () => {
     expect(created).toBe(true);
   });
 });
+
+test.describe('pilot: drop files into compose', () => {
+  test('W4 dropping two files attaches both and does not show the G7 document toast', async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop frame');
+    const uploads: string[] = [];
+    await mockMail(page, {
+      'POST /api/mail/compose/d-1/attachments': () => {
+        uploads.push('file');
+        return {
+          body: {
+            ...COMPOSE_DRAFT,
+            attachments: uploads.map((_, i) => ({
+              id: `a-${i + 1}`,
+              filename: i === 0 ? 'cennik.pdf' : 'foto.png',
+              content_type: i === 0 ? 'application/pdf' : 'image/png',
+              size: 1200,
+              av_status: 'clean',
+              is_inline: false,
+              content_id: null,
+            })),
+          },
+        };
+      },
+    });
+    await page.goto('/compose?mailbox=default');
+    const screen = page.getByTestId('compose-screen');
+    await expect(screen).toBeVisible();
+    await expect(page.getByLabel('Komu')).toBeEnabled();
+    const transfer = await page.evaluateHandle(() => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['%PDF-1.4'], 'cennik.pdf', { type: 'application/pdf' }));
+      dt.items.add(new File(['png'], 'foto.png', { type: 'image/png' }));
+      return dt;
+    });
+    await screen.dispatchEvent('dragenter', { dataTransfer: transfer });
+    await screen.dispatchEvent('dragover', { dataTransfer: transfer });
+    await expect(page.getByText('Pustite súbory sem – priložia sa k správe')).toBeVisible();
+    await screen.dispatchEvent('drop', { dataTransfer: transfer });
+    await expect(page.getByText('foto.png')).toBeVisible();
+    await expect(page.getByText('cennik.pdf')).toBeVisible();
+    expect(uploads).toHaveLength(2);
+    await expect(page.getByText('Nahrávanie dokladov zatiaľ nie je dostupné – súbor sme neotvorili.')).toHaveCount(0);
+  });
+});
