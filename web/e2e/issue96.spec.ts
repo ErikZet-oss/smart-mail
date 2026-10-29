@@ -158,3 +158,29 @@ test.describe('#96 move from the list', () => {
     expect(bulkCalls).toEqual([{ action: 'move', message_ids: ['m1', 'm2', 'm3'], dest_folder_id: FAKTURY }]);
   });
 });
+
+test.describe('#96 drag & drop', () => {
+  test('#96 dragging a row onto Faktúry moves it', async ({ page }) => {
+    const { bulkCalls } = await setup(page);
+    await page.goto('/mail/default/inbox');
+    const faktury = page.locator(`[data-folder-id="${FAKTURY}"]`);
+    await option(page, 'Cenová ponuka M10×30 A2').dragTo(faktury);
+    await expect(page.getByText('Presunuté do priečinka Faktúry.')).toBeVisible();
+    await expect(option(page, 'Cenová ponuka M10×30 A2')).toHaveCount(0);
+    expect(bulkCalls).toEqual([{ action: 'move', message_ids: ['m2'], dest_folder_id: FAKTURY }]);
+  });
+
+  test('#96 dragging the selection moves every selected row; the own folder is no target', async ({ page }) => {
+    const { bulkCalls } = await setup(page);
+    await page.goto('/mail/default/inbox');
+    await expect(option(page, 'Reklamácia')).toBeVisible();
+    const inbox = page.locator(`[data-folder-id="${foldersView().folders[0]?.id ?? ''}"]`);
+    await option(page, 'Reklamácia').dragTo(inbox);
+    expect(bulkCalls).toEqual([]);
+    await page.locator('body').click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press('Control+a');
+    await option(page, 'Reklamácia').dragTo(page.locator(`[data-folder-id="${FAKTURY}"]`));
+    await expect(page.getByRole('option')).toHaveCount(0);
+    expect(bulkCalls).toEqual([{ action: 'move', message_ids: ['m1', 'm2', 'm3'], dest_folder_id: FAKTURY }]);
+  });
+});

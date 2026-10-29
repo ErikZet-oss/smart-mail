@@ -54,6 +54,7 @@ import {
   type MessageListItem,
   type ThreadListItem,
 } from './mailApi';
+import { startMessageDrag } from './dragMessages';
 import { FolderPicker } from './FolderPicker';
 import { applyActionLocally, REMOVING_ACTIONS } from './optimistic';
 import { CATEGORY_COLOR_TOKEN, categoryDotClass } from './categoryStyles';
@@ -507,6 +508,7 @@ function ScreenW2Body({
           classic={classic}
           aiCategories={aiOn ? (aiCats.data?.categories ?? []) : []}
           activeCategory={aiView ? category : null}
+          onDropMessages={canMarkSeen ? (dest, ids) => bulk.mutate({ action: 'move', ids, dest }) : undefined}
         />
       ) : (
         <FolderSkeleton />
@@ -805,6 +807,11 @@ function ScreenW2Body({
                       return next;
                     });
                   }}
+                  onDragStart={
+                    !mobile && canMarkSeen
+                      ? (dt) => startMessageDrag(dt, selectedIds.has(id) ? [...selectedIds] : [id], folderId ?? null)
+                      : undefined
+                  }
                   onLongPress={
                     mobile
                       ? () => {
