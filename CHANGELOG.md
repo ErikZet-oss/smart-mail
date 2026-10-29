@@ -5,6 +5,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 ## [Unreleased] — #77 PR 2: enforce „Vyžadovať 2FA“, admin reset
 
 ### Fixed
+- Uploads over 1 MB (a person photo, compose attachments up to 25 MB) failed with nginx's default 413: `/api/` now allows `client_max_body_size 26m` in every nginx config (dev, VPS, tunnel). `update.sh` reloads nginx on deploy (#61).
+
+### Fixed
 - Settings 11: the last active person of a branch **without a branch login** can be deactivated or deleted, so an unused (test) branch can be emptied and removed with „Vymazať pobočku“. A branch with a login still keeps one active person for „Kto ste?“.
 
 - Login of a personal account with `require_2fa` and no TOTP → `next: "2fa-setup"`: an `mfa_pending` session plus a
