@@ -27,6 +27,7 @@ async def _signed_in(client: Client, db: AsyncSession, mail_server: FakeMailServ
     acc = await make_personal(db, email=EMAIL)
     mail_server.passwords[EMAIL] = PASSWORD
     assert (await client.login(EMAIL, PASSWORD)).status_code == 200
+    assert (await client.reauth(PASSWORD)).status_code == 200  # `start` needs a fresh re-auth (#79 review)
     return acc
 
 
@@ -108,17 +109,18 @@ async def test_77_pending_setup_is_not_json_with_a_clear_secret(
     acc = await _signed_in(client, db, mail_server)
     started = (await client.send_json("POST", f"{URL}/start")).json()
     pending = json.loads(await app.state.redis.get(setup_key(acc.id)))
-    assert set(pending) == {"secret_enc", "backup_hashes", "failures"}
+    assert set(pending) == {"secret_enc", "backup_hashes", "failures", "session_id"}
     assert pending["secret_enc"] != started["secret"]
     assert 0 < await app.state.redis.ttl(setup_key(acc.id)) <= 15 * 60
 
 
 async def test_77_disable_needs_a_reauth_and_is_refused_when_required(
-    client: Client, db: AsyncSession, mail_server: FakeMailServer
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, app: FastAPI
 ) -> None:
     acc = await _signed_in(client, db, mail_server)
     secret = (await client.send_json("POST", f"{URL}/start")).json()["secret"]
     assert (await client.send_json("POST", f"{URL}/confirm", {"code": _now_code(secret)})).status_code == 200
+    await app.state.redis.flushdb()  # the re-auth of `start` is over
     r = await client.send_json("POST", f"{URL}/disable")
     assert r.status_code == 401 and r.json()["detail"]["code"] == "reauth_required"
     assert (await client.reauth(PASSWORD)).status_code == 200
@@ -145,3 +147,25 @@ async def test_77_branch_login_cannot_enable_2fa(client: Client, db: AsyncSessio
     assert (await client.get(URL)).json()["available"] is False
     r = await client.send_json("POST", f"{URL}/start")
     assert r.status_code == 403 and r.json()["detail"]["code"] == "personal_only"
+
+
+async def test_77_start_needs_a_reauth(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
+    await make_personal(db, email=EMAIL)
+    mail_server.passwords[EMAIL] = PASSWORD
+    assert (await client.login(EMAIL, PASSWORD)).status_code == 200
+    r = await client.send_json("POST", f"{URL}/start")
+    assert r.status_code == 401 and r.json()["detail"]["code"] == "reauth_required"
+    assert (await client.reauth(PASSWORD)).status_code == 200
+    assert (await client.send_json("POST", f"{URL}/start")).status_code == 200
+
+
+async def test_77_setup_is_bound_to_the_session_that_started_it(
+    client: Client, new_client: Callable[[], Client], db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    acc = await _signed_in(client, db, mail_server)
+    secret = (await client.send_json("POST", f"{URL}/start")).json()["secret"]
+    async with new_client() as other_device:
+        assert (await other_device.login(EMAIL, PASSWORD)).status_code == 200
+        r = await other_device.send_json("POST", f"{URL}/confirm", {"code": _now_code(secret)})
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "totp_setup_expired"
+    assert not (await _account(db, acc)).totp_enabled

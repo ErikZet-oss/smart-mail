@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Download, ShieldCheck } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Banner } from '../../components/Banner';
@@ -90,7 +90,14 @@ function EnableTwoFactorDialog({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const start = useMutation({ mutationFn: startTwoFactor });
+  const start = useMutation({
+    mutationFn: startTwoFactor,
+    onError: (e) => {
+      // „Potvrďte heslom“ was cancelled: nothing was started, close quietly
+      if (e instanceof ApiError && e.detail.code === 'reauth_required') onClose();
+      else setError(t('settings.twoFactor.errors.generic'));
+    },
+  });
   const confirm = useMutation({
     mutationFn: () => confirmTwoFactor(code.replace(/\s/g, '')),
     onSuccess: () => {
@@ -105,7 +112,13 @@ function EnableTwoFactorDialog({ onClose }: { onClose: () => void }) {
     },
   });
   const { mutate } = start;
-  useEffect(() => mutate(), [mutate]);
+  const started = useRef(false);
+  useEffect(() => {
+    // exactly one setup per dialog (a second `start` would replace the secret shown here)
+    if (started.current) return;
+    started.current = true;
+    mutate();
+  }, [mutate]);
   const setup = start.data;
 
   function download() {

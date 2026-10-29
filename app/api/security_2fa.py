@@ -19,7 +19,7 @@ from redis.asyncio import Redis
 from app.auth import totp
 from app.auth.deps import DB, Auth, AuthContext, SettingsDep, client_ip
 from app.auth.models import AccountKind
-from app.auth.reauth import ReauthedSession
+from app.auth.reauth import ReauthedSession, require_reauthed_session
 from app.auth.security import decrypt, encrypt
 from app.core.audit import audit
 
@@ -55,7 +55,10 @@ async def status(ctx: Auth) -> dict[str, Any]:
 
 @router.post("/start")
 async def start(request: Request, ctx: Auth, settings: SettingsDep) -> dict[str, Any]:
-    _personal(ctx)
+    """Turning 2FA on is as sensitive as turning it off: an open or stolen session must not bind its own
+    authenticator and lock the owner out (#79 review) — so it needs the re-auth of this session too."""
+    _personal(ctx)  # a branch login gets 403, not a pointless password prompt
+    await require_reauthed_session(request, ctx)
     if ctx.account.totp_enabled:
         raise _fail(409, "totp_already_enabled")
     secret = totp.new_secret()
@@ -65,6 +68,8 @@ async def start(request: Request, ctx: Auth, settings: SettingsDep) -> dict[str,
         "secret_enc": encrypt(settings, secret),
         "backup_hashes": [totp.hash_backup_code(c) for c in codes],
         "failures": 0,
+        # bound to the session that started it: another session (device) cannot confirm it
+        "session_id": str(ctx.session.id),
     }
     await redis.set(setup_key(ctx.account.id), json.dumps(pending), ex=SETUP_TTL_S)
     label = quote(f"{ISSUER}:{ctx.account.email}")
@@ -86,6 +91,8 @@ async def confirm(body: ConfirmIn, request: Request, ctx: Auth, db: DB, settings
     if not raw:
         raise _fail(409, "totp_setup_expired")
     pending = json.loads(raw)
+    if pending.get("session_id") != str(ctx.session.id):
+        raise _fail(409, "totp_setup_expired")
     secret = decrypt(settings, pending["secret_enc"])
     step = totp.verify(secret, body.code, time.time(), None)  # ±1 time step (clock drift)
     if step is None:

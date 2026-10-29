@@ -10,6 +10,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   Redis for 15 min — secret Fernet-encrypted, codes as hashes; a new `start` replaces an unconfirmed one),
   `POST …/confirm {code}` (±1 time step, the confirming step cannot be reused at login, 5 wrong codes end the setup),
   `POST …/disable` (re-auth of this session and person; 409 `totp_required` while an admin requires 2FA).
+  `start` needs the same re-auth and the pending setup is bound to the session that started it (#79 review).
   Personal accounts only (403 `personal_only`). Audit `auth.totp_enabled` / `auth.totp_disabled` without secrets.
 - W12-09 Bezpečnosť: „Dvojstupňové overenie“ row (vypnuté / zapnuté, Zapnúť / Vypnúť) and the dialog of Figma
   `67:58896` (QR, key by hand + Kopírovať, code from the app, 10 backup codes + Stiahnuť kódy).

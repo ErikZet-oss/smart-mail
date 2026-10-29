@@ -18,6 +18,14 @@ const CODES = [
 
 test('#77 W12-09 enable 2FA: QR, key, backup codes and the code from the app @mobile', async ({ page }, info) => {
   let enabled = false;
+  let reauthed = false;
+  const startReply = {
+    body: {
+      secret: SECRET,
+      otpauth_uri: `otpauth://totp/Smart%20Mail%3Ajana%40smartmail.test?secret=${SECRET}&issuer=Smart%20Mail`,
+      backup_codes: CODES,
+    },
+  };
   const confirms: unknown[] = [];
   await mockApi(page, {
     'GET /api/auth/me': { body: ME },
@@ -27,13 +35,12 @@ test('#77 W12-09 enable 2FA: QR, key, backup codes and the code from the app @mo
     'GET /api/settings/security/2fa': () => ({
       body: { available: true, enabled, required: false, backup_codes_left: enabled ? 10 : 0 },
     }),
-    'POST /api/settings/security/2fa/start': {
-      body: {
-        secret: SECRET,
-        otpauth_uri: `otpauth://totp/Smart%20Mail%3Ajana%40smartmail.test?secret=${SECRET}&issuer=Smart%20Mail`,
-        backup_codes: CODES,
-      },
+    'POST /api/auth/reauth': () => {
+      reauthed = true;
+      return { body: { valid_s: 900 } };
     },
+    'POST /api/settings/security/2fa/start': () =>
+      reauthed ? startReply : { status: 401, body: { detail: { code: 'reauth_required' } } },
     'POST /api/settings/security/2fa/confirm': (body) => {
       confirms.push(body);
       if ((body as { code: string }).code !== '123456') {
@@ -47,6 +54,9 @@ test('#77 W12-09 enable 2FA: QR, key, backup codes and the code from the app @mo
   const row = page.getByTestId('two-factor');
   await expect(row).toContainText('vypnuté');
   await row.getByRole('button', { name: 'Zapnúť' }).click();
+  const reauth = page.getByRole('dialog', { name: 'Potvrďte heslom' }); // turning 2FA on needs the password too
+  await reauth.getByLabel('Heslo k e-mailu').fill('Spravne-Heslo-1');
+  await reauth.getByRole('button', { name: 'Potvrdiť' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Zapnúť dvojstupňové overenie' });
   await expect(dialog.getByRole('img', { name: 'QR kód pre aplikáciu na overovanie' })).toBeVisible();
