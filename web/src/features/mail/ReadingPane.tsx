@@ -19,7 +19,7 @@ import {
   Trash2,
   UserPlus,
 } from 'lucide-react';
-import { useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -34,7 +34,15 @@ import { useTheme } from '../prefs/ThemeProvider';
 import { AttachmentLightbox } from './AttachmentLightbox';
 import { formatMailDate } from './formatMailDate';
 import { previewKind } from './previewKind';
-import { attachmentUrl, bulkMessages, fetchMessage, messageKey, patchFlags, snoozeThread } from './mailApi';
+import {
+  applyAttachmentFlagLocally,
+  attachmentUrl,
+  bulkMessages,
+  fetchMessage,
+  messageKey,
+  patchFlags,
+  snoozeThread,
+} from './mailApi';
 
 type Props = {
   mailbox: string;
@@ -112,6 +120,9 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
     },
     enabled: Boolean(messageId),
   });
+  useEffect(() => {
+    if (detail.data) applyAttachmentFlagLocally(queryClient, mailbox, detail.data);
+  }, [detail.data, mailbox, queryClient]);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const previewable = (detail.data?.attachments ?? []).filter(
     (a) => !a.is_inline && a.av_status !== 'infected' && previewKind(a) !== null,

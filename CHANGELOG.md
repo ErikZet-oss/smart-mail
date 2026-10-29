@@ -10,7 +10,10 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   unknown or broken structures → no paperclip. `ensure_body` stays authoritative on the first open.
 - One-off backfill for mailboxes synced before: worker job `backfill_attachment_flags` (minute 5 and 35, one mailbox
   per run) fetches `BODYSTRUCTURE` of unopened messages in batches of 500 with a pause, under the mailbox sync lock;
-  a Redis marker makes it run once per mailbox. No schema change.
+  a Redis marker makes it run once per mailbox. No schema change. One run holds the sync lock at most 120 s (budget
+  checked before each batch); an interrupted run stores the last checked UID per folder and the next run continues;
+  the marker is set only when every folder is done.
+- After the first open the list row gets the paperclip from the detail at once (`applyAttachmentFlagLocally`), no F5.
 
 ## [Unreleased] — Pilot #65: signature person in compose („Odpovedá: … ▾“)
 

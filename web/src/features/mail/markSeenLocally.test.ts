@@ -2,7 +2,15 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 
 import type { ListPrefs } from '../prefs/prefsApi';
-import { foldersKey, markSeenLocally, messagesKey, type FoldersView, type MessagesList } from './mailApi';
+import {
+  applyAttachmentFlagLocally,
+  foldersKey,
+  markSeenLocally,
+  messagesKey,
+  type FoldersView,
+  type MessageDetail,
+  type MessagesList,
+} from './mailApi';
 
 function list(seen: boolean): MessagesList {
   return {
@@ -79,5 +87,30 @@ describe('markSeenLocally (pilot: "prečítané" must show at once)', () => {
     markSeenLocally(qc, 'default', 'm-1', 't-1', 'f-in');
     expect(qc.getQueryData<MessagesList>(key)?.threads[0]?.unread_count).toBe(1);
     expect(qc.getQueryData<FoldersView>(foldersKey('default'))?.folders[0]?.unread).toBe(2);
+  });
+});
+
+describe('applyAttachmentFlagLocally (review #67: paperclip right after the first open)', () => {
+  const withPaperclip = (has: boolean): MessagesList => {
+    const base = list(true);
+    return { ...base, messages: base.messages.map((m) => ({ ...m, has_attachments: has })) };
+  };
+  const detail = (attachments: { is_inline: boolean }[]) =>
+    ({ id: 'm-1', thread_id: 't-1', attachments }) as unknown as MessageDetail;
+
+  it('the list row gets has_attachments=true from the detail, without a refetch', () => {
+    const qc = new QueryClient();
+    const key = messagesKey('default', 'f-in', 1, 'all');
+    qc.setQueryData(key, withPaperclip(false));
+    applyAttachmentFlagLocally(qc, 'default', detail([{ is_inline: false }]));
+    expect(qc.getQueryData<MessagesList>(key)?.messages[0]?.has_attachments).toBe(true);
+  });
+
+  it('a signature logo shown inline is not a paperclip', () => {
+    const qc = new QueryClient();
+    const key = messagesKey('default', 'f-in', 1, 'all');
+    qc.setQueryData(key, withPaperclip(true));
+    applyAttachmentFlagLocally(qc, 'default', detail([{ is_inline: true }]));
+    expect(qc.getQueryData<MessagesList>(key)?.messages[0]?.has_attachments).toBe(false);
   });
 });

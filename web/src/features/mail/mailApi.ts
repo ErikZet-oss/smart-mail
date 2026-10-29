@@ -323,3 +323,35 @@ export function markSeenLocally(
     folders: view.folders.map((f) => (f.id === folderId ? { ...f, unread: Math.max(0, f.unread - 1) } : f)),
   });
 }
+
+/**
+ * The first open downloads the body and the server sets the authoritative paperclip (`ensure_body`). Copy it into the
+ * cached list rows (message and thread) at once, like `markSeenLocally` does for \Seen — no refetch of the list
+ * (review #67: before, the paperclip appeared only after F5).
+ */
+export function applyAttachmentFlagLocally(client: QueryClient, mailbox: string, detail: MessageDetail) {
+  const has = detail.attachments.some((a) => !a.is_inline);
+  const lists = [
+    ...client.getQueriesData<MessagesList>({ queryKey: ['mail', 'messages', mailbox] }),
+    ...client.getQueriesData<MessagesList>({ queryKey: ['mail', 'ai-view', mailbox] }),
+  ];
+  for (const [key, data] of lists) {
+    if (!data) continue;
+    if (data.mode === 'list') {
+      const hit = data.messages.find((m) => m.id === detail.id);
+      if (!hit || hit.has_attachments === has) continue;
+      client.setQueryData<MessagesList>(key, {
+        ...data,
+        messages: data.messages.map((m) => (m.id === detail.id ? { ...m, has_attachments: has } : m)),
+      });
+    } else if (detail.thread_id && has) {
+      // a thread has a paperclip when any message has one; never clear it from a single message
+      const hit = data.threads.find((th) => th.id === detail.thread_id);
+      if (!hit || hit.has_attachments) continue;
+      client.setQueryData<MessagesList>(key, {
+        ...data,
+        threads: data.threads.map((th) => (th.id === detail.thread_id ? { ...th, has_attachments: true } : th)),
+      });
+    }
+  }
+}
