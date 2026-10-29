@@ -335,5 +335,12 @@ async def test_33_admin_changes_are_audited_with_before_and_after(
             select(AuditLog).where(AuditLog.action == "settings.user_patched").execution_options(populate_existing=True)
         )
     ).scalar_one()
-    assert row.details["before"] == {"kind": "personal", "branch_id": None, "role": "viewer", "active": True}
-    assert row.details["after"] == {"kind": "branch", "branch_id": str(branch.id), "role": None, "active": True}
+    no_2fa = {"require_2fa": False, "totp_enabled": False}  # 2FA state is part of the audited account (#77)
+    assert row.details["before"] == {"kind": "personal", "branch_id": None, "role": "viewer", "active": True, **no_2fa}
+    assert row.details["after"] == {
+        "kind": "branch",
+        "branch_id": str(branch.id),
+        "role": None,
+        "active": True,
+        **no_2fa,
+    }

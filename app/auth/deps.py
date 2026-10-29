@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import Account, Person, Role, Session
 from app.auth.persons import is_eligible
+from app.auth.reauth_store import needs_mfa_setup
 from app.auth.sessions import Invalid, InvalidReason, resolve, touch
 from app.core.audit import audit, set_actor
 from app.core.config import Settings
@@ -18,6 +19,16 @@ from app.core.db import get_db
 from app.core.middleware import SESSION_COOKIE
 
 DB = Annotated[AsyncSession, Depends(get_db)]
+
+# what a session limited to the 2FA setup may call (#77); logout and csrf do not use `get_auth` at all
+MFA_SETUP_PATHS = frozenset(
+    {
+        "/api/auth/me",
+        "/api/settings/security/2fa",
+        "/api/settings/security/2fa/start",
+        "/api/settings/security/2fa/confirm",
+    }
+)
 
 
 def get_settings_dep(request: Request) -> Settings:
@@ -41,6 +52,7 @@ class AuthContext:
     session: Session
     account: Account
     person: Person | None
+    mfa_setup: bool = False  # „Vyžadovať 2FA“: only the 2FA setup is allowed (#77)
 
     @property
     def read_only(self) -> bool:
@@ -57,8 +69,14 @@ async def get_auth(request: Request, db: DB, settings: SettingsDep) -> AuthConte
     found = await resolve(db, request.cookies.get(SESSION_COOKIE), now=now)
     if isinstance(found, Invalid):
         raise unauthenticated(found.reason)
+    mfa_setup = False
     if found.mfa_pending:
-        raise unauthenticated(InvalidReason.missing)
+        # a login that must first set up 2FA reaches only the setup and `me`; any other pending session nothing
+        if not await needs_mfa_setup(request.app.state.redis, found.id):
+            raise unauthenticated(InvalidReason.missing)
+        if request.url.path not in MFA_SETUP_PATHS:
+            raise HTTPException(status_code=403, detail={"code": "mfa_setup_required"})
+        mfa_setup = True
     account = await db.get(Account, found.account_id)
     if account is None or not account.active:
         raise unauthenticated(InvalidReason.account_disabled)
@@ -80,7 +98,7 @@ async def get_auth(request: Request, db: DB, settings: SettingsDep) -> AuthConte
     touch(found, settings, now=now)
     await db.commit()
     set_actor(account.id, person.id if person else None)
-    return AuthContext(found, account, person)
+    return AuthContext(found, account, person, mfa_setup)
 
 
 Auth = Annotated[AuthContext, Depends(get_auth)]

@@ -10,11 +10,18 @@ import { LoginField } from '../../components/LoginField';
 import { Logo } from '../../components/Logo';
 import { ApiError } from '../../lib/api';
 import { rememberAfterLogin, returnTo, verifyMfa } from './authApi';
+import { MfaSetup } from './MfaSetup';
 
 const DIGITS = 6;
 const empty = () => Array.from({ length: DIGITS }, () => '');
 
 export function ScreenW1a() {
+  const location = useLocation();
+  if (new URLSearchParams(location.search).get('setup') === '1') return <MfaSetup />;
+  return <MfaVerify />;
+}
+
+function MfaVerify() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();

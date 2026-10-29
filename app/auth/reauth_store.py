@@ -35,3 +35,27 @@ async def forget_reauth(redis: Redis | None, session_ids: Iterable[uuid.UUID]) -
     keys = [reauth_key(s) for s in session_ids]
     if redis is not None and keys:
         await redis.delete(*keys)
+
+
+# --- „Vyžadovať 2FA“ (#77 PR 2): a session that must first set up TOTP --------------------------------------------
+MFA_SETUP_TTL_S = 10 * 60  # as long as an mfa_pending session lives
+
+
+def mfa_setup_key(session_id: uuid.UUID) -> str:
+    return f"smartmail:mfa-setup:{session_id}"
+
+
+async def mark_mfa_setup(redis: Redis, session_id: uuid.UUID) -> None:
+    await redis.set(mfa_setup_key(session_id), "1", ex=MFA_SETUP_TTL_S)
+
+
+async def needs_mfa_setup(redis: Redis, session_id: uuid.UUID) -> bool:
+    return bool(await redis.exists(mfa_setup_key(session_id)))
+
+
+async def forget_session_keys(redis: Redis | None, session_ids: Iterable[uuid.UUID]) -> None:
+    """Logout / revoke: the re-auth and the 2FA-setup flag of these sessions go away."""
+    ids = list(session_ids)
+    keys = [reauth_key(s) for s in ids] + [mfa_setup_key(s) for s in ids]
+    if redis is not None and keys:
+        await redis.delete(*keys)

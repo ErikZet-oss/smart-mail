@@ -42,6 +42,11 @@ describe('#54 re-auth for ⚠ admin changes', () => {
     expect(global).not.toHaveBeenCalled();
   });
 
+  it('#77 sends a session limited to the 2FA setup to the setup screen', () => {
+    const error = new ApiError(403, { code: 'mfa_setup_required' });
+    expect(routeForError(error, '/mail/default/inbox')).toBe('/login/2fa?setup=1');
+  });
+
   it('never routes reauth_required to the login screen', () => {
     const error = new ApiError(401, { code: 'reauth_required' });
     expect(routeForError(error, '/settings/users')).toBeNull();

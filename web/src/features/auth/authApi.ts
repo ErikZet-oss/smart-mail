@@ -20,7 +20,7 @@ export type Me = {
   read_only: boolean;
 };
 
-export type LoginResult = { next: '2fa' | 'who' | 'app'; me: Me | null };
+export type LoginResult = { next: '2fa' | '2fa-setup' | 'who' | 'app'; me: Me | null };
 
 export const login = (email: string, password: string, remember: boolean) =>
   api<LoginResult>('POST', '/api/auth/login', { email, password, remember }, { global: false });
