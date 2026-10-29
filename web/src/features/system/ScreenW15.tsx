@@ -7,8 +7,8 @@ import { Button } from '../../components/Button';
 
 /**
  * Phase-1 shortcuts only (UX_SPEC §6 — no AI / Doklady / Asistent / Dnes). Keys whose feature is not built yet stay
- * out, like the menu items (#93): E vybavené, # priradiť (Phase 5), L presunúť do… and [ skryť priečinky (no folder
- * picker / collapsible folder column yet).
+ * out, like the menu items (#93): E vybavené, # priradiť (Phase 5) and [ skryť priečinky (no collapsible folder
+ * column yet, #97).
  */
 const GROUPS: { id: string; keys: { keys: string; actionKey: string }[] }[] = [
   {
@@ -29,6 +29,7 @@ const GROUPS: { id: string; keys: { keys: string; actionKey: string }[] }[] = [
       { keys: 'R', actionKey: 'shortcuts.actions.reply' },
       { keys: 'Shift+R', actionKey: 'shortcuts.actions.replyAll' },
       { keys: 'F', actionKey: 'shortcuts.actions.forward' },
+      { keys: 'L', actionKey: 'shortcuts.actions.moveTo' },
     ],
   },
   {

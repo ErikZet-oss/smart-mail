@@ -85,7 +85,7 @@ export function Menu({ label, entries, at, width, onClose }: Props) {
       aria-label={label}
       onKeyDown={onKey}
       style={{ left: pos.x, top: pos.y, width }}
-      className="fixed z-40 flex flex-col rounded-md border border-border-default bg-bg-canvas py-1.5 text-left shadow-e2"
+      className="fixed z-40 flex max-h-[calc(100vh-16px)] flex-col overflow-y-auto rounded-md border border-border-default bg-bg-canvas py-1.5 text-left shadow-e2"
     >
       {entries.map((entry) => {
         if (entry.kind === 'divider') {
