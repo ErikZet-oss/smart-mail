@@ -244,7 +244,9 @@ test.describe('Phase 2b — W2f AI triage', () => {
 });
 
 test.describe('Pilot: open from AI triedenie on mobile', () => {
-  test('a message filed into Faktúry opens in its own folder, not a blank screen @mobile', async ({ page }) => {
+  test('a message filed into Faktúry opens in its own folder, not a blank screen @mobile', async ({ page }, info) => {
+    // desktop opens the message in the side pane (no navigation); the blank screen was the phone's full-screen view
+    test.skip(info.project.name !== 'mobile', 'mobile only');
     const handlers: Parameters<typeof mockApi>[1] = mailShell();
     const invoice = {
       ...INQUIRY_MSG,
