@@ -214,3 +214,52 @@ test.describe('Phase 2e W12-17e @mobile', () => {
     expect(calls.created).toEqual([]);
   });
 });
+
+test.describe('Phase 2e W12-07 style profile @mobile', () => {
+  test('2e opt in, generate, edit and switch off', async ({ page }, info) => {
+    let profile = { opt_in: false, text: '', generated_at: null as string | null, source_count: 0 };
+    const puts: unknown[] = [];
+    await mockApi(page, {
+      'GET /api/auth/me': { body: ME },
+      'GET /api/auth/persons': { body: ME_PICKER },
+      'GET /api/system/maintenance': { body: { active: false, until: null } },
+      'GET /api/settings/preferences': {
+        body: { ui: { classic: false }, list: { show_ai_summary: true }, reading: {}, composing: {}, shortcuts: {} },
+      },
+      'GET /api/settings/ai/style-profile': () => ({ body: profile }),
+      'PUT /api/settings/ai/style-profile': (payload) => {
+        puts.push(payload);
+        const body = payload as { opt_in: boolean; text: string };
+        profile = body.opt_in
+          ? { ...profile, opt_in: true, text: body.text }
+          : { opt_in: false, text: '', generated_at: null, source_count: 0 };
+        return { body: profile };
+      },
+      'POST /api/settings/ai/style-profile/generate': () => {
+        profile = {
+          opt_in: true,
+          text: '- Vyká.\n- Krátke odseky.',
+          generated_at: '2026-10-30T09:00:00Z',
+          source_count: 42,
+        };
+        return { body: profile };
+      },
+    });
+    await page.goto('/settings/ai');
+    const section = page.getByTestId('style-profile');
+    await section.getByRole('switch').click();
+    await section.getByRole('button', { name: 'Vytvoriť profil' }).click();
+    await expect(section.getByLabel('Profil (môžete upraviť)')).toHaveValue('- Vyká.\n- Krátke odseky.');
+    await expect(section.getByText('Vytvorené z 42 e-mailov.')).toBeVisible();
+    await shot(page, `phase2e-W12-07-profile-${info.project.name}`);
+    await section.getByLabel('Profil (môžete upraviť)').fill('- Vyká.\n- Píše stručne.');
+    await section.getByRole('button', { name: 'Uložiť profil' }).click();
+    await section.getByRole('switch').click();
+    await expect(section.getByRole('button', { name: 'Vytvoriť profil' })).toHaveCount(0);
+    expect(puts).toEqual([
+      { opt_in: true, text: '' },
+      { opt_in: true, text: '- Vyká.\n- Píše stručne.' },
+      { opt_in: false, text: '' },
+    ]);
+  });
+});

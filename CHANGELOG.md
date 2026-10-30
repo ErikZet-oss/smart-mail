@@ -2,6 +2,25 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2e PR 5: personal style profile (Settings 07)
+
+**„Môj štýl písania“ in W12-07:**
+- opt-in per person;
+- „Vytvoriť / Aktualizovať profil“ builds it from the person's own last 200 sent e-mails (their text only — no quoted mail, no signature; at least 5);
+- the profile is editable;
+- switching off **deletes** it.
+- Stored in `user_settings` › `ai.style_profile` (#110, no table).
+
+**Profile content:** max 12 Slovak bullet points about how the person writes; the model is told never to include names, addresses, phone numbers, prices or document numbers.
+
+**Use:** the compose AI panel (2d) adds the writer's profile to the company style guide for that person's drafts.
+
+**Guards:**
+- AI availability and the budget are checked; `ai_runs` row;
+- audit `ai.style_profile_updated` / `_generated` without the profile text.
+
+This completes milestone **2e**.
+
 ## [Unreleased] — Phase 2e PR 4: W12-17e Pravidlá
 
 **Settings 17 „AI – správa“ › „Pravidlá“** (admin), with the settings schema regenerated.

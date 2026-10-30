@@ -275,3 +275,11 @@ export const toggleRule = (id: string, enabled: boolean) =>
 export const deleteRule = (id: string) => api<{ status: string }>('DELETE', `/api/settings/ai/rules/${id}`);
 export const testRule = (structured: StructuredRule) =>
   api<RuleTestOut>('POST', '/api/settings/ai/rules/test', { structured });
+
+// 07 Personal style profile (each person, opt-in, Phase 2e)
+export type StyleProfile = { opt_in: boolean; text: string; generated_at: string | null; source_count: number };
+export const styleProfileKey = ['settings', 'ai', 'style-profile'] as const;
+export const fetchStyleProfile = () => api<StyleProfile>('GET', '/api/settings/ai/style-profile');
+export const saveStyleProfile = (body: { opt_in: boolean; text: string }) =>
+  api<StyleProfile>('PUT', '/api/settings/ai/style-profile', body);
+export const generateStyleProfile = () => api<StyleProfile>('POST', '/api/settings/ai/style-profile/generate', {});

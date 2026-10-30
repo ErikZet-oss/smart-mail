@@ -126,6 +126,8 @@ export const MAIL_DEFAULTS: Record<string, Reply> = {
 
 /** Phase 1f W12: nav + profile so opening Nastavenia from older e2e shells does not 401 → /login. */
 export const SETTINGS_DEFAULTS: Record<string, Reply> = {
+  // W12-07 „Môj štýl písania“ (Phase 2e): off unless a test sets it
+  'GET /api/settings/ai/style-profile': { body: { opt_in: false, text: '', generated_at: null, source_count: 0 } },
   'GET /api/settings/nav': {
     body: {
       sections: [

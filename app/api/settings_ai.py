@@ -5,7 +5,7 @@ The audit records which card changed, never its text (#110)."""
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -19,10 +19,12 @@ from app.ai.pricing import estimate_purpose_cost_usd
 from app.ai.provider import get_llm_provider
 from app.ai.rule_parse import parse_rule
 from app.ai.service import daily_spend_usd
+from app.ai.style_profile import MIN_MAILS, PROFILE_CHARS, load_profile, save_profile, sent_samples
+from app.ai.style_profile import generate as generate_profile
 from app.ai.user_rules import MailFacts, StructuredRule, describe, rule_matches
 from app.api.mail import _ai_provider_configured, fail
 from app.api.settings import require_admin
-from app.auth.deps import DB, Auth, SettingsDep
+from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
 from app.auth.models import Person
 from app.core.audit import audit
 from app.mail.mailboxes import accessible_mailboxes
@@ -368,3 +370,104 @@ async def test_rule(body: RuleTestIn, admin: Admin, ctx: Auth, db: DB) -> RuleTe
         )
     ]
     return RuleTestOut(checked=len(messages), matches=hits)
+
+
+# ----- 07 Personal style profile (each person, opt-in) -----
+
+
+class StyleProfileOut(BaseModel):
+    opt_in: bool
+    text: str
+    generated_at: str | None
+    source_count: int
+
+
+class StyleProfileIn(BaseModel):
+    opt_in: bool
+    text: str = Field(default="", max_length=PROFILE_CHARS)
+
+
+@router.get("/style-profile")
+async def get_style_profile(person: ActivePerson, db: DB) -> StyleProfileOut:
+    return StyleProfileOut(**await load_profile(db, person.id))
+
+
+@router.put("/style-profile")
+async def put_style_profile(body: StyleProfileIn, person: ActivePerson, db: DB) -> StyleProfileOut:
+    """Edit or switch off. Switching off deletes the profile text (opt-in, AI_ASSISTANT §10)."""
+    current = await load_profile(db, person.id)
+    data = {
+        **current,
+        "opt_in": body.opt_in,
+        "text": body.text.strip() if body.opt_in else "",
+    }
+    if not body.opt_in:
+        data.update(generated_at=None, source_count=0)
+    await save_profile(db, person.id, data)
+    audit(
+        db,
+        "ai.style_profile_updated",
+        person_id=person.id,
+        object_type="person",
+        object_id=str(person.id),
+        details={"opt_in": body.opt_in},
+    )
+    await db.commit()
+    return StyleProfileOut(**await load_profile(db, person.id))
+
+
+@router.post("/style-profile/generate")
+async def generate_style_profile(person: ActivePerson, db: DB, settings: SettingsDep) -> StyleProfileOut:
+    """Build the profile from the person's own last 200 sent e-mails — only after opt-in."""
+    current = await load_profile(db, person.id)
+    if not current["opt_in"]:
+        raise fail(409, "opt_in_required")
+    model = (settings.llm_model_draft or "").strip()
+    if not _ai_provider_configured(settings) or not model:
+        raise fail(409, "ai_unavailable")
+    samples = await sent_samples(db, person.id)
+    if len(samples) < MIN_MAILS:
+        raise fail(422, "not_enough_mail", count=len(samples))
+    if not budget_allows_call(
+        spent_usd=await daily_spend_usd(db),
+        estimate_usd=estimate_purpose_cost_usd(model, "draft"),
+        budget_usd=Decimal(str(settings.ai_daily_budget_usd)),
+    ):
+        raise fail(429, "ai_budget_exceeded")
+    result = await generate_profile(get_llm_provider(settings), model, samples)
+    db.add(
+        AiRun(
+            purpose="draft",
+            provider="anthropic",
+            model=result.model,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            cost_usd=result.cost_usd,
+            latency_ms=result.latency_ms,
+            status=result.status,
+            error_class=result.error_class,
+        )
+    )
+    if result.text is None:
+        await db.commit()
+        raise fail(502, "ai_failed")
+    await save_profile(
+        db,
+        person.id,
+        {
+            "opt_in": True,
+            "text": result.text,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "source_count": len(samples),
+        },
+    )
+    audit(
+        db,
+        "ai.style_profile_generated",
+        person_id=person.id,
+        object_type="person",
+        object_id=str(person.id),
+        details={"source_count": len(samples)},
+    )
+    await db.commit()
+    return StyleProfileOut(**await load_profile(db, person.id))
