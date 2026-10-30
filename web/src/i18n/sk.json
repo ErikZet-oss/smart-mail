@@ -350,8 +350,7 @@
   "settingsAi": {
     "title": "AI asistent",
     "summaries": "Zhrnutia v zozname",
-    "summariesHelp": "Pod predmetom v zozname zobrazí krátke AI zhrnutie (v Klasickom zobrazení vypnuté).",
-    "comingAutonomy": "Samostatnosť AI a ďalšie voľby pribudnú v ďalšej fáze."
+    "summariesHelp": "Pod predmetom v zozname zobrazí krátke AI zhrnutie (v Klasickom zobrazení vypnuté)."
   },
   "shell": {
     "offline": "Ste offline – zobrazujeme uložené správy, odoslanie počká.",
@@ -1098,6 +1097,47 @@
     }
   },
   "ai": {
+    "autonomy": {
+      "title": "Samostatnosť",
+      "help": "Koľko smie AI urobiť sama. Odoslanie von a zápis do Money vždy schvaľuje človek.",
+      "scope": "Platí pre všetky osoby na tomto prihlásení.",
+      "hardRule": "Odoslanie mimo firmy a zápis do Money vždy schvaľuje človek.",
+      "locked": "Uzamknuté – vždy schvaľuje človek",
+      "action": "Akcia",
+      "levels": {
+        "0": "Vypnuté",
+        "1": "Len navrhnúť",
+        "2": "Pripraviť na schválenie",
+        "3": "Urobiť a oznámiť",
+        "4": "Urobiť potichu"
+      },
+      "actions": {
+        "classify": "Triedenie, priorita, jazyk, zhrnutie",
+        "link_company": "Priradenie odosielateľa k firme v Money",
+        "newsletter_feed": "Presun newsletterov do Feedu",
+        "spam_move": "Presun do Nevyžiadanej pošty",
+        "assign": "Pridelenie konverzácie kolegovi",
+        "reply": "Návrh odpovede",
+        "invoice_attach": "Faktúra alebo zálohová faktúra s PDF",
+        "reminder": "Upomienka",
+        "delivery_note": "Príjemka z dokladu dodávateľa",
+        "complaint": "Reklamácia v Money",
+        "order_create": "Objednávka v Money",
+        "order_confirmation": "Potvrdenie objednávky e-mailom",
+        "order_clarification": "Dopyt na nejasné položky objednávky",
+        "order_change": "Zmena alebo zrušenie objednávky",
+        "goods_shipped": "Odpoveď „Tovar odoslaný“",
+        "offer": "Ponuka",
+        "money_company": "Nová firma alebo kontakt v Money",
+        "money_activity": "Záznam aktivity v Money po odoslaní",
+        "followup": "Pripomienka, ak neodpovedia"
+      },
+      "overviewTitle": "Samostatnosť AI podľa prihlásení",
+      "overviewHelp": "Každé prihlásenie si samostatnosť nastavuje samo v časti AI asistent. Tu je len prehľad.",
+      "login": "Prihlásenie",
+      "defaults": "predvolené",
+      "customized": "upravené"
+    },
     "usage": {
       "shadowTitle": "Tieňový režim",
       "shadowReplies": "AI návrhy odpovedí – tieňový režim (návrhy sa tvoria, ale nezobrazujú)",

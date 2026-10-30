@@ -390,6 +390,15 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
                 help="Pod predmetom v zozname zobrazí krátke AI zhrnutie. V Klasickom zobrazení je vypnuté.",
                 scope="P",
             ),
+            # ⚠ per login (D8): re-auth + audit; external send and Money writes locked at 2 in code
+            field(
+                "ai.autonomy",
+                label="Samostatnosť ⚠",
+                control="table",
+                default=None,
+                help="Koľko smie AI urobiť sama. Odoslanie von a zápis do Money vždy schvaľuje človek.",
+                scope="A",
+            ),
         ],
     },
     {
@@ -467,6 +476,7 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
         "title": "AI – správa",
         "admin_only": True,
         "subs": [
+            {"id": "17b", "path": "autonomy", "title": "Samostatnosť AI", "fields": []},
             {"id": "17d", "path": "style", "title": "Štýl a znalosti", "fields": []},
             {"id": "17e", "path": "rules", "title": "Pravidlá", "fields": []},
             {
