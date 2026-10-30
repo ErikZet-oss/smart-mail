@@ -379,6 +379,8 @@ export type ExportStatus = {
   filename: string;
   expires_at: string | null;
   downloaded_at: string | null;
+  purged_at: string | null;
+  purged: number;
   error: string | null;
   folder_names: string[];
 };
@@ -388,6 +390,12 @@ export const startExport = (mailbox: string, body: ExportRequest) =>
   api<ExportStatus>('POST', `${base(mailbox)}/exports`, body);
 export const fetchExport = (id: string) => api<ExportStatus>('GET', `/api/mail/exports/${encodeURIComponent(id)}`);
 export const exportDownloadUrl = (id: string) => `/api/mail/exports/${encodeURIComponent(id)}/download`;
+export const purgeExport = (id: string) =>
+  api<{ deleted: number; folders: string[]; skipped: Record<string, string> }>(
+    'POST',
+    `/api/mail/exports/${encodeURIComponent(id)}/purge`,
+    {},
+  );
 
 /** #143 „Zmeniť kategóriu“ / „Znova zaradiť (AI)“. */
 export type CategoryChange = { message_id: string; category: string | null; corrected: boolean; needs_reply: boolean };

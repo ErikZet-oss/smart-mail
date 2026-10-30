@@ -45,7 +45,8 @@ async def sync_mailbox_job(ctx: dict[str, Any], mailbox_id: str, scope: Scope = 
 
 async def process_mailbox_ai_job(ctx: dict[str, Any], mailbox_id: str) -> dict[str, int]:
     """AI pipeline: eligibility + Message-ID idempotency, classify (2b), then reply suggestions (2c)."""
-    from app.ai.service import process_mailbox_ai, suggest_replies_for_mailbox
+    from app.ai.conformity_suggest import suggest_conformity
+    from app.ai.service import daily_spend_usd, process_mailbox_ai, shadow_mode_enabled, suggest_replies_for_mailbox
 
     settings: Settings = ctx["settings"]
     async with ctx["sessionmaker"]() as db:
@@ -56,7 +57,16 @@ async def process_mailbox_ai_job(ctx: dict[str, Any], mailbox_id: str) -> dict[s
         await db.commit()
         replies = await suggest_replies_for_mailbox(db, mailbox, settings)
         await db.commit()
-        return {**stats, **{f"reply_{k}": v for k, v in replies.items()}}
+        # #139 part C: an atest 2.1 request also gets a prefilled „Prehlásenie o zhode“ card (never issued by AI)
+        conformity = await suggest_conformity(
+            db, mailbox, settings, spent_usd=await daily_spend_usd(db), shadow=await shadow_mode_enabled(db)
+        )
+        await db.commit()
+        return {
+            **stats,
+            **{f"reply_{k}": v for k, v in replies.items()},
+            **{f"conformity_{k}": v for k, v in conformity.items()},
+        }
 
 
 async def send_compose_draft(ctx: dict[str, Any], draft_id: str) -> str:

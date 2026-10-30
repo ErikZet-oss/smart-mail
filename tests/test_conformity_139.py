@@ -272,3 +272,50 @@ async def test_139_issue_from_a_mail_attaches_the_pdf_to_a_reply_draft(
     assert att is not None and att.filename == f"Prehlasenie_o_zhode_{r.json()['number']}.pdf"
     row = await db.scalar(select(ConformityDeclaration))
     assert row is not None and att.storage_key != row.pdf_storage_key  # removing the chip never deletes the document
+
+
+async def test_139c_issue_from_the_ai_card_marks_it_approved(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.ai.models import AiSuggestion
+
+    async def no_imap(*_a: Any, **_k: Any) -> None:
+        return None
+
+    monkeypatch.setattr("app.api.documents.sync_draft_to_imap", no_imap)
+    await _setup(client, db, mail_server, settings)
+    mailbox = await db.scalar(select(Mailbox).where(Mailbox.email == "predajca@smartsro.sk"))
+    assert mailbox is not None
+    folder = FolderMeta(mailbox_id=mailbox.id, name="INBOX", special_use="inbox", selectable=True, subscribed=True)
+    db.add(folder)
+    await db.flush()
+    message = Message(mailbox_id=mailbox.id, folder_id=folder.id, uid=8, subject="Atest 2.1", from_email="a@x.example")
+    db.add(message)
+    await db.flush()
+    card = AiSuggestion(
+        mailbox_id=mailbox.id,
+        message_id=message.id,
+        suggestion_type="conformity_declaration",
+        payload={"customer": "X", "document_ref": "", "items": [{"nazov": "Matica M8 Zn"}]},
+        status="pending",
+    )
+    db.add(card)
+    await db.commit()
+    body = {**BODY, "message_id": str(message.id), "suggestion_id": str(card.id)}
+    r = await client.send_json("POST", "/api/documents/conformity", body)
+    assert r.status_code == 201, r.text
+    await db.refresh(card)
+    assert card.status == "approved" and card.final_payload is not None
+    assert card.final_payload["number"] == r.json()["number"] and card.diff == {"edited": True}
+    # AI approve itself can never issue a declaration
+    other = AiSuggestion(
+        mailbox_id=mailbox.id,
+        message_id=message.id,
+        suggestion_type="conformity_declaration",
+        payload={},
+        status="pending",
+    )
+    db.add(other)
+    await db.commit()
+    r = await client.send_json("POST", f"/api/suggestions/{other.id}/approve", {})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "unsupported_type"

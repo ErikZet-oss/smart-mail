@@ -12,15 +12,19 @@ from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from arq.connections import ArqRedis
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from app.api.mail import _mailbox, _redis, fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
+from app.auth.reauth import ReauthedSession
 from app.core.audit import audit
 from app.core.content_disposition import content_disposition_attachment
 from app.mail import export, storage
+from app.mail.models import Mailbox
+from app.mail.sync import SyncAuthError, SyncUnavailable
+from app.mail.sync_schedule import schedule_sync
 
 router = APIRouter(prefix="/api/mail", tags=["mail-export"])
 
@@ -81,6 +85,9 @@ async def start_export(
     ref: str, body: ExportIn, request: Request, ctx: Auth, person: ActivePerson, db: DB
 ) -> dict[str, Any]:
     mailbox, folders = await _folders(db, ctx, ref, body)
+    _, estimated = await export.estimate(db, folders, body.range.to_range(), datetime.now(UTC).date())
+    if not export.enough_space(estimated):
+        raise fail(507, "export_no_space")  # the test server has a small disk; a whole mailbox can be GBs
     stamp = datetime.now(UTC).strftime("%Y-%m-%d")
     scope: Literal["folders", "mailbox"] = "mailbox" if body.folder_ids is None else "folders"
     name = mailbox.email.split("@")[0] if scope == "mailbox" else export.folder_dir(folders[0]).replace("/", "-")
@@ -143,20 +150,36 @@ async def download_export(
     chunks = storage.iter_key(settings, state.storage_key)
     if chunks is None:
         raise fail(410, "export_expired")
-    state.downloaded_at = datetime.now(UTC).isoformat()
-    await export.save_state(_redis(request), state)
-    audit(
-        db,
-        "mail.export_downloaded",
-        account_id=ctx.account.id,
-        person_id=person.id,
-        object_type="mailbox",
-        object_id=state.mailbox_id,
-        details={"export_id": state.id, "messages": state.done, "bytes": state.archive_size, "sha256": state.sha256},
-    )
-    await db.commit()
+    redis = _redis(request)
+    maker = request.app.state.sessionmaker
+    account_id, person_id = ctx.account.id, person.id
+
+    async def downloaded() -> None:
+        # only after the whole archive went out: a broken download must not unlock the delete step (#134)
+        fresh = await export.load_state(redis, export_id)
+        if fresh is None:
+            return
+        fresh.downloaded_at = datetime.now(UTC).isoformat()
+        await export.save_state(redis, fresh)
+        async with maker() as session:
+            audit(
+                session,
+                "mail.export_downloaded",
+                account_id=account_id,
+                person_id=person_id,
+                object_type="mailbox",
+                object_id=fresh.mailbox_id,
+                details={
+                    "export_id": fresh.id,
+                    "messages": fresh.done,
+                    "bytes": fresh.archive_size,
+                    "sha256": fresh.sha256,
+                },
+            )
+            await session.commit()
+
     return StreamingResponse(
-        chunks,
+        export.stream_then(chunks, downloaded),
         media_type="application/zip",
         headers={
             "Content-Disposition": content_disposition_attachment(state.filename),
@@ -164,3 +187,69 @@ async def download_export(
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+@router.post("/exports/{export_id}/purge")
+async def purge_export(
+    export_id: str,
+    request: Request,
+    ctx: ReauthedSession,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+) -> dict[str, Any]:
+    """⚠ part 2 of #127: delete from the server exactly the messages in the archive (manifest UIDs, \\Deleted +
+    EXPUNGE — not the Kôš, so the quota is freed). Needs a re-auth, a downloaded archive whose stored copy still
+    matches its sha256, and runs once per archive."""
+    state = await _own(request, person, export_id)
+    if state.status != "ready" or export.is_expired(state):
+        raise fail(409, "export_not_ready")
+    if state.purged_at:
+        raise fail(409, "export_already_purged")
+    if not state.downloaded_at:
+        raise fail(409, "export_not_downloaded")
+    if not await export.archive_intact(settings, state):
+        raise fail(409, "export_archive_mismatch")
+    mailbox = await db.get(Mailbox, uuid.UUID(state.mailbox_id))
+    if mailbox is None:
+        raise fail(404, "mailbox_not_found")
+    redis = _redis(request)
+    lock = export.purge_lock_key(state.id)
+    if not await redis.set(lock, "1", nx=True, ex=export.PURGE_LOCK_TTL_S):
+        raise fail(409, "export_purge_running")  # two clicks at once: only one delete runs
+    try:
+        fresh = await export.load_state(redis, export_id)
+        if fresh is None or fresh.purged_at:
+            raise fail(409, "export_already_purged")
+        result = await export.purge_exported(db, settings, state, mailbox)
+    except export.ExportError as exc:
+        await redis.delete(lock)
+        raise fail(409, exc.code) from exc
+    except (SyncUnavailable, SyncAuthError) as exc:
+        await redis.delete(lock)
+        raise fail(503, "mail_server_unavailable") from exc
+    except HTTPException:
+        await redis.delete(lock)
+        raise
+    state.purged_at = datetime.now(UTC).isoformat()
+    state.purged = result.deleted
+    await export.save_state(_redis(request), state)
+    audit(
+        db,
+        "mail.export_purged",
+        account_id=ctx.account.id,
+        person_id=person.id,
+        object_type="mailbox",
+        object_id=state.mailbox_id,
+        details={
+            "export_id": state.id,
+            "deleted": result.deleted,
+            "folders": result.folders,
+            "skipped": result.skipped,
+            "sha256": state.sha256,
+        },
+    )
+    await db.commit()
+    await redis.delete(lock)
+    await schedule_sync(redis, mailbox.id)
+    return {"deleted": result.deleted, "folders": result.folders, "skipped": result.skipped}
