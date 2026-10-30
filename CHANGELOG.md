@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — 2f: 17c categories
+
+- W12-17c „Kategórie“ (admin): one table with Názov, Farba, Zapnutá, Popis pre AI and Počet za 30 dní. Built-in categories keep their ids; you can edit the description and switch them off. Up to 15 custom categories can be added (ids `x_…`). Stored in `org_settings` (`ai.categories`) (#116).
+- The classify prompt lists only the enabled categories with the admin's descriptions, and the model may answer only those. An answer with a switched-off category counts as invalid output and falls back like any other.
+- Switching a category off removes it from the prompt and the triage list only. Stored classifications keep their category, and its view still opens. „Iné“ is the fallback and stays on.
+- Saving is a ⚠ change: password re-auth and audit `ai.categories_changed` with before/after per category.
 ## [Unreleased] — deterministic web tests (#121)
 
 - vitest: the onboarding tour (W13) opened in whichever W2 test happened to run first, because the „tour seen“ key lived in jsdom's shared localStorage. The G3/G5 confirm-dialog tests then found two dialogs. The test setup now marks the tour as seen before every test, and a tour test removes the key itself. 10 shuffled runs are green.

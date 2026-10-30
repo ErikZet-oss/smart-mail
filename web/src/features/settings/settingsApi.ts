@@ -346,3 +346,28 @@ export type AiLimitsIn = {
 export const limitsKey = ['settings', 'ai', 'limits'] as const;
 export const fetchLimits = () => api<AiLimits>('GET', '/api/settings/ai/limits');
 export const saveLimits = (body: AiLimitsIn) => api<AiLimits>('PUT', '/api/settings/ai/limits', body);
+
+/** 17c Kategórie (#116): built-ins (description, on/off) + max 15 custom; descriptions feed the classify prompt. */
+export type CategoryColor = 'warning' | 'success' | 'danger' | 'info' | 'brand' | 'neutral';
+export type CategoryRow = {
+  id: string;
+  label: string;
+  description: string;
+  default_description: string | null;
+  color: CategoryColor;
+  enabled: boolean;
+  builtin: boolean;
+  locked: boolean;
+  count_30d: number;
+};
+export type CategoryRowIn = {
+  id: string | null;
+  label: string | null;
+  description: string;
+  color: CategoryColor;
+  enabled: boolean;
+};
+export const categoriesKey = ['settings', 'ai', 'categories'] as const;
+export const fetchCategories = () => api<CategoryRow[]>('GET', '/api/settings/ai/categories');
+export const saveCategories = (categories: CategoryRowIn[]) =>
+  api<CategoryRow[]>('PUT', '/api/settings/ai/categories', { categories });
