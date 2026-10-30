@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Bell, RefreshCw, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Bell, FolderDown, RefreshCw, UserPlus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
+import { exportDownloadUrl } from '../mail/mailApi';
 
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { safeInternalPath } from '../../lib/safePath';
@@ -22,6 +23,12 @@ function notifBody(item: NotificationItem, t: (k: string, o?: Record<string, str
   if (item.kind === 'sync_failed') {
     const code = syncErrorKey(item.params.error_code);
     return t(`notifs.syncErrors.${code}`, { email: item.params.mailbox_email ?? '' });
+  }
+  if (item.kind === 'export_ready') {
+    return t('notifs.kinds.export_ready.body', {
+      filename: item.params.filename ?? '',
+      messages: item.params.messages ?? '',
+    });
   }
   return t('notifs.kinds.assigned.body', { subject: item.params.subject ?? '' });
 }
@@ -47,6 +54,7 @@ function timeLabel(iso: string): string {
 
 function KindIcon({ kind }: { kind: NotificationItem['kind'] }) {
   if (kind === 'sync_failed') return <RefreshCw size={18} className="text-danger-600" aria-hidden="true" />;
+  if (kind === 'export_ready') return <FolderDown size={18} className="text-brand-primary-600" aria-hidden="true" />;
   return <UserPlus size={18} className="text-brand-primary-600" aria-hidden="true" />;
 }
 
@@ -151,7 +159,10 @@ export function NotificationsPanel({ onClose }: Props) {
                       onClick={() => {
                         if (item.unread) dismiss.mutate({ ids: [item.id] });
                         onClose();
-                        if (item.href) navigate(safeInternalPath(item.href));
+                        if (item.kind === 'export_ready' && item.params.export_id) {
+                          // #127: the archive download is a same-origin API URL, not an app route
+                          window.location.assign(exportDownloadUrl(item.params.export_id));
+                        } else if (item.href) navigate(safeInternalPath(item.href));
                       }}
                     >
                       <KindIcon kind={item.kind} />

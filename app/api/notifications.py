@@ -1,4 +1,4 @@
-"""Phase-1 in-app notifications (W14 / M16): sync failure + assignment/handover. No Web Push.
+"""In-app notifications (W14 / M16): sync failure, assignment/handover, backup ready (#127). No Web Push.
 
 API returns kind + params only (no UI language). Texts live in web/src/i18n/sk.json.
 """
@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -20,7 +20,7 @@ from app.mail.prefs import save_section
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
-Kind = Literal["sync_failed", "assigned"]
+Kind = Literal["sync_failed", "assigned", "export_ready"]
 SECTION = "notifications.dismissed"
 DISMISS_MAX = 500
 DISMISS_MAX_AGE = timedelta(days=30)
@@ -121,7 +121,7 @@ async def _save_dismissed(db: DB, person_id: uuid.UUID, ids: set[str]) -> list[s
     return pruned
 
 
-async def _build(db: DB, ctx: Auth) -> list[NotificationOut]:
+async def _build(db: DB, ctx: Auth, request: Request | None = None) -> list[NotificationOut]:
     now = datetime.now(UTC)
     dismissed = await _dismissed(db, ctx.person.id if ctx.person else None)
     items: list[NotificationOut] = []
@@ -173,23 +173,43 @@ async def _build(db: DB, ctx: Auth) -> list[NotificationOut]:
                 )
             )
 
+    if ctx.person is not None and request is not None:
+        # #127 „Archív je pripravený“: a finished backup of this person, while its 24 h link is valid
+        from app.mail.export import is_expired, person_exports
+
+        for state in await person_exports(request.app.state.redis, str(ctx.person.id)):
+            if state.status != "ready" or state.finished_at is None or is_expired(state, now):
+                continue
+            finished = datetime.fromisoformat(state.finished_at)
+            nid = event_id("export", uuid.UUID(state.id), finished)
+            items.append(
+                NotificationOut(
+                    id=nid,
+                    kind="export_ready",
+                    created_at=finished,
+                    unread=nid not in dismissed,
+                    href=None,  # the web downloads /api/mail/exports/{id}/download
+                    params={"export_id": state.id, "filename": state.filename, "messages": str(state.done)},
+                )
+            )
+
     items.sort(key=lambda n: n.created_at, reverse=True)
     return items
 
 
 @router.get("")
-async def list_notifications(ctx: Auth, db: DB) -> ListOut:
-    items = await _build(db, ctx)
+async def list_notifications(request: Request, ctx: Auth, db: DB) -> ListOut:
+    items = await _build(db, ctx, request)
     return ListOut(items=items, unread_count=sum(1 for i in items if i.unread))
 
 
 @router.post("/dismiss")
-async def dismiss(body: DismissIn, ctx: Auth, db: DB) -> dict[str, Any]:
+async def dismiss(body: DismissIn, request: Request, ctx: Auth, db: DB) -> dict[str, Any]:
     if ctx.person is None:
         raise _fail(403, "person_required")
     current = await _dismissed(db, ctx.person.id)
     if body.all:
-        items = await _build(db, ctx)
+        items = await _build(db, ctx, request)
         current = {i.id for i in items} | current
     else:
         current = current | {str(i) for i in body.ids}

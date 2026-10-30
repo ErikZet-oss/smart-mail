@@ -220,6 +220,22 @@ async def backfill_attachment_flags(ctx: dict[str, Any]) -> dict[str, int | None
     return {}
 
 
+async def export_mail_job(ctx: dict[str, Any], export_id: str) -> str | None:
+    """#127: back up folders to a ZIP of raw .eml in object storage (BODY.PEEK[], never changes \\Seen)."""
+    from app.mail.export import run_export
+
+    async with ctx["sessionmaker"]() as db:
+        state = await run_export(ctx["redis"], db, ctx["settings"], export_id)
+    return state.status if state else None
+
+
+async def delete_expired_exports(ctx: dict[str, Any]) -> int:
+    """#127: the 24 h download link is over — delete the archive from storage."""
+    from app.mail.export import delete_expired
+
+    return await delete_expired(ctx["redis"], ctx["settings"])
+
+
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
     # keep_result=0 frees the job id at once, so the next IDLE push or poll can enqueue the same sync again
@@ -232,6 +248,9 @@ class WorkerSettings:
         func(rescan_clamav_attachments, keep_result=0),
         func(reparse_attachment_messages, keep_result=0),
         func(backfill_attachment_flags, keep_result=0),
+        # a whole mailbox can take hours; the per-mailbox lock (export.LOCK_TTL_S) has the same bound
+        func(export_mail_job, keep_result=0, timeout=6 * 3600, max_tries=1),
+        func(delete_expired_exports, keep_result=0),
     ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, minute=set(range(60)), run_at_startup=True),
@@ -243,6 +262,8 @@ class WorkerSettings:
         cron(reparse_attachment_messages, hour={3}, minute={15}, unique=True),
         # #52 one-off paperclip backfill: one mailbox per run until every mailbox is done
         cron(backfill_attachment_flags, minute={5, 35}, unique=True),
+        # #127 hourly: archives whose 24 h link expired are deleted
+        cron(delete_expired_exports, minute={20}, unique=True),
     ]
     on_startup = startup
     on_shutdown = shutdown

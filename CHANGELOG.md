@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #127 part 1: back up a folder or the whole mailbox to ZIP
+
+- W2 folder menu „Stiahnuť priečinok (.zip)…“, mailbox menu and Nastavenia › Priečinky „Stiahnuť celú schránku (.zip)…“. The dialog offers Všetky správy / Staršie ako N mesiacov / Od – do, an optional „Vrátane podpriečinkov“, and an estimate (count and size from the synced copy). Then progress, and a download link valid 24 h. The notification „Archív je pripravený“ downloads it too.
+- The ARQ job `export_mail_job` reads each message with `BODY.PEEK[]` on a read-only SELECT, so \Seen never changes. Each message goes straight into a ZIP on disk (one FETCH of ≤ 20 messages at a time, never the whole archive in memory) and the file is uploaded to object storage in parts (`storage.put_file`). The download is streamed (`storage.iter_key`).
+- ZIP layout: one directory per folder (ASCII slug of the IMAP path), files `RRRR-MM-DD_HHMM_<predmet>_<uid>.eml` with the raw bytes from the server, and `manifest.csv` (folder, UID, Message-ID, date, from, subject, size, sha256, file). stdlib `zipfile` only.
+- Job state lives in Redis with a TTL; there is no new table. It holds progress, the storage key, the archive sha256 and the exported UIDs per folder (for part 2, safe delete). One running export per mailbox (409 `export_running`). The hourly cron `delete_expired_exports` removes archives after 24 h.
+- Rights: a person with access to the mailbox, not a viewer. A named private folder of somebody else → 403; a whole-mailbox export leaves such folders out. Only the person who started an export sees and downloads it. Audit `mail.export_started` / `mail.export_downloaded` carries folders, range, count, size and sha256, never mail content.
+
 ## [Unreleased] — 2f close-out: `make eval` on the server and the category confusion table
 
 - `python -m app.ai.eval_cli sample` picks N random classified messages and writes a label CSV on the server: mode 0600, never inside the repository, no mail bodies. An admin fills `category` (and optionally `language`).
