@@ -2,6 +2,27 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3b: Money read cache + sync (#144)
+
+- **Migration 0018** (approved by Erik in #150) adds `money_companies`, `money_persons`, `money_codebooks`, `email_company_links` and `money_sync_state`.
+  - These tables are a read cache only; nothing is written back to Money.
+  - Company e-mails (`Email` + `SeznamSpojeni`) are stored lower-cased for the sender matching in 3c.
+- **`app/money/bridge_client.py`**: the main app's only way to Money.
+  - HMAC-signed GETs, the same signature as the bridge (shared test vector).
+  - After 3 failures in a row a circuit breaker opens for 60 s; every failure becomes „Money nedostupné“, and mail keeps working.
+  - The contract fixture `fixtures/money/bridge_contract.json` comes from the bridge mock: the bridge suite fails on drift, and the app parses the fixture with `app/money/schemas.py`.
+- **`app/money/cache_sync.py`**:
+  - companies sync by `ChangeFrom` delta;
+  - persons and codebooks sync in full (the REST delta is [PROBE]);
+  - a nightly full run marks rows that disappeared as inactive and never deletes them;
+  - the cursor moves only after a run without errors;
+  - the last 20 runs are kept per entity, with counts and error codes only, never Money data.
+- **Worker `money_sync`**: checked every 5 min. It does what Settings 13e says is due, runs only with `FEATURE_MONEY=true`, and one run at a time (Redis lock).
+- **Settings 13 Money S4** (admin, shown only with `FEATURE_MONEY`):
+  - **13a Prepojenie**: bridge status card with agenda, API and bridge version, latency, last sync and „Otestovať“, plus row counts of the cache. Writes are shown as off.
+  - **13e Synchronizácia**: interval 5/15/30/60 min (audited), „Synchronizovať teraz“, history.
+  - 13c / 13f stay hidden in Phase 3 (Erik, #150); 13b / 13d come with 3d / 3f.
+
 ## [Unreleased] — fix: supplier invoices classified as invoice requests
 
 - Pilot 2026-10-30: „Faktura E3/2026/19608“ from a supplier with `E3_126_19608.pdf` + `.csv` (body only a bank-details note) was classified „Žiadosti o faktúru“ and got a reply suggestion. New deterministic rule `supplier_subject_attachment`: a new external mail (no `Re:`/`Fwd:`) whose subject starts with Faktúra/Faktura/Invoice/Rechnung/Dobropis/Dodací list/Delivery note/Lieferschein and carries a PDF/ISDOC/XML/CSV is a supplier document, without an LLM call. It runs after the DMARC check, so a spoofed „Faktura“ is still flagged. The non-decisive PDF-name hint no longer short-circuits the later checks.

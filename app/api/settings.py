@@ -2166,13 +2166,15 @@ async def _mailbox_by_id(db: DB, ctx: Auth, mailbox_id: uuid.UUID) -> Mailbox:
 
 
 @router.get("/nav")
-async def settings_nav(ctx: Auth) -> dict[str, Any]:
+async def settings_nav(ctx: Auth, settings: SettingsDep) -> dict[str, Any]:
     """Section list in Roundcube order for the W12 left column."""
     is_admin = ctx.person is not None and ctx.person.role == Role.admin
     sections = []
     for section in schema_document()["sections"]:
         if section.get("admin_only") and not is_admin:
             continue
+        if section.get("feature") == "money" and not settings.feature_money:
+            continue  # 13 Money S4 only with FEATURE_MONEY (pilot keeps it off, ADR-010)
         sections.append(
             {
                 "id": section["id"],
