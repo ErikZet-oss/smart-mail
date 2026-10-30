@@ -129,3 +129,25 @@ class AiRule(IdMixin, TimestampMixin, Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_by_person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"))
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AccountSettings(IdMixin, TimestampMixin, Base):
+    """JSON settings per login (scope A) — 07 autonomy (DECISIONS D8, #116)."""
+
+    __tablename__ = "account_settings"
+    __table_args__ = (UniqueConstraint("account_id", "section", name="uq_account_settings_account_section"),)
+
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), index=True
+    )
+    section: Mapped[str] = mapped_column(String(64))
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+
+
+class OrgSettings(IdMixin, TimestampMixin, Base):
+    """Company-wide JSON settings (scope G) — 17a provider/budget, 17c categories (#116)."""
+
+    __tablename__ = "org_settings"
+
+    section: Mapped[str] = mapped_column(String(64), unique=True)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")

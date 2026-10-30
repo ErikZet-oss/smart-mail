@@ -28,6 +28,7 @@ from app.api import (
     search,
     security_2fa,
     settings_ai,
+    settings_autonomy,
     suggestions,
     system,
 )
@@ -124,6 +125,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(compose_ai.router)
     app.include_router(settings_api.router)
     app.include_router(settings_ai.router)
+    app.include_router(settings_autonomy.router)
     app.include_router(contacts.router)
     app.include_router(search.router)
     app.include_router(notifications.router)

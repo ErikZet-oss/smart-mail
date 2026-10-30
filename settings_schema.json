@@ -680,6 +680,17 @@
           "options": [],
           "validation": {},
           "admin_only": false
+        },
+        {
+          "id": "ai.autonomy",
+          "label": "Samostatnosť ⚠",
+          "control": "table",
+          "default": null,
+          "help": "Koľko smie AI urobiť sama. Odoslanie von a zápis do Money vždy schvaľuje človek.",
+          "scope": "A",
+          "options": [],
+          "validation": {},
+          "admin_only": false
         }
       ]
     },
@@ -805,6 +816,12 @@
       "title": "AI – správa",
       "admin_only": true,
       "subs": [
+        {
+          "id": "17b",
+          "path": "autonomy",
+          "title": "Samostatnosť AI",
+          "fields": []
+        },
         {
           "id": "17d",
           "path": "style",

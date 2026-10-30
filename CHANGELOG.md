@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — 2f: autonomy per login (W12-07) and 17b overview
+
+- New tables `account_settings` (per login) and `org_settings` (company), migration 0016, reversible, no change to existing tables (#116, Erik's answer A). `org_settings` is used by 17a/17c in the next PRs.
+- W12-07 „Samostatnosť“: a matrix of the AI_ASSISTANT §1 actions × levels 0–4, set by each login for all its persons (D8). Changing it is a ⚠ change: password re-auth and audit `ai.autonomy_changed` with before/after.
+- Hard rule in code (`app/ai/autonomy.py`): external send and Money writes never go above level 2. Values are clamped when saved and when read, so a stored 3/4 is ignored. Those rows show a lock and levels 3–4 are disabled.
+- W12-17b „Samostatnosť AI“ (admin): read-only overview per active login, no admin maximum.
+- Levels are stored and shown; the pipeline starts reading them as each action lands (today only reply suggestions exist, at level 2).
+
 ## [Unreleased] — Konverzácie: opening marks the whole conversation read
 
 - In Konverzácie mode, opening a conversation marked only its newest message read, so the thread was bold again after a refresh (pilot, Nitra). The web now sends `mark_thread=true` in this mode, and `GET …/messages/{id}` marks every unread message of the thread in that mailbox (one IMAP `\Seen` per folder, audit `mail.thread_seen`). The row and folder counts update at once. List mode still marks only the opened message, as in Roundcube.

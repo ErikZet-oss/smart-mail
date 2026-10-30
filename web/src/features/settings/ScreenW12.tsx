@@ -27,6 +27,7 @@ import { buildNavItems, isItemActive, TABBED_SECTIONS } from './settingsNavModel
 import { AiKnowledgePanel } from './AiKnowledgePanel';
 import { AiRulesPanel } from './AiRulesPanel';
 import { AiUsagePanel } from './AiUsagePanel';
+import { AutonomyMatrix, AutonomyOverview } from './AiAutonomy';
 import { StyleProfileSection } from './StyleProfile';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
@@ -310,12 +311,13 @@ function SectionBody({
     if (meRole !== 'admin') return <AdminOnly />;
     if (sub === 'rules') return <AiRulesPanel />;
     if (sub === 'shadow') return <AiUsagePanel />;
-    return <AiKnowledgePanel />;
+    if (sub === 'style') return <AiKnowledgePanel />;
+    return <AutonomyOverview />; // 17b is the first tab
   }
   return <p className="type-body text-text-secondary">…</p>;
 }
 
-/** W12-07 — Phase 2b: list summaries only (autonomy matrix = later milestones). */
+/** W12-07 — summaries, autonomy per login (2f, D8), style profile. */
 function AiPanel() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -355,7 +357,7 @@ function AiPanel() {
         />
       ))}
       {classic ? <Banner kind="info" message={t('classic.banner')} /> : null}
-      <p className="type-small text-text-secondary">{t('settingsAi.comingAutonomy')}</p>
+      <AutonomyMatrix disabled={false} />
       {classic ? null : <StyleProfileSection disabled={false} />}
     </div>
   );

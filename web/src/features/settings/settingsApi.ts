@@ -308,3 +308,19 @@ export const fetchUsage = () => api<AiUsage>('GET', '/api/settings/ai/usage');
 export const fetchShadow = () => api<{ replies: boolean }>('GET', '/api/settings/ai/shadow');
 export const saveShadow = (replies: boolean) =>
   api<{ replies: boolean }>('PUT', '/api/settings/ai/shadow', { replies });
+
+/** 07 Samostatnosť per login (D8) and the 17b read-only overview (#116). */
+export type AutonomyAction = { id: string; level: number; default: number; max: number; hard: boolean };
+export type AccountAutonomy = {
+  account_id: string;
+  email: string;
+  kind: string;
+  levels: Record<string, number>;
+  customized: boolean;
+};
+export const autonomyKey = ['settings', 'ai', 'autonomy'] as const;
+export const autonomyOverviewKey = ['settings', 'ai', 'autonomy', 'overview'] as const;
+export const fetchAutonomy = () => api<{ actions: AutonomyAction[] }>('GET', '/api/settings/ai/autonomy');
+export const saveAutonomy = (levels: Record<string, number>) =>
+  api<{ actions: AutonomyAction[] }>('PUT', '/api/settings/ai/autonomy', { levels });
+export const fetchAutonomyOverview = () => api<AccountAutonomy[]>('GET', '/api/settings/ai/autonomy/overview');
