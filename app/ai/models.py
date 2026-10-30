@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -17,7 +18,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, IdMixin, TimestampMixin
@@ -100,3 +101,31 @@ class FeatureFlag(IdMixin, TimestampMixin, Base):
     )
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+
+
+class KnowledgeCard(IdMixin, TimestampMixin, Base):
+    """17d Znalosti (company data for drafts) and the single company style guide (kind ``style_guide``) — #110."""
+
+    __tablename__ = "knowledge_cards"
+
+    kind: Mapped[str] = mapped_column(String(16), default="knowledge", server_default="knowledge")
+    title: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    body: Mapped[str] = mapped_column(Text, default="", server_default="")
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String(64)), default=list, server_default="{}")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_by_person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"))
+    # filled by a trigger (title, tags weight A; body B) — read-only here
+    search_vector: Mapped[Any] = mapped_column(TSVECTOR, nullable=True, deferred=True)
+
+
+class AiRule(IdMixin, TimestampMixin, Base):
+    """17e Pravidlá: the rule in Slovak and its confirmed structured form (executed deterministically) — #110."""
+
+    __tablename__ = "ai_rules"
+
+    nl_text: Mapped[str] = mapped_column(Text)
+    structured: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_by_person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

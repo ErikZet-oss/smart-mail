@@ -7,6 +7,7 @@ the guard checks and the shadow flag. Nothing is sent or saved to Koncepty here 
 from __future__ import annotations
 
 import re
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from decimal import Decimal
@@ -22,10 +23,11 @@ from app.ai.budget import budget_allows_call
 from app.ai.categories import LANGUAGE_IDS
 from app.ai.classify import neutralize_untrusted_wrapper
 from app.ai.guards import SECURITY_PREFIX, reply_checks
-from app.ai.models import AiRun, AiSuggestion, Classification
+from app.ai.models import AiRun, AiSuggestion, Classification, KnowledgeCard
 from app.ai.pipeline import message_eligible_for_ai, normalize_message_id_header
 from app.ai.pricing import estimate_purpose_cost_usd
 from app.ai.provider import AnthropicLLMProvider, LLMProvider, LLMRequest, NullLLMProvider, get_llm_provider
+from app.ai.retrieval import Retriever, default_retriever, knowledge_block, style_guide_text
 from app.core.audit import audit
 from app.core.config import Settings
 from app.mail.models import FolderMeta, Mailbox, Message
@@ -231,6 +233,7 @@ async def suggest_replies(
     shadow: bool,
     provider: LLMProvider | None = None,
     load_body: BodyLoader | None = None,
+    retriever: Retriever | None = None,
 ) -> dict[str, int]:
     """Create `reply` suggestions for classified messages that need a reply. The caller commits."""
     stats = ReplyStats()
@@ -244,6 +247,8 @@ async def suggest_replies(
     budget = Decimal(str(settings.ai_daily_budget_usd))
     live = isinstance(provider, AnthropicLLMProvider)
     spent = spent_usd
+    retriever = retriever or default_retriever()
+    guide = await style_guide_text(db) or "(none yet)"
 
     for message, _folder, cls in await _candidates(db, mailbox):
         stats.candidates += 1
@@ -261,8 +266,9 @@ async def suggest_replies(
                 log.warning("ai.reply_body_unavailable", message_id=str(message.id), error=type(exc).__name__)
         thread = await thread_messages(db, message)
         context = thread_block(thread)
+        cards = await retriever.knowledge(db, f"{message.subject or ''}\n{message.body_text or message.preview or ''}")
         language = cls.language or "other"
-        system = render_prompt("system_base", company_name=COMPANY_NAME, style_guide="(zatiaľ nenastavený — Phase 2e)")
+        system = render_prompt("system_base", company_name=COMPANY_NAME, style_guide=guide)
         user = render_prompt(
             "draft",
             language=language,
@@ -271,6 +277,7 @@ async def suggest_replies(
             category=cls.category,
             priority=cls.priority or "normal",
             thread=context,
+            knowledge=knowledge_block(cards),
         )
         try:
             response = await provider.complete(
@@ -326,7 +333,7 @@ async def suggest_replies(
         notes: list[str] = list((cls.payload or {}).get("note_codes") or [])
         checks = reply_checks(
             body=proposal.body,
-            context=context,
+            context=facts_context(context, cards),
             recipient=recipient,
             recipient_known=bool(recipient) and await _recipient_known(db, mailbox, recipient or "", message),
             internal_domains=settings.internal_domain_list,
@@ -342,6 +349,7 @@ async def suggest_replies(
             "in_reply_to": message.message_id,
             "category": cls.category,
             "ai_run_id": str(run.id),
+            "knowledge_ids": [str(c.id) for c in cards],  # the approve re-check uses the same facts
         }
         suggestion = AiSuggestion(
             mailbox_id=mailbox.id,
@@ -377,8 +385,20 @@ async def suggest_replies(
     return stats.as_dict()
 
 
+def facts_context(thread_text: str, cards: list[KnowledgeCard]) -> str:
+    """What the number/fact check accepts: the thread plus the knowledge cards the draft was given."""
+    return "\n".join([thread_text, *(c.body for c in cards)])
+
+
 async def recheck_reply(
-    db: AsyncSession, mailbox: Mailbox, settings: Settings, message: Message, *, body: str, language: str | None
+    db: AsyncSession,
+    mailbox: Mailbox,
+    settings: Settings,
+    message: Message,
+    *,
+    body: str,
+    language: str | None,
+    knowledge_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """The same guards as at creation, on the body being approved (CLAUDE.md §8: the backend re-runs all checks)."""
     cls = await db.scalar(select(Classification).where(Classification.message_id == message.id).limit(1))
@@ -386,7 +406,7 @@ async def recheck_reply(
     recipient = message.from_email
     return reply_checks(
         body=body,
-        context=thread_block(await thread_messages(db, message)),
+        context=facts_context(thread_block(await thread_messages(db, message)), await _cards(db, knowledge_ids)),
         recipient=recipient,
         recipient_known=bool(recipient) and await _recipient_known(db, mailbox, recipient or "", message),
         internal_domains=settings.internal_domain_list,
@@ -394,3 +414,18 @@ async def recheck_reply(
         expected_language=cls.language if cls else None,
         proposal_language=language,
     )
+
+
+async def _cards(db: AsyncSession, ids: list[str] | None) -> list[KnowledgeCard]:
+    wanted = [uuid.UUID(i) for i in ids or [] if _is_uuid(i)]
+    if not wanted:
+        return []
+    return list((await db.execute(select(KnowledgeCard).where(KnowledgeCard.id.in_(wanted)))).scalars())
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except (ValueError, TypeError):
+        return False
+    return True

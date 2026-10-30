@@ -99,13 +99,16 @@ async def assist(
     instruction: str | None,
     language: TargetLanguage | None,
     source_thread: list[Message],
+    style_guide: str | None = None,
+    knowledge: str = "(no matching company knowledge)",
 ) -> AssistResult:
     """One LLM call; never raises for provider errors (the caller records the run and answers 502)."""
-    system = render_prompt("system_base", company_name=COMPANY_NAME, style_guide="(zatiaľ nenastavený — Phase 2e)")
+    system = render_prompt("system_base", company_name=COMPANY_NAME, style_guide=style_guide or "(none yet)")
     user = render_prompt(
         "compose",
         task=task_text(action, instruction=instruction, language=language),
         thread=thread_block(source_thread) if source_thread else "(no quoted e-mail)",
+        knowledge=knowledge,
         draft=neutralize_untrusted_wrapper(text[:MAX_TEXT]).replace("</draft>", "‹/draft›"),
     )
     try:

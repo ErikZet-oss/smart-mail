@@ -85,7 +85,7 @@ approval. Prefer small PRs. **Pilot bugs preempt** any in-flight Phase 2 PR.
 | **2b** | Classify + AI views | W2f (AI triedenie), list badges | Deterministic rules first (AI_ASSISTANT §2); classify JSON schema (§4); language detection; AI category views / filters; list summaries toggle (SETTINGS 07); private-folder skip; phishing / DMARC banners (guard basics) |
 | **2c** | Reply suggestions | reading pane `AiSuggestionCard`, approve/reject | Plan step for **reply** only (no Money tools yet); guards (§9) that apply without Money; draft into Koncepty on approve path level 2; reject reason chips; audit `ai` / `user`; shadow mode hides cards |
 | **2d** | Compose AI panel | W4a, M17 | Napíš / Prepíš / Prelož / Kontrola pred odoslaním; diff preview (Formálnejšie etc.); never invent signature; uses active person style when available |
-| **2e** | Style, knowledge, NL rules | W12-07 (person), W12-17d–e (admin) | Style guide + knowledge cards (embeddings later ok with pgvector); NL → structured rules with confirm; personal style profile opt-in (per person, PRODUCT_SPEC §2.0) |
+| **2e** | Style, knowledge, NL rules | W12-07 (person), W12-17d–e (admin) | Style guide + knowledge cards (**full-text retrieval now, embeddings later — ADR-014**); NL → structured rules with confirm; personal style profile opt-in (per person, PRODUCT_SPEC §2.0). Data model (#110, Erik A): `knowledge_cards` (kind knowledge / style_guide) + `ai_rules`; personal profile in `user_settings` › `ai.style_profile` |
 | **2f** | Autonomy, budget, shadow, eval | W12-07 autonomy matrix, W12-17a–c, W12-17f | Autonomy per login (D8); cost budget; admin provider/budget/categories; shadow + accuracy/consumption; server `make eval` + injection suite; manual backfill UI (count + cost + limit) if not earlier |
 
 **Suggested PR mapping:** one PR per milestone (2a…2f), same pattern as Phase 1h. Merge only after review.
@@ -120,7 +120,7 @@ Not all items block 2a; call out blockers explicitly.
   - `LLM_MODEL_DRAFT=claude-sonnet-5-5`
   - `LLM_MODEL_EXTRACT=claude-sonnet-5-5`
   - `LLM_MODEL_ASSISTANT=claude-sonnet-5-5`
-  - `LLM_MODEL_EMBED` empty (the embeddings provider is decided at 2e).
+  - `LLM_MODEL_EMBED` empty. At 2e Erik chose PostgreSQL full-text first (#110, ADR-014); embeddings only if the eval after the shadow week shows missed knowledge.
 - Erik puts the API key into the server `.env` himself.
 
 | Need | Blocks | Notes |

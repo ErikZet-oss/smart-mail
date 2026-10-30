@@ -2,6 +2,30 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2e PR 1: knowledge cards, style guide, full-text retrieval
+
+**Migration 0015** (#110, Erik A; reversible, no change to existing tables):
+- `knowledge_cards`: `kind` knowledge | style_guide, with the style guide as one row (partial unique index); title, body, valid_until, tags, enabled, created_by; a full-text `search_vector` trigger (simple + unaccent).
+- `ai_rules`: used in a later 2e PR.
+
+**Retrieval** (`app/ai/retrieval.py`, ADR-014):
+- `Retriever` protocol with `FullTextRetriever`: up to 3 enabled, valid cards matching the mail's words.
+- Letters-only OR query, so no tsquery syntax gets through.
+- Embeddings can replace it in this one module later.
+
+**Prompts:**
+- Reply drafts (2c) and the compose panel (2d) get the company style guide (system prompt) and the matching cards.
+- Cards go in `<company_knowledge>` blocks marked as data, not instructions.
+- Numbers from those cards count as facts for the number check, at creation and at approve (`knowledge_ids` in the payload).
+
+**API** `/api/settings/ai/style-guide` (GET/PUT) and `/api/settings/ai/knowledge` (list / create / edit / delete):
+- admin only (17d);
+- audit without card text.
+
+**Docs:** ADR-014; CLAUDE.md §4 data model updated; `docs/plans/phase-2.md`.
+
+The W12-17d UI follows in the next PR.
+
 ## [Unreleased] — Phase 2d PR 3: live „Kontrola pred odoslaním“ + send-gate fixes
 
 **Live checklist** in the W4a panel / M17 sheet:
