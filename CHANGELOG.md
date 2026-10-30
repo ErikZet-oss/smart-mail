@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — reply suggestions also for „Iné“ (#132)
+
+- A reply suggestion is now prepared for every classified message with `needs_reply = true`, in any category, built-in or a 17c custom one. The exception is `NO_REPLY_CATEGORIES` (newsletter, spam, notification, internal, supplier_document). Before, only a fixed list of categories got one, so a customer's „pracujete aj cez víkend? … link na eshop?“ in „Iné“ got none (pilot 2026-10-30). Guards, autonomy (level 2 draft) and the daily budget are unchanged. AI_ASSISTANT §6 documents the rule.
+
 ## [Unreleased] — #127 part 1: back up a folder or the whole mailbox to ZIP
 
 - W2 folder menu „Stiahnuť priečinok (.zip)…“, mailbox menu and Nastavenia › Priečinky „Stiahnuť celú schránku (.zip)…“. The dialog offers Všetky správy / Staršie ako N mesiacov / Od – do, an optional „Vrátane podpriečinkov“, and an estimate (count and size from the synced copy). Then progress, and a download link valid 24 h. The notification „Archív je pripravený“ downloads it too.
