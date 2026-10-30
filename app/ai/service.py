@@ -8,12 +8,13 @@ from decimal import Decimal
 from typing import Any
 
 import structlog
-from sqlalchemy import func, select
+from pydantic import ValidationError
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.budget import budget_allows_call, budget_day_start
-from app.ai.classify import MAX_LLM_ATTEMPTS, classify_message
-from app.ai.models import AiRun, Classification, FeatureFlag
+from app.ai.classify import MAX_LLM_ATTEMPTS, ClassifyOutcome, classify_message
+from app.ai.models import AiRule, AiRun, Classification, FeatureFlag
 from app.ai.pipeline import (
     folder_eligible_for_ai,
     message_eligible_for_ai,
@@ -22,6 +23,7 @@ from app.ai.pipeline import (
 )
 from app.ai.pricing import estimate_purpose_cost_usd
 from app.ai.provider import AnthropicLLMProvider, get_llm_provider
+from app.ai.user_rules import MailFacts, RuleOutcome, StructuredRule, first_match
 from app.core.config import Settings
 from app.mail.models import Attachment, FolderMeta, Mailbox, Message
 
@@ -114,6 +116,8 @@ async def process_mailbox_ai(
     spent = await daily_spend_usd(db)
     provider = get_llm_provider(settings)
     shadow = await shadow_mode_enabled(db)
+    user_rules = await load_user_rules(db)
+    used_rule_ids: set[str] = set()
 
     q = (
         select(Message, FolderMeta)
@@ -159,41 +163,57 @@ async def process_mailbox_ai(
         if plan.note_codes:
             stats["unscanned_attachment_notes"] += 1
 
+        # 17e user rules first (deterministic, no model): a rule with a category decides alone (#110)
+        user_hit = first_match(
+            user_rules,
+            MailFacts(
+                from_email=message.from_email or "",
+                subject=message.subject or "",
+                body=message.body_text or message.preview or "",
+                attachment_names=tuple(a.filename for a in atts),
+            ),
+        )
+        if user_hit is not None:
+            used_rule_ids.add(user_hit.rule_id)
         live_llm = isinstance(provider, AnthropicLLMProvider) and bool(model)
-        if live_llm and not budget_allows_call(spent_usd=spent, estimate_usd=estimate, budget_usd=budget):
-            stats["skipped_budget"] += 1
-            log.info("ai.pipeline_budget_stop", mailbox_id=str(mailbox.id), spent_usd=str(spent))
-            break
+        if user_hit is not None and user_hit.category is not None:
+            stats["eligible"] += 1
+            outcome = user_rule_outcome(user_hit, message, list(plan.note_codes), settings.internal_domain_list)
+        else:
+            if live_llm and not budget_allows_call(spent_usd=spent, estimate_usd=estimate, budget_usd=budget):
+                stats["skipped_budget"] += 1
+                log.info("ai.pipeline_budget_stop", mailbox_id=str(mailbox.id), spent_usd=str(spent))
+                break
 
-        stats["eligible"] += 1
-        try:
-            outcome = await classify_message(
-                provider=provider,
-                model=model,
-                from_email=message.from_email,
-                from_name=message.from_name,
-                subject=message.subject,
-                body_text=message.body_text or message.preview,
-                headers_text=None,
-                attachment_names=[a.filename for a in atts],
-                auth_results=message.auth_results,
-                internal_domains=settings.internal_domain_list,
-                extra_note_codes=list(plan.note_codes),
-                recipients=[
-                    str(a.get("email"))
-                    for a in [*(message.to_addrs or []), *(message.cc_addrs or [])]
-                    if a.get("email")
-                ],
-            )
-        except Exception as exc:  # never crash mail sync
-            log.warning(
-                "ai.classify_unexpected",
-                mailbox_id=str(mailbox.id),
-                message_id=str(message.id),
-                error=type(exc).__name__,
-            )
-            stats["llm_error"] += 1
-            continue
+            stats["eligible"] += 1
+            try:
+                outcome = await classify_message(
+                    provider=provider,
+                    model=model,
+                    from_email=message.from_email,
+                    from_name=message.from_name,
+                    subject=message.subject,
+                    body_text=message.body_text or message.preview,
+                    headers_text=None,
+                    attachment_names=[a.filename for a in atts],
+                    auth_results=message.auth_results,
+                    internal_domains=settings.internal_domain_list,
+                    extra_note_codes=list(plan.note_codes),
+                    recipients=[
+                        str(a.get("email"))
+                        for a in [*(message.to_addrs or []), *(message.cc_addrs or [])]
+                        if a.get("email")
+                    ],
+                )
+            except Exception as exc:  # never crash mail sync
+                log.warning(
+                    "ai.classify_unexpected",
+                    mailbox_id=str(mailbox.id),
+                    message_id=str(message.id),
+                    error=type(exc).__name__,
+                )
+                stats["llm_error"] += 1
+                continue
 
         ai_run_id = None
         recorded_paid = False
@@ -226,6 +246,8 @@ async def process_mailbox_ai(
         elif outcome.source == "rules":
             stats["rules_only"] += 1
 
+        if user_hit is not None and outcome.result is not None:
+            apply_rule_overrides(outcome, user_hit)
         if outcome.source == "error" or outcome.result is None:
             # Leave unclassified; bump attempt count for retry (max 3).
             if existing is None:
@@ -251,6 +273,7 @@ async def process_mailbox_ai(
                 "note_codes": outcome.note_codes,
                 "source": outcome.source,
                 "rule_id": outcome.rule.rule_id if outcome.rule else None,
+                "user_rule_id": user_hit.rule_id if user_hit is not None else None,
                 "entities": outcome.result.entities.model_dump(),
                 "needs_reply": outcome.result.needs_reply,
                 "sentiment": outcome.result.sentiment,
@@ -288,6 +311,7 @@ async def process_mailbox_ai(
             log.info("ai.pipeline_budget_stop", mailbox_id=str(mailbox.id), spent_usd=str(spent))
             break
 
+    await mark_rules_used(db, used_rule_ids)
     if stats["classified"] or stats["llm_error"] or stats["llm_invalid"]:
         await db.flush()
     log.info("ai.pipeline_classify", mailbox_id=str(mailbox.id), **stats)
@@ -347,3 +371,62 @@ async def suggest_replies_for_mailbox(db: AsyncSession, mailbox: Mailbox, settin
         shadow=await shadow_mode_enabled(db),
         load_body=load_body,
     )
+
+
+async def load_user_rules(db: AsyncSession) -> list[tuple[str, StructuredRule]]:
+    """Enabled 17e rules, oldest first; a row that no longer validates is skipped (never guessed)."""
+    rows = await db.execute(select(AiRule).where(AiRule.enabled.is_(True)).order_by(AiRule.created_at))
+    out: list[tuple[str, StructuredRule]] = []
+    for row in rows.scalars():
+        try:
+            out.append((str(row.id), StructuredRule.model_validate(row.structured)))
+        except ValidationError:
+            log.warning("ai.user_rule_invalid", rule_id=str(row.id))
+    return out
+
+
+async def mark_rules_used(db: AsyncSession, rule_ids: set[str]) -> None:
+    if not rule_ids:
+        return
+    await db.execute(
+        update(AiRule).where(AiRule.id.in_([uuid.UUID(r) for r in rule_ids])).values(last_used_at=datetime.now(UTC))
+    )
+
+
+def user_rule_outcome(hit: RuleOutcome, message: Message, notes: list[str], internal: list[str]) -> ClassifyOutcome:
+    """Classification decided by a confirmed 17e rule — no LLM call; security notes still computed."""
+    from app.ai.classify import ClassificationResult, phishing_signals
+    from app.ai.language import detect_language
+    from app.ai.reply import REPLY_CATEGORIES
+
+    category = hit.category or "other"
+    body = message.body_text or message.preview or ""
+    signals = phishing_signals(
+        from_name=message.from_name,
+        from_email=message.from_email,
+        auth_results=message.auth_results,
+        body_text=body,
+        internal_domains=internal,
+    )
+    return ClassifyOutcome(
+        result=ClassificationResult(
+            category=category,
+            priority=hit.priority or "normal",
+            language=detect_language(f"{message.subject or ''}\n{body}"),
+            needs_reply=hit.needs_reply if hit.needs_reply is not None else category in REPLY_CATEGORIES,
+            summary_sk=(message.subject or category)[:140],
+            confidence=1.0,
+        ),
+        source="user_rule",
+        note_codes=list(dict.fromkeys([*notes, *signals])),
+    )
+
+
+def apply_rule_overrides(outcome: ClassifyOutcome, hit: RuleOutcome) -> None:
+    """A rule's priority / reply flag wins over the classifier (category rules already decided alone)."""
+    if outcome.result is None:
+        return
+    if hit.priority is not None:
+        outcome.result.priority = hit.priority
+    if hit.needs_reply is not None:
+        outcome.result.needs_reply = hit.needs_reply
