@@ -29,7 +29,7 @@ types:
 	cd web && npm run typecheck
 check: lint types test   ## everything CI runs except docker compose
 EVAL_CSV ?= /var/lib/smartmail/eval/labels.csv
-eval:          ## category eval on the SERVER against its labeled CSV (never in git); EVAL_ARGS="--live --save"
+eval:          ## local dev only (server: README › dc exec app python -m app.ai.eval_cli run …); EVAL_ARGS="--live --save"
 	docker compose exec app python -m app.ai.eval_cli run --from-csv $(EVAL_CSV) $(EVAL_ARGS)
 
 injection:     ## AI injection suite (AI_ASSISTANT §12; fictional fixtures/ai/injection) — must pass before each release

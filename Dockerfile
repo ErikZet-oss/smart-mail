@@ -26,7 +26,9 @@ COPY templates ./templates
 COPY design/tokens.css ./design/tokens.css
 COPY design/brand/logo-smart.png ./design/brand/logo-smart.png
 
-RUN useradd --system --uid 10001 smartmail && chown -R smartmail /srv
+# `make eval` label CSVs (server only, never in git) live in the smartmail_eval volume, owned by the app user (#129)
+RUN useradd --system --uid 10001 smartmail && chown -R smartmail /srv \
+    && mkdir -p /var/lib/smartmail/eval && chown -R smartmail /var/lib/smartmail
 USER smartmail
 
 EXPOSE 8000

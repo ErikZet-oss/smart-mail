@@ -122,6 +122,8 @@ services:
       redis: { condition: service_healthy }
       s3: { condition: service_started }
       imap-test: { condition: service_healthy }
+    # `eval_cli sample` label CSVs survive `up -d --build` (update.sh); never in git (#129)
+    volumes: [smartmail_eval:/var/lib/smartmail/eval]
     ports: ["127.0.0.1:8000:8000"]
 
   worker:
@@ -141,6 +143,7 @@ services:
     ports: ["127.0.0.1:8080:8080"]
 
 volumes:
+  smartmail_eval:
   imap-test-data:
   db-data:
   s3-data:

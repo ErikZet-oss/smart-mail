@@ -282,15 +282,17 @@ Testovací režim: `APP_ENV=test`, sync voči reálnemu IMAP, odosielanie len na
 ```
 Migrácie sa pri zlyhaní update **samy nevracajú** — skript vypíše postup `pg_restore` zo zálohy.
 
-**Presnosť AI (`make eval`, len na serveri).** Označené e-maily nikdy nejdú do gitu.
+**Presnosť AI (eval, len na serveri).** Označené e-maily nikdy nejdú do gitu. Na serveri:
 ```bash
-docker compose exec app python -m app.ai.eval_cli sample --sample 200 --out /var/lib/smartmail/eval/labels.csv
-# v CSV na serveri doplňte stĺpec category (prípadne language) – kódy kategórií zo Nastavenia › AI – správa › Kategórie
-make eval                                  # porovná uložené zaradenia s označením (zadarmo)
-make eval EVAL_ARGS="--live --save"        # zaradí znova dnešným promptom (platené, v dennom rozpočte), uloží súhrn do 17f
+alias dc='docker compose --env-file /opt/smart-mail/deploy/.env -f /opt/smart-mail/deploy/docker-compose.yml'
+dc exec app python -m app.ai.eval_cli sample --sample 200 --out /var/lib/smartmail/eval/labels.csv
+# doplňte stĺpec category (prípadne language) – kódy z Nastavenia › AI – správa › Kategórie
+dc exec app python -m app.ai.eval_cli run --from-csv /var/lib/smartmail/eval/labels.csv                # uložené zaradenia (zadarmo)
+dc exec app python -m app.ai.eval_cli run --from-csv /var/lib/smartmail/eval/labels.csv --live --save  # znova, platené, v rozpočte
 ```
-Cieľ je ≥ 90 % (príkaz skončí s kódom 1, ak sa nesplní). V 17f sa zobrazí len súhrn a tabuľka zámen, nie texty
-e-mailov. Súbor CSV vznikne s právami 0600 a nástroj ho odmietne zapísať do priečinka s kódom.
+CSV je vo zväzku `smartmail_eval`, takže prežije aktualizáciu (`update.sh`). Cieľ je ≥ 90 % (príkaz skončí s kódom
+1, ak sa nesplní). V 17f sa zobrazí len súhrn a tabuľka zámen, nie texty e-mailov. Súbor vznikne s právami 0600 a
+nástroj ho odmietne zapísať do priečinka s kódom. `make eval` (s `EVAL_CSV=…`) je len pre lokálny vývoj.
 
 **Nikdy** nepoužívajte live schránky eshop@ / info@ / pobočky na pilot — len `test@smartsro.sk` (alebo
 LOGIN_ALLOWLIST).

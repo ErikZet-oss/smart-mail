@@ -126,6 +126,8 @@ services:
       redis: { condition: service_healthy }
       s3: { condition: service_started }
       bridge: { condition: service_started }
+    # `eval_cli sample` label CSVs survive `up -d --build` (update.sh); never in git (#129)
+    volumes: [smartmail_eval:/var/lib/smartmail/eval]
     ports: ["127.0.0.1:8000:8000"]
     healthcheck:
       # Own curl budget — must not hang if the app event loop is busy (pilot #18 B4).
@@ -185,6 +187,7 @@ services:
       web: { condition: service_healthy }
 
 volumes:
+  smartmail_eval:
   db-data:
   s3-data:
   clamav-data:
