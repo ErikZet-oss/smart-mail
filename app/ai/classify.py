@@ -41,7 +41,14 @@ class ClassificationResult(BaseModel):
     priority: str = "normal"
     priority_reason: str = ""
     language: str = "other"
-    needs_reply: bool = False
+    needs_reply: bool = Field(
+        default=False,
+        description=(
+            "true when the sender expects an answer or an action from Smart s.r.o.: a question, a request, an order, "
+            "a complaint or a reported problem with a delivery. false for automatic notifications, newsletters and "
+            "a plain thank-you without a request."
+        ),
+    )
     deadline: str | None = None
     sentiment: str = "neutral"
     summary_sk: str = ""
@@ -121,6 +128,10 @@ DIRECTION_RULES: tuple[str, ...] = (
     "number, „objednávame“).",
     "supplier_info = a supplier's business information for us (price lists, outages, price changes); newsletter = "
     "bulk marketing or mailing-list mail.",
+    "complaint = a customer reports a problem with goods or a delivery we sent: missing or wrong quantity, wrong or "
+    "damaged goods, a defect, a lost parcel — also without the word „reklamácia“, and it always needs a reply.",
+    "A customer's reply to our automatic e-shop notification („Re: [Smart s.r.o. …] Odoslaná“, „… Prijatá“) is "
+    "classified by what the customer wrote, never as a notification; the quoted notification below it is context.",
 )
 
 

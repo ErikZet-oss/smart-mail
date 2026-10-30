@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — fix: complaints in replies to e-shop notifications were missed
+
+- Pilot 2026-10-30: „po otvorení zásielky … zistené množstvo 20 ks“, a reply to our „Odoslaná“ notification, was classified `other` with `needs_reply=false`, so no reply suggestion. The classify prompt now defines a complaint (missing/wrong quantity, wrong or damaged goods, defect, lost parcel — even without „reklamácia“) and says a reply to our automatic notification is judged by what the customer wrote. `needs_reply` got a description in the tool schema.
+
 ## [Unreleased] — #139 part A: Prehlásenie o zhode — data model, Pečiatka and Podpis
 
 - Migration 0017 (approved by Erik): `branches.stamp_key`, `persons.signature_key`, and the table `conformity_declarations` (number unique, branch, prepared_by, signer, account, customer, document, items, place, date, PDF key, sha256, message/thread). Part B uses the table.
