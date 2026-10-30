@@ -23,6 +23,13 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   - **13e Synchronizácia**: interval 5/15/30/60 min (audited), „Synchronizovať teraz“, history.
   - 13c / 13f stay hidden in Phase 3 (Erik, #150); 13b / 13d come with 3d / 3f.
 
+## [Unreleased] — #156 AI suggestion cards collapsed by default
+
+- The reply suggestion card and the Prehlásenie o zhode card start as one line (~48 px): AI icon, title, category · language, check status (✓ / ⚠ N / ⛔), the first ~80 characters, „Zobraziť návrh“.
+- „Pripraviť koncept“ / „Pripraviť prehlásenie…“ appear only after expanding; „Zamietnuť“ (×) also works collapsed.
+- Click, Enter or Space expands (`aria-expanded`); „Zbaliť“ in the expanded header gets the focus.
+- No Figma frame for the collapsed state (built from the existing card, Erik's approval in #156). The optional setting „Návrhy zobrazovať rozbalené“ is left out.
+
 ## [Unreleased] — fix: supplier invoices classified as invoice requests
 
 - Pilot 2026-10-30: „Faktura E3/2026/19608“ from a supplier with `E3_126_19608.pdf` + `.csv` (body only a bank-details note) was classified „Žiadosti o faktúru“ and got a reply suggestion. New deterministic rule `supplier_subject_attachment`: a new external mail (no `Re:`/`Fwd:`) whose subject starts with Faktúra/Faktura/Invoice/Rechnung/Dobropis/Dodací list/Delivery note/Lieferschein and carries a PDF/ISDOC/XML/CSV is a supplier document, without an LLM call. It runs after the DMARC check, so a spoofed „Faktura“ is still flagged. The non-decisive PDF-name hint no longer short-circuits the later checks.
