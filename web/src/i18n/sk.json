@@ -1098,6 +1098,23 @@
     }
   },
   "ai": {
+    "styleProfile": {
+      "title": "Môj štýl písania",
+      "help": "AI sa naučí, ako píšete vy, z vašich posledných 200 odoslaných e-mailov (len váš text, bez citácií a podpisu). Profil platí len pre vás a môžete ho upraviť alebo kedykoľvek vypnúť – vypnutím sa vymaže.",
+      "optIn": "Učiť sa z mojich odoslaných e-mailov",
+      "generate": "Vytvoriť profil",
+      "regenerate": "Aktualizovať profil",
+      "label": "Profil (môžete upraviť)",
+      "save": "Uložiť profil",
+      "from": "Vytvorené z {{count}} e-mailov.",
+      "saved": "Uložené.",
+      "errors": {
+        "not_enough_mail": "Zatiaľ máte málo odoslaných e-mailov v Smart Mail (treba aspoň 5).",
+        "ai_unavailable": "AI nie je zapnutá.",
+        "ai_budget_exceeded": "Denný rozpočet AI je vyčerpaný – skúste zajtra.",
+        "generic": "Profil sa nepodarilo vytvoriť – skúste to znova."
+      }
+    },
     "admin": {
       "rules": {
         "title": "Pravidlá",

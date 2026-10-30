@@ -26,6 +26,7 @@ import { SettingsBreadcrumb, SettingsNav, SettingsSubList, SettingsSubTabs } fro
 import { buildNavItems, isItemActive, TABBED_SECTIONS } from './settingsNavModel';
 import { AiKnowledgePanel } from './AiKnowledgePanel';
 import { AiRulesPanel } from './AiRulesPanel';
+import { StyleProfileSection } from './StyleProfile';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
   createResponse,
@@ -352,6 +353,7 @@ function AiPanel() {
       ))}
       {classic ? <Banner kind="info" message={t('classic.banner')} /> : null}
       <p className="type-small text-text-secondary">{t('settingsAi.comingAutonomy')}</p>
+      {classic ? null : <StyleProfileSection disabled={false} />}
     </div>
   );
 }
