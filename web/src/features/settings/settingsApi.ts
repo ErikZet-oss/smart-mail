@@ -248,3 +248,30 @@ export const createKnowledge = (card: KnowledgeCardIn) =>
 export const updateKnowledge = (id: string, card: KnowledgeCardIn) =>
   api<KnowledgeCardOut>('PUT', `/api/settings/ai/knowledge/${id}`, card);
 export const deleteKnowledge = (id: string) => api<{ status: string }>('DELETE', `/api/settings/ai/knowledge/${id}`);
+
+// 17e Pravidlá (admin, Phase 2e)
+export type StructuredRule = Record<string, unknown>;
+export type AiRuleOut = {
+  id: string;
+  nl_text: string;
+  description: string;
+  enabled: boolean;
+  last_used_at: string | null;
+  created_by: string | null;
+};
+export type RuleTestOut = {
+  checked: number;
+  matches: { id: string; subject: string | null; from_email: string | null; received_at: string | null }[];
+};
+
+export const rulesKey = ['settings', 'ai', 'rules'] as const;
+export const fetchRules = () => api<AiRuleOut[]>('GET', '/api/settings/ai/rules');
+export const previewRule = (nl_text: string) =>
+  api<{ structured: StructuredRule; description: string }>('POST', '/api/settings/ai/rules/preview', { nl_text });
+export const createRule = (nl_text: string, structured: StructuredRule) =>
+  api<AiRuleOut>('POST', '/api/settings/ai/rules', { nl_text, structured });
+export const toggleRule = (id: string, enabled: boolean) =>
+  api<AiRuleOut>('PATCH', `/api/settings/ai/rules/${id}`, { enabled });
+export const deleteRule = (id: string) => api<{ status: string }>('DELETE', `/api/settings/ai/rules/${id}`);
+export const testRule = (structured: StructuredRule) =>
+  api<RuleTestOut>('POST', '/api/settings/ai/rules/test', { structured });

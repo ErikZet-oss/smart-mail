@@ -116,3 +116,101 @@ test.describe('Phase 2e W12-17d @mobile', () => {
     expect(calls.deleted).toEqual(['k1']);
   });
 });
+
+const RULE_STRUCT = {
+  match: 'all',
+  conditions: [{ field: 'from_domain', op: 'equals', value: 'fixtech.example' }],
+  actions: [{ type: 'set_category', value: 'supplier_document' }],
+};
+const RULE_TEXT = 'Ak doména odosielateľa je „fixtech.example“, tak kategória = Doklady dodávateľov.';
+
+async function setupRules(page: Page, understood = true) {
+  let rules: unknown[] = [];
+  const calls: { preview: unknown[]; created: unknown[]; tested: unknown[] } = { preview: [], created: [], tested: [] };
+  await mockApi(page, {
+    'GET /api/auth/me': { body: ADMIN },
+    'GET /api/auth/persons': { body: { ...ME_PICKER, persons: [ADMIN.person] } },
+    'GET /api/settings/nav': {
+      body: {
+        ...NAV,
+        sections: [
+          NAV.sections[0],
+          {
+            ...NAV.sections[1],
+            subs: [...(NAV.sections[1]?.subs ?? []), { id: '17e', path: 'rules', title: 'Pravidlá' }],
+          },
+        ],
+      },
+    },
+    'GET /api/system/maintenance': { body: { active: false, until: null } },
+    'GET /api/settings/ai/rules': () => ({ body: rules }),
+    'POST /api/settings/ai/rules/preview': (payload) => {
+      calls.preview.push(payload);
+      return understood
+        ? { body: { structured: RULE_STRUCT, description: RULE_TEXT } }
+        : { status: 422, body: { detail: { code: 'rule_not_understood' } } };
+    },
+    'POST /api/settings/ai/rules/test': (payload) => {
+      calls.tested.push(payload);
+      return {
+        body: {
+          checked: 50,
+          matches: [{ id: 'm1', subject: 'Faktura E3', from_email: 'f@fixtech.example', received_at: null }],
+        },
+      };
+    },
+    'POST /api/settings/ai/rules': (payload) => {
+      calls.created.push(payload);
+      rules = [
+        {
+          id: 'r1',
+          nl_text: (payload as { nl_text: string }).nl_text,
+          description: RULE_TEXT,
+          enabled: true,
+          last_used_at: null,
+          created_by: 'Jana Testová',
+        },
+      ];
+      return { body: rules[0] };
+    },
+  });
+  return calls;
+}
+
+test.describe('Phase 2e W12-17e @mobile', () => {
+  test('2e rule: convert, try, confirm and save', async ({ page }, info) => {
+    const calls = await setupRules(page);
+    await page.goto('/settings/ai-admin/rules');
+    const panel = page.getByTestId('settings-ai-rules');
+    await expect(panel.getByText('Zatiaľ žiadne pravidlá.')).toBeVisible();
+    await panel.getByRole('button', { name: 'Nové pravidlo' }).click();
+    await panel.getByLabel('Pravidlo', { exact: true }).fill('Faktúry od Fixtechu sú doklady dodávateľov');
+    await panel.getByRole('button', { name: 'Previesť' }).click();
+    await expect(panel.getByTestId('rule-preview').getByText(RULE_TEXT)).toBeVisible();
+    expect(calls.created).toEqual([]); // nothing saved before the confirmation
+    await panel.getByRole('button', { name: 'Vyskúšať na posledných 50 e-mailoch' }).click();
+    await expect(panel.getByText('Zhoduje sa 1 z 50 posledných e-mailov.')).toBeVisible();
+    await shot(page, `phase2e-W12-17e-${info.project.name}`);
+    const axe = await new AxeBuilder({ page })
+      .include('[data-testid="settings-ai-rules"]')
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(axe.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+    await panel.getByRole('button', { name: 'Uložiť pravidlo' }).click();
+    await expect(panel.getByRole('cell', { name: RULE_TEXT })).toBeVisible();
+    expect(calls.created).toEqual([{ nl_text: 'Faktúry od Fixtechu sú doklady dodávateľov', structured: RULE_STRUCT }]);
+    expect(calls.tested).toEqual([{ structured: RULE_STRUCT }]);
+  });
+
+  test('2e rule the AI cannot express shows a hint and saves nothing', async ({ page }) => {
+    const calls = await setupRules(page, false);
+    await page.goto('/settings/ai-admin/rules');
+    const panel = page.getByTestId('settings-ai-rules');
+    await panel.getByRole('button', { name: 'Nové pravidlo' }).click();
+    await panel.getByLabel('Pravidlo', { exact: true }).fill('Faktúry pošli účtovníčke');
+    await panel.getByRole('button', { name: 'Previesť' }).click();
+    await expect(panel.getByRole('alert')).toContainText('Pravidlu sa nepodarilo porozumieť');
+    await expect(panel.getByRole('button', { name: 'Uložiť pravidlo' })).toHaveCount(0);
+    expect(calls.created).toEqual([]);
+  });
+});
