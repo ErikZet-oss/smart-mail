@@ -67,7 +67,18 @@ def test_2c_guard_number_not_in_context_blocks() -> None:
 
 
 def test_2c_guard_numbers_from_the_thread_and_short_sizes_pass() -> None:
-    assert unverified_numbers("Skrutky M8 x 30, 25 ks, faktúra 2026123.", "faktúry 2026123") == []
+    assert unverified_numbers("Skrutky M8 x 30, M10, 25 ks, faktúra 2026123.", "faktúry 2026123") == []
+    # an IBAN in groups or in one piece is found in the thread either way (2f)
+    iban = "SK31 1200 0000 1987 4263 7541"
+    assert unverified_numbers(f"Platba na {iban}.", "IBAN SK3112000000198742637541") == []
+    assert unverified_numbers("Platba na SK3112000000198742637541.", f"IBAN {iban}") == []
+
+
+def test_2f_guard_made_up_iban_or_prefixed_number_blocks() -> None:
+    assert unverified_numbers("Nový účet SK9999000000000000000001.", "účet SK3112000000198742637541") == [
+        "SK9999000000000000000001"
+    ]
+    assert unverified_numbers("Faktúra FV2026/0999.", "faktúra FV2026/0123") == ["FV2026/0999"]
 
 
 def test_2c_guard_recipient_checks() -> None:

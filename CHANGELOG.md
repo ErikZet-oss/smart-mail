@@ -2,6 +2,23 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2f PR 1: injection suite + fact-check fix
+
+**Injection suite** (AI_ASSISTANT §12; `make injection`, also part of `pytest`):
+- 22 fictional malicious fixtures in `fixtures/ai/injection/cases.json`, covering classify, reply, compose, rules, knowledge cards, style samples and approve.
+- In each case the scripted model **obeys** the attack, and the test proves the code still holds:
+  - wrappers stay closed;
+  - unknown categories and priorities are refused;
+  - the recipient never comes from the model;
+  - invented numbers and placeholders block, security notes warn;
+  - rules can't forward or delete;
+  - approve only prepares a draft.
+
+**Fix found by the suite:** the number/fact check ignored numbers with a letter prefix. A **made-up IBAN** (`SK99…`) or invoice number (`FV2026/0999`) in a draft was not flagged. Now:
+- they block unless they appear in the thread or knowledge;
+- an IBAN written in groups still matches the thread;
+- sizes like M8 / M10 still pass (fewer than 3 digits).
+
 ## [Unreleased] — Phase 2e PR 5: personal style profile (Settings 07)
 
 **„Môj štýl písania“ in W12-07:**
