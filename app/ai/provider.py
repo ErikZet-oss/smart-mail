@@ -20,6 +20,10 @@ _anthropic_client: object | None = None
 _anthropic_client_key: str | None = None
 _ANTHROPIC_TIMEOUT_S = 60.0
 _ANTHROPIC_MAX_RETRIES = 2
+# Models that answer 400 "tool_choice: type "tool" and "any" are not supported for this model" (claude-sonnet-5-5 on
+# the test server, 2026-10-30). Learned at run time: such a model gets tool_choice "auto" + an instruction to call the
+# tool. Callers already treat a missing tool call as invalid output (reply) or parse JSON text (classify).
+_NO_FORCED_TOOL_MODELS: set[str] = set()
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +92,7 @@ def _shared_anthropic_client(api_key: str) -> object:
 def reset_anthropic_client_for_tests() -> None:
     """Test helper — drop the process-wide client."""
     global _anthropic_client, _anthropic_client_key
+    _NO_FORCED_TOOL_MODELS.clear()
     _anthropic_client = None
     _anthropic_client_key = None
 
@@ -120,17 +125,20 @@ class AnthropicLLMProvider:
         # temperature omitted: current Anthropic SDK Messages.create typing has no temperature kwarg
         _ = request.temperature
         user_msg = cast(MessageParam, {"role": "user", "content": request.user})
-        kwargs: dict[str, object] = {
-            "model": model,
-            "max_tokens": request.max_tokens,
-            "system": request.system,
-            "messages": [user_msg],
-        }
-        if request.tools:
-            kwargs["tools"] = list(request.tools)
-            if request.tool_choice is not None:
-                kwargs["tool_choice"] = request.tool_choice
-        message = await client.messages.create(**kwargs)  # type: ignore[attr-defined]
+        kwargs = _request_kwargs(request, model, user_msg, forced_ok=model not in _NO_FORCED_TOOL_MODELS)
+        try:
+            message = await client.messages.create(**kwargs)  # type: ignore[attr-defined]
+        except Exception as exc:
+            detail = _bad_request_detail(exc)
+            if detail is not None:
+                # the API's own explanation (parameter errors only — never mail text), so the next 400 is diagnosable
+                log.warning("ai.llm_bad_request", purpose=request.purpose, model=model, detail=detail[:300])
+            if detail is None or not _forced_tool_unsupported(detail) or not _is_forced(request.tool_choice):
+                raise
+            # read-only LLM call: one retry with tool_choice "auto" is safe; remember the model for later calls
+            _NO_FORCED_TOOL_MODELS.add(model)
+            kwargs = _request_kwargs(request, model, user_msg, forced_ok=False)
+            message = await client.messages.create(**kwargs)  # type: ignore[attr-defined]
         latency_ms = int((time.perf_counter() - started) * 1000)
         text_parts: list[str] = []
         tool_input: dict[str, object] | None = None
@@ -167,6 +175,48 @@ class AnthropicLLMProvider:
             provider="anthropic",
             tool_input=tool_input,
         )
+
+
+def _is_forced(tool_choice: dict[str, object] | None) -> bool:
+    return tool_choice is not None and tool_choice.get("type") in ("tool", "any")
+
+
+def _forced_tool_unsupported(detail: str) -> bool:
+    text = detail.lower()
+    return "tool_choice" in text and "not supported" in text
+
+
+def _bad_request_detail(exc: Exception) -> str | None:
+    """The API error message of a 400, or None for any other failure."""
+    try:
+        from anthropic import BadRequestError
+    except ImportError:  # pragma: no cover - the SDK is a runtime dependency
+        return None
+    if not isinstance(exc, BadRequestError):
+        return None
+    body = exc.body
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict) and isinstance(error.get("message"), str):
+            return str(error["message"])
+    return str(exc)
+
+
+def _request_kwargs(request: LLMRequest, model: str, user_msg: object, *, forced_ok: bool) -> dict[str, object]:
+    system = request.system
+    kwargs: dict[str, object] = {"model": model, "max_tokens": request.max_tokens, "messages": [user_msg]}
+    if request.tools:
+        kwargs["tools"] = list(request.tools)
+        choice = request.tool_choice
+        if choice is not None and _is_forced(choice) and not forced_ok:
+            name = choice.get("name")
+            target = f"the tool `{name}`" if isinstance(name, str) else "one of the tools"
+            system = f"{system}\n\nAnswer only by calling {target}; do not reply with plain text."
+            choice = {"type": "auto"}
+        if choice is not None:
+            kwargs["tool_choice"] = choice
+    kwargs["system"] = system
+    return kwargs
 
 
 class BedrockLLMProvider:
