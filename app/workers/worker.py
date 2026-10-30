@@ -45,7 +45,8 @@ async def sync_mailbox_job(ctx: dict[str, Any], mailbox_id: str, scope: Scope = 
 
 async def process_mailbox_ai_job(ctx: dict[str, Any], mailbox_id: str) -> dict[str, int]:
     """AI pipeline: eligibility + Message-ID idempotency, classify (2b), then reply suggestions (2c)."""
-    from app.ai.service import process_mailbox_ai, suggest_replies_for_mailbox
+    from app.ai.conformity_suggest import suggest_conformity
+    from app.ai.service import daily_spend_usd, process_mailbox_ai, shadow_mode_enabled, suggest_replies_for_mailbox
 
     settings: Settings = ctx["settings"]
     async with ctx["sessionmaker"]() as db:
@@ -56,7 +57,16 @@ async def process_mailbox_ai_job(ctx: dict[str, Any], mailbox_id: str) -> dict[s
         await db.commit()
         replies = await suggest_replies_for_mailbox(db, mailbox, settings)
         await db.commit()
-        return {**stats, **{f"reply_{k}": v for k, v in replies.items()}}
+        # #139 part C: an atest 2.1 request also gets a prefilled „Prehlásenie o zhode“ card (never issued by AI)
+        conformity = await suggest_conformity(
+            db, mailbox, settings, spent_usd=await daily_spend_usd(db), shadow=await shadow_mode_enabled(db)
+        )
+        await db.commit()
+        return {
+            **stats,
+            **{f"reply_{k}": v for k, v in replies.items()},
+            **{f"conformity_{k}": v for k, v in conformity.items()},
+        }
 
 
 async def send_compose_draft(ctx: dict[str, Any], draft_id: str) -> str:
@@ -220,6 +230,48 @@ async def backfill_attachment_flags(ctx: dict[str, Any]) -> dict[str, int | None
     return {}
 
 
+async def reclassify_messages_job(
+    ctx: dict[str, Any], mailbox_id: str, message_ids: list[str], person_id: str, account_id: str
+) -> dict[str, int]:
+    """#143 bulk „Znova zaradiť (AI)“ from an AI view: one message after another, stops when the budget is spent;
+    manually corrected messages and mail the AI may not read (private folder, …) are skipped."""
+    from app.ai.reclassify import ReclassifyError, reclassify
+    from app.mail.models import Message
+
+    stats = {"reclassified": 0, "skipped_corrected": 0, "skipped": 0, "failed": 0, "stopped_budget": 0}
+    async with ctx["sessionmaker"]() as db:
+        mailbox = await db.get(Mailbox, uuid.UUID(mailbox_id))
+        if mailbox is None:
+            return stats
+        for raw in message_ids[:50]:
+            message = await db.get(Message, uuid.UUID(raw))
+            if message is None or message.mailbox_id != mailbox.id:
+                continue
+            try:
+                await reclassify(
+                    db,
+                    mailbox,
+                    message,
+                    ctx["settings"],
+                    person_id=uuid.UUID(person_id),
+                    account_id=uuid.UUID(account_id),
+                )
+                stats["reclassified"] += 1
+            except ReclassifyError as exc:
+                if exc.code == "category_corrected_manually":
+                    stats["skipped_corrected"] += 1
+                elif exc.code == "ai_not_allowed_here":
+                    stats["skipped"] += 1
+                elif exc.code in ("ai_budget_exceeded", "ai_unavailable"):
+                    stats["stopped_budget"] += 1
+                    await db.commit()
+                    break
+                else:
+                    stats["failed"] += 1
+            await db.commit()
+    return stats
+
+
 async def ai_catchup(ctx: dict[str, Any]) -> int:
     """#135: every 15 min — enqueue the AI job for mailboxes with unclassified mail or a missing reply draft."""
     from app.ai.catchup import mailboxes_with_work
@@ -264,6 +316,7 @@ class WorkerSettings:
         func(export_mail_job, keep_result=0, timeout=6 * 3600, max_tries=1),
         func(delete_expired_exports, keep_result=0),
         func(ai_catchup, keep_result=0),
+        func(reclassify_messages_job, keep_result=0, timeout=30 * 60),
     ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, minute=set(range(60)), run_at_startup=True),

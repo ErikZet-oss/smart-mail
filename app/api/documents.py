@@ -16,6 +16,7 @@ from fastapi import APIRouter, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
+from app.ai.models import AiSuggestion
 from app.api.mail import fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
 from app.auth.models import Branch, Person, PersonBranch, Role
@@ -49,6 +50,7 @@ class DeclarationIn(BaseModel):
     issued_on: date | None = None  # default: today
     items: list[ItemIn] = Field(min_length=1, max_length=cf.MAX_ITEMS)
     message_id: uuid.UUID | None = None  # issue from a mail → attach to a reply draft
+    suggestion_id: uuid.UUID | None = None  # #139 C: issued from the AI card → the suggestion becomes „approved“
 
     @field_validator("customer")
     @classmethod
@@ -225,6 +227,25 @@ async def issue_declaration(
         )
         draft_id = str(draft.id)
 
+    if body.suggestion_id is not None:
+        suggestion = await db.get(AiSuggestion, body.suggestion_id)
+        if (
+            suggestion is not None
+            and suggestion.suggestion_type == "conformity_declaration"
+            and suggestion.status == "pending"
+            and source is not None
+            and suggestion.message_id == source.id
+        ):
+            suggestion.status = "approved"
+            suggestion.decided_by = person.id
+            suggestion.decided_at = datetime.now(UTC)
+            suggestion.final_payload = {
+                "number": number,
+                "customer": data.customer,
+                "document_ref": data.document_ref,
+                "items": items,
+            }
+            suggestion.diff = {"edited": (suggestion.payload or {}).get("items") != items}
     audit(
         db,
         "document.conformity_issued",

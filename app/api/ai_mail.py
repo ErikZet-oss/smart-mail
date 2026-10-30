@@ -5,17 +5,20 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from arq.connections import ArqRedis
+from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, case, desc, func, or_, select
 
-from app.ai.category_settings import category_lookup, load_category_data, triage_categories
+from app.ai.category_settings import category_lookup, load_category_data, prompt_categories, triage_categories
 from app.ai.models import AiSuggestion, Classification
 from app.ai.pipeline import normalize_message_id_header
+from app.ai.reclassify import ReclassifyError, correct_category, reclassify
 from app.ai.service import category_counts
 from app.api.mail import _ai_provider_configured, _mailbox, fail
 from app.api.messages import MessageListItem
-from app.auth.deps import DB, Auth, SettingsDep
+from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
+from app.auth.models import Role
 from app.core.config import Settings
 from app.mail.models import Mailbox, Message
 from app.mail.prefs import get_list_prefs
@@ -82,8 +85,18 @@ def _cls_fields(row: Classification | None) -> dict[str, Any]:
 
 
 @router.get("/mailboxes/{ref}/ai/categories")
-async def list_ai_categories(ref: str, ctx: Auth, db: DB, settings: SettingsDep) -> CategoriesOut:
+async def list_ai_categories(ref: str, ctx: Auth, db: DB, settings: SettingsDep, all: bool = False) -> CategoriesOut:
+    """Triage sidebar; `all=1` = every enabled 17c category for „Zmeniť kategóriu“ (#143)."""
     mailbox = await _mailbox(db, ctx, ref)
+    if all:
+        return CategoriesOut(
+            categories=[
+                CategoryOut(
+                    id=c.id, label_sk=c.label_sk, description_sk=c.description_sk, color_token=c.color_token, count=0
+                )
+                for c in prompt_categories(await load_category_data(db))
+            ]
+        )
     if not _ai_active(mailbox, settings):
         return CategoriesOut(categories=[])
     counts = await category_counts(db, mailbox.id)
@@ -272,6 +285,8 @@ class SuggestionOut(BaseModel):
     confidence: float | None
     checks: list[SuggestionCheckOut]
     blocked: bool
+    # #139 part C: the prefilled Prehlásenie o zhode form (type conformity_declaration); None for replies
+    conformity: dict[str, Any] | None = None
 
 
 def suggestion_out(row: AiSuggestion) -> SuggestionOut:
@@ -289,6 +304,15 @@ def suggestion_out(row: AiSuggestion) -> SuggestionOut:
         confidence=float(row.confidence) if row.confidence is not None else None,
         checks=checks,
         blocked=any(c.level == "blocking" for c in checks),
+        conformity=(
+            {
+                "customer": str(payload.get("customer") or ""),
+                "document_ref": str(payload.get("document_ref") or ""),
+                "items": [i for i in payload.get("items") or [] if isinstance(i, dict)],
+            }
+            if row.suggestion_type == "conformity_declaration"
+            else None
+        ),
     )
 
 
@@ -319,3 +343,101 @@ async def get_message_suggestions(ref: str, message_id: uuid.UUID, ctx: Auth, db
         .order_by(AiSuggestion.created_at)
     )
     return [suggestion_out(row) for row in rows.scalars()]
+
+
+# --- #143 „Zmeniť kategóriu“ and „Znova zaradiť (AI)“ ---
+
+_CORRECTORS = frozenset({Role.sales, Role.admin})
+RECLASSIFY_BATCH_MAX = 50
+
+
+class CategoryIn(BaseModel):
+    category: str = Field(min_length=1, max_length=64)
+
+
+class CategoryChangeOut(BaseModel):
+    message_id: str
+    category: str | None
+    corrected: bool
+    needs_reply: bool
+
+
+def _out(message: Message, cls: Classification) -> CategoryChangeOut:
+    payload = cls.payload or {}
+    return CategoryChangeOut(
+        message_id=str(message.id),
+        category=cls.category,
+        corrected=bool(payload.get("corrected_category")),
+        needs_reply=bool(payload.get("needs_reply")),
+    )
+
+
+async def _own_message(db: DB, ctx: Auth, ref: str, message_id: uuid.UUID) -> tuple[Mailbox, Message]:
+    mailbox = await _mailbox(db, ctx, ref)
+    message = await db.get(Message, message_id)
+    if message is None or message.mailbox_id != mailbox.id:
+        raise fail(404, "message_not_found")
+    return mailbox, message
+
+
+def _require_corrector(person: Any) -> None:
+    if person.role not in _CORRECTORS:
+        raise fail(403, "role_not_allowed")
+
+
+@router.post("/mailboxes/{ref}/messages/{message_id}/category")
+async def change_category(
+    ref: str, message_id: uuid.UUID, body: CategoryIn, ctx: Auth, person: ActivePerson, db: DB
+) -> CategoryChangeOut:
+    """A person's correction (sales/admin): wins over the pipeline and „Znova zaradiť“ until changed by hand."""
+    _require_corrector(person)
+    _, message = await _own_message(db, ctx, ref, message_id)
+    try:
+        cls = await correct_category(db, message, body.category, person_id=person.id, account_id=ctx.account.id)
+    except ReclassifyError as exc:
+        raise fail(exc.status, exc.code) from exc
+    await db.commit()
+    return _out(message, cls)
+
+
+@router.post("/mailboxes/{ref}/messages/{message_id}/reclassify")
+async def reclassify_message(
+    ref: str, message_id: uuid.UUID, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
+) -> CategoryChangeOut:
+    """One classify call with today's prompt (daily budget); a manual correction answers 409."""
+    _require_corrector(person)
+    mailbox, message = await _own_message(db, ctx, ref, message_id)
+    try:
+        cls = await reclassify(db, mailbox, message, settings, person_id=person.id, account_id=ctx.account.id)
+    except ReclassifyError as exc:
+        await db.commit()  # a paid call that failed is still recorded in ai_runs
+        raise fail(exc.status, exc.code) from exc
+    await db.commit()
+    return _out(message, cls)
+
+
+class ReclassifyBatchIn(BaseModel):
+    message_ids: list[uuid.UUID] = Field(min_length=1, max_length=RECLASSIFY_BATCH_MAX)
+
+
+@router.post("/mailboxes/{ref}/ai/reclassify", status_code=202)
+async def reclassify_batch(
+    ref: str, body: ReclassifyBatchIn, request: Request, ctx: Auth, person: ActivePerson, db: DB
+) -> dict[str, int]:
+    """Up to 50 messages from an AI view, classified again by the worker (one ARQ job, in the daily budget)."""
+    _require_corrector(person)
+    mailbox = await _mailbox(db, ctx, ref)
+    found = (
+        await db.scalars(select(Message.id).where(Message.id.in_(body.message_ids), Message.mailbox_id == mailbox.id))
+    ).all()
+    if not found:
+        raise fail(404, "message_not_found")
+    redis = request.app.state.redis
+    await ArqRedis(connection_pool=redis.connection_pool).enqueue_job(
+        "reclassify_messages_job",
+        str(mailbox.id),
+        [str(i) for i in found],
+        str(person.id),
+        str(ctx.account.id),
+    )
+    return {"queued": len(found)}

@@ -174,6 +174,13 @@ Card content per type (title, checks, actions): UX_SPEC §3.1.
 There is **no** tool that sends e-mail or writes to Money. Those are backend functions behind `/approve`.
 
 ---------------------------------------------------------------------------------------------------
+**Prehlásenie o zhode (#139 part C):** a message classified `document_request` that names an atest 2.1 / prehlásenie o
+zhode / declaration of conformity (deterministic keyword gate, SK/CZ/EN/DE) gets one `conformity_declaration`
+suggestion: the extract model prefills customer, document number and products from the e-mail only (untrusted
+wrapping, budget, shadow mode). Codes or numbers that do not appear in the e-mail are flagged (`unverified_number`,
+warning). The suggestion has **no approve**: its card opens the issue dialog and the person checks and issues it
+(ADR-015, autonomy level 2); issuing from the card marks the suggestion approved with the final values.
+
 ## 6. Reply drafting
 
 **Which mail gets a reply suggestion (#132):** every classified message with `needs_reply = true`, in any category —

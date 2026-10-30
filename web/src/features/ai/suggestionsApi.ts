@@ -14,6 +14,12 @@ export type Suggestion = {
   confidence: number | null;
   checks: SuggestionCheck[];
   blocked: boolean;
+  /** #139 C: prefilled Prehlásenie o zhode (type `conformity_declaration`) */
+  conformity?: {
+    customer: string;
+    document_ref: string;
+    items: { nazov: string; kod?: string; norma?: string; poznamka?: string }[];
+  } | null;
 };
 
 export type RejectReason = 'wrong_category' | 'wrong_data' | 'tone' | 'not_needed';

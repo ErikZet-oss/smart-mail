@@ -7,6 +7,8 @@ import {
   Code,
   Copy,
   FileCheck2,
+  Sparkles,
+  Tags,
   Ellipsis,
   Flame,
   Flag,
@@ -25,6 +27,7 @@ import {
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConformityDialog } from '../documents/ConformityDialog';
+import { CategoryDialog } from './CategoryDialog';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Banner } from '../../components/Banner';
@@ -34,6 +37,7 @@ import { useToast } from '../../components/toastContext';
 import { ApiError, formatRef } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { AiSuggestionCard } from '../ai/AiSuggestionCard';
+import { ConformitySuggestionCard } from '../ai/ConformitySuggestionCard';
 import { fetchSuggestions, suggestionsKey } from '../ai/suggestionsApi';
 import { fetchMe } from '../auth/authApi';
 import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
@@ -54,6 +58,7 @@ import {
   fetchMessage,
   messageKey,
   patchFlags,
+  reclassifyMessage,
   snoozeThread,
 } from './mailApi';
 
@@ -128,8 +133,25 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   const [markMenu, setMarkMenu] = useState<{ x: number; y: number } | null>(null);
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   const [conformity, setConformity] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const readOnly = !me.data?.person || Boolean(me.data.read_only);
+  // #143 „Znova zaradiť (AI)“: one classify call; a manual correction or a spent budget is explained in the toast
+  const reclassify = useMutation({
+    mutationFn: () => reclassifyMessage(mailbox, messageId ?? ''),
+    onSuccess: (out) => {
+      toast({
+        message: t('mail.category.reclassified', {
+          category: t(`ai.categories.${out.category ?? 'other'}.label`, { defaultValue: out.category ?? '' }),
+        }),
+      });
+      void queryClient.invalidateQueries({ queryKey: ['mail'] });
+    },
+    onError: (error) => {
+      const code = error instanceof ApiError ? error.detail.code : 'generic';
+      toast({ message: t(`mail.category.errors.${code}`, { defaultValue: t('mail.errors.generic') }) });
+    },
+  });
   const labelOf = useFolderLabel();
   const [snoozeMenu, setSnoozeMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -334,6 +356,29 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           },
         },
         { kind: 'divider', id: 'd-move' },
+        {
+          kind: 'item',
+          id: 'category',
+          label: t('mail.category.menu'),
+          icon: <Tags size={16} />,
+          // #143: sales/admin with an active person; the server checks the role again
+          disabled: readOnly || !['sales', 'admin'].includes(me.data?.person?.role ?? ''),
+          onSelect: () => {
+            setMoreMenu(null);
+            setCategoryOpen(true);
+          },
+        },
+        {
+          kind: 'item',
+          id: 'reclassify',
+          label: t('mail.category.reclassify'),
+          icon: <Sparkles size={16} />,
+          disabled: readOnly || !['sales', 'admin'].includes(me.data?.person?.role ?? ''),
+          onSelect: () => {
+            setMoreMenu(null);
+            reclassify.mutate();
+          },
+        },
         {
           kind: 'item',
           id: 'conformity',
@@ -679,6 +724,14 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           onClose={() => setMarkMenu(null)}
         />
       ) : null}
+      {categoryOpen && msg ? (
+        <CategoryDialog
+          mailbox={mailbox}
+          messageId={msg.id}
+          current={msg.ai_category ?? null}
+          onClose={() => setCategoryOpen(false)}
+        />
+      ) : null}
       {conformity && msg ? (
         <ConformityDialog
           messageId={msg.id}
@@ -747,16 +800,26 @@ function SuggestionCards({
   const shown = all ? list : list.slice(0, VISIBLE_CARDS);
   return (
     <div className="flex flex-col gap-2 py-3" data-testid="ai-suggestions">
-      {shown.map((s) => (
-        <AiSuggestionCard
-          key={s.id}
-          suggestion={s}
-          mailbox={mailbox}
-          messageId={messageId}
-          category={category}
-          readOnly={readOnly}
-        />
-      ))}
+      {shown.map((s) =>
+        s.type === 'conformity_declaration' ? (
+          <ConformitySuggestionCard
+            key={s.id}
+            suggestion={s}
+            mailbox={mailbox}
+            messageId={messageId}
+            readOnly={readOnly}
+          />
+        ) : (
+          <AiSuggestionCard
+            key={s.id}
+            suggestion={s}
+            mailbox={mailbox}
+            messageId={messageId}
+            category={category}
+            readOnly={readOnly}
+          />
+        ),
+      )}
       {list.length > VISIBLE_CARDS && !all ? (
         <button
           type="button"

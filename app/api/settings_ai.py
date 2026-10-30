@@ -552,6 +552,7 @@ class UsageOut(BaseModel):
     reject_reasons: dict[str, int]
     categories: dict[str, int]
     eval: EvalSummary | None = None  # the last `make eval --save` on the server (aggregates only)
+    corrected_30d: int = 0  # #143: „Zmeniť kategóriu“ by people in the last 30 days (an info line only)
 
 
 class ShadowOut(BaseModel):
@@ -627,6 +628,14 @@ async def usage_stats(db: DB, settings: Settings, *, days: int = USAGE_DAYS) -> 
         reject_reasons=dict(sorted(reasons.items(), key=lambda kv: -kv[1])),
         categories=dict(sorted(categories.items(), key=lambda kv: -kv[1])),
         eval=await _eval_summary(db),
+        corrected_30d=int(
+            await db.scalar(
+                select(func.count())
+                .select_from(Classification)
+                .where(Classification.payload["corrected_at"].astext >= since.isoformat())
+            )
+            or 0
+        ),
     )
 
 

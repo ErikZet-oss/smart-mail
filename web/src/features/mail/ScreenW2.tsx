@@ -38,6 +38,7 @@ import { SwipeRow } from './SwipeRow';
 import {
   aiCategoriesKey,
   bulkMessages,
+  reclassifyBatch,
   fetchAiCategories,
   fetchCategoryMessages,
   fetchFolders,
@@ -318,6 +319,16 @@ function ScreenW2Body({
   });
 
   const canMarkSeen = Boolean(me.data?.person && !me.data.read_only);
+  // #143 bulk „Znova zaradiť (AI)“ in an AI view: one worker job, max 50, in the daily budget
+  const canReclassify = canMarkSeen && ['sales', 'admin'].includes(me.data?.person?.role ?? '');
+  const reclassifyAll = useMutation({
+    mutationFn: (ids: string[]) => reclassifyBatch(mailboxRef, ids),
+    onSuccess: (out) => {
+      toasts.success(t('mail.category.bulkQueued', { count: out.queued }));
+      setSelectedIds(new Set());
+    },
+    onError: () => toasts.error(t('mail.errors.generic')),
+  });
   const openMessage = useCallback(
     (messageId: string, threadId: string | null, full = false) => {
       setPickedMessageId(messageId);
@@ -605,6 +616,18 @@ function ScreenW2Body({
               <FolderInput size={14} className="mr-1 inline" aria-hidden="true" />
               {t('mail.moveTo.bulkMove')}
             </button>
+            {category ? (
+              <button
+                type="button"
+                className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle disabled:opacity-50"
+                disabled={!canReclassify || reclassifyAll.isPending || selectedIds.size > 50}
+                title={selectedIds.size > 50 ? t('mail.category.bulkMax') : undefined}
+                onClick={() => reclassifyAll.mutate([...selectedIds])}
+              >
+                <Sparkles size={14} className="mr-1 inline" aria-hidden="true" />
+                {t('mail.category.bulk')}
+              </button>
+            ) : null}
             <button
               type="button"
               className="type-caption rounded-sm px-2 py-1 text-danger-600 hover:bg-bg-subtle"

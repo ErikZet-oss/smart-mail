@@ -398,9 +398,24 @@
     "background": "Môžete pokračovať v práci. Keď bude archív pripravený, dáme vám vedieť v notifikáciách.",
     "ready": "Archív je pripravený: {{count}} správ, {{size}}.",
     "download": "Stiahnuť archív",
+    "purge": "Vymazať správy zahrnuté v archíve…",
+    "purgeAfterDownload": "Najprv archív stiahnite a uložte. Potom môžete správy zo servera vymazať.",
+    "purgeHelp": "Vymaže zo servera len správy, ktoré sú v archíve. Uvoľní sa miesto v schránke; správy, ktoré prišli medzitým, zostanú.",
+    "purgeTitle": "Vymazať správy zo servera?",
+    "purgeBody": "Natrvalo vymaže {{count}} správ ({{size}}) z priečinkov {{folders}}. Máte archív uložený?",
+    "andMore": "{{list}} a {{count}} ďalších",
+    "purgeConfirm": "Vymazať natrvalo",
+    "purged": "Zo servera vymazaných {{count}} správ.",
+    "purgeSkipped": "Niektoré priečinky sa zmenili alebo obsahujú iné správy na vymazanie, preto zostali bez zmeny.",
     "validFor": "Odkaz platí 24 hodín, potom sa archív zo servera zmaže.",
     "failed": "Archív sa nepodarilo pripraviť. Skúste to znova neskôr.",
     "errors": {
+      "export_no_space": "Na serveri nie je dosť miesta na archív. Zúžte rozsah (napr. staršie ako 12 mesiacov) alebo kontaktujte správcu.",
+      "export_not_downloaded": "Archív ešte nebol stiahnutý.",
+      "export_already_purged": "Správy z tohto archívu už boli vymazané.",
+      "export_archive_mismatch": "Archív na serveri sa nezhoduje s pôvodným. Nič sa nevymazalo – pripravte nový archív.",
+      "export_not_ready": "Archív už nie je k dispozícii.",
+      "mail_server_unavailable": "Mailový server je nedostupný. Skúste to neskôr.",
       "export_running": "Pre túto schránku sa už pripravuje iný archív. Počkajte, kým sa dokončí.",
       "folder_private": "Súkromný priečinok iného používateľa sa nedá stiahnuť.",
       "no_folders": "Nie je čo stiahnuť.",
@@ -408,6 +423,15 @@
     }
   },
   "conformity": {
+    "card": {
+      "title": "Návrh: Prehlásenie o zhode (atest 2.1)",
+      "subline": "AI predvyplnila údaje z e-mailu. Pred vystavením ich skontrolujte.",
+      "items": "Výrobky",
+      "noItems": "zákazník výrobky nevymenoval – doplňte ich z faktúry",
+      "checkNumbers": "Niektoré čísla alebo kódy nie sú v e-maile – skontrolujte ich.",
+      "open": "Pripraviť prehlásenie…",
+      "reject": "Netreba"
+    },
     "menu": "Vystaviť prehlásenie o zhode…",
     "title": "Prehlásenie o zhode (atest 2.1)",
     "customer": "Odberateľ",
@@ -615,6 +639,26 @@
     }
   },
   "mail": {
+    "category": {
+      "menu": "Zmeniť kategóriu…",
+      "reclassify": "Znova zaradiť (AI)",
+      "title": "Zmeniť kategóriu",
+      "help": "Vaša voľba má prednosť pred AI – ani „Znova zaradiť“ ju neprepíše.",
+      "save": "Uložiť",
+      "cancel": "Zrušiť",
+      "saved": "Kategória zmenená.",
+      "reclassified": "AI zaradila správu do kategórie {{category}}.",
+      "bulk": "Znova zaradiť (AI)",
+      "bulkQueued": "Znova zaraďujem {{count}} správ. Výsledok uvidíte o chvíľu.",
+      "bulkMax": "Naraz najviac 50 správ.",
+      "errors": {
+        "category_corrected_manually": "Kategóriu zmenil človek – AI ju neprepíše. Zmeňte ju ručne cez „Zmeniť kategóriu“.",
+        "ai_budget_exceeded": "Denný rozpočet AI je vyčerpaný. Skúste to zajtra.",
+        "ai_unavailable": "AI nie je dostupná.",
+        "ai_not_allowed_here": "AI túto správu nečíta (súkromný priečinok, Koncepty, Odoslané, Kôš, Nevyžiadaná pošta alebo pošta spred zapnutia AI). Kategóriu môžete zmeniť ručne.",
+        "ai_failed": "AI správu nezaradila. Pôvodná kategória ostala."
+      }
+    },
     "toolbar": {
       "select": "Výber",
       "threads": "Konverzácie",

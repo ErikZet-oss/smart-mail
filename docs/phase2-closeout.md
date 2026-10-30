@@ -23,11 +23,11 @@ Added during the phase on Erik's request (outside the original milestones):
 
 | Criterion | Proof | Status |
 |---|---|---|
-| ≥ 90 % category accuracy on the labeled set | `make eval` on the server (#129); the confusion table is in 17f; manual corrections from #143 add labels (`--labels-from corrections`) | ⏳ **needs the server run** on ≥ 200 labeled mails — the result is not in git (real mail stays on the server) |
-| Drafts in the right language | `test_2b_language_sk_vs_en`, `test_2c_guard_security_attachment_and_language_warnings`, `test_2d_language_check`; Slovak named in full in prompts (#136) | ✅ in tests; ⏳ confirm in the shadow week |
+| ≥ 90 % category accuracy on the labeled set | In 17f: **Stiahnuť vzorku na označenie → doplniť v Exceli → Nahrať označenú vzorku**; 17f shows accuracy and the confusion table (#129). Alternative: `make eval` on the server. Manual corrections from #143 add labels | ⏳ **Erik labels the sample in 17f** (variant B, when he has time) — real mail never goes to git |
+| Drafts in the right language | `test_2b_language_sk_vs_en`, `test_2c_guard_security_attachment_and_language_warnings`, `test_2d_language_check`; Slovak named in full in prompts (#136) | ✅ in tests; ⏳ confirm in live use |
 | Injection suite passes | `make injection`: 22 fictional cases (`fixtures/ai/injection/cases.json`, #117) | ✅ |
 | Autonomy hard rules | `test_116_hard_actions_never_above_2_whatever_is_stored`; approve re-runs guards (2c tests) | ✅ |
-| Shadow mode | `ai_shadow_mode` fail-safe ON without a row; admin switch + accuracy in 17f (#118) | ✅ — **stays ON** |
+| Shadow mode | `ai_shadow_mode` fail-safe ON without a row; admin switch + accuracy in 17f (#118) | ✅ — **switched OFF by Erik in 17f on 30. 10. 2026 ~11:57 UTC**; suggestions are visible and in use |
 | History not auto-processed | `test_2a_first_sync_of_10000_old_messages_makes_zero_llm_calls`, `test_2a_backfill_estimate_requires_count_cost_and_limit`; „Znova zaradiť“ also refuses mail from before `ai_enabled_at` (#148) | ✅ |
 | Settings 07 + 17 | schema in `web/src/features/settings/schema.ts` + backend; snapshot test vs SETTINGS_SPEC | ✅ |
 | Screens match Figma (W2f, W4a, AiSuggestionCard, W12-07, W12-17a–f, M17) | side-by-side in each UI PR | ⚠ the Figma MCP server is not reachable from this session (proxy 403), so no new side-by-side for this report — **customer review of the frames is open** |
@@ -48,8 +48,17 @@ Added during the phase on Erik's request (outside the original milestones):
 
 ## Open items and risks
 
-- **Server eval (≥ 90 %)** and the **end of the shadow week** decide when suggestions become visible. Erik runs `make eval` on
-  the server and switches shadow off in 17f; until then shadow stays ON.
+- **Accuracy (≥ 90 %)** is not measured yet: Erik downloads the sample in 17f, labels it in Excel and uploads it
+  (variant B; `make eval` on the server is the alternative).
+- Shadow mode is OFF since 30. 10. 2026 ~11:57 UTC, so suggestions are visible before the accuracy is measured.
+  Wrong categories can be fixed with #143 (Zmeniť kategóriu / Znova zaradiť).
+- Pilot fixes of 30. 10. 2026:
+  - #131 — the draft model rejects a forced `tool_choice`, so it falls back to `auto`;
+  - #133 — reply suggestions also for „Iné“;
+  - #136 — Czech words in Slovak drafts;
+  - #141 — complaints in replies to e-shop notifications.
+- **Older classifications made before these fixes are not recalculated on their own.** „Znova zaradiť (AI)“ (#143)
+  reclassifies them on request.
 - Stored but not wired yet:
   - 17a „Upozorniť pri (%)“ — no alert yet; it needs 08 Notifikácie (Phase 5);
   - 17a „Uchovávať záznamy AI“ — no purge job for `ai_runs` / classifications yet;
@@ -59,11 +68,10 @@ Added during the phase on Erik's request (outside the original milestones):
   has shown up since. If one does, the annotation names the test and it gets fixed in its own PR.
 - Phase 1 pilot acceptance (real-mailbox day, Filtre ↔ Roundcube, Figma review) is still open — Erik's waiver of
   29. 10. (#94) let Phase 2 run in parallel; it does not replace that acceptance.
-- Open PRs: #134 (re-reviewed, merges after green CI), #147, #148.
+- Open PRs: #134 (re-reviewed, merges after green CI), #148. #147 is merged.
 
 ## Needed from Erik
 
-1. Run `make eval` on the server (≥ 200 labels) and post the accuracy (no mail content).
-2. Decide the end of the shadow week → switch in 17f.
-3. Review the Phase 2 Figma frames (W2f, W4a, AiSuggestionCard, W12-07, W12-17a–f, M17).
-4. Approve the Phase 3 plan (#144).
+1. In 17f: Stiahnuť vzorku na označenie → doplniť v Exceli → Nahrať označenú vzorku (or `make eval` on the server).
+2. Review the Phase 2 Figma frames (W2f, W4a, AiSuggestionCard, W12-07, W12-17a–f, M17) — open, together with Phase 1.
+3. Approve the Phase 3 plan (#144).
