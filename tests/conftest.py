@@ -35,6 +35,7 @@ TABLES = (
     "contact_group_members, contact_groups, contacts, recent_recipients, address_books, "
     "ai_suggestions, classifications, ai_runs, feature_flags, knowledge_cards, ai_rules, "
     "conformity_declarations, account_settings, org_settings, "
+    "money_companies, money_persons, money_codebooks, email_company_links, money_sync_state, "
     "attachments, messages, threads, user_settings, sieve_script_backups, "
     "folders_meta, mailbox_access, mailboxes, "
     "device_person_memory, sessions, accounts, person_branches, persons, branches"

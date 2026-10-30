@@ -470,6 +470,36 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
         "fields": [],
     },
     {
+        # SETTINGS_SPEC 13 Money S4 (G, admin) — Phase 3b: 13a status, 13e sync. 13b/13d come with 3d/3f;
+        # 13c and 13f (writes) stay hidden in Phase 3 (Erik, #150). Shown only with FEATURE_MONEY.
+        "id": "13",
+        "path": "money",
+        "title": "Money S4",
+        "admin_only": True,
+        "feature": "money",
+        "subs": [
+            {"id": "13a", "path": "connection", "title": "Prepojenie", "fields": []},
+            {
+                "id": "13e",
+                "path": "sync",
+                "title": "Synchronizácia",
+                "fields": [
+                    field(
+                        "money.sync_interval_min",
+                        label="Interval synchronizácie",
+                        control="select",
+                        default=15,
+                        options=[{"value": str(m), "label": f"{m} min"} for m in (5, 15, 30, 60)],
+                        help="Firmy, artikle, kódy dodávateľov, číselníky.",
+                        scope="G",
+                        admin_only=True,
+                    )
+                ],
+            },
+        ],
+        "fields": [],
+    },
+    {
         # SETTINGS_SPEC 17 AI – správa (G, admin); Phase 2e brings 17d, the other tabs follow in 2e/2f.
         "id": "17",
         "path": "ai-admin",
@@ -579,8 +609,8 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
 
 def schema_document() -> dict[str, Any]:
     return {
-        "version": "2b",
-        "phase": "2b",
+        "version": "3b",
+        "phase": "3b",
         "sections": PHASE_1F_SECTIONS,
     }
 
@@ -598,5 +628,6 @@ SECTION_PATHS = {
     "users": "10",
     "branches": "11",
     "mailboxes": "12",
+    "money": "13",
     "ai-admin": "17",
 }

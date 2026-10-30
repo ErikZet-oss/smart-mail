@@ -31,6 +31,7 @@ import { ExportDialog } from '../mail/ExportDialog';
 import { AutonomyMatrix, AutonomyOverview } from './AiAutonomy';
 import { AiLimitsPanel } from './AiLimitsPanel';
 import { AiCategoriesPanel } from './AiCategoriesPanel';
+import { MoneyConnectionPanel, MoneySyncPanel } from './MoneyPanels';
 import { StyleProfileSection } from './StyleProfile';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
@@ -310,6 +311,10 @@ function SectionBody({
     return meRole === 'admin' ? <BranchesWorkspace section={navSection} sub={sub} crumbs={[]} mobile /> : <AdminOnly />;
   }
   if (section === 'mailboxes') return meRole === 'admin' ? <MailboxesPanel /> : <AdminOnly />;
+  if (section === 'money') {
+    if (meRole !== 'admin') return <AdminOnly />;
+    return sub === 'sync' ? <MoneySyncPanel /> : <MoneyConnectionPanel />; // 13a is the first tab
+  }
   if (section === 'ai-admin') {
     if (meRole !== 'admin') return <AdminOnly />;
     if (sub === 'rules') return <AiRulesPanel />;

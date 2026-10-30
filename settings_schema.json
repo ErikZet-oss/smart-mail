@@ -1,6 +1,6 @@
 {
-  "version": "2b",
-  "phase": "2b",
+  "version": "3b",
+  "phase": "3b",
   "sections": [
     {
       "id": "01",
@@ -808,6 +808,57 @@
       "title": "Schránky",
       "admin_only": true,
       "subs": [],
+      "fields": []
+    },
+    {
+      "id": "13",
+      "path": "money",
+      "title": "Money S4",
+      "admin_only": true,
+      "feature": "money",
+      "subs": [
+        {
+          "id": "13a",
+          "path": "connection",
+          "title": "Prepojenie",
+          "fields": []
+        },
+        {
+          "id": "13e",
+          "path": "sync",
+          "title": "Synchronizácia",
+          "fields": [
+            {
+              "id": "money.sync_interval_min",
+              "label": "Interval synchronizácie",
+              "control": "select",
+              "default": 15,
+              "help": "Firmy, artikle, kódy dodávateľov, číselníky.",
+              "scope": "G",
+              "options": [
+                {
+                  "value": "5",
+                  "label": "5 min"
+                },
+                {
+                  "value": "15",
+                  "label": "15 min"
+                },
+                {
+                  "value": "30",
+                  "label": "30 min"
+                },
+                {
+                  "value": "60",
+                  "label": "60 min"
+                }
+              ],
+              "validation": {},
+              "admin_only": true
+            }
+          ]
+        }
+      ],
       "fields": []
     },
     {

@@ -1,5 +1,6 @@
 import {
   Building2,
+  Database,
   Circle,
   CircleUserRound,
   Clock,
@@ -33,6 +34,7 @@ const SECTION_ICONS: Record<string, LucideIcon> = {
   users: Users,
   branches: Building2,
   mailboxes: Mails,
+  money: Database,
 };
 
 /** Figma order of the personal group (Identity and Môj profil are separate rows around Odpovede). */
@@ -51,7 +53,7 @@ const PERSONAL_ORDER = [
 ];
 
 /** Sections listed under the „SPRÁVA 🔒“ group header (SETTINGS_SPEC 10–20; Phase 1 has 10–12). */
-const ADMIN_SECTIONS = new Set(['users', 'branches', 'mailboxes']);
+const ADMIN_SECTIONS = new Set(['users', 'branches', 'mailboxes', 'money']);
 
 /** Sections whose subsections are shown as tabs inside the content area instead of the middle list (Figma W12-11). */
 export const TABBED_SECTIONS = new Set(['branches']);

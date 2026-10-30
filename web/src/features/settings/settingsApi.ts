@@ -396,3 +396,44 @@ export const stampUrl = (branchId: string) => `/api/settings/admin/branches/${br
 export const signatureUrl = (personId: string) => `/api/settings/admin/people/${personId}/signature`;
 export const uploadPrivateImage = (url: string, file: File) => uploadImage<Record<string, boolean>>(url, file);
 export const removePrivateImage = (url: string) => api<Record<string, boolean>>('DELETE', url);
+
+/** 13a / 13e Money S4 (Phase 3b, admin). */
+export type MoneyEntityState = {
+  entity: 'companies' | 'persons' | 'codebooks';
+  last_run_at: string | null;
+  last_full_at: string | null;
+  status: 'ok' | 'error' | null;
+  error: string | null;
+  rows: number;
+};
+export type MoneyStatus = {
+  enabled: boolean;
+  reachable: boolean;
+  error: string | null;
+  backend: string | null;
+  agenda: string | null;
+  bridge_version: string | null;
+  money_version: string | null;
+  latency_ms: number | null;
+  writes_enabled: boolean;
+  entities: MoneyEntityState[];
+};
+export type MoneySyncRun = {
+  entity: MoneyEntityState['entity'];
+  at: string;
+  full: boolean;
+  status: string;
+  changed: number;
+  deactivated: number;
+  error: string | null;
+  duration_ms: number;
+};
+export type MoneySync = { interval_min: number; running: boolean; history: MoneySyncRun[] };
+
+export const moneyStatusKey = ['settings', 'money', 'status'] as const;
+export const moneySyncKey = ['settings', 'money', 'sync'] as const;
+export const fetchMoneyStatus = () => api<MoneyStatus>('GET', '/api/settings/money/status');
+export const fetchMoneySync = () => api<MoneySync>('GET', '/api/settings/money/sync');
+export const saveMoneyInterval = (interval_min: number) =>
+  api<MoneySync>('PUT', '/api/settings/money/sync', { interval_min });
+export const startMoneySync = () => api<{ queued: boolean }>('POST', '/api/settings/money/sync-now');

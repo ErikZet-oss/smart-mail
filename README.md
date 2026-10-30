@@ -97,6 +97,10 @@ cd bridge && uv run pytest -q                       # testy mostu vrátane spolo
 cd bridge && uv run pytest -q tests/test_contract.py --money-live   # tá istá sada proti TEST agende (MONEY_* v .env)
 ```
 
+Aplikácia si z Money priebežne načítava firmy, osoby a číselníky do vlastnej databázy (fáza 3b, len čítanie).
+Zapína sa `FEATURE_MONEY=true`. Potom správca v **Nastavenia › Money S4** vidí stav prepojenia (13a) a nastaví interval
+synchronizácie, spustí ju ručne a vidí históriu behov (13e). Keď Money nie je dostupné, pošta funguje ďalej.
+
 Skutočné Money (`MONEY_BACKEND=api`) sa spustí len s `MONEY_AGENDA_LABEL=TEST` a s vlastným `BRIDGE_HMAC_SECRET` –
 inak most odmietne štart. Ostrú agendu bez Erikovho súhlasu nepoužívame.
 
