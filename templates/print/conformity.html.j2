@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<title>Prehlásenie o zhode {{ d.number }}</title>
+<style>{{ css }}</style>
+</head>
+<body>
+<div class="pagefooter"><span><b>{{ firm.name }}</b> · {{ firm.street }}, {{ firm.city }} · {% if firm.ico %}IČO {{ firm.ico }} · {% endif %}IČ DPH {{ firm.ic_dph }} · {{ firm.web }}</span><span class="pages"></span></div>
+<div class="band"><div class="navy"></div><div class="blue"></div></div>
+<div class="wrap">
+  <header>
+    <img class="logo" src="{{ logo }}" alt="SMART">
+    <div class="firm"><span class="slogan">{{ firm.slogan }}</span><b>{{ firm.name }}</b>
+      {{ branch.name }}{% if branch.address %}, {{ branch.address }}{% endif %}<br>
+      {{ firm.web }}{% if branch.phone %} · tel. {{ branch.phone }}{% endif %}</div>
+  </header>
+
+  <div class="title">
+    <div><div class="kicker">Vyhlásenie dodávateľa</div><h1>Prehlásenie<br>o zhode</h1>
+      <div class="basis">{{ legal_basis }}</div></div>
+    <div class="meta">
+      <div class="chip"><span>Číslo prehlásenia</span><b>{{ d.number }}</b></div>
+      <div class="chip"><span>Dátum vystavenia</span><b>{{ d.date }}</b></div>
+    </div>
+  </div>
+
+  <div class="parties">
+    <div><span class="lbl">Odberateľ</span><div class="val">{{ d.customer }}</div></div>
+    <div><span class="lbl">Doklad / zákazka</span><div class="val">{{ d.document_ref }}</div></div>
+  </div>
+
+  <div class="section">Uistenie o vystavení prehlásenia o zhode</div>
+  <p class="legal">{{ text_intro }}</p>
+
+  <div class="section">Výrobky, na ktoré sa prehlásenie vzťahuje</div>
+  <table class="prod">
+    <thead><tr><th class="c-i">#</th>{% for key, label in columns %}<th class="c-{{ key }}">{{ label }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for item in d.rows %}<tr><td class="c-i">{{ loop.index }}</td>{% for key, _ in columns %}<td class="c-{{ key }}">{{ item[key] }}</td>{% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="section">Rozsah platnosti</div>
+  <p class="legal">{{ text_scope }}</p>
+
+  <div class="sigs">
+    <div class="sig"><span class="lbl">Miesto a dátum</span>
+      <div class="val">{{ d.place }}{% if d.place %}, {% endif %}{{ d.date }}</div><div class="sub"></div></div>
+    <div class="sig"><span class="lbl">Vystavil</span>
+      <div class="val">{{ signer.name }}</div>
+      <div class="sub">{{ signer.function }}{% if signer.function %}, {{ firm.name }}{% endif %}</div></div>
+    <div class="stampcol"><span class="lbl">Pečiatka a podpis</span>
+      <div class="stampbox"><img class="stamp" src="{{ stamp }}" alt=""><img class="sign" src="{{ signature }}" alt=""></div></div>
+  </div>
+</div>
+</body>
+</html>

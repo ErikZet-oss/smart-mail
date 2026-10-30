@@ -301,6 +301,23 @@ customer without IČ DPH (row hidden). Labels are Slovak in the template; EN/DE 
 Smart s.r.o. sends the Money report in that language (Q-D6).
 
 ---------------------------------------------------------------------------------------------------
+
+## 5. Prehlásenie o zhode (atest 2.1) — issued by Smart Mail (#139, ADR-015)
+
+- **Look**: Erik's approved template (`design/reference/prehlasenie_o_zhode/`), ported to
+  `templates/print/conformity.html.j2` + `conformity.css`, rendered with WeasyPrint. A4, top band, logo, header from the
+  branch (name, address, phone), footer = company seat + IČ DPH (+ IČO from `org_settings` › `company` when set) +
+  „Strana X / Y“. Font Liberation Sans 2.1.5 (bundled in `templates/print/fonts/`).
+- **Content**: number `PZ-RRRR-NNNN` (one company series, restarts each year, no gaps — a counter row in `org_settings`
+  locked FOR UPDATE), date, Odberateľ, Doklad / zákazka, the fixed legal texts, the products table (Názov always; Kód /
+  Norma / Poznámka only when some row has them; header repeated on every page; no row limit), Miesto a dátum, Vystavil
+  (the branch manager's name and function), the stamp box (branch stamp + manager signature, never split).
+- **Rules**: blocked without a branch stamp (`no_branch_stamp`) or a manager with a signature (`no_manager_signature`);
+  sales/admin of the branch or covering it; never edited after issue (a correction is a new number); the PDF and its
+  sha256 are stored (`conformity_declarations`); audit `document.conformity_issued` without customer content.
+- **Files**: `fixtures/documents/conformity_sample.{json,pdf,png}` + fictional `conformity_stamp.png` /
+  `conformity_signature.png` (golden test, pixel diff < 0,5 %); regenerate with `tools/make_conformity_fixture.py`.
+
 ## 5. Potvrdenie objednávky — same template, kind `order_confirmation`
 Rendered after a successful `CreateReceivedOrder` + read-back (ORDERS_SPEC §10) and attached to the confirmation
 e-mail. Differences to §4: title "Potvrdenie objednávky č." + Money order number (`CisloDokladu` from read-back);

@@ -1252,6 +1252,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "imapclient" },
+    { name = "jinja2" },
     { name = "nh3" },
     { name = "pillow" },
     { name = "pydantic" },
@@ -1262,13 +1263,13 @@ dependencies = [
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "structlog" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "weasyprint" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "graphql-core" },
     { name = "hypothesis" },
-    { name = "jinja2" },
     { name = "moto" },
     { name = "mypy" },
     { name = "pytest" },
@@ -1277,7 +1278,6 @@ dev = [
     { name = "respx" },
     { name = "ruff" },
     { name = "types-boto3" },
-    { name = "weasyprint" },
 ]
 
 [package.metadata]
@@ -1293,6 +1293,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "imapclient", specifier = ">=3.0" },
+    { name = "jinja2", specifier = ">=3.1.4" },
     { name = "nh3", specifier = ">=0.3.7" },
     { name = "pillow", specifier = ">=11.0" },
     { name = "pydantic", specifier = ">=2.9" },
@@ -1303,13 +1304,13 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
     { name = "structlog", specifier = ">=24.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+    { name = "weasyprint", specifier = "==70.0" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "graphql-core", specifier = ">=3.2" },
     { name = "hypothesis", specifier = ">=6.120" },
-    { name = "jinja2", specifier = ">=3.1.4" },
     { name = "moto", specifier = ">=5.2.4" },
     { name = "mypy", specifier = ">=1.13" },
     { name = "pytest", specifier = ">=8.3" },
@@ -1318,7 +1319,6 @@ dev = [
     { name = "respx", specifier = ">=0.21" },
     { name = "ruff", specifier = ">=0.8" },
     { name = "types-boto3", specifier = ">=1.43.119" },
-    { name = "weasyprint", specifier = "==70.0" },
 ]
 
 [[package]]

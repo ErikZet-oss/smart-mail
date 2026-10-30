@@ -26,8 +26,9 @@ def normalize_stamp_png(data: bytes) -> bytes:
         raise SignatureImageError("image_png_required")
     from PIL import Image
 
-    Image.MAX_IMAGE_PIXELS = MAX_STAMP_INPUT_PX * MAX_STAMP_INPUT_PX
     try:
+        # `open` only reads the header; the size is checked here, before any decode — no change of Pillow's global
+        # MAX_IMAGE_PIXELS, which other uploads in the same process rely on (#140 review)
         with Image.open(io.BytesIO(data)) as image:
             width, height = image.size
             if width < 1 or height < 1 or width > MAX_STAMP_INPUT_PX or height > MAX_STAMP_INPUT_PX:
