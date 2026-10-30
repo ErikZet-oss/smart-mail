@@ -23,6 +23,7 @@ from app.ai.budget import budget_allows_call
 from app.ai.categories import LANGUAGE_IDS
 from app.ai.classify import neutralize_untrusted_wrapper
 from app.ai.guards import SECURITY_PREFIX, reply_checks
+from app.ai.language import draft_language
 from app.ai.models import AiRun, AiSuggestion, Classification, KnowledgeCard
 from app.ai.org_settings import load_ai_limits
 from app.ai.pipeline import message_eligible_for_ai, normalize_message_id_header
@@ -278,7 +279,7 @@ async def suggest_replies(
         system = render_prompt("system_base", company_name=COMPANY_NAME, style_guide=guide)
         user = render_prompt(
             "draft",
-            language=language,
+            language=draft_language(language),
             register=register_for(language),
             max_words=MAX_WORDS,
             category=cls.category,

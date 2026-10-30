@@ -7,6 +7,8 @@ import re
 from collections.abc import Iterable
 from typing import Any, Literal
 
+from app.ai.language import czech_words
+
 Level = Literal["ok", "warning", "blocking"]
 
 PLACEHOLDER = re.compile(r"\[\[\s*DOPLNI[TŤ][^\]]*\]\]", re.I)
@@ -75,6 +77,10 @@ def reply_checks(
         checks.append(check("attachment_missing", "warning"))
     if expected_language and proposal_language and expected_language not in {"other", proposal_language}:
         checks.append(check("language_mismatch", "warning", expected=expected_language, got=proposal_language))
+    if expected_language == "sk":
+        czech = czech_words(body)
+        if czech:  # pilot 2026-10-30: a Slovak draft drifted into Czech
+            checks.append(check("czech_in_slovak", "warning", words=czech))
     return checks
 
 
