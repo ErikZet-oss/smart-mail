@@ -13,6 +13,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.budget import budget_allows_call, budget_day_start
+from app.ai.category_settings import load_category_data, prompt_categories
 from app.ai.classify import MAX_LLM_ATTEMPTS, ClassifyOutcome, classify_message
 from app.ai.models import AiRule, AiRun, Classification, FeatureFlag
 from app.ai.org_settings import load_ai_limits
@@ -120,6 +121,7 @@ async def process_mailbox_ai(
     provider = get_llm_provider(settings)
     shadow = await shadow_mode_enabled(db)
     user_rules = await load_user_rules(db)
+    categories = prompt_categories(await load_category_data(db))  # 17c: enabled list, admin descriptions
     used_rule_ids: set[str] = set()
 
     q = (
@@ -207,6 +209,7 @@ async def process_mailbox_ai(
                     attachment_names=[a.filename for a in atts],
                     auth_results=message.auth_results,
                     internal_domains=settings.internal_domain_list,
+                    categories=categories,
                     extra_note_codes=list(plan.note_codes),
                     recipients=[
                         str(a.get("email"))

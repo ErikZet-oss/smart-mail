@@ -7,13 +7,26 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.budget import budget_allows_call
+from app.ai.categories import CATEGORIES, CATEGORY_BY_ID, CATEGORY_IDS
+from app.ai.category_settings import (
+    CUSTOM_ID,
+    FALLBACK_ID,
+    MAX_CUSTOM,
+    MAX_DESCRIPTION,
+    MAX_LABEL,
+    SECTION_CATEGORIES,
+    all_categories,
+    custom_id,
+    load_category_data,
+)
 from app.ai.models import AiRule, AiRun, AiSuggestion, Classification, KnowledgeCard
 from app.ai.org_settings import (
     ALERT_DEFAULT,
@@ -729,3 +742,119 @@ def _limits_audit(limits: AiLimits) -> dict[str, object]:
         "on_exhausted": limits.on_exhausted,
         "retention_days": limits.retention_days,
     }
+
+
+# --- 17c Kategórie (#116) ---
+
+
+class CategoryRowOut(BaseModel):
+    id: str
+    label: str
+    description: str
+    default_description: str | None  # built-ins: the text from code, to restore
+    color: str
+    enabled: bool
+    builtin: bool
+    locked: bool  # „Iné“ is the fallback and stays on
+    count_30d: int
+
+
+class CategoryRowIn(BaseModel):
+    id: str | None = Field(default=None, max_length=64)  # None = a new custom category
+    label: str | None = Field(default=None, max_length=MAX_LABEL)
+    description: str = Field(default="", max_length=MAX_DESCRIPTION)
+    color: Literal["warning", "success", "danger", "info", "brand", "neutral"] = "neutral"
+    enabled: bool = True
+
+
+class CategoriesIn(BaseModel):
+    categories: list[CategoryRowIn] = Field(max_length=len(CATEGORIES) + MAX_CUSTOM)
+
+
+async def _category_rows(db: AsyncSession, data: dict[str, Any] | None) -> list[CategoryRowOut]:
+    since = datetime.now(UTC) - timedelta(days=30)
+    counts = dict(
+        (
+            await db.execute(
+                select(Classification.category, func.count())
+                .where(Classification.created_at >= since, Classification.status == "done")
+                .group_by(Classification.category)
+            )
+        ).all()
+    )
+    return [
+        CategoryRowOut(
+            id=c.id,
+            label=c.label_sk,
+            description=c.description_sk,
+            default_description=CATEGORY_BY_ID[c.id].description_sk if builtin else None,
+            color=c.color_token,
+            enabled=enabled,
+            builtin=builtin,
+            locked=c.id == FALLBACK_ID,
+            count_30d=int(counts.get(c.id, 0)),
+        )
+        for c, enabled, builtin in all_categories(data)
+    ]
+
+
+@router.get("/categories")
+async def get_categories(admin: Admin, db: DB) -> list[CategoryRowOut]:
+    return await _category_rows(db, await load_category_data(db))
+
+
+@router.put("/categories")
+async def put_categories(body: CategoriesIn, ctx: RecentReauth, db: DB) -> list[CategoryRowOut]:
+    """⚠ changes what the AI classifies into: re-auth + audit before/after. Built-ins: description and on/off;
+    custom (max 15): name, description, colour, on/off. Stored classifications are never touched."""
+    before_data = await load_category_data(db)
+    builtin: dict[str, dict[str, Any]] = {}
+    custom: list[dict[str, Any]] = []
+    used: set[str] = set(CATEGORY_IDS)
+    for row in body.categories:
+        if row.id in CATEGORY_IDS:
+            default = CATEGORY_BY_ID[row.id].description_sk
+            entry: dict[str, Any] = {"enabled": row.enabled or row.id == FALLBACK_ID}
+            if row.description.strip() and row.description.strip() != default:
+                entry["description"] = row.description.strip()
+            builtin[row.id] = entry
+            continue
+        label = (row.label or "").strip()
+        if not label:
+            raise fail(422, "category_label_required")
+        cid = row.id
+        if cid is None:
+            cid = base = custom_id(label)
+            n = 2
+            while cid in used:
+                cid, n = f"{base[:37]}_{n}", n + 1
+        elif not CUSTOM_ID.match(cid):
+            raise fail(422, "category_unknown")
+        if cid in used:
+            raise fail(422, "category_duplicate")
+        used.add(cid)
+        description = row.description.strip()
+        custom.append(
+            {"id": cid, "label": label, "description": description, "color": row.color, "enabled": row.enabled},
+        )
+    if len(custom) > MAX_CUSTOM:
+        raise fail(422, "too_many_categories")
+    data: dict[str, Any] = {"builtin": builtin, "custom": custom}
+    await save_org_section(db, SECTION_CATEGORIES, data)
+
+    def _snapshot(d: dict[str, Any] | None) -> dict[str, Any]:
+        return {c.id: {"enabled": on, "description": c.description_sk} for c, on, _ in all_categories(d)}
+
+    before, after = _snapshot(before_data), _snapshot(data)
+    changed = {k: {"before": before.get(k), "after": v} for k, v in after.items() if before.get(k) != v}
+    removed = {k: {"before": v, "after": None} for k, v in before.items() if k not in after}
+    audit(
+        db,
+        "ai.categories_changed",
+        person_id=ctx.person.id if ctx.person else None,
+        object_type="org_settings",
+        object_id=SECTION_CATEGORIES,
+        details={"changed": {**changed, **removed}},
+    )
+    await db.commit()
+    return await _category_rows(db, data)

@@ -1097,6 +1097,26 @@
     }
   },
   "ai": {
+    "categoriesAdmin": {
+      "title": "Kategórie",
+      "help": "Popis pre AI sa použije pri triedení pošty. Vypnutá kategória zmizne z triedenia, už zatriedené správy zostanú.",
+      "name": "Názov",
+      "color": "Farba",
+      "enabled": "Zapnutá",
+      "description": "Popis pre AI",
+      "count": "Počet za 30 dní",
+      "remove": "Odstrániť kategóriu",
+      "offHint": "Kategória „Iné“ sa nedá vypnúť – AI do nej dáva správy, ktoré nevie zaradiť.",
+      "add": "Pridať kategóriu ({{count}}/{{max}})",
+      "colors": {
+        "warning": "Oranžová",
+        "success": "Zelená",
+        "danger": "Červená",
+        "info": "Modrá",
+        "brand": "Firemná",
+        "neutral": "Sivá"
+      }
+    },
     "limits": {
       "title": "Poskytovateľ a rozpočet",
       "provider": "Poskytovateľ",

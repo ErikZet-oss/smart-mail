@@ -534,6 +534,24 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
                 ],
             },
             {"id": "17b", "path": "autonomy", "title": "Samostatnosť AI", "fields": []},
+            {
+                "id": "17c",
+                "path": "categories",
+                "title": "Kategórie",
+                "fields": [
+                    # ⚠ changes what the AI classifies into: re-auth + audit; max 15 custom categories (#116)
+                    field(
+                        "ai.categories",
+                        label="Kategórie ⚠",
+                        control="table",
+                        default=None,
+                        help="Popis pre AI sa použije pri triedení pošty. Vypnutá kategória zmizne z triedenia, "
+                        "už zatriedené správy zostanú.",
+                        scope="G",
+                        admin_only=True,
+                    )
+                ],
+            },
             {"id": "17d", "path": "style", "title": "Štýl a znalosti", "fields": []},
             {"id": "17e", "path": "rules", "title": "Pravidlá", "fields": []},
             {

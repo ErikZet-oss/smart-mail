@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator
 
 from app.ai.categories import CATEGORIES, CATEGORY_IDS, LANGUAGE_IDS, PRIORITY_IDS, CategoryDef
 from app.ai.language import detect_language
@@ -50,8 +50,11 @@ class ClassificationResult(BaseModel):
 
     @field_validator("category")
     @classmethod
-    def _cat(cls, value: str) -> str:
-        if value not in CATEGORY_IDS:
+    def _cat(cls, value: str, info: ValidationInfo) -> str:
+        # 17c: the enabled company list when the caller passes one (context "categories"), else the built-ins
+        context = info.context if isinstance(info.context, dict) else {}
+        allowed = context.get("categories") or CATEGORY_IDS
+        if value not in allowed:
             raise ValueError(f"unknown category: {value}")
         return value
 
@@ -123,7 +126,7 @@ DIRECTION_RULES: tuple[str, ...] = (
 
 def classify_system(categories: Sequence[CategoryDef] = CATEGORIES) -> str:
     """System prompt with every category's Slovak name and description (SETTINGS_SPEC 17c: the description is used in
-    the classify prompt; when 17c lands, the admin-edited list is passed in here instead of the defaults)."""
+    the classify prompt; the pipeline passes the enabled 17c list, #116)."""
     lines = "\n".join(f"- {c.id} — {c.label_sk}: {c.description_sk}" for c in categories)
     rules = "\n".join(f"- {r}" for r in DIRECTION_RULES)
     return (
@@ -161,7 +164,7 @@ def neutralize_untrusted_wrapper(text: str | None) -> str:
     return _WRAPPER_TAG.sub(_replace, text)
 
 
-def parse_classification_json(raw: str) -> ClassificationResult:
+def parse_classification_json(raw: str, allowed: frozenset[str] | None = None) -> ClassificationResult:
     """Parse model text — prefer direct JSON; ``{.*}`` regex is last resort only."""
     text = raw.strip()
     if text.startswith("```"):
@@ -174,11 +177,11 @@ def parse_classification_json(raw: str) -> ClassificationResult:
         if not match:
             raise
         data = json.loads(match.group(0))
-    return ClassificationResult.model_validate(data)
+    return ClassificationResult.model_validate(data, context={"categories": allowed})
 
 
-def parse_classification_payload(data: dict[str, Any]) -> ClassificationResult:
-    return ClassificationResult.model_validate(data)
+def parse_classification_payload(data: dict[str, Any], allowed: frozenset[str] | None = None) -> ClassificationResult:
+    return ClassificationResult.model_validate(data, context={"categories": allowed})
 
 
 def company_aliases_for_domains(internal_domains: list[str]) -> frozenset[str]:
@@ -333,8 +336,10 @@ async def classify_message(
     extra_note_codes: list[str] | None = None,
     known_person_names: list[str] | None = None,
     recipients: list[str] | None = None,
+    categories: Sequence[CategoryDef] | None = None,
 ) -> ClassifyOutcome:
-    """Rules first; LLM only when not decisive. Never invent Money actions."""
+    """Rules first; LLM only when not decisive. Never invent Money actions. `categories` = the enabled 17c list
+    (prompt + allowed answers); None = the built-in defaults."""
     text_for_lang = f"{subject or ''}\n{body_text or ''}"
     language = detect_language(text_for_lang)
     rule = apply_rules(
@@ -420,7 +425,7 @@ async def classify_message(
         response = await provider.complete(
             LLMRequest(
                 purpose="classify",
-                system=CLASSIFY_SYSTEM,
+                system=CLASSIFY_SYSTEM if categories is None else classify_system(categories),
                 user=user,
                 model=model,
                 max_tokens=800,
@@ -443,11 +448,12 @@ async def classify_message(
         )
 
     cost, in_tok, out_tok, latency, used_model = _usage_from_response(response)
+    allowed = frozenset(c.id for c in categories) if categories is not None else None
     try:
         if response.tool_input is not None:
-            parsed = parse_classification_payload(dict(response.tool_input))
+            parsed = parse_classification_payload(dict(response.tool_input), allowed)
         else:
-            parsed = parse_classification_json(response.text)
+            parsed = parse_classification_json(response.text, allowed)
         if not parsed.language or parsed.language == "other":
             parsed.language = language
         return ClassifyOutcome(
