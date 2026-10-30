@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — fix: supplier invoices classified as invoice requests
+
+- Pilot 2026-10-30: „Faktura E3/2026/19608“ from a supplier with `E3_126_19608.pdf` + `.csv` (body only a bank-details note) was classified „Žiadosti o faktúru“ and got a reply suggestion. New deterministic rule `supplier_subject_attachment`: a new external mail (no `Re:`/`Fwd:`) whose subject starts with Faktúra/Faktura/Invoice/Rechnung/Dobropis/Dodací list/Delivery note/Lieferschein and carries a PDF/ISDOC/XML/CSV is a supplier document, without an LLM call. It runs after the DMARC check, so a spoofed „Faktura“ is still flagged. The non-decisive PDF-name hint no longer short-circuits the later checks.
+
 ## [Unreleased] — Phase 3a: Money bridge core + mock (#144)
 
 - The bridge answers the Phase 3 read endpoints of MONEY_API §6, all behind HMAC (key id + timestamp ±5 min + body hash, replay refused):

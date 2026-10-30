@@ -66,7 +66,7 @@ def test_100_smoke_fixtures_are_fictional_and_valid(fixture: dict[str, object]) 
 async def test_100_supplier_invoice_request_shows_attachments_and_recipients() -> None:
     fixture = json.loads((SMOKE / "004_supplier_invoice.json").read_text(encoding="utf-8"))
     attachments = list(fixture["attachments"])
-    # „Faktura“ in the subject alone is no rule: the LLM decides with the descriptions (#100)
+    # pilot 2026-10-30: a new external „Faktura …“ with a PDF/CSV is decided by the rule, no LLM call
     rule = apply_rules(
         from_email=fixture["from"],
         subject=fixture["subject"],
@@ -75,14 +75,15 @@ async def test_100_supplier_invoice_request_shows_attachments_and_recipients() -
         auth_results=None,
         internal_domains=INTERNAL,
     )
-    assert rule is None or rule.category == "supplier_document"
+    assert rule is not None and rule.category == "supplier_document" and rule.decisive
+    # a reply about the same invoice stays with the model: it sees the attachments and the recipients (#100)
     llm = ScriptedLLM([_ok_response()])
     await classify_message(
         provider=llm,  # type: ignore[arg-type]
         model="claude-haiku-5-5",
         from_email=fixture["from"],
         from_name="Účtáreň",
-        subject=fixture["subject"],
+        subject=f"Re: {fixture['subject']}",
         body_text=fixture["body_text"],
         headers_text=None,
         attachment_names=attachments,
