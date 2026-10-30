@@ -419,3 +419,17 @@ async def test_2b_review_api_error_pending_retry_and_airun(
     assert len(rows) == 1
     assert rows[0].status == "pending"
     assert (rows[0].payload or {}).get("llm_attempts") == 1
+
+
+def test_complaint_and_reply_to_notification_rules_in_prompt() -> None:
+    """Pilot 2026-10-30: „po otvorení zásielky … zistené množstvo 20 ks“ as a reply to „Odoslaná“ became other /
+    needs_reply=false. The prompt now says what a complaint is and how to treat replies to our notifications, and the
+    needs_reply field is described in the tool schema."""
+    from app.ai.classify import classify_system, classify_tool_definition
+
+    system = classify_system()
+    assert "missing or wrong quantity" in system and "without the word „reklamácia“" in system
+    assert "reply to our automatic e-shop notification" in system
+    schema = classify_tool_definition()["input_schema"]
+    assert isinstance(schema, dict)
+    assert "reported problem with a delivery" in schema["properties"]["needs_reply"]["description"]
