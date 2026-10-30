@@ -110,6 +110,7 @@ services:
     environment:
       MONEY_BACKEND: ${MONEY_BACKEND:-mock}
       MONEY_AGENDA_LABEL: ${MONEY_AGENDA_LABEL:-TEST}
+      BRIDGE_HMAC_KEY_ID: ${BRIDGE_HMAC_KEY_ID:-dev}
       BRIDGE_HMAC_SECRET: ${BRIDGE_HMAC_SECRET:-dev-only-change-me}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports: ["127.0.0.1:8100:8100"]

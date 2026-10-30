@@ -2,6 +2,22 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3a: Money bridge core + mock (#144)
+
+- The bridge answers the Phase 3 read endpoints of MONEY_API §6, all behind HMAC (key id + timestamp ±5 min + body hash, replay refused):
+  - `/sync/companies|persons|codebooks/{name}` (paging with `from`/`count`, `since` for delta);
+  - `/companies/{id}` and its `/receivables`, `/orders`, `/deliveries`, `/activities`;
+  - `/invoices/issued/search` (MONEY_API §5.1 cascade: number → VS → Odkaz → company + dates → digits);
+  - `/invoices/issued/{invoice|proforma}/{id}/pdf?report_id=` (original Money PDF; the report id comes from Settings 13b).
+- Two backends behind one interface and one Pydantic contract:
+  - **mock** (fictional seed: 20 companies on `*.example`, IČO with a wrong check digit, 320 invoices, orders, deliveries, activities, codebooks, a valid one-page PDF);
+  - **api** (token cache with single-flight refresh and one retry on 401, GraphQL from `bridge/app/queries/*.graphql`, REST only for PDF and persons, JSON parsed without floats).
+- Filter builder (MONEY_API §7) rejects `~ # | ( )` in values instead of escaping them; unit + property tests (hypothesis).
+- **Contract suite** `bridge/tests/test_contract.py` runs on the mock in CI and on the TEST agenda with `--money-live`.
+- Not guessed, answered 501 `waiting_for_probe` on the real API: REST activity filter by company (also proforma search). `Stav` / `TypDokladu` / `Vyrizeno` are passed through raw.
+- Safety: `MONEY_BACKEND=api` refuses to start unless `MONEY_AGENDA_LABEL=TEST` and a non-dev `BRIDGE_HMAC_SECRET` are set. Read-only (no mutation in any query; a test checks it). Money down → 503 `money_unavailable`, `/readyz` 503.
+- CI (bridge job): schema drift check of queries and docs blocks (`tools/validate_graphql.py`), and a `float(` ban for `bridge/app` and the money/order packages.
+
 ## [Unreleased] — Phase 3 plan (#144)
 
 - `docs/plans/phase-3.md`: Money read with a mock bridge first — milestones 3a–3h, [PROBE] items, bridge deployment draft (ADR-016), acceptance, questions for Erik. Waiting for approval; no code yet.

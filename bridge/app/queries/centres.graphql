@@ -1,0 +1,5 @@
+query Centres($filter: String, $from: Int, $count: Int, $changeFrom: DateTime) {
+  Centres(Filter: $filter, From: $from, Count: $count, ChangeFrom: $changeFrom) {
+    ID Kod Nazev
+  }
+}

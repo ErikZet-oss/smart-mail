@@ -1,0 +1,5 @@
+query ReceivedOrders($filter: String, $from: Int, $count: Int, $changeFrom: DateTime) {
+  ReceivedOrders(Filter: $filter, From: $from, Count: $count, ChangeFrom: $changeFrom) {
+    ID CisloDokladu Firma_ID DatumVystaveni Odkaz Stav Vyrizeno CelkovaCastka
+  }
+}
