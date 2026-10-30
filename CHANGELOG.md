@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — external links open in a new tab
+
+- Reading pane: an http(s) link in a received mail opens in a new tab (`noopener,noreferrer`), so Smart Mail stays open. This works for messages already stored too, because it is handled on click, not in the stored HTML. mailto: and in-page anchors are unchanged.
+
 ## [Unreleased] — Phase 2f PR 2: W12-17f shadow mode, consumption and accuracy
 
 **Settings 17 › „Tieňový režim, spotreba a presnosť“** (admin):

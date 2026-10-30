@@ -37,6 +37,7 @@ import { fetchMe } from '../auth/authApi';
 import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
 import { useTheme } from '../prefs/ThemeProvider';
 import { AttachmentLightbox } from './AttachmentLightbox';
+import { openExternalLinkInNewTab } from './externalLinks';
 import { formatMailDate } from './formatMailDate';
 import { FolderPicker } from './FolderPicker';
 import { applyActionLocally, REMOVING_ACTIONS } from './optimistic';
@@ -646,6 +647,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
               className="type-body-lg max-w-none overflow-x-auto text-text-primary [&_a]:text-brand-primary-600 [&_img]:h-auto [&_img]:max-w-full"
               // sanitized on the server (nh3); remote images stay blocked until the user opts in
               dangerouslySetInnerHTML={{ __html: bodyHtml }}
+              onClick={openExternalLinkInNewTab}
             />
           )}
         </div>
