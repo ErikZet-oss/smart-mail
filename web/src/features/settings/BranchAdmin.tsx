@@ -830,14 +830,14 @@ function PersonDrawer({
           {person ? <PersonPhoto person={person} /> : null}
           {person ? (
             <div className="flex flex-col gap-1">
-              <span className="type-label text-text-primary">{t('settings.branches.signature')} ⚠</span>
+              <span className="type-label text-text-primary">{t('settings.branches.handSignature')} ⚠</span>
               <PrivateImageField
                 url={signatureUrl(person.id)}
                 present={Boolean(person.has_signature)}
                 kind="signature"
                 queryKey={BRANCHES}
               />
-              <span className="type-caption text-text-secondary">{t('settings.branches.signatureHelp')}</span>
+              <span className="type-caption text-text-secondary">{t('settings.branches.handSignatureHelp')}</span>
             </div>
           ) : null}
           <label className="flex flex-col gap-1">
