@@ -24,6 +24,7 @@ import { fillSignature, type SignatureLang } from './signatureHtml';
 import { MobileSettingsIndex } from './MobileSettingsIndex';
 import { SettingsBreadcrumb, SettingsNav, SettingsSubList, SettingsSubTabs } from './SettingsNav';
 import { buildNavItems, isItemActive, TABBED_SECTIONS } from './settingsNavModel';
+import { AiKnowledgePanel } from './AiKnowledgePanel';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
   createResponse,
@@ -302,6 +303,7 @@ function SectionBody({
     return meRole === 'admin' ? <BranchesWorkspace section={navSection} sub={sub} crumbs={[]} mobile /> : <AdminOnly />;
   }
   if (section === 'mailboxes') return meRole === 'admin' ? <MailboxesPanel /> : <AdminOnly />;
+  if (section === 'ai-admin') return meRole === 'admin' ? <AiKnowledgePanel /> : <AdminOnly />;
   return <p className="type-body text-text-secondary">…</p>;
 }
 

@@ -2,6 +2,19 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2e PR 2: W12-17d Štýl a znalosti
+
+**Section 17 „AI – správa“** (admin) in Settings, with tab 17d „Štýl a znalosti“. The settings schema and its JSON snapshot are regenerated.
+
+**On the page:**
+- **Štýlová príručka firmy:** one text field + Uložiť.
+- **Znalosti:**
+  - a table of cards (Názov, Platné do with an „neplatná“ hint, Tagy, Zapnuté) with edit and delete (confirm);
+  - „Pridať kartu“ opens a form: Názov, Text, Platné do, Tagy (comma-separated), Zapnuté.
+- Non-admins see the admin-only notice.
+
+**Fix:** card text can no longer close its `<company_knowledge>` block or open an `<untrusted_email>` block in the prompt (#111 review).
+
 ## [Unreleased] — Phase 2e PR 1: knowledge cards, style guide, full-text retrieval
 
 **Migration 0015** (#110, Erik A; reversible, no change to existing tables):

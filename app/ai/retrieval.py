@@ -71,12 +71,21 @@ async def style_guide_text(db: AsyncSession) -> str | None:
     return text or None
 
 
+_KNOWLEDGE_TAG = re.compile(r"</?\s*(company_knowledge|untrusted_email)\s*>", re.I)
+
+
+def _safe(text: str) -> str:
+    """A card can never close its own block or open an e-mail block (#111 review)."""
+    return _KNOWLEDGE_TAG.sub(lambda m: m.group(0).replace("<", "‹").replace(">", "›"), text)
+
+
 def knowledge_block(cards: list[KnowledgeCard]) -> str:
     """Company data for the prompt — wrapped as data of Smart s.r.o., never as instructions from a mail (#110)."""
     if not cards:
         return "(no matching company knowledge)"
     parts = [
-        f'<company_knowledge title="{c.title.replace(chr(34), "")}">\n{c.body[:CARD_CHARS]}\n</company_knowledge>'
+        f'<company_knowledge title="{_safe(c.title).replace(chr(34), "")}">\n{_safe(c.body[:CARD_CHARS])}\n'
+        "</company_knowledge>"
         for c in cards
     ]
     return "\n".join(parts)

@@ -215,3 +215,36 @@ export const deletePersonAdmin = (id: string) =>
   api<{ id: string; result: 'deleted' | 'deactivated' }>('DELETE', `/api/settings/admin/people/${id}`);
 export const linkBranchLogin = (branchId: string) =>
   api<AdminUser>('POST', `/api/settings/admin/branches/${branchId}/link-login`, {});
+
+// 17d Štýl a znalosti (admin, Phase 2e)
+export type KnowledgeCardOut = {
+  id: string;
+  title: string;
+  body: string;
+  valid_until: string | null;
+  tags: string[];
+  enabled: boolean;
+  expired: boolean;
+  updated_at: string | null;
+};
+export type KnowledgeCardIn = {
+  title: string;
+  body: string;
+  valid_until: string | null;
+  tags: string[];
+  enabled: boolean;
+};
+
+export const knowledgeKey = ['settings', 'ai', 'knowledge'] as const;
+export const styleGuideKey = ['settings', 'ai', 'style-guide'] as const;
+
+export const fetchStyleGuide = () =>
+  api<{ body: string; updated_at: string | null }>('GET', '/api/settings/ai/style-guide');
+export const saveStyleGuide = (body: string) =>
+  api<{ body: string; updated_at: string | null }>('PUT', '/api/settings/ai/style-guide', { body });
+export const fetchKnowledge = () => api<KnowledgeCardOut[]>('GET', '/api/settings/ai/knowledge');
+export const createKnowledge = (card: KnowledgeCardIn) =>
+  api<KnowledgeCardOut>('POST', '/api/settings/ai/knowledge', card);
+export const updateKnowledge = (id: string, card: KnowledgeCardIn) =>
+  api<KnowledgeCardOut>('PUT', `/api/settings/ai/knowledge/${id}`, card);
+export const deleteKnowledge = (id: string) => api<{ status: string }>('DELETE', `/api/settings/ai/knowledge/${id}`);

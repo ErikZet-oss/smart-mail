@@ -1098,6 +1098,40 @@
     }
   },
   "ai": {
+    "admin": {
+      "styleTitle": "Štýlová príručka firmy",
+      "styleHelp": "Ako AI píše za firmu: oslovenie, čo nesľubovať, zakázané frázy. Podpis pridáva Smart Mail sám.",
+      "styleLabel": "Text príručky",
+      "save": "Uložiť",
+      "saved": "Uložené.",
+      "knowledgeTitle": "Znalosti",
+      "knowledgeHelp": "Fakty, ktoré AI môže použiť v návrhoch (dodacie a platobné podmienky, otváracie hodiny, VOP…). AI ich berie ako údaje firmy, nie ako pokyny.",
+      "add": "Pridať kartu",
+      "empty": "Zatiaľ žiadne karty.",
+      "cols": {
+        "title": "Názov",
+        "validUntil": "Platné do",
+        "tags": "Tagy",
+        "enabled": "Zapnuté"
+      },
+      "form": {
+        "title": "Názov",
+        "body": "Text",
+        "validUntil": "Platné do (nepovinné)",
+        "tags": "Tagy (oddelené čiarkou)",
+        "enabled": "Zapnuté",
+        "save": "Uložiť kartu",
+        "cancel": "Zrušiť"
+      },
+      "edit": "Upraviť",
+      "delete": "Vymazať",
+      "deleteTitle": "Vymazať kartu {{title}}?",
+      "deleteBody": "AI ju prestane používať v návrhoch.",
+      "expired": "neplatná",
+      "never": "—",
+      "on": "áno",
+      "off": "nie"
+    },
     "compose": {
       "tab": "AI",
       "title": "AI pri písaní",

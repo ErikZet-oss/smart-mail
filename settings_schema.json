@@ -798,6 +798,21 @@
       "admin_only": true,
       "subs": [],
       "fields": []
+    },
+    {
+      "id": "17",
+      "path": "ai-admin",
+      "title": "AI – správa",
+      "admin_only": true,
+      "subs": [
+        {
+          "id": "17d",
+          "path": "style",
+          "title": "Štýl a znalosti",
+          "fields": []
+        }
+      ],
+      "fields": []
     }
   ]
 }
