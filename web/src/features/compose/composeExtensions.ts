@@ -26,6 +26,37 @@ function atomView(tag: string, className: string, marker: string, html: string, 
   return dom;
 }
 
+/**
+ * Inline images in the body keep `src="cid:…"`, which is what the sent mail references (a related MIME part). A browser
+ * can't load `cid:`, so the editor shows the draft's own copy instead; the document (getHTML) still says `cid:`.
+ */
+let inlineImageDraftId: string | null = null;
+
+export function setInlineImageDraft(draftId: string | null): void {
+  inlineImageDraftId = draftId;
+}
+
+export function inlinePreviewUrl(src: string, draftId: string | null = inlineImageDraftId): string {
+  if (!draftId || !src.toLowerCase().startsWith('cid:')) return src;
+  return `/api/mail/compose/${encodeURIComponent(draftId)}/inline/${encodeURIComponent(src.slice(4))}`;
+}
+
+const InlineImage = Image.extend({
+  addNodeView() {
+    return ({ node }) => {
+      const img = document.createElement('img');
+      const src = String(node.attrs.src ?? '');
+      img.src = inlinePreviewUrl(src);
+      if (node.attrs.alt) img.alt = String(node.attrs.alt);
+      if (node.attrs.title) img.title = String(node.attrs.title);
+      img.setAttribute('data-cid-src', src);
+      img.style.maxWidth = '100%';
+      img.style.height = 'auto';
+      return { dom: img };
+    };
+  },
+});
+
 export const SignatureBlock = Node.create({
   name: 'signatureBlock',
   group: 'block',
@@ -163,7 +194,7 @@ export const composeExtensions = [
   TableRow,
   TableHeader,
   TableCell,
-  Image.configure({ inline: true, allowBase64: false }),
+  InlineImage.configure({ inline: true, allowBase64: false }),
   SignatureBlock,
   QuotedMessage,
 ];

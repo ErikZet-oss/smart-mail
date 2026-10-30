@@ -450,6 +450,9 @@ test.describe('pilot: paste a screenshot into compose', () => {
       node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
     });
     await expect.poll(() => uploads).toBe(1);
-    await expect(editor.locator('img[src="cid:snimka-1@smartmail"]')).toHaveCount(1);
+    const img = editor.locator('img[data-cid-src="cid:snimka-1@smartmail"]');
+    await expect(img).toHaveCount(1);
+    // the browser shows the draft's own copy; the document keeps cid: for the sent mail
+    await expect(img).toHaveAttribute('src', '/api/mail/compose/d-1/inline/snimka-1%40smartmail');
   });
 });
