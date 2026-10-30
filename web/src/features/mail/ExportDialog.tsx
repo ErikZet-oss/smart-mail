@@ -4,12 +4,14 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '../../components/Button';
-import { Dialog } from '../../components/Dialog';
+import { ConfirmDialog, Dialog } from '../../components/Dialog';
+import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import {
   estimateExport,
   exportDownloadUrl,
   fetchExport,
+  purgeExport,
   startExport,
   type ExportRange,
   type ExportRequest,
@@ -22,6 +24,15 @@ function formatSize(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1).replace('.', ',')} GB`;
   if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1).replace('.', ',')} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} kB`;
+}
+
+/** „Doručená pošta, Odoslané, Nitra a 3 ďalšie“ — the folders the delete step will touch. */
+function folderList(names: string[], t: (key: string, options?: Record<string, unknown>) => string): string {
+  const special: Record<string, string> = { INBOX: t('folders.special.inbox') };
+  const shown = names.slice(0, 4).map((n) => special[n] ?? n);
+  return names.length > 4
+    ? t('mailExport.andMore', { list: shown.join(', '), count: names.length - 4 })
+    : shown.join(', ');
 }
 
 type Props = {
@@ -41,6 +52,9 @@ export function ExportDialog({ mailboxRef, folder, onClose }: Props) {
   const [dateTo, setDateTo] = useState('');
   const [children, setChildren] = useState(true);
   const [exportId, setExportId] = useState<string | null>(null);
+  const [downloaded, setDownloaded] = useState(false);
+  const [confirmPurge, setConfirmPurge] = useState(false);
+  const toasts = useToasts();
 
   const range: ExportRange =
     kind === 'older'
@@ -74,6 +88,22 @@ export function ExportDialog({ mailboxRef, folder, onClose }: Props) {
     },
   });
 
+  const purge = useMutation({
+    mutationFn: () => purgeExport(exportId ?? ''),
+    onSuccess: (out) => {
+      setConfirmPurge(false);
+      void status.refetch();
+      toasts.success(t('mailExport.purged', { count: out.deleted }));
+      if (Object.keys(out.skipped).length > 0) toasts.error(t('mailExport.purgeSkipped'));
+    },
+    onError: (e) => {
+      setConfirmPurge(false);
+      if (e instanceof ApiError && e.status === 401) return; // the password dialog was cancelled
+      const code = e instanceof ApiError ? e.detail.code : 'generic';
+      toasts.error(t(`mailExport.errors.${code}`, { defaultValue: t('mailExport.errors.generic') }));
+    },
+  });
+
   const title = folder ? t('mailExport.titleFolder', { name: folder.label }) : t('mailExport.titleMailbox');
   const state = status.data;
   const startError = start.error instanceof ApiError ? start.error.detail.code : null;
@@ -81,58 +111,99 @@ export function ExportDialog({ mailboxRef, folder, onClose }: Props) {
   if (exportId !== null) {
     const pct = state && state.total > 0 ? Math.round((100 * state.done) / state.total) : 0;
     return (
-      <Dialog
-        title={title}
-        width={460}
-        onClose={onClose}
-        footer={
-          <Button type="button" variant="secondary" onClick={onClose}>
-            {t('mailExport.close')}
-          </Button>
-        }
-      >
-        <div className="flex flex-col gap-3" data-testid="export-progress">
-          {state?.status === 'ready' ? (
-            <>
-              <p className="type-body text-text-primary">
-                {t('mailExport.ready', { count: state.done, size: formatSize(state.archive_size) })}
+      <>
+        <Dialog
+          title={title}
+          width={460}
+          onClose={onClose}
+          footer={
+            <Button type="button" variant="secondary" onClick={onClose}>
+              {t('mailExport.close')}
+            </Button>
+          }
+        >
+          <div className="flex flex-col gap-3" data-testid="export-progress">
+            {state?.status === 'ready' ? (
+              <>
+                <p className="type-body text-text-primary">
+                  {t('mailExport.ready', { count: state.done, size: formatSize(state.archive_size) })}
+                </p>
+                <a
+                  href={exportDownloadUrl(state.id)}
+                  download={state.filename}
+                  onClick={() => {
+                    setDownloaded(true);
+                    window.setTimeout(() => void status.refetch(), 1500);
+                  }}
+                  className="type-label inline-flex items-center gap-1 self-start rounded-md bg-brand-primary-600 px-3 py-2 text-white hover:bg-brand-primary-700"
+                >
+                  <Download size={16} aria-hidden="true" />
+                  {t('mailExport.download')}
+                </a>
+                <p className="type-small text-text-secondary">{t('mailExport.validFor')}</p>
+                {state.purged_at ? (
+                  <p className="type-small text-text-primary">{t('mailExport.purged', { count: state.purged })}</p>
+                ) : (
+                  <div className="flex flex-col gap-1 border-t border-border-default pt-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="self-start text-danger-600"
+                      disabled={!(downloaded || state.downloaded_at) || purge.isPending}
+                      onClick={() => setConfirmPurge(true)}
+                    >
+                      {t('mailExport.purge')} ⚠
+                    </Button>
+                    <p className="type-small text-text-secondary">
+                      {downloaded || state.downloaded_at
+                        ? t('mailExport.purgeHelp')
+                        : t('mailExport.purgeAfterDownload')}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : state?.status === 'failed' ? (
+              <p role="alert" className="type-body text-danger-600">
+                {t('mailExport.failed')}
               </p>
-              <a
-                href={exportDownloadUrl(state.id)}
-                download={state.filename}
-                className="type-label inline-flex items-center gap-1 self-start rounded-md bg-brand-primary-600 px-3 py-2 text-white hover:bg-brand-primary-700"
-              >
-                <Download size={16} aria-hidden="true" />
-                {t('mailExport.download')}
-              </a>
-              <p className="type-small text-text-secondary">{t('mailExport.validFor')}</p>
-            </>
-          ) : state?.status === 'failed' ? (
-            <p role="alert" className="type-body text-danger-600">
-              {t('mailExport.failed')}
-            </p>
-          ) : (
-            <>
-              <p className="type-body text-text-primary">
-                {state && state.total > 0
-                  ? t('mailExport.progress', { done: state.done, total: state.total })
-                  : t('mailExport.preparing')}
-              </p>
-              <div
-                role="progressbar"
-                aria-label={t('mailExport.progressLabel')}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={pct}
-                className="h-2 w-full overflow-hidden rounded-full bg-bg-subtle"
-              >
-                <div className="h-full bg-brand-primary-600 transition-all" style={{ width: `${pct}%` }} />
-              </div>
-              <p className="type-small text-text-secondary">{t('mailExport.background')}</p>
-            </>
-          )}
-        </div>
-      </Dialog>
+            ) : (
+              <>
+                <p className="type-body text-text-primary">
+                  {state && state.total > 0
+                    ? t('mailExport.progress', { done: state.done, total: state.total })
+                    : t('mailExport.preparing')}
+                </p>
+                <div
+                  role="progressbar"
+                  aria-label={t('mailExport.progressLabel')}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={pct}
+                  className="h-2 w-full overflow-hidden rounded-full bg-bg-subtle"
+                >
+                  <div className="h-full bg-brand-primary-600 transition-all" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="type-small text-text-secondary">{t('mailExport.background')}</p>
+              </>
+            )}
+          </div>
+        </Dialog>
+        {/* a sibling, not inside the Dialog: both are <form>s, and a nested form would submit the outer one */}
+        {confirmPurge && state ? (
+          <ConfirmDialog
+            title={t('mailExport.purgeTitle')}
+            body={t('mailExport.purgeBody', {
+              count: state.done,
+              size: formatSize(state.bytes),
+              folders: folderList(state.folder_names, t),
+            })}
+            confirmLabel={t('mailExport.purgeConfirm')}
+            busy={purge.isPending}
+            onConfirm={() => purge.mutate()}
+            onClose={() => setConfirmPurge(false)}
+          />
+        ) : null}
+      </>
     );
   }
 
