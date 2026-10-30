@@ -227,6 +227,9 @@ export async function mockApi(page: Page, given: Record<string, ReplySource>) {
     } else if (!reply && AI_SUGGESTIONS.test(key)) {
       // Phase 2c reading-pane cards — none unless a test gives some (#94)
       reply = { body: [] };
+    } else if (!reply && key === 'GET /api/documents/conformity/branches') {
+      // #152: the Prehlásenie dialog asks which branches the person may issue for — one by default (no select shown)
+      reply = { body: [{ id: 'b1', name: 'Nitra', ready: true }] };
     } else if (!reply && AI_CATEGORIES.test(key)) {
       // Phase 2b poll — empty triage so Phase 1 shells stay signed in
       reply = { body: EMPTY_AI_CATEGORIES };

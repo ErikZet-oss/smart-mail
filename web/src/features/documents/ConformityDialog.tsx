@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { FileText, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +8,13 @@ import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
-import { issueConformity, previewConformity, type ConformityItem, type ConformityRequest } from './documentsApi';
+import {
+  fetchConformityBranches,
+  issueConformity,
+  previewConformity,
+  type ConformityItem,
+  type ConformityRequest,
+} from './documentsApi';
 
 const INPUT =
   'type-body w-full rounded-md border border-border-default bg-bg-surface px-2 py-1 text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary-500';
@@ -48,6 +54,10 @@ export function ConformityDialog({
     initialItems && initialItems.length > 0 ? initialItems.map((i) => ({ ...EMPTY, ...i })) : [{ ...EMPTY }],
   );
   const [error, setError] = useState<string | null>(null);
+  // pilot 2026-10-30: a personal account (no branch) or a person covering several branches picks the branch here
+  const branches = useQuery({ queryKey: ['conformity-branches'], queryFn: fetchConformityBranches });
+  const [branchId, setBranchId] = useState<string>('');
+  const chosenBranch = branchId || branches.data?.[0]?.id || '';
 
   const request = (): ConformityRequest => ({
     customer: customer.trim(),
@@ -57,6 +67,7 @@ export function ConformityDialog({
     items: items.filter((i) => i.nazov.trim() !== ''),
     message_id: messageId,
     suggestion_id: suggestionId,
+    branch_id: chosenBranch || null,
   });
   const valid = customer.trim() !== '' && items.some((i) => i.nazov.trim() !== '');
   const showError = (e: unknown) => {
@@ -114,6 +125,23 @@ export function ConformityDialog({
       }
     >
       <div className="flex flex-col gap-3" data-testid="conformity-dialog">
+        {(branches.data?.length ?? 0) > 1 && (
+          <label className="flex flex-col gap-1">
+            <span className="type-label text-text-secondary">{t('conformity.branch')}</span>
+            <select
+              className={INPUT}
+              data-testid="conformity-branch"
+              value={chosenBranch}
+              onChange={(e) => setBranchId(e.target.value)}
+            >
+              {branches.data?.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.ready ? b.name : `${b.name} – ${t('conformity.branchNotReady')}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="grid gap-3 sm:grid-cols-[1.6fr_1fr]">
           <label className="flex flex-col gap-1">
             <span className="type-label text-text-secondary">{t('conformity.customer')}</span>

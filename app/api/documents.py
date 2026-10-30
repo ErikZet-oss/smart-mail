@@ -282,6 +282,38 @@ async def issue_declaration(
     )
 
 
+class BranchChoice(BaseModel):
+    id: str
+    name: str
+    ready: bool  # stamp + an active manager with a signature
+
+
+@router.get("/conformity/branches")
+async def conformity_branches(ctx: Auth, person: ActivePerson, db: DB) -> list[BranchChoice]:
+    """Branches this person may issue for (pilot 2026-10-30: a personal account without a branch could not issue at
+    all). Admin: every branch; sales: own branch + branches covered in „Pôsobí aj na pobočkách“; others: none.
+    The person's own branch comes first."""
+    if person.role not in ISSUER_ROLES:
+        return []
+    if person.role == Role.admin:
+        branches = list((await db.scalars(select(Branch).order_by(Branch.name))).all())
+    else:
+        covered = select(PersonBranch.branch_id).where(PersonBranch.person_id == person.id)
+        query = select(Branch).where((Branch.id == person.branch_id) | Branch.id.in_(covered)).order_by(Branch.name)
+        branches = list((await db.scalars(query)).all())
+    branches.sort(key=lambda b: b.id != person.branch_id)
+    signers = set(
+        (
+            await db.scalars(
+                select(Person.branch_id).where(
+                    Person.is_manager.is_(True), Person.active.is_(True), Person.signature_key.is_not(None)
+                )
+            )
+        ).all()
+    )
+    return [BranchChoice(id=str(b.id), name=b.name, ready=bool(b.stamp_key) and b.id in signers) for b in branches]
+
+
 @router.get("/conformity/{declaration_id}/pdf")
 async def declaration_pdf(
     declaration_id: uuid.UUID, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
