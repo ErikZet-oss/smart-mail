@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #139 part A: Prehlásenie o zhode — data model, Pečiatka and Podpis
+
+- Migration 0017 (approved by Erik): `branches.stamp_key`, `persons.signature_key`, and the table `conformity_declarations` (number unique, branch, prepared_by, signer, account, customer, document, items, place, date, PDF key, sha256, message/thread). Part B uses the table.
+- Settings 11: „Pečiatka“ for a branch and „Podpis“ for a person. Both take a PNG with a transparent background, max 1 MB, scaled down to 1200 px. Upload and removal are ⚠ (admin + re-auth), audited as `settings.stamp_saved`/`stamp_removed` and `settings.signature_saved`/`signature_removed`. The images are never served publicly: there is only an admin preview with `no-store`, and no e-mail signature variable.
+- ADR-015 records Erik's decisions (numbering, branch header, the manager signs, render with WeasyPrint and Liberation Sans). SETTINGS_SPEC 11 has the two new fields.
+
 ## [Unreleased] — AI catch-up cron (#135)
 
 - The AI job used to start only when a sync found new mail, so classifications and reply drafts that failed (e.g. before #131) waited for the next incoming message. The new cron `ai_catchup` runs every 15 min. For every mailbox with AI on, it enqueues `process_mailbox_ai_job` (same `_job_id=mail-ai:<id>`, never twice) **only when there is work**: an eligible unclassified message with < 3 attempts, or a reply candidate without a suggestion.

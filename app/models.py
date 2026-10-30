@@ -8,5 +8,6 @@ import app.ai.models
 import app.auth.models
 import app.contacts.models
 import app.core.audit
+import app.documents.models
 import app.mail.compose_models
 import app.mail.models  # noqa: F401
