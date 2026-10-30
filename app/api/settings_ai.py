@@ -26,6 +26,7 @@ from app.api.mail import _ai_provider_configured, fail
 from app.api.settings import require_admin
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
 from app.auth.models import Person
+from app.auth.reauth import RecentReauth
 from app.core.audit import audit
 from app.core.config import Settings
 from app.mail.mailboxes import accessible_mailboxes
@@ -603,8 +604,11 @@ async def get_shadow(admin: Admin, db: DB) -> ShadowOut:
 
 
 @router.put("/shadow")
-async def put_shadow(body: ShadowIn, admin: Admin, db: DB) -> ShadowOut:
-    """Turning shadow off makes new reply suggestions visible to everybody (Erik decides on the server — #116)."""
+async def put_shadow(body: ShadowIn, ctx: RecentReauth, db: DB) -> ShadowOut:
+    """Turning shadow off makes new reply suggestions visible to everybody (Erik decides on the server — #116) —
+    a ⚠ change, so it needs a recent re-auth (#54)."""
+    admin = ctx.person
+    assert admin is not None  # require_recent_reauth answers 403 without an active admin person
     row = await ensure_shadow_flag(db)
     before = row.enabled
     row.enabled = body.replies

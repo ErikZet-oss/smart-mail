@@ -13,7 +13,7 @@ from app.auth.models import Role
 from app.core.audit import AuditLog
 from app.mail.models import FolderMeta, Mailbox, Message
 from tests.conftest import Client, FakeMailServer
-from tests.test_knowledge_2e import _admin
+from tests.test_knowledge_2e import PASSWORD, _admin
 
 
 async def _seed(db: AsyncSession) -> None:
@@ -120,8 +120,13 @@ async def test_2f_shadow_switch_default_on_and_audited(
 ) -> None:
     await _admin(client, db, mail_server)
     assert (await client.get("/api/settings/ai/shadow")).json() == {"replies": True}  # no row → shadow on
+    # ⚠ change: without a recent re-auth → 401, nothing changes, nothing audited (#54)
     r = await client.send_json("PUT", "/api/settings/ai/shadow", {"replies": False})
-    assert r.json() == {"replies": False}
+    assert r.status_code == 401 and r.json()["detail"]["code"] == "reauth_required"
+    assert await db.scalar(select(AuditLog).where(AuditLog.action == "ai.shadow_mode_changed")) is None
+    assert (await client.reauth(PASSWORD)).status_code == 200
+    r = await client.send_json("PUT", "/api/settings/ai/shadow", {"replies": False})
+    assert r.status_code == 200 and r.json() == {"replies": False}
     row = await db.scalar(select(FeatureFlag).where(FeatureFlag.key == "ai_shadow_mode"))
     assert row is not None and row.enabled is False
     entry = await db.scalar(select(AuditLog).where(AuditLog.action == "ai.shadow_mode_changed"))

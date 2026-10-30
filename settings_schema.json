@@ -821,7 +821,19 @@
           "id": "17f",
           "path": "shadow",
           "title": "Tieňový režim, spotreba a presnosť",
-          "fields": []
+          "fields": [
+            {
+              "id": "ai.shadow_replies",
+              "label": "Tieňový režim návrhov odpovedí ⚠",
+              "control": "switch",
+              "default": true,
+              "help": "Návrhy sa tvoria, ale nikto ich nevidí. Vypnutie vyžaduje potvrdenie heslom.",
+              "scope": "G",
+              "options": [],
+              "validation": {},
+              "admin_only": true
+            }
+          ]
         }
       ],
       "fields": []

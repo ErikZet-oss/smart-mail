@@ -469,7 +469,23 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
         "subs": [
             {"id": "17d", "path": "style", "title": "Štýl a znalosti", "fields": []},
             {"id": "17e", "path": "rules", "title": "Pravidlá", "fields": []},
-            {"id": "17f", "path": "shadow", "title": "Tieňový režim, spotreba a presnosť", "fields": []},
+            {
+                "id": "17f",
+                "path": "shadow",
+                "title": "Tieňový režim, spotreba a presnosť",
+                "fields": [
+                    # ⚠ change (SETTINGS_SPEC §0): confirm dialog + re-auth; off shows AI suggestions to everybody
+                    field(
+                        "ai.shadow_replies",
+                        label="Tieňový režim návrhov odpovedí ⚠",
+                        control="switch",
+                        default=True,
+                        help="Návrhy sa tvoria, ale nikto ich nevidí. Vypnutie vyžaduje potvrdenie heslom.",
+                        scope="G",
+                        admin_only=True,
+                    )
+                ],
+            },
         ],
         "fields": [],
     },
