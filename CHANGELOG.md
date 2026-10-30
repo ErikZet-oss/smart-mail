@@ -2,6 +2,9 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — fix: duplicate key in sk.json
+
+- `settings.branches.signature` was defined twice („Podpis“ from #140 and „Šablóna podpisu pobočky“); JSON keeps the last one silently. The unused #140 entry is removed and a vitest check now fails on any duplicate key inside one object of `sk.json` (found by the agent in #158).
 ## [Unreleased] — Phase 3b: Money read cache + sync (#144)
 
 - **Migration 0018** (approved by Erik in #150) adds `money_companies`, `money_persons`, `money_codebooks`, `email_company_links` and `money_sync_state`.
