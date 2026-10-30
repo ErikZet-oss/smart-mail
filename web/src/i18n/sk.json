@@ -1155,7 +1155,6 @@
       "logoHelp": "PNG/SVG, max 200 kB.",
       "stamp": "Pečiatka (pre doklady)",
       "stampHelp": "PNG s priehľadným pozadím, max 1 MB. Použije sa len v Prehlásení o zhode (atest 2.1), nikdy v podpise e-mailu.",
-      "signature": "Podpis",
       "handSignature": "Vlastnoručný podpis (pre doklady)",
       "handSignatureHelp": "Vlastnoručný podpis ako PNG s priehľadným pozadím, max 1 MB. Použije sa len v Prehlásení o zhode, ktoré podpisuje vedúci pobočky – nie v podpise e-mailu.",
       "imageNone": "Nenahraté",
