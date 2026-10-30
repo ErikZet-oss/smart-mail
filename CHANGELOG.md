@@ -5,6 +5,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 ## [Unreleased] — Phase 3 plan (#144)
 
 - `docs/plans/phase-3.md`: Money read with a mock bridge first — milestones 3a–3h, [PROBE] items, bridge deployment draft (ADR-016), acceptance, questions for Erik. Waiting for approval; no code yet.
+## [Unreleased] — Phase 2 close-out report
+
+- `docs/phase2-closeout.md`: milestones 2a–2f, acceptance status, gates, open items and what is needed from Erik.
 
 ## [Unreleased] — #143 „Zmeniť kategóriu“ and „Znova zaradiť (AI)“
 
