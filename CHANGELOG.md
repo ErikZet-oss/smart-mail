@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #143 „Zmeniť kategóriu“ and „Znova zaradiť (AI)“
+
+- Review (#148): „Znova zaradiť (AI)“ — one message or in bulk — follows the same rule as the pipeline (`message_eligible_for_ai`): a private folder, Koncepty/Odoslané/Kôš/Nevyžiadaná pošta and mail from before `ai_enabled_at` answer 409 `ai_not_allowed_here` without a model call; the bulk job counts them as `skipped`. „Zmeniť kategóriu“ by hand stays allowed everywhere.
+- W3 Viac › **„Zmeniť kategóriu…“** (sales/admin with an active person) offers the enabled 17c categories. The choice is stored on the existing classification: `category` plus `payload.corrected_category`, `corrected_from` (the AI's answer, kept from the first correction), `corrected_by_person_id`, `corrected_at`. No new column. Audit `ai.category_corrected` with before/after. The message moves to the new AI view at once.
+- **A person's correction wins:** the pipeline never touches a finished classification, and „Znova zaradiť“ answers 409 `category_corrected_manually`.
+- W3 Viac › **„Znova zaradiť (AI)“** makes one classify call with today's prompt and 17c categories (an `ai_runs` row with purpose `classify`, within the daily budget, else 429). It replaces category, needs_reply and summary; on failure the old classification stays. Audit `ai.reclassified`. In an AI view, a selection of up to 50 messages → **„Znova zaradiť (AI)“** as one ARQ job (`reclassify_messages_job`), which stops when the budget is spent and skips corrected messages.
+- Eval: `eval_cli run --labels-from corrections` scores people's corrections (label = their choice, predicted = the AI's answer; biased towards mistakes, so the random sample stays the main metric). `GET /api/settings/ai/usage` returns `corrected_30d`.
+- `GET …/ai/categories?all=1` lists every enabled category, for the dialog.
+
 ## [Unreleased] — #127 part 2: delete the archived messages from the server, and check disk space first
 
 - After the archive is downloaded, the export dialog offers „Vymazať správy zahrnuté v archíve…“. It confirms („Natrvalo vymaže N správ zo servera. Máte archív uložený?“) and needs the password (re-auth). It deletes **exactly the UIDs in the manifest**, per folder, with `\Deleted` + UID EXPUNGE (not the Kôš, so the quota is freed). Mail that arrived after the export stays.

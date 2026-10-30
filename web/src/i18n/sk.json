@@ -639,6 +639,26 @@
     }
   },
   "mail": {
+    "category": {
+      "menu": "Zmeniť kategóriu…",
+      "reclassify": "Znova zaradiť (AI)",
+      "title": "Zmeniť kategóriu",
+      "help": "Vaša voľba má prednosť pred AI – ani „Znova zaradiť“ ju neprepíše.",
+      "save": "Uložiť",
+      "cancel": "Zrušiť",
+      "saved": "Kategória zmenená.",
+      "reclassified": "AI zaradila správu do kategórie {{category}}.",
+      "bulk": "Znova zaradiť (AI)",
+      "bulkQueued": "Znova zaraďujem {{count}} správ. Výsledok uvidíte o chvíľu.",
+      "bulkMax": "Naraz najviac 50 správ.",
+      "errors": {
+        "category_corrected_manually": "Kategóriu zmenil človek – AI ju neprepíše. Zmeňte ju ručne cez „Zmeniť kategóriu“.",
+        "ai_budget_exceeded": "Denný rozpočet AI je vyčerpaný. Skúste to zajtra.",
+        "ai_unavailable": "AI nie je dostupná.",
+        "ai_not_allowed_here": "AI túto správu nečíta (súkromný priečinok, Koncepty, Odoslané, Kôš, Nevyžiadaná pošta alebo pošta spred zapnutia AI). Kategóriu môžete zmeniť ručne.",
+        "ai_failed": "AI správu nezaradila. Pôvodná kategória ostala."
+      }
+    },
     "toolbar": {
       "select": "Výber",
       "threads": "Konverzácie",
