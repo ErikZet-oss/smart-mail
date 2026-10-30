@@ -96,7 +96,7 @@ test.describe('#93 list shortcuts', () => {
     await page.keyboard.press('Delete');
     await expect(option(page, 'Kópia faktúry 2026123')).toHaveCount(0, { timeout: 1000 });
     await expect(page.getByText('Správa je v Koši.')).toBeVisible();
-    expect(bulkCalls).toEqual([{ action: 'delete', message_ids: ['m1'] }]);
+    await expect.poll(() => bulkCalls).toEqual([{ action: 'delete', message_ids: ['m1'] }]);
     await shot(page, 'issue93-delete');
   });
 
@@ -132,8 +132,10 @@ test.describe('#93 list shortcuts', () => {
     await expect(dialog.getByText('Vymazať natrvalo (1)?')).toBeVisible();
     expect(bulkCalls).toEqual([]);
     await dialog.getByRole('button', { name: 'Vymazať natrvalo' }).click();
+    await expect(dialog).toHaveCount(0);
     await expect(option(page, 'Reklamácia')).toHaveCount(0);
-    expect(bulkCalls).toEqual([{ action: 'purge', message_ids: ['m3'] }]);
+    // the row leaves optimistically before the request is sent: wait for it, never read the array at once (#121)
+    await expect.poll(() => bulkCalls).toEqual([{ action: 'purge', message_ids: ['m3'] }]);
   });
 
   test('#93 typing in the search field does not delete', async ({ page }) => {

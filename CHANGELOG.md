@@ -2,6 +2,11 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — deterministic web tests (#121)
+
+- vitest: the onboarding tour (W13) opened in whichever W2 test happened to run first, because the „tour seen“ key lived in jsdom's shared localStorage. The G3/G5 confirm-dialog tests then found two dialogs. The test setup now marks the tour as seen before every test, and a tour test removes the key itself. 10 shuffled runs are green.
+- Playwright #93/#96: the list removes a row optimistically before the bulk request goes out, so reading the captured requests at once could see `[]`. The tests now wait for the dialog to close and poll the requests (`expect.poll`). No retries were added to CI.
+
 ## [Unreleased] — 2f: 17a provider and budget
 
 - W12-17a „Poskytovateľ a rozpočet“ (admin): daily budget, alert %, „Pri vyčerpaní“ and retention are stored in `org_settings` (`ai.limits`). `AI_DAILY_BUDGET_USD` stays the default until an admin saves a budget (1–500 USD, a decimal string); the panel shows „z nastavenia servera“ / „nastavené v aplikácii“, and clearing the field goes back to the server value (#116).
