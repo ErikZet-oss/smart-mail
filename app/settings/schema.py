@@ -468,6 +468,7 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
         "admin_only": True,
         "subs": [
             {"id": "17d", "path": "style", "title": "Štýl a znalosti", "fields": []},
+            {"id": "17e", "path": "rules", "title": "Pravidlá", "fields": []},
         ],
         "fields": [],
     },

@@ -810,6 +810,12 @@
           "path": "style",
           "title": "Štýl a znalosti",
           "fields": []
+        },
+        {
+          "id": "17e",
+          "path": "rules",
+          "title": "Pravidlá",
+          "fields": []
         }
       ],
       "fields": []

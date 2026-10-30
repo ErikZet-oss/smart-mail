@@ -1099,6 +1099,32 @@
   },
   "ai": {
     "admin": {
+      "rules": {
+        "title": "Pravidlá",
+        "help": "Napíšte pravidlo po slovensky. AI ho prevedie na podobu „Ak … tak …“ – uloží sa až po vašom potvrdení a potom sa vykonáva vždy rovnako, bez AI. Pravidlo môže len zaradiť e-mail (kategória, priorita, či treba odpovedať) – nikdy nič neodošle ani nepresunie.",
+        "new": "Nové pravidlo",
+        "nlLabel": "Pravidlo",
+        "nlPlaceholder": "Napr. Faktúry od Fixtech sú doklady dodávateľov, odpoveď netreba.",
+        "preview": "Previesť",
+        "previewTitle": "Takto sa pravidlo vykoná:",
+        "try": "Vyskúšať na posledných 50 e-mailoch",
+        "tried": "Zhoduje sa {{count}} z {{checked}} posledných e-mailov.",
+        "save": "Uložiť pravidlo",
+        "cancel": "Zrušiť",
+        "notUnderstood": "Pravidlu sa nepodarilo porozumieť. Pravidlo môže len zaradiť e-mail – skúste ho napísať inak.",
+        "empty": "Zatiaľ žiadne pravidlá.",
+        "cols": {
+          "rule": "Pravidlo",
+          "form": "Prevedená podoba",
+          "enabled": "Zapnuté",
+          "author": "Autor",
+          "lastUsed": "Posledné použitie"
+        },
+        "never": "nikdy",
+        "delete": "Vymazať pravidlo",
+        "deleteTitle": "Vymazať pravidlo?",
+        "deleteBody": "Pravidlo sa prestane vykonávať. Už zaradené e-maily zostanú tak, ako sú."
+      },
       "styleTitle": "Štýlová príručka firmy",
       "styleHelp": "Ako AI píše za firmu: oslovenie, čo nesľubovať, zakázané frázy. Podpis pridáva Smart Mail sám.",
       "styleLabel": "Text príručky",
