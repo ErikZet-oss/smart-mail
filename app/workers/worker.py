@@ -220,6 +220,46 @@ async def backfill_attachment_flags(ctx: dict[str, Any]) -> dict[str, int | None
     return {}
 
 
+async def reclassify_messages_job(
+    ctx: dict[str, Any], mailbox_id: str, message_ids: list[str], person_id: str, account_id: str
+) -> dict[str, int]:
+    """#143 bulk „Znova zaradiť (AI)“ from an AI view: one message after another, stops when the budget is spent;
+    manually corrected messages are skipped."""
+    from app.ai.reclassify import ReclassifyError, reclassify
+    from app.mail.models import Message
+
+    stats = {"reclassified": 0, "skipped_corrected": 0, "failed": 0, "stopped_budget": 0}
+    async with ctx["sessionmaker"]() as db:
+        mailbox = await db.get(Mailbox, uuid.UUID(mailbox_id))
+        if mailbox is None:
+            return stats
+        for raw in message_ids[:50]:
+            message = await db.get(Message, uuid.UUID(raw))
+            if message is None or message.mailbox_id != mailbox.id:
+                continue
+            try:
+                await reclassify(
+                    db,
+                    mailbox,
+                    message,
+                    ctx["settings"],
+                    person_id=uuid.UUID(person_id),
+                    account_id=uuid.UUID(account_id),
+                )
+                stats["reclassified"] += 1
+            except ReclassifyError as exc:
+                if exc.code == "category_corrected_manually":
+                    stats["skipped_corrected"] += 1
+                elif exc.code in ("ai_budget_exceeded", "ai_unavailable"):
+                    stats["stopped_budget"] += 1
+                    await db.commit()
+                    break
+                else:
+                    stats["failed"] += 1
+            await db.commit()
+    return stats
+
+
 async def ai_catchup(ctx: dict[str, Any]) -> int:
     """#135: every 15 min — enqueue the AI job for mailboxes with unclassified mail or a missing reply draft."""
     from app.ai.catchup import mailboxes_with_work
@@ -264,6 +304,7 @@ class WorkerSettings:
         func(export_mail_job, keep_result=0, timeout=6 * 3600, max_tries=1),
         func(delete_expired_exports, keep_result=0),
         func(ai_catchup, keep_result=0),
+        func(reclassify_messages_job, keep_result=0, timeout=30 * 60),
     ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, minute=set(range(60)), run_at_startup=True),

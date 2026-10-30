@@ -217,6 +217,17 @@ async def run(
     return result
 
 
+async def correction_rows(db: AsyncSession) -> list[EvalRow]:
+    """#143: people's corrections as labels — label = the category they chose, predicted = what the AI had said.
+    Biased towards mistakes (correct ones are rarely confirmed), so the random sample stays the main metric."""
+    rows = (
+        await db.scalars(select(Classification).where(Classification.payload["corrected_category"].astext.is_not(None)))
+    ).all()
+    return [
+        EvalRow(str(c.payload["corrected_category"]), (c.payload or {}).get("corrected_from"), None, None) for c in rows
+    ]
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.ai.eval_cli", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -224,7 +235,13 @@ def _parser() -> argparse.ArgumentParser:
     p_sample.add_argument("--sample", type=int, default=SAMPLE_DEFAULT)
     p_sample.add_argument("--out", type=Path, required=True)
     p_run = sub.add_parser("run", help="score the AI against a labeled CSV")
-    p_run.add_argument("--from-csv", type=Path, required=True)
+    p_run.add_argument("--from-csv", type=Path)
+    p_run.add_argument(
+        "--labels-from",
+        choices=("csv", "corrections"),
+        default="csv",
+        help="corrections = people's „Zmeniť kategóriu“ as labels (#143; biased towards mistakes)",
+    )
     p_run.add_argument("--live", action="store_true", help="classify again with today's prompt (paid, budgeted)")
     p_run.add_argument("--limit", type=int, default=None)
     p_run.add_argument("--save", action="store_true", help="store the summary for Settings › 17f")
@@ -241,6 +258,13 @@ async def main(argv: list[str] | None = None) -> int:
                 count = await sample(db, args.sample, args.out)
                 print(f"wrote {count} rows to {args.out} (0600). Fill `category` on the server; never commit it.")
                 return 0
+            if args.labels_from == "corrections":
+                report = evaluate(await correction_rows(db))
+                print(format_report(report, mode="corrections"))
+                print("note: corrections are biased towards mistakes; the random sample is the acceptance metric")
+                return 0
+            if args.from_csv is None:
+                raise EvalError("--from-csv is required unless --labels-from corrections")
             report, text = await run(db, settings, args.from_csv, live=args.live, limit=args.limit, save=args.save)
             print(text)
             return 0 if report.passes() else 1

@@ -388,3 +388,14 @@ export const startExport = (mailbox: string, body: ExportRequest) =>
   api<ExportStatus>('POST', `${base(mailbox)}/exports`, body);
 export const fetchExport = (id: string) => api<ExportStatus>('GET', `/api/mail/exports/${encodeURIComponent(id)}`);
 export const exportDownloadUrl = (id: string) => `/api/mail/exports/${encodeURIComponent(id)}/download`;
+
+/** #143 „Zmeniť kategóriu“ / „Znova zaradiť (AI)“. */
+export type CategoryChange = { message_id: string; category: string | null; corrected: boolean; needs_reply: boolean };
+export const fetchEnabledCategories = (mailbox: string) =>
+  api<{ categories: AiCategory[] }>('GET', `${base(mailbox)}/ai/categories?all=1`);
+export const changeCategory = (mailbox: string, messageId: string, category: string) =>
+  api<CategoryChange>('POST', `${base(mailbox)}/messages/${messageId}/category`, { category });
+export const reclassifyMessage = (mailbox: string, messageId: string) =>
+  api<CategoryChange>('POST', `${base(mailbox)}/messages/${messageId}/reclassify`, {}, { global: false });
+export const reclassifyBatch = (mailbox: string, messageIds: string[]) =>
+  api<{ queued: number }>('POST', `${base(mailbox)}/ai/reclassify`, { message_ids: messageIds }, { global: false });
