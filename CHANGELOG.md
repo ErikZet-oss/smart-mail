@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — fix: stamp/signature upload showed only a generic error
+
+- Pilot 2026-10-30: a stamp upload ended with „Zmenu sa nepodarilo uložiť.“ — `image_png_required` and `image_not_transparent` had no Slovak text. Both added; a test checks that every error code of the stamp/signature check has its text.
+
 ## [Unreleased] — #139 part A: Prehlásenie o zhode — data model, Pečiatka and Podpis
 
 - Migration 0017 (approved by Erik): `branches.stamp_key`, `persons.signature_key`, and the table `conformity_declarations` (number unique, branch, prepared_by, signer, account, customer, document, items, place, date, PDF key, sha256, message/thread). Part B uses the table.
