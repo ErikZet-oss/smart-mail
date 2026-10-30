@@ -423,6 +423,8 @@
     }
   },
   "conformity": {
+    "branch": "Pobočka",
+    "branchNotReady": "chýba pečiatka alebo podpis vedúceho",
     "card": {
       "title": "Návrh: Prehlásenie o zhode (atest 2.1)",
       "subline": "AI predvyplnila údaje z e-mailu. Pred vystavením ich skontrolujte.",
@@ -458,7 +460,7 @@
       "no_manager_signature": "Vedúci pobočky nemá nahratý podpis. Správca ho nahrá v Nastaveniach › Pobočky a osoby.",
       "role_not_allowed": "Prehlásenie môže vystaviť obchodník alebo správca.",
       "other_branch": "Prehlásenie môžete vystaviť len za svoju pobočku.",
-      "branch_required": "Nie je jasné, za ktorú pobočku vystavujete. Vyberte osobu s pobočkou.",
+      "branch_required": "Vyberte pobočku, za ktorú vystavujete. Ak sa žiadna neponúka, priraďte si pobočku v Nastaveniach › Pobočky a osoby › Pôsobí aj na pobočkách.",
       "items_required": "Doplňte aspoň jeden výrobok.",
       "read_only": "Bez vybranej osoby sa prehlásenie nedá vystaviť.",
       "generic": "Prehlásenie sa nepodarilo vystaviť. Skúste to znova."

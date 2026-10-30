@@ -10,7 +10,10 @@ export type ConformityRequest = {
   items: ConformityItem[];
   message_id: string | null;
   suggestion_id?: string | null;
+  branch_id?: string | null;
 };
+export type ConformityBranch = { id: string; name: string; ready: boolean };
+export const fetchConformityBranches = () => api<ConformityBranch[]>('GET', '/api/documents/conformity/branches');
 export type ConformityIssued = {
   id: string;
   number: string;

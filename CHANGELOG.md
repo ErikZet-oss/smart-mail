@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — fix: Prehlásenie o zhode for a personal account / several branches
+
+- Pilot 2026-10-30: Erik (personal account on eshop@, no branch) could not issue — 422 `branch_required`, and the dialog had no way to pick a branch. New `GET /api/documents/conformity/branches` (admin: all branches; sales: own + „Pôsobí aj na pobočkách“; with a `ready` flag = stamp + manager signature), and the dialog shows a „Pobočka“ select when more than one branch is offered. The SK error text now says how to get a branch.
+
 ## [Unreleased] — Phase 2 close-out report
 
 - `docs/phase2-closeout.md`: milestones 2a–2f, acceptance status, gates, open items and what is needed from Erik.
