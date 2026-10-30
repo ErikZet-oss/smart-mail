@@ -141,3 +141,59 @@ test('#139 issue a declaration from a mail; blocked without a branch stamp', asy
     ],
   });
 });
+
+test('#139 C AI card opens the prefilled dialog; issuing sends the suggestion id', async ({ page }) => {
+  const issued: unknown[] = [];
+  await setup(page, {
+    'GET /api/mail/mailboxes/default/messages/m3/suggestions': {
+      body: [
+        {
+          id: 's-pz',
+          type: 'conformity_declaration',
+          status: 'pending',
+          to: [],
+          subject: '',
+          body: '',
+          language: 'sk',
+          rationale: 'Zákazník žiada atest 2.1.',
+          confidence: 0.8,
+          checks: [],
+          blocked: false,
+          conformity: {
+            customer: 'ABC Stav s.r.o., Hlavná 1, 949 01 Nitra',
+            document_ref: 'FV2026/0815',
+            items: [{ nazov: 'Skrutka M8x40', kod: '', norma: 'DIN 933', poznamka: '' }],
+          },
+        },
+      ],
+    },
+    'POST /api/documents/conformity': (payload) => {
+      issued.push(payload);
+      return {
+        status: 201,
+        body: {
+          id: 'pz2',
+          number: 'PZ-2026-0008',
+          issued_on: '2026-10-30',
+          branch_id: 'b1',
+          signer: 'Ján Vedúci',
+          items: 1,
+          sha256: 'x',
+          draft_id: null,
+        },
+      };
+    },
+  });
+  await page.goto('/mail/default/inbox');
+  await option(page, 'Reklamácia').click();
+  const card = page.getByTestId('ai-conformity-card');
+  await expect(card).toContainText('FV2026/0815');
+  await expect(card).toContainText('Skrutka M8x40');
+  await card.getByRole('button', { name: 'Pripraviť prehlásenie…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Prehlásenie o zhode (atest 2.1)' });
+  await expect(dialog.getByLabel('Doklad / zákazka')).toHaveValue('FV2026/0815');
+  await expect(dialog.getByLabel('Norma 1')).toHaveValue('DIN 933');
+  await dialog.getByRole('button', { name: 'Vystaviť' }).click();
+  await expect(page.getByText('Prehlásenie PZ-2026-0008 je vystavené.')).toBeVisible();
+  expect(issued[0]).toMatchObject({ suggestion_id: 's-pz', message_id: 'm3', document_ref: 'FV2026/0815' });
+});

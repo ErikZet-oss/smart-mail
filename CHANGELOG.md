@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #139 part C: AI suggestion for the Prehlásenie o zhode
+
+- A mail classified `document_request` that asks for an atest 2.1 / prehlásenie o zhode (keywords in SK, CZ, EN and DE, ignoring case and diacritics) gets a card „Návrh: Prehlásenie o zhode (atest 2.1)“. The extract model prefills customer, document and products from the e-mail only; the e-mail is wrapped as untrusted, and budget and shadow mode apply. Numbers or codes that are not in the e-mail are flagged as a warning.
+- The card has no approve: „Pripraviť prehlásenie…“ opens the issue dialog prefilled, and the person checks and issues it. Issuing from the card marks the suggestion approved with the final values (and whether the person changed the products). `POST /suggestions/{id}/approve` answers 422 for this type, so the AI can never issue. „Netreba“ rejects the card.
+- Products from the invoice or delivery note in Money come with Phase 3.
+
 ## [Unreleased] — #139 part B: issue the Prehlásenie o zhode (atest 2.1)
 
 - W3 Viac › „Vystaviť prehlásenie o zhode…“ opens a dialog: customer prefilled from the sender, document, place (default: the branch's town), date, and an editable products table. „Náhľad PDF“ shows the document without a number and stores nothing. „Vystaviť“ is the person's click (sales or admin of the branch, or covering it) and:

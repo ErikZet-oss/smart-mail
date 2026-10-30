@@ -272,6 +272,8 @@ class SuggestionOut(BaseModel):
     confidence: float | None
     checks: list[SuggestionCheckOut]
     blocked: bool
+    # #139 part C: the prefilled Prehlásenie o zhode form (type conformity_declaration); None for replies
+    conformity: dict[str, Any] | None = None
 
 
 def suggestion_out(row: AiSuggestion) -> SuggestionOut:
@@ -289,6 +291,15 @@ def suggestion_out(row: AiSuggestion) -> SuggestionOut:
         confidence=float(row.confidence) if row.confidence is not None else None,
         checks=checks,
         blocked=any(c.level == "blocking" for c in checks),
+        conformity=(
+            {
+                "customer": str(payload.get("customer") or ""),
+                "document_ref": str(payload.get("document_ref") or ""),
+                "items": [i for i in payload.get("items") or [] if isinstance(i, dict)],
+            }
+            if row.suggestion_type == "conformity_declaration"
+            else None
+        ),
     )
 
 

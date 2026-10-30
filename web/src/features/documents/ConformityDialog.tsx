@@ -18,20 +18,35 @@ const COLUMNS: (keyof ConformityItem)[] = ['nazov', 'kod', 'norma', 'poznamka'];
 type Props = {
   messageId: string | null;
   initialCustomer?: string;
+  /** #139 C: values prefilled by the AI card; the person checks them before „Vystaviť“ */
+  initialDocumentRef?: string;
+  initialItems?: Partial<ConformityItem>[];
+  suggestionId?: string | null;
+  onIssued?: () => void;
   onClose: () => void;
 };
 
 /** #139 „Vystaviť prehlásenie o zhode…“ (atest 2.1). No Figma frame — built from the Dialog component with an
  * editable table. „Vystaviť“ is always this person's click; the PDF is attached to a reply draft in Koncepty. */
-export function ConformityDialog({ messageId, initialCustomer = '', onClose }: Props) {
+export function ConformityDialog({
+  messageId,
+  initialCustomer = '',
+  initialDocumentRef = '',
+  initialItems,
+  suggestionId = null,
+  onIssued,
+  onClose,
+}: Props) {
   const { t } = useTranslation();
   const toasts = useToasts();
   const navigate = useNavigate();
   const [customer, setCustomer] = useState(initialCustomer);
-  const [documentRef, setDocumentRef] = useState('');
+  const [documentRef, setDocumentRef] = useState(initialDocumentRef);
   const [place, setPlace] = useState('');
   const [issuedOn, setIssuedOn] = useState(new Date().toISOString().slice(0, 10));
-  const [items, setItems] = useState<ConformityItem[]>([{ ...EMPTY }]);
+  const [items, setItems] = useState<ConformityItem[]>(
+    initialItems && initialItems.length > 0 ? initialItems.map((i) => ({ ...EMPTY, ...i })) : [{ ...EMPTY }],
+  );
   const [error, setError] = useState<string | null>(null);
 
   const request = (): ConformityRequest => ({
@@ -41,6 +56,7 @@ export function ConformityDialog({ messageId, initialCustomer = '', onClose }: P
     issued_on: issuedOn || null,
     items: items.filter((i) => i.nazov.trim() !== ''),
     message_id: messageId,
+    suggestion_id: suggestionId,
   });
   const valid = customer.trim() !== '' && items.some((i) => i.nazov.trim() !== '');
   const showError = (e: unknown) => {
@@ -63,6 +79,7 @@ export function ConformityDialog({ messageId, initialCustomer = '', onClose }: P
     mutationFn: () => issueConformity(request()),
     onSuccess: (out) => {
       toasts.success(t('conformity.issued', { number: out.number }));
+      onIssued?.();
       onClose();
       if (out.draft_id) navigate(`/compose/${encodeURIComponent(out.draft_id)}`);
     },
