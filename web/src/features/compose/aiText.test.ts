@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/core';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { replaceUserText, textToHtml, userTextOf, wordDiff } from './aiText';
 import { composeExtensions } from './composeExtensions';
@@ -7,8 +7,19 @@ import { composeExtensions } from './composeExtensions';
 const QUOTE = '<blockquote data-sm-quote="1"><p>Koľko stoja skrutky M8?</p></blockquote>';
 const SIGNATURE = '<div data-sm-signature="1"><p>Jana Testová · Smart s.r.o.</p></div>';
 
-const editorWith = (user: string) =>
-  new Editor({ extensions: composeExtensions, content: `${user}${QUOTE}${SIGNATURE}` });
+// #121: an editor left alive keeps a ProseMirror DOMObserver timer; when it fires after jsdom is torn down, vitest
+// reports „ReferenceError: document is not defined“ as an unhandled error and the CI step fails although every test
+// passed. Every editor of this file is destroyed after its test.
+const editors: Editor[] = [];
+afterEach(() => {
+  while (editors.length) editors.pop()?.destroy();
+});
+
+const editorWith = (user: string) => {
+  const editor = new Editor({ extensions: composeExtensions, content: `${user}${QUOTE}${SIGNATURE}` });
+  editors.push(editor);
+  return editor;
+};
 
 describe('2d compose AI text', () => {
   it('reads only the person’s own text — never the quote or the signature', () => {

@@ -5,6 +5,10 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 ## [Unreleased] — Phase 3 plan (#144)
 
 - `docs/plans/phase-3.md`: Money read with a mock bridge first — milestones 3a–3h, [PROBE] items, bridge deployment draft (ADR-016), acceptance, questions for Erik. Waiting for approval; no code yet.
+## [Unreleased] — fix(#121): the CI `npm test` flake found
+
+- The #145 annotation showed it: every test passed, but vitest reported an unhandled `ReferenceError: document is not defined` from a ProseMirror `DOMObserver` timer — `aiText.test.ts` created TipTap editors and never destroyed them, so a timer fired after jsdom was torn down. The editors are now destroyed after each test.
+
 ## [Unreleased] — Phase 2 close-out report
 
 - `docs/phase2-closeout.md`: milestones 2a–2f, acceptance status, gates, open items and what is needed from Erik.
