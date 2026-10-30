@@ -407,6 +407,39 @@
       "generic": "Archív sa nepodarilo spustiť."
     }
   },
+  "conformity": {
+    "menu": "Vystaviť prehlásenie o zhode…",
+    "title": "Prehlásenie o zhode (atest 2.1)",
+    "customer": "Odberateľ",
+    "documentRef": "Doklad / zákazka",
+    "place": "Miesto",
+    "placeDefault": "mesto pobočky",
+    "date": "Dátum vystavenia",
+    "columns": {
+      "nazov": "Názov výrobku",
+      "kod": "Kód",
+      "norma": "Norma",
+      "poznamka": "Poznámka"
+    },
+    "addRow": "Pridať riadok",
+    "removeRow": "Odstrániť riadok",
+    "preview": "Náhľad PDF",
+    "issue": "Vystaviť",
+    "cancel": "Zrušiť",
+    "help": "Prehlásenie podpíše vedúci pobočky a opečiatkuje pečiatkou pobočky. Po vystavení sa už nedá upraviť – oprava dostane nové číslo.",
+    "helpReply": "Po vystavení sa PDF priloží ku konceptu odpovede v Konceptoch. Odoslanie je na vás. Vystavené prehlásenie sa už nedá upraviť.",
+    "issued": "Prehlásenie {{number}} je vystavené.",
+    "errors": {
+      "no_branch_stamp": "Pobočka nemá nahratú pečiatku. Správca ju nahrá v Nastaveniach › Pobočky a osoby.",
+      "no_manager_signature": "Vedúci pobočky nemá nahratý podpis. Správca ho nahrá v Nastaveniach › Pobočky a osoby.",
+      "role_not_allowed": "Prehlásenie môže vystaviť obchodník alebo správca.",
+      "other_branch": "Prehlásenie môžete vystaviť len za svoju pobočku.",
+      "branch_required": "Nie je jasné, za ktorú pobočku vystavujete. Vyberte osobu s pobočkou.",
+      "items_required": "Doplňte aspoň jeden výrobok.",
+      "read_only": "Bez vybranej osoby sa prehlásenie nedá vystaviť.",
+      "generic": "Prehlásenie sa nepodarilo vystaviť. Skúste to znova."
+    }
+  },
   "folders": {
     "label": "Priečinky",
     "withUnread": "{{name}}, neprečítané: {{count}}",

@@ -200,9 +200,16 @@ W1 with an info banner on top ("Heslo k e-mailu sa zmenilo – prihláste sa nov
   cards with author + time) and composer "Interná poznámka… (@ pre zmienku)".
 - **Actions**: Odpovedať / Všetkým / Poslať ďalej → W4 (inline reply in desktop-xl, else full W4); Vymazať (toast
   Späť); Nevyžiadané; Označiť menu; Viac menu (Archivovať, Tlač → W2m, Stiahnuť .eml, Upraviť ako novú, Zdroj → W2n,
-  Presunúť do…, Kopírovať do…, Vytvoriť filter z tejto správy → W12 Filtre prefilled, Otvoriť v novom okne);
+  Presunúť do…, Kopírovať do…, Vystaviť prehlásenie o zhode… → dialog W2-PZ (#139), Vytvoriť filter z tejto správy → W12
+  Filtre prefilled, Otvoriť v novom okne);
   **Prideliť** popover W2j; **Vybavené** (`E`, toast Späť; moves the thread to done); **Odložiť** W2i; AI card actions
   (UX_SPEC §3 states); translation toggle; company chip.
+- **Dialog W2-PZ „Prehlásenie o zhode (atest 2.1)“** (#139, ADR-015; no Figma frame — existing Dialog + editable
+  table): Odberateľ (prefilled from the sender), Doklad / zákazka, Miesto (default: the branch's town), Dátum vystavenia
+  (today), Výrobky (Názov výrobku, Kód, Norma, Poznámka; Pridať riadok / remove). Buttons: Zrušiť · Náhľad PDF (no
+  number, nothing stored) · **Vystaviť** (sales or admin of the branch or covering it; takes the next PZ-RRRR-NNNN,
+  renders the PDF with the branch stamp and the manager's signature, attaches it to a reply draft in Koncepty and opens
+  W4). Errors inline: no branch stamp, no manager signature, other branch, role. Disabled without an active person.
 - **States**: message loading (body skeleton); large message "Zobraziť celú správu (2,3 MB)"; encrypted/S/MIME
   "Podpísaná správa ✓"; attachment infected (red chip, download disabled); thread changed by another person while open
   (info bar "Jana práve označila ako Vybavené").
