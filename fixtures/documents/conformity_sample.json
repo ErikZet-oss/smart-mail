@@ -1,0 +1,38 @@
+{
+  "_comment": "FICTIONAL golden fixture — invented customer, products, branch, signer, stamp and signature; never real data (#139).",
+  "number": "PZ-2026-0001",
+  "issued_on": "2026-10-30",
+  "customer": "Fiktívna Stavebná s.r.o.\nTestovacia 1, 000 00 Vzorovo",
+  "document_ref": "FA 2026/0000",
+  "place": "Nitra",
+  "branch": {
+    "name": "Pobočka Vzorovo",
+    "address": "Ukážková 12, 000 00 Vzorovo",
+    "phone": "000 / 000 00 00"
+  },
+  "signer": {
+    "name": "Ján Vzorový",
+    "function": "Vedúci pobočky"
+  },
+  "ico": "",
+  "items": [
+    {
+      "nazov": "Skrutka samorezná 5,5x67 Zn",
+      "kod": "TEST-0001",
+      "norma": "DIN 7504 K",
+      "poznamka": ""
+    },
+    {
+      "nazov": "Matica šesťhranná M8 Zn",
+      "kod": "TEST-0002",
+      "norma": "DIN 934",
+      "poznamka": ""
+    },
+    {
+      "nazov": "Podložka 8,4 Zn",
+      "kod": "TEST-0003",
+      "norma": "DIN 125 A",
+      "poznamka": "balenie 100 ks"
+    }
+  ]
+}

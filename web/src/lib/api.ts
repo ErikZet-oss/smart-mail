@@ -161,3 +161,35 @@ export function formatRef(ref: string): string {
   const clean = ref.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
   return clean.length === 8 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
 }
+
+/** JSON request whose answer is a file (e.g. a PDF preview, #139) — same CSRF, error and re-auth handling as `api`. */
+export async function apiBlob(
+  method: string,
+  path: string,
+  body?: unknown,
+  options: RequestOptions = {},
+): Promise<Blob> {
+  const send = async (csrf: string | undefined): Promise<Response> =>
+    fetch(path, {
+      method,
+      credentials: 'same-origin',
+      headers: {
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  const unsafe = !SAFE.has(method.toUpperCase());
+  let response = await send(unsafe ? await ensureCsrf() : undefined);
+  if (unsafe && response.status === 403) {
+    const error = await toError(response.clone());
+    if (error.detail.code === 'csrf') response = await send(await ensureCsrf(true));
+  }
+  if (response.ok) return response.blob();
+  const error = await toError(response);
+  if (needsReauth(error) && reauthHandler && !options.retried && (await reauthHandler())) {
+    return apiBlob(method, path, body, { ...options, retried: true });
+  }
+  if (globalHandler && isGlobal(error, options)) globalHandler(error);
+  throw error;
+}

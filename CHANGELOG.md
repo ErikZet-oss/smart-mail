@@ -2,6 +2,18 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #139 part B: issue the Prehlásenie o zhode (atest 2.1)
+
+- W3 Viac › „Vystaviť prehlásenie o zhode…“ opens a dialog: customer prefilled from the sender, document, place (default: the branch's town), date, and an editable products table. „Náhľad PDF“ shows the document without a number and stores nothing. „Vystaviť“ is the person's click (sales or admin of the branch, or covering it) and:
+  - takes the next **`PZ-RRRR-NNNN`** (one company series, new each year, no gaps — a counter row in `org_settings` locked FOR UPDATE; tested with 6 issues at once);
+  - renders the PDF (WeasyPrint port of Erik's template, `templates/print/conformity.html.j2`) with the **branch stamp and the branch manager's signature**;
+  - stores the PDF with its sha256 in `conformity_declarations`;
+  - **attaches it to a reply draft in Koncepty** and opens it. Sending stays with the person.
+- Issuing is blocked without a branch stamp (`no_branch_stamp`) or a manager with a signature (`no_manager_signature`). A person of another branch gets 403 unless covering it; a warehouse role 403; a viewer read-only. Audit `document.conformity_issued` records number, branch, prepared_by, signer, document, item count and sha256, without customer content.
+- Golden file `fixtures/documents/conformity_sample.{json,pdf,png}` with a fictional customer, stamp and signature (`tools/make_conformity_fixture.py`). Liberation Sans 2.1.5 is bundled so CI, the image and dev render the same.
+- The stamp/signature size check no longer changes Pillow's global `MAX_IMAGE_PIXELS` (#140 review).
+- SCREENS_SPEC (dialog W2-PZ) and DOCUMENTS_SPEC §5 updated.
+
 ## [Unreleased] — fix: stamp/signature upload showed only a generic error
 
 - Pilot 2026-10-30: a stamp upload ended with „Zmenu sa nepodarilo uložiť.“ — `image_png_required` and `image_not_transparent` had no Slovak text. Both added; a test checks that every error code of the stamp/signature check has its text.
