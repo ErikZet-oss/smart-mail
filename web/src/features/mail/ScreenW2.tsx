@@ -535,6 +535,7 @@ function ScreenW2Body({
             folderRef={folderParam}
             messageId={activeMessageId}
             threadId={activeThreadId}
+            conversation={list.data?.mode === 'conversations'}
             onCleared={() => {
               setPickedMessageId(null);
               navigate(listBasePath);
@@ -874,6 +875,7 @@ function ScreenW2Body({
           folderRef={aiView ? 'inbox' : folderParam}
           messageId={activeMessageId}
           threadId={activeThreadId}
+          conversation={list.data?.mode === 'conversations'}
           onCleared={() => {
             setPickedMessageId(null);
             navigate(listBasePath, { replace: true });

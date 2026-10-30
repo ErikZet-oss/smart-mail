@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Konverzácie: opening marks the whole conversation read
+
+- In Konverzácie mode, opening a conversation marked only its newest message read, so the thread was bold again after a refresh (pilot, Nitra). The web now sends `mark_thread=true` in this mode, and `GET …/messages/{id}` marks every unread message of the thread in that mailbox (one IMAP `\Seen` per folder, audit `mail.thread_seen`). The row and folder counts update at once. List mode still marks only the opened message, as in Roundcube.
+
 ## [Unreleased] — inline image preview in compose
 
 - W4: a pasted screenshot or a toolbar image showed as a broken image in the editor, because the body keeps `src="cid:…"` for the sent mail and a browser can't load `cid:`. The editor now shows the draft's own copy from the new `GET /api/mail/compose/{draft}/inline/{content_id}` (own drafts, inline png/jpeg/gif only, never an infected file, `nosniff`). The saved and sent HTML still says `cid:`, so the recipient gets the related MIME part as before.

@@ -60,6 +60,8 @@ type Props = {
   folderRef: string;
   messageId: string | null;
   threadId: string | null;
+  /** Konverzácie: opening marks the whole conversation read (Roundcube). */
+  conversation?: boolean;
   onCleared: () => void;
 };
 
@@ -112,7 +114,7 @@ function menuAt(event: MouseEvent<HTMLButtonElement>) {
 /** W2c reading pane: Roundcube toolbar order; Reply/Forward open W4 (Phase 1e). */
 type PaneAction = 'delete' | 'junk' | 'archive' | 'done' | 'move' | 'copy';
 
-export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared }: Props) {
+export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared, conversation = false }: Props) {
   const mobile = useMediaQuery(MOBILE_QUERY);
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -132,7 +134,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
     queryKey: messageKey(mailbox, messageId ?? ''),
     queryFn: () => {
       if (!messageId) throw new Error('message missing');
-      return fetchMessage(mailbox, messageId);
+      return fetchMessage(mailbox, messageId, true, conversation);
     },
     enabled: Boolean(messageId),
   });

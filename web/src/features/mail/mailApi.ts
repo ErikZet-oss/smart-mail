@@ -241,10 +241,14 @@ export const fetchCategoryMessages = (
   }>('GET', `${base(mailbox)}/ai/views/${encodeURIComponent(category)}/messages${qs ? `?${qs}` : ''}`);
 };
 
-export const fetchMessage = (mailbox: string, id: string, markRead = true) =>
-  api<MessageDetail>('GET', `${base(mailbox)}/messages/${id}${markRead ? '' : '?mark_read=false'}`, undefined, {
-    inlineServerErrors: true,
-  });
+/** `markThread`: Konverzácie — opening a conversation marks every message of it read (Roundcube). */
+export const fetchMessage = (mailbox: string, id: string, markRead = true, markThread = false) =>
+  api<MessageDetail>(
+    'GET',
+    `${base(mailbox)}/messages/${id}${!markRead ? '?mark_read=false' : markThread ? '?mark_thread=true' : ''}`,
+    undefined,
+    { inlineServerErrors: true },
+  );
 
 export const patchFlags = (mailbox: string, id: string, body: { seen?: boolean; flagged?: boolean }) =>
   api<MessageDetail>('PATCH', `${base(mailbox)}/messages/${id}/flags`, body);
@@ -291,6 +295,7 @@ export function markSeenLocally(
     ...client.getQueriesData<MessagesList>({ queryKey: ['mail', 'ai-view', mailbox] }),
   ];
   let wasUnread = false;
+  let unreadDelta = 1;
   for (const [key, data] of lists) {
     if (!data) continue;
     if (data.mode === 'list') {
@@ -306,11 +311,11 @@ export function markSeenLocally(
       const hit = data.threads.find((th) => th.id === threadId);
       if (!hit || hit.unread_count <= 0) continue;
       wasUnread = true;
+      // the server marks the whole conversation read (mark_thread), so the row is read at once
+      unreadDelta = Math.max(unreadDelta, hit.unread_count);
       client.setQueryData<MessagesList>(key, {
         ...data,
-        threads: data.threads.map((th) =>
-          th.id === threadId ? { ...th, unread_count: Math.max(0, th.unread_count - 1) } : th,
-        ),
+        threads: data.threads.map((th) => (th.id === threadId ? { ...th, unread_count: 0 } : th)),
       });
     }
   }
@@ -319,8 +324,8 @@ export function markSeenLocally(
   if (!view) return;
   client.setQueryData<FoldersView>(foldersKey(mailbox), {
     ...view,
-    mailbox: { ...view.mailbox, unread: Math.max(0, view.mailbox.unread - 1) },
-    folders: view.folders.map((f) => (f.id === folderId ? { ...f, unread: Math.max(0, f.unread - 1) } : f)),
+    mailbox: { ...view.mailbox, unread: Math.max(0, view.mailbox.unread - unreadDelta) },
+    folders: view.folders.map((f) => (f.id === folderId ? { ...f, unread: Math.max(0, f.unread - unreadDelta) } : f)),
   });
 }
 
