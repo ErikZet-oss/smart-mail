@@ -460,6 +460,17 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
         "subs": [],
         "fields": [],
     },
+    {
+        # SETTINGS_SPEC 17 AI – správa (G, admin); Phase 2e brings 17d, the other tabs follow in 2e/2f.
+        "id": "17",
+        "path": "ai-admin",
+        "title": "AI – správa",
+        "admin_only": True,
+        "subs": [
+            {"id": "17d", "path": "style", "title": "Štýl a znalosti", "fields": []},
+        ],
+        "fields": [],
+    },
 ]
 
 
@@ -484,4 +495,5 @@ SECTION_PATHS = {
     "users": "10",
     "branches": "11",
     "mailboxes": "12",
+    "ai-admin": "17",
 }

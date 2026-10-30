@@ -59,6 +59,7 @@ export const SECTION_ORDER = [
   'users',
   'branches',
   'mailboxes',
+  'ai-admin',
 ] as const;
 
 export const SECTION_TITLES: Record<string, string> = {
@@ -74,4 +75,5 @@ export const SECTION_TITLES: Record<string, string> = {
   users: 'Používatelia a role',
   branches: 'Pobočky a osoby',
   mailboxes: 'Schránky',
+  'ai-admin': 'AI – správa',
 };
