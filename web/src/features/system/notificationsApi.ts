@@ -1,6 +1,6 @@
 import { api } from '../../lib/api';
 
-export type NotificationKind = 'sync_failed' | 'assigned';
+export type NotificationKind = 'sync_failed' | 'assigned' | 'export_ready';
 
 export type NotificationItem = {
   id: string;
@@ -13,6 +13,9 @@ export type NotificationItem = {
     mailbox_email?: string;
     error_code?: string;
     subject?: string;
+    export_id?: string;
+    filename?: string;
+    messages?: string;
   };
 };
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
@@ -97,3 +98,56 @@ def delete_key(settings: Settings, key: str) -> None:
         _s3(settings).delete_object(Bucket=settings.s3_bucket, Key=key)
     except ClientError:
         return
+
+
+CHUNK = 1024 * 1024
+
+
+def put_file(settings: Settings, path: Path, *, prefix: str) -> tuple[str, str]:
+    """Store a file from disk without reading it into memory (large exports, #127); return (storage_key, sha256).
+    S3: boto3 `upload_file` sends it in parts."""
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(CHUNK), b""):
+            digest.update(block)
+    sha = digest.hexdigest()
+    key = f"{prefix.strip('/')}/{sha[:2]}/{sha[2:4]}/{uuid.uuid4().hex}"
+    if _backend(settings) == "local":
+        target = _local_root(settings) / key
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("rb") as src, target.open("wb") as dst:
+            for block in iter(lambda: src.read(CHUNK), b""):
+                dst.write(block)
+        return key, sha
+    ensure_bucket(settings)
+    _s3(settings).upload_file(str(path), settings.s3_bucket, key)
+    return key, sha
+
+
+def iter_key(settings: Settings, key: str) -> Iterator[bytes] | None:
+    """Stream a stored object in 1 MB blocks (downloads of large exports); None when it is gone."""
+    if not key:
+        return None
+    if _backend(settings) == "local":
+        path = _local_root(settings) / key
+        if not path.is_file():
+            return None
+
+        def _local() -> Iterator[bytes]:
+            with path.open("rb") as fh:
+                yield from iter(lambda: fh.read(CHUNK), b"")
+
+        return _local()
+    try:
+        response = _s3(settings).get_object(Bucket=settings.s3_bucket, Key=key)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code", "") in {"404", "NoSuchKey", "NotFound"}:
+            return None
+        raise
+    body = response["Body"]
+
+    def _s3_chunks() -> Iterator[bytes]:
+        for block in body.iter_chunks(CHUNK):
+            yield bytes(block)
+
+    return _s3_chunks()

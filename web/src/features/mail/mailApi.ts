@@ -360,3 +360,31 @@ export function applyAttachmentFlagLocally(client: QueryClient, mailbox: string,
     }
   }
 }
+
+/** #127 backup of folders / the whole mailbox to a ZIP of .eml (ARQ job, 24 h download). */
+export type ExportRange = {
+  kind: 'all' | 'older' | 'between';
+  months?: number | null;
+  date_from?: string | null;
+  date_to?: string | null;
+};
+export type ExportRequest = { folder_ids: string[] | null; include_children: boolean; range: ExportRange };
+export type ExportStatus = {
+  id: string;
+  status: 'queued' | 'running' | 'ready' | 'failed';
+  done: number;
+  total: number;
+  bytes: number;
+  archive_size: number;
+  filename: string;
+  expires_at: string | null;
+  downloaded_at: string | null;
+  error: string | null;
+  folder_names: string[];
+};
+export const estimateExport = (mailbox: string, body: ExportRequest) =>
+  api<{ folders: number; messages: number; bytes: number }>('POST', `${base(mailbox)}/exports/estimate`, body);
+export const startExport = (mailbox: string, body: ExportRequest) =>
+  api<ExportStatus>('POST', `${base(mailbox)}/exports`, body);
+export const fetchExport = (id: string) => api<ExportStatus>('GET', `/api/mail/exports/${encodeURIComponent(id)}`);
+export const exportDownloadUrl = (id: string) => `/api/mail/exports/${encodeURIComponent(id)}/download`;
