@@ -301,6 +301,18 @@ export type AiUsage = {
   };
   reject_reasons: Record<string, number>;
   categories: Record<string, number>;
+  /** Last `make eval --save` on the server (aggregates only, #116). */
+  eval: {
+    run_at: string;
+    mode: 'stored' | 'live';
+    total: number;
+    accuracy: string | null;
+    language_accuracy: string | null;
+    gate: string;
+    passed: boolean;
+    too_small: boolean;
+    confusion: { label: string; predicted: string; count: number }[];
+  } | null;
 };
 export const usageKey = ['settings', 'ai', 'usage'] as const;
 export const shadowKey = ['settings', 'ai', 'shadow'] as const;
@@ -371,3 +383,9 @@ export const categoriesKey = ['settings', 'ai', 'categories'] as const;
 export const fetchCategories = () => api<CategoryRow[]>('GET', '/api/settings/ai/categories');
 export const saveCategories = (categories: CategoryRowIn[]) =>
   api<CategoryRow[]>('PUT', '/api/settings/ai/categories', { categories });
+
+/** 17f eval label file (Erik's answer B on #129): admin + re-auth; the app keeps only aggregates. */
+export const downloadEvalSample = () =>
+  api<{ filename: string; csv: string; rows: number }>('POST', '/api/settings/ai/eval/sample', {});
+export const uploadEvalLabels = (csv: string) =>
+  api<NonNullable<AiUsage['eval']>>('POST', '/api/settings/ai/eval/upload', { csv });

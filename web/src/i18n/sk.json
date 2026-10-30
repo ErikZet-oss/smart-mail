@@ -1185,6 +1185,31 @@
       "customized": "upravené"
     },
     "usage": {
+      "eval": {
+        "filesHelp": "Stiahnite náhodnú vzorku 200 e-mailov, v Exceli doplňte stĺpec category (kód alebo názov kategórie zo stĺpca kategorie_na_vyber) a súbor nahrajte späť. Súbor obsahuje predmety skutočných e-mailov – po označení ho zmažte. Aplikácia si ho neukladá.",
+        "download": "Stiahnuť vzorku na označenie",
+        "upload": "Nahrať označenú vzorku",
+        "downloaded": "Stiahnutá vzorka: {{count}} e-mailov.",
+        "uploaded": "Vzorka vyhodnotená.",
+        "errors": {
+          "eval_file_too_large": "Súbor je väčší ako 1 MB.",
+          "eval_bad_header": "Súbor nemá stĺpce message_uuid a category. Použite stiahnutú vzorku.",
+          "eval_unknown_category": "Riadok {{line}}: kategóriu „{{value}}“ nepoznáme. Použite kód alebo názov zo stĺpca kategorie_na_vyber.",
+          "eval_bad_id": "Riadok {{line}}: chybný stĺpec message_uuid. Nemeňte ho.",
+          "eval_no_labels": "V súbore nie je vyplnená žiadna kategória."
+        },
+        "title": "Presnosť kategórií",
+        "never": "Hodnotenie zatiaľ neprebehlo. Správca servera ho spustí príkazom make eval nad označenými e-mailmi.",
+        "result": "Posledné hodnotenie {{date}}: {{accuracy}} % zo {{total}} označených e-mailov (cieľ {{gate}} %).",
+        "passed": "Splnené",
+        "failed": "Nesplnené",
+        "tooSmall": "Označených e-mailov je menej ako 200 – na prijatie to nestačí.",
+        "noConfusion": "Žiadne zámeny.",
+        "label": "Správne",
+        "predicted": "AI zaradila",
+        "count": "Počet",
+        "none": "nezaradené"
+      },
       "shadowTitle": "Tieňový režim",
       "shadowReplies": "AI návrhy odpovedí – tieňový režim (návrhy sa tvoria, ale nezobrazujú)",
       "shadowHelp": "V tieňovom režime AI pripravuje návrhy a meriame ich presnosť, no nikto ich nevidí. Ostatné funkcie (Príjem tovaru, Objednávky, Ponuky) prídu v ďalších fázach.",

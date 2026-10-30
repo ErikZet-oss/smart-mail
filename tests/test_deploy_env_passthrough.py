@@ -42,3 +42,16 @@ def test_ai_settings_reach_the_app_and_worker() -> None:
 def test_every_app_setting_written_by_install_is_passed() -> None:
     missing = sorted(_install_env_keys() - _app_env_keys() - DEPLOY_ONLY)
     assert not missing, f"install.sh writes these to .env but the containers never see them: {missing}"
+
+
+def test_129_eval_labels_survive_a_rebuild() -> None:
+    """`eval_cli sample` writes to /var/lib/smartmail/eval; update.sh recreates the app container, so the labels must
+    live in a named volume (deploy and dev compose) that the image creates owned by the app user."""
+    for compose in ("deploy/docker-compose.yml", "docker-compose.yml"):
+        text = (ROOT / compose).read_text(encoding="utf-8")
+        app = text.split("\n  app:\n", 1)[1].split("\n  worker:", 1)[0]
+        assert "smartmail_eval:/var/lib/smartmail/eval" in app, f"{compose}: app has no eval volume"
+        top = text.rsplit("\nvolumes:\n", 1)[1]
+        assert re.search(r"^  smartmail_eval:", top, re.MULTILINE), f"{compose}: volume not declared"
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "mkdir -p /var/lib/smartmail/eval" in dockerfile and "chown -R smartmail /var/lib/smartmail" in dockerfile

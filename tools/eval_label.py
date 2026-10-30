@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Server-side eval labeling (Phase 2a skeleton).
+"""Server-side eval labeling and `make eval` (Phase 2f).
 
 Binding (Phase 2 plan B): **no real e-mail in git**, not even encrypted.
 This tool is meant to run **on the server** against the live DB / a server-local CSV.
 
-Usage (on the server):
-  python tools/eval_label.py --sample 50 --out /var/lib/smartmail/eval/labels.csv
-  python tools/eval_label.py --from-csv /var/lib/smartmail/eval/labels.csv --stats
+Usage (on the server; inside the app container use `python -m app.ai.eval_cli` — `make eval`):
+  python tools/eval_label.py sample --sample 200 --out /var/lib/smartmail/eval/labels.csv
+  python tools/eval_label.py stats --from-csv /var/lib/smartmail/eval/labels.csv
+  python tools/eval_label.py run --from-csv /var/lib/smartmail/eval/labels.csv [--live] [--save]
 
 Git holds only fictional smoke fixtures under fixtures/ai/eval_smoke/ for CI.
 """
@@ -19,19 +20,7 @@ import json
 import sys
 from pathlib import Path
 
-CATEGORIES = (
-    "inquiry",
-    "order",
-    "order_change",
-    "invoice_request",
-    "payment",
-    "complaint",
-    "shipping",
-    "newsletter",
-    "spam",
-    "internal",
-    "other",
-)
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _smoke_dir() -> Path:
@@ -67,32 +56,14 @@ def cmd_stats(csv_path: Path) -> int:
     return 0
 
 
-def cmd_sample(n: int, out: Path) -> int:
-    """Write a CSV template. Filling it requires server DB access (not implemented in 2a)."""
-    out.parent.mkdir(parents=True, exist_ok=True)
-    if out.exists():
-        print(f"refusing to overwrite {out}", file=sys.stderr)
-        return 2
-    with out.open("w", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(
-            fh,
-            fieldnames=["message_uuid", "message_id_header", "category", "language", "notes"],
-        )
-        writer.writeheader()
-        for i in range(n):
-            writer.writerow(
-                {
-                    "message_uuid": "",
-                    "message_id_header": "",
-                    "category": "",
-                    "language": "",
-                    "notes": f"fill on server; sample slot {i + 1}",
-                }
-            )
-    print(f"wrote empty template ({n} rows) to {out}")
-    print("Allowed categories:", ", ".join(CATEGORIES))
-    print("Do not copy real mail bodies into git.")
-    return 0
+def cmd_server(argv: list[str]) -> int:
+    """sample / run need the database: delegate to the server CLI (app/ai/eval_cli.py)."""
+    import asyncio
+
+    sys.path.insert(0, str(REPO_ROOT))
+    from app.ai.eval_cli import main as eval_main
+
+    return asyncio.run(eval_main(argv))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -106,10 +77,11 @@ def main(argv: list[str] | None = None) -> int:
     p_stats.add_argument("--from-csv", type=Path, required=True)
     p_stats.set_defaults(fn=lambda a: cmd_stats(a.from_csv))
 
-    p_sample = sub.add_parser("sample", help="write an empty label CSV template (server path)")
-    p_sample.add_argument("--sample", type=int, default=50)
-    p_sample.add_argument("--out", type=Path, required=True)
-    p_sample.set_defaults(fn=lambda a: cmd_sample(a.sample, a.out))
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] in (["sample"], ["run"]):
+        return cmd_server(argv)
+    sub.add_parser("sample", help="write a label CSV of N random classified messages (server, needs the DB)")
+    sub.add_parser("run", help="score the AI against a labeled CSV (server, needs the DB)")
 
     args = parser.parse_args(argv)
     return int(args.fn(args))
