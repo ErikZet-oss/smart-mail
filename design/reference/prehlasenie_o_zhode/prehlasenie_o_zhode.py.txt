@@ -1,0 +1,244 @@
+"""
+Generátor PDF „Prehlásenie o zhode“ – SMART s.r.o.
+
+Použitie:
+    python prehlasenie_o_zhode.py data.json vystup.pdf
+    python prehlasenie_o_zhode.py --prazdne vystup.pdf      # prázdna šablóna na ručné vyplnenie
+
+Z Pythonu (napr. z AI agenta):
+    from prehlasenie_o_zhode import vytvor_pdf
+    vytvor_pdf(data_dict, "vystup.pdf")
+
+Štruktúra dát (všetko okrem "produkty" je voliteľné):
+{
+  "cislo": "PZ-2026-0142",
+  "datum": "30.10.2026",              # predvolene dnešný dátum
+  "miesto": "Nitra",
+  "odberatel": "Stavby XY s.r.o., Hlavná 1, 949 01 Nitra",
+  "doklad": "FA 2026/0815",           # faktúra / dodací list / zákazka
+  "produkty": [
+     {"nazov": "WSS 6HR 5,5x67 Zn do 12 mm", "kod": "WSS55067", "norma": "DIN 7504 K", "poznamka": ""}
+  ],
+  "vystavil": {"meno": "René Ivančík", "funkcia": "Manažér pobočky"},
+  "peciatka": "cesta/k/peciatke.png", # PNG s priehľadným pozadím
+  "podpis": "cesta/k/podpisu.png"     # PNG s priehľadným pozadím
+}
+Vyžaduje: pip install playwright && playwright install chromium
+"""
+import base64, html, json, mimetypes, sys
+from datetime import date
+from pathlib import Path
+
+ADRESAR = Path(__file__).resolve().parent
+
+# ---------- Firemné údaje (upravte podľa potreby) ----------
+FIRMA = {
+    "nazov": "SMART s.r.o.",
+    "slogan": "Spojovací materiál · Kotviaca technika",
+    "ulica": "Novozámocká 232",
+    "mesto": "949 01 Nitra",
+    "ico": "",                      # doplňte – na skene je čiastočne prekryté pečiatkou
+    "ic_dph": "SK2020393606",
+    "tel": "037 / 651 31 45",
+    "web": "www.smartsro.sk",
+}
+
+PRAVNY_ZAKLAD = "podľa zákona č. 22/1997 Z. z. o technických požiadavkách na výrobky"
+
+TEXT_UVOD = (
+    "Na základe zákona č. 22/1997 Z. z. a ďalej vykonávacích predpisov vlády SR č. 173/1997 Z. z. "
+    "a č. 163/2002 Z. z., v platných zneniach, vydávame uistenie, že nami dodávaný spojovací materiál "
+    "a kotviaca technika, vrátane materiálu, ktorý patrí medzi vybrané výrobky pre nosné stavebné "
+    "konštrukcie podľa predpisu č. 163/2002 Z. z., bolo ich výrobcami, resp. dovozcami vystavené podľa "
+    "§ 13 cit. zákona prehlásenie o zhode, predložené príslušnými certifikátmi a osvedčeniami "
+    "potvrdzujúcimi, že tento materiál spĺňa zákonné požiadavky predpísané platnými slovenskými normami, "
+    "prípadne prevzatými medzinárodnými normami a predpismi týkajúcimi sa oprávneného záujmu "
+    "a požiadaviek na bezpečnosť výrobkov."
+)
+
+TEXT_ROZSAH = (
+    "Toto prehlásenie sa vzťahuje na sortiment výrobkov písomne deklarovaný a publikovaný firmou "
+    "SMART s.r.o. v bežnom obchodnom styku vrátane plnenia verejných zákaziek a súčasne nadväzuje "
+    "na už vystavené uistenia tuzemských výrobcov a dovozcov nami distribuovaných výrobkov na sprievodné "
+    "doklady a vydané prehlásenia o zhode, ktoré sú v sídle našej spoločnosti k dispozícii pre príslušné "
+    "kontrolné orgány."
+)
+
+PRAZDNE_RIADKY = 5  # počet prázdnych riadkov v šablóne bez produktov
+
+
+def _e(t):
+    return html.escape(str(t or ""))
+
+
+def _data_uri(cesta):
+    if not cesta:
+        return ""
+    p = Path(cesta)
+    if not p.exists():
+        raise FileNotFoundError(f"Súbor neexistuje: {p}")
+    mime = mimetypes.guess_type(p.name)[0] or "image/png"
+    return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode()
+
+
+def _logo(biele=False):
+    return (ADRESAR / ("logo_white.svg" if biele else "logo.svg")).read_text(encoding="utf-8").split("?>", 1)[-1]
+
+
+def _tabulka(produkty):
+    stlpce = [("nazov", "Názov výrobku")]
+    for k, nazov in (("kod", "Kód"), ("norma", "Norma"), ("poznamka", "Poznámka")):
+        if not produkty or any(p.get(k) for p in produkty):
+            stlpce.append((k, nazov))
+    hlava = "".join(f'<th class="c-{k}">{n}</th>' for k, n in stlpce)
+    riadky = []
+    if produkty:
+        for i, p in enumerate(produkty, 1):
+            bunky = "".join(f'<td class="c-{k}">{_e(p.get(k))}</td>' for k, _ in stlpce)
+            riadky.append(f'<tr><td class="c-i">{i}</td>{bunky}</tr>')
+    else:
+        for i in range(1, PRAZDNE_RIADKY + 1):
+            bunky = "".join(f'<td class="c-{k}"></td>' for k, _ in stlpce)
+            riadky.append(f'<tr class="blank"><td class="c-i">{i}</td>{bunky}</tr>')
+    return f'<table class="prod"><thead><tr><th class="c-i">#</th>{hlava}</tr></thead><tbody>{"".join(riadky)}</tbody></table>'
+
+
+def zostav_html(d):
+    produkty = d.get("produkty") or []
+    prazdne = not produkty
+    vystavil = d.get("vystavil") or {}
+    datum = d.get("datum") or ("" if prazdne else date.today().strftime("%d.%m.%Y"))
+    peciatka, podpis = _data_uri(d.get("peciatka")), _data_uri(d.get("podpis"))
+    pole = lambda v: _e(v) if v else '<span class="line"></span>'
+
+    meta = [("Číslo prehlásenia", d.get("cislo")), ("Dátum vystavenia", datum)]
+    meta_html = "".join(f'<div class="chip"><span>{k}</span><b>{pole(v)}</b></div>' for k, v in meta)
+
+    odb = ""
+    if prazdne or d.get("odberatel") or d.get("doklad"):
+        odb = f"""
+        <div class="parties">
+          <div><span class="lbl">Odberateľ</span><div class="val">{pole(d.get("odberatel"))}</div></div>
+          <div><span class="lbl">Doklad / zákazka</span><div class="val">{pole(d.get("doklad"))}</div></div>
+        </div>"""
+
+    stamp_img = f'<img class="stamp" src="{peciatka}">' if peciatka else ""
+    sign_img = f'<img class="sign" src="{podpis}">' if podpis else ""
+    hint = "" if (peciatka or podpis) else '<span class="hint">pečiatka a podpis</span>'
+
+    return f"""<!doctype html><html lang="sk"><head><meta charset="utf-8"><style>
+@page {{ size: A4; margin: 14mm 0 17mm 0; }}
+@page :first {{ margin-top: 0; }}
+:root {{ --blue:#3871C1; --navy:#14264A; --ink:#25324A; --muted:#6B7891; --tint:#EEF3FB; --rule:#D7E0EE; }}
+* {{ box-sizing:border-box; margin:0; padding:0; }}
+body {{ font-family: Inter, 'DejaVu Sans', sans-serif; color:var(--ink); font-size:9.3pt; line-height:1.5;
+        -webkit-print-color-adjust:exact; print-color-adjust:exact; }}
+.band {{ height:6mm; background:linear-gradient(90deg, var(--navy) 0 38%, var(--blue) 38% 100%); }}
+.wrap {{ padding: 8mm 18mm 0 18mm; }}
+header {{ display:flex; justify-content:space-between; align-items:flex-end; padding-bottom:5mm; border-bottom:1.2pt solid var(--blue); }}
+header svg {{ height:13mm; width:auto; display:block; }}
+.firm {{ text-align:right; font-size:8.4pt; line-height:1.45; color:var(--muted); }}
+.firm b {{ display:block; color:var(--navy); font-size:11pt; letter-spacing:.02em; }}
+.firm .slogan {{ text-transform:uppercase; letter-spacing:.14em; font-size:7pt; color:var(--blue); font-weight:600; }}
+.title {{ display:flex; justify-content:space-between; align-items:flex-end; margin:6mm 0 4mm; gap:6mm; }}
+.kicker {{ text-transform:uppercase; letter-spacing:.22em; font-size:7.6pt; font-weight:700; color:var(--blue); }}
+h1 {{ font-family:'Inter Display', Inter, sans-serif; font-size:24pt; line-height:1.05; color:var(--navy); font-weight:800; letter-spacing:-.01em; margin-top:1.5mm; }}
+.basis {{ color:var(--muted); font-size:8.8pt; margin-top:2mm; }}
+.meta {{ display:flex; flex-direction:column; gap:2mm; min-width:60mm; flex-shrink:0; }}
+.chip {{ background:var(--tint); border-left:2.4pt solid var(--blue); padding:1.6mm 3mm; display:flex; justify-content:space-between; gap:4mm; font-size:8.2pt; }}
+.chip span {{ color:var(--muted); white-space:nowrap; }} .chip b {{ color:var(--navy); white-space:nowrap; }}
+.chip .line {{ width:20mm; min-width:20mm; }}
+.line {{ display:inline-block; min-width:40mm; border-bottom:.7pt dotted #9AA7BD; height:1.05em; vertical-align:bottom; }}
+.parties {{ display:grid; grid-template-columns:1.6fr 1fr; gap:5mm; margin-bottom:3mm; }}
+.parties > div {{ border:.7pt solid var(--rule); border-radius:1.5mm; padding:2.5mm 3.5mm; }}
+.lbl {{ display:block; text-transform:uppercase; letter-spacing:.12em; font-size:6.8pt; color:var(--muted); font-weight:600; margin-bottom:.8mm; }}
+.val {{ color:var(--navy); font-weight:600; min-height:1.4em; }} .val .line {{ width:100%; }}
+.section {{ display:flex; align-items:center; gap:3mm; margin:5mm 0 2.5mm; font-weight:700; color:var(--navy);
+            text-transform:uppercase; letter-spacing:.12em; font-size:8pt; }}
+.section::before {{ content:""; width:6mm; height:2.2pt; background:var(--blue); }}
+.section::after {{ content:""; flex:1; height:.6pt; background:var(--rule); }}
+p.legal {{ text-align:justify; hyphens:auto; }}
+table.prod {{ width:100%; border-collapse:collapse; font-size:9.2pt; }}
+table.prod thead {{ display:table-header-group; }}
+table.prod th {{ background:var(--navy); color:#fff; text-align:left; font-weight:600; font-size:7.6pt; text-transform:uppercase;
+                 letter-spacing:.08em; padding:2.2mm 3mm; }}
+table.prod td {{ padding:1.8mm 3mm; border-bottom:.6pt solid var(--rule); vertical-align:top; }}
+table.prod tbody tr:nth-child(even) td {{ background:#F7F9FD; }}
+table.prod tr {{ page-break-inside:avoid; }}
+table.prod tr.blank td {{ height:7mm; }}
+.c-i {{ width:9mm; color:var(--muted); text-align:center !important; }}
+.c-nazov {{ font-weight:600; color:var(--navy); }}
+.c-kod, .c-norma {{ white-space:nowrap; }}
+.c-nazov {{ width:42%; }}
+.c-poznamka {{ color:var(--muted); font-size:8.6pt; }}
+.sigs {{ display:grid; grid-template-columns:1fr 1fr 72mm; gap:6mm; margin-top:5mm; align-items:end; page-break-inside:avoid; }}
+.sig .val {{ border-bottom:.7pt solid var(--ink); padding-bottom:1.2mm; font-weight:600; min-height:6mm; }}
+.sig .sub {{ color:var(--muted); font-size:8.4pt; margin-top:1mm; min-height:1.3em; }}
+.stampbox {{ position:relative; height:32mm; border:.8pt dashed #A9B6CC; border-radius:2mm; background:
+             repeating-linear-gradient(135deg, transparent 0 3mm, rgba(56,113,193,.035) 3mm 6mm); }}
+.stampbox .hint {{ position:absolute; inset:auto 0 2mm 0; text-align:center; font-size:7pt; color:#9AA7BD; text-transform:uppercase; letter-spacing:.14em; }}
+.stamp {{ position:absolute; left:4mm; top:2mm; height:27mm; max-width:58mm; object-fit:contain; opacity:.92; }}
+.sign {{ position:absolute; right:3mm; top:4mm; height:22mm; max-width:46mm; object-fit:contain; }}
+</style></head><body>
+<div class="band"></div>
+<div class="wrap">
+  <header>
+    {_logo()}
+    <div class="firm"><span class="slogan">{_e(FIRMA["slogan"])}</span><b>{_e(FIRMA["nazov"])}</b>
+      {_e(FIRMA["ulica"])}, {_e(FIRMA["mesto"])}<br>{_e(FIRMA["web"])} · tel. {_e(FIRMA["tel"])}</div>
+  </header>
+
+  <div class="title">
+    <div><div class="kicker">Vyhlásenie dodávateľa</div><h1>Prehlásenie<br>o zhode</h1>
+      <div class="basis">{_e(PRAVNY_ZAKLAD)}</div></div>
+    <div class="meta">{meta_html}</div>
+  </div>
+  {odb}
+  <div class="section">Uistenie o vystavení prehlásenia o zhode</div>
+  <p class="legal">{_e(TEXT_UVOD)}</p>
+
+  <div class="section">Výrobky, na ktoré sa prehlásenie vzťahuje</div>
+  {_tabulka(produkty)}
+
+  <div class="section">Rozsah platnosti</div>
+  <p class="legal">{_e(TEXT_ROZSAH)}</p>
+
+  <div class="sigs">
+    <div class="sig"><span class="lbl">Miesto a dátum</span>
+      <div class="val">{_e(", ".join(x for x in (d.get("miesto") or ("" if prazdne else "Nitra"), datum) if x))}</div>
+      <div class="sub"></div></div>
+    <div class="sig"><span class="lbl">Vystavil</span>
+      <div class="val">{_e(vystavil.get("meno"))}</div>
+      <div class="sub">{_e(vystavil.get("funkcia"))}{(", " + _e(FIRMA["nazov"])) if vystavil.get("funkcia") else ""}</div></div>
+    <div><span class="lbl">Pečiatka a podpis</span><div class="stampbox">{stamp_img}{sign_img}{hint}</div></div>
+  </div>
+</div></body></html>"""
+
+
+def _footer():
+    ico = f'IČO {FIRMA["ico"]} · ' if FIRMA["ico"] else ""
+    return f"""<div style="width:100%;font-family:Inter,sans-serif;font-size:7pt;color:#6B7891;padding:0 18mm;
+      display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;">
+      <span><b style="color:#14264A">{_e(FIRMA["nazov"])}</b> · {_e(FIRMA["ulica"])}, {_e(FIRMA["mesto"])} ·
+      {ico}IČ DPH {_e(FIRMA["ic_dph"])} · {_e(FIRMA["web"])}</span>
+      <span>Strana <span class="pageNumber"></span> / <span class="totalPages"></span></span></div>"""
+
+
+def vytvor_pdf(data, vystup):
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        prehliadac = p.chromium.launch()
+        strana = prehliadac.new_page()
+        strana.set_content(zostav_html(data), wait_until="load")
+        strana.pdf(path=str(vystup), format="A4", print_background=True, prefer_css_page_size=True,
+                   display_header_footer=True, header_template="<span></span>", footer_template=_footer())
+        prehliadac.close()
+    return Path(vystup)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        sys.exit(__doc__)
+    vstup, vystup = sys.argv[1:]
+    data = {} if vstup == "--prazdne" else json.loads(Path(vstup).read_text(encoding="utf-8"))
+    print(vytvor_pdf(data, vystup))
