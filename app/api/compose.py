@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 
@@ -446,6 +446,35 @@ async def upload_attachment(
     )
     await db.commit()
     return await _draft_out(db, draft, await _load_atts(db, draft.id), settings)
+
+
+_PREVIEW_TYPES = frozenset({"image/png", "image/jpeg", "image/gif"})
+
+
+@router.get("/compose/{draft_id}/inline/{content_id}")
+async def inline_image(
+    draft_id: uuid.UUID, content_id: str, ctx: Auth, db: DB, settings: SettingsDep
+) -> Response:
+    """Editor preview of an inline image (pasted screenshot / toolbar image): the body keeps `cid:…`, which a browser
+    can't show. Own drafts only, inline images only, never an infected file."""
+    draft = await _get_draft(db, ctx, draft_id)
+    att = await db.scalar(
+        select(ComposeAttachment).where(
+            ComposeAttachment.draft_id == draft.id,
+            ComposeAttachment.content_id == content_id,
+            ComposeAttachment.is_inline.is_(True),
+        )
+    )
+    if att is None or att.av_status == "infected" or att.content_type not in _PREVIEW_TYPES:
+        raise fail(404, "attachment_not_found")
+    data = storage.get_bytes(settings, att.storage_key)
+    if data is None:
+        raise fail(404, "attachment_not_found")
+    return Response(
+        content=data,
+        media_type=att.content_type,
+        headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.delete("/compose/{draft_id}/attachments/{att_id}")

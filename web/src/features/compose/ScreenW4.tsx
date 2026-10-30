@@ -47,7 +47,7 @@ import {
 import { ComposeToolbar } from './ComposeToolbar';
 import { pastedImages } from './pastedImages';
 import { ComposeAiPanel } from './ComposeAiPanel';
-import { composeExtensions, signatureHtmlOf } from './composeExtensions';
+import { composeExtensions, setInlineImageDraft, signatureHtmlOf } from './composeExtensions';
 import { sendErrorMessage, sendErrorServerReply } from './sendCopy';
 import { watchSend } from './sendWatch';
 import { PreSendDialog } from './PreSendDialog';
@@ -137,6 +137,10 @@ export function ScreenW4() {
   const [keptSigner, setKeptSigner] = useState<string | null>(null);
   const [overrideFor, setOverrideFor] = useState<{ id: string; name: string } | null>(null);
   const [localId, setLocalId] = useState<string | null>(draftId ?? null);
+  useEffect(() => {
+    setInlineImageDraft(localId);
+    return () => setInlineImageDraft(null);
+  }, [localId]);
   const [to, setTo] = useState(seedTo);
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState('');
