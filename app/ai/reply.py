@@ -160,6 +160,22 @@ class ReplyStats:
         }
 
 
+MAX_DRAFT_FAILURES = 3
+_FAILED_RUN = ("error", "invalid_output")
+
+
+async def draft_failures(db: AsyncSession, message_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    """Failed paid draft calls per message (`ai_runs` purpose draft, status error / invalid_output)."""
+    if not message_ids:
+        return {}
+    rows = await db.execute(
+        select(AiRun.message_id, func.count())
+        .where(AiRun.purpose == "draft", AiRun.status.in_(_FAILED_RUN), AiRun.message_id.in_(message_ids))
+        .group_by(AiRun.message_id)
+    )
+    return {mid: int(n) for mid, n in rows.all() if mid is not None}
+
+
 async def _candidates(db: AsyncSession, mailbox: Mailbox) -> list[tuple[Message, FolderMeta, Classification]]:
     has_reply = (
         select(AiSuggestion.id)
@@ -178,10 +194,14 @@ async def _candidates(db: AsyncSession, mailbox: Mailbox) -> list[tuple[Message,
             ~has_reply,
         )
     )
+    found = rows.all()
+    failures = await draft_failures(db, [m.id for m, _, _ in found])
     out = []
-    for message, folder, cls in rows.all():
+    for message, folder, cls in found:
         if not (cls.payload or {}).get("needs_reply"):
             continue
+        if failures.get(message.id, 0) >= MAX_DRAFT_FAILURES:
+            continue  # #135: a draft that failed 3× is not retried every 15 min (it would only burn the budget)
         if not message_eligible_for_ai(mailbox, folder, message):
             continue  # private folder, Koncepty/Odoslané/Kôš/Nevyžiadaná, history before ai_enabled_at
         if (message.from_email or "").lower() == mailbox.email.lower():

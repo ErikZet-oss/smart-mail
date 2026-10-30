@@ -18,6 +18,11 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   - The confirm dialog names the size and the folders.
 - Audit `mail.export_purged` records the count, folders, skipped folders and the archive sha256; a sync is scheduled afterwards.
 - Before an export starts (API and job), the free space of the temp directory is checked against the estimate × 1.1. Too little → 507 `export_no_space` with a Slovak hint to narrow the range (reviewer note on #130).
+## [Unreleased] — AI catch-up cron (#135)
+
+- The AI job used to start only when a sync found new mail, so classifications and reply drafts that failed (e.g. before #131) waited for the next incoming message. The new cron `ai_catchup` runs every 15 min. For every mailbox with AI on, it enqueues `process_mailbox_ai_job` (same `_job_id=mail-ai:<id>`, never twice) **only when there is work**: an eligible unclassified message with < 3 attempts, or a reply candidate without a suggestion.
+- A reply candidate whose draft failed 3× (`ai_runs` purpose `draft`, status `error`/`invalid_output`) is not retried, so a broken case can't burn the budget every 15 min. Budget and shadow mode are unchanged.
+
 ## [Unreleased] — fix: Slovak reply drafts drifted into Czech
 
 - Pilot 2026-10-30: a Slovak reply suggestion mixed in Czech words. The draft prompt said only „Language: sk“; it now names the language in full („Slovak (slovenčina) … never Czech“), and the compose „Napíš za mňa“ task says never to mix Slovak and Czech.
