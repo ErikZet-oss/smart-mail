@@ -29,7 +29,8 @@ _LANGUAGE_NAMES = {"sk": "Slovak", "cs": "Czech", "en": "English", "de": "German
 
 _TASKS: dict[str, str] = {
     "write": "Write the e-mail text from the employee's instruction: {instruction}. "
-    "Answer the quoted e-mail if there is one. Language: the language of the quoted e-mail, else Slovak.",
+    "Answer the quoted e-mail if there is one. Language: the language of the quoted e-mail, else Slovak. "
+    "Never mix Slovak and Czech.",
     "shorter": "Make the text shorter and clearer. Same language.",
     "formal": "Make the text more formal (vykanie in Slovak/Czech, Sie in German). Same language.",
     "friendly": "Make the text friendlier while staying professional. Same language.",

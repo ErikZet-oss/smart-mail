@@ -53,3 +53,38 @@ def detect_language(text: str) -> str:
     if best == "cs" and scores[1][1] == "sk" and scores[1][0] >= best_n - 1:
         return "sk"
     return best
+
+
+# Drafts (pilot 2026-10-30): a bare code „sk“ in the prompt let the model drift into Czech mid-reply.
+_DRAFT_LANGUAGE: dict[str, str] = {
+    "sk": "Slovak (slovenčina). Every word must be Slovak — never Czech (no ř, ě, ů, no „jsme“, „děkujeme“, „dotaz“)",
+    "cs": "Czech (čeština). Every word must be Czech — never Slovak",
+    "en": "English",
+    "de": "German (Deutsch)",
+    "pl": "Polish (polski)",
+    "hu": "Hungarian (magyar)",
+}
+
+
+def draft_language(code: str | None) -> str:
+    """The language line for a draft prompt: a full name, not a code („other“ = the language of the e-mail)."""
+    return _DRAFT_LANGUAGE.get(code or "", "the language of the customer's last e-mail")
+
+
+# Words and letters that occur in Czech but not in Slovak — a Slovak draft containing them drifted into Czech.
+_CZECH_ONLY = re.compile(
+    r"[řěůŘĚŮ]|\b(jsme|jste|jsem|děkuj\w*|dekujeme|dotaz\w*|zboží|poptávk\w*|vaší|vašeho|pozdravem|také\s+jsme)\b",
+    re.I,
+)
+
+
+def czech_words(text: str, limit: int = 5) -> list[str]:
+    """Czech-only tokens found in a text meant to be Slovak (unique, in order)."""
+    out: list[str] = []
+    for match in _CZECH_ONLY.finditer(text or ""):
+        token = match.group(0)
+        if token.lower() not in {t.lower() for t in out}:
+            out.append(token)
+        if len(out) >= limit:
+            break
+    return out

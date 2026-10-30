@@ -577,7 +577,8 @@
       "attachment_pending": "Príloha ešte nebola skontrolovaná antivírusom",
       "external_recipient": "Správa ide mimo firmu.",
       "multiple_companies": "Príjemcovia sú z viacerých firiem: {{message}}",
-      "language_mismatch": "Text je v inom jazyku ako e-mail zákazníka."
+      "language_mismatch": "Text je v inom jazyku ako e-mail zákazníka.",
+      "czech_in_slovak": "V slovenskom texte sú české slová – skontrolujte jazyk."
     }
   },
   "mail": {
@@ -1451,6 +1452,7 @@
         "new_recipient": "Nový príjemca: {{address}}",
         "attachment_missing": "Text spomína prílohu, ale návrh žiadnu nemá",
         "language_mismatch": "Návrh je v inom jazyku ako e-mail",
+        "czech_in_slovak": "V slovenskom návrhu sú české slová: {{words}}",
         "security_dmarc_fail": "Odosielateľ neprešiel overením DMARC",
         "security_spf_fail": "Odosielateľ neprešiel overením SPF",
         "security_display_spoof": "Meno odosielateľa sa vydáva za našu firmu",
