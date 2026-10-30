@@ -154,3 +154,33 @@ def test_2b_triage_categories_match_figma_order() -> None:
         "supplier_info",
         "newsletter",
     ]
+
+
+def _rule(subject: str, attachments: list[str], dmarc: str | None = None) -> object:
+    hit = apply_rules(
+        from_email="fakturace@dodavatel.example",
+        subject=subject,
+        headers_text="",
+        attachment_names=attachments,
+        auth_results={"dmarc": dmarc} if dmarc else None,
+        internal_domains=["smartsro.sk"],
+    )
+    return (hit.category, hit.decisive, hit.rule_id) if hit else None
+
+
+def test_2b_supplier_invoice_by_subject_and_attachment() -> None:
+    """Pilot 2026-10-30: „Faktura E3/2026/19608“ + E3_126_19608.pdf/.csv from a supplier became „Žiadosti o faktúru“."""
+    assert _rule("Faktura E3/2026/19608", ["E3_126_19608.csv", "E3_126_19608.pdf"]) == (
+        "supplier_document",
+        True,
+        "supplier_subject_attachment",
+    )
+    assert _rule("Faktúra č. 2026123", ["doc.pdf"])[0] == "supplier_document"  # type: ignore[index]
+    assert _rule("Dodací list 4711", ["dl.pdf"])[0] == "supplier_document"  # type: ignore[index]
+    # a customer replying about our invoice, a subject without a document, or no attachment → the model decides
+    assert _rule("Re: Faktura 123", ["faktura.pdf"]) == ("supplier_document", False, "supplier_pdf_name")
+    assert _rule("Re: Faktura 123", ["scan.pdf"]) is None
+    assert _rule("Prosím o faktúru", ["objednavka.pdf"]) is None
+    assert _rule("Faktura 123", []) is None
+    # a spoofed sender is flagged first, never fast-tracked
+    assert _rule("Faktura 123", ["x.pdf"], dmarc="fail") == ("spam", False, "dmarc_fail")

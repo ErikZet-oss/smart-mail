@@ -32,6 +32,15 @@ _ISDOC_NAMES = re.compile(r"\.(isdoc|isdocx)$", re.I)
 _UBL_NAMES = re.compile(r"(ubl|factur[-_]?x|invoice).*\.(xml|pdf)$", re.I)
 _SUPPLIER_PDF = re.compile(r"(fakt[uú]r|invoice|dodac[ií]|delivery[-_ ]?note|lieferschein)", re.I)
 _LIST_UNSUB = re.compile(r"list-unsubscribe", re.I)
+# Pilot 2026-10-30: „Faktura E3/2026/19608“ from a supplier with E3_126_19608.pdf + .csv was classified as an invoice
+# request twice. A NEW external mail whose subject starts with a document word and carries a document attachment is a
+# supplier document; replies/forwards („Re:“ — a customer asking about our invoice) are left to the model.
+_SUPPLIER_SUBJECT = re.compile(
+    r"^\s*(fakt[uú]ra|faktury|invoice|rechnung|dobropis|credit\s*note|dodac[ií]\s*list|delivery\s*note|lieferschein)\b",
+    re.I,
+)
+_REPLY_PREFIX = re.compile(r"^\s*(re|odp|aw|fw|fwd|wg|tr)\s*:", re.I)
+_DOCUMENT_ATTACHMENT = re.compile(r"\.(pdf|isdoc|isdocx|xml|csv)$", re.I)
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,12 +92,13 @@ def apply_rules(
     if domain and domain in internal:
         return RuleHit(category="internal", decisive=True, rule_id="internal_domain")
 
+    pdf_hint: RuleHit | None = None
     for name in attachment_names:
         if _ISDOC_NAMES.search(name) or _UBL_NAMES.search(name):
             return RuleHit(category="supplier_document", decisive=True, rule_id="isdoc_ubl")
-        if name.lower().endswith(".pdf") and _SUPPLIER_PDF.search(name):
+        if pdf_hint is None and name.lower().endswith(".pdf") and _SUPPLIER_PDF.search(name):
             # Needs LLM confirmation per AI_ASSISTANT — not decisive
-            return RuleHit(category="supplier_document", decisive=False, rule_id="supplier_pdf_name")
+            pdf_hint = RuleHit(category="supplier_document", decisive=False, rule_id="supplier_pdf_name")
 
     dmarc = (auth_results or {}).get("dmarc", "").lower()
     if dmarc in {"fail", "softfail"}:
@@ -100,4 +110,12 @@ def apply_rules(
             notes=("security_dmarc_fail",),
         )
 
-    return None
+    # after the DMARC check: a spoofed „Faktura“ must still be flagged, never fast-tracked as a supplier document
+    if (
+        _SUPPLIER_SUBJECT.search(subj)
+        and not _REPLY_PREFIX.search(subj)
+        and any(_DOCUMENT_ATTACHMENT.search(n) for n in attachment_names)
+    ):
+        return RuleHit(category="supplier_document", decisive=True, rule_id="supplier_subject_attachment")
+
+    return pdf_hint

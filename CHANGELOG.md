@@ -2,6 +2,9 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — fix: supplier invoices classified as invoice requests
+
+- Pilot 2026-10-30: „Faktura E3/2026/19608“ from a supplier with `E3_126_19608.pdf` + `.csv` (body only a bank-details note) was classified „Žiadosti o faktúru“ and got a reply suggestion. New deterministic rule `supplier_subject_attachment`: a new external mail (no `Re:`/`Fwd:`) whose subject starts with Faktúra/Faktura/Invoice/Rechnung/Dobropis/Dodací list/Delivery note/Lieferschein and carries a PDF/ISDOC/XML/CSV is a supplier document, without an LLM call. It runs after the DMARC check, so a spoofed „Faktura“ is still flagged. The non-decisive PDF-name hint no longer short-circuits the later checks.
 ## [Unreleased] — fix: „Šablóna podpisu pobočky“ label on the person's hand signature
 
 - Pilot 2026-10-30: the person's hand-signature upload (#140) reused the label key `settings.branches.signature` = „Šablóna podpisu pobočky“ (the e-mail signature template), so Erik uploaded the signature in the wrong place. New labels „Vlastnoručný podpis (pre doklady)“ and „Pečiatka (pre doklady)“, with help texts that say they are never used in e-mail signatures.
