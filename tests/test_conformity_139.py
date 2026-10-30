@@ -319,3 +319,41 @@ async def test_139c_issue_from_the_ai_card_marks_it_approved(
     await db.commit()
     r = await client.send_json("POST", f"/api/suggestions/{other.id}/approve", {})
     assert r.status_code == 422 and r.json()["detail"]["code"] == "unsupported_type"
+
+
+async def test_139_personal_account_without_branch_picks_a_covered_branch(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, settings: Settings
+) -> None:
+    """Pilot 2026-10-30 (Erik on eshop@, a personal account): a person without a branch got only 422
+    branch_required. The dialog now lists the branches he may issue for and sends `branch_id`."""
+    branch, _ = await _setup(client, db, mail_server, settings)
+    issuer = await db.scalar(select(Person).where(Person.first_name != "Ján", Person.is_manager.is_(False)))
+    assert issuer is not None
+    issuer.branch_id = None
+    other, _ = await make_branch(db, "Senica", people=0)
+    await db.commit()
+
+    assert (await client.get("/api/documents/conformity/branches")).json() == []
+    r = await client.send_json("POST", "/api/documents/conformity", BODY)
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "branch_required"
+
+    db.add(PersonBranch(person_id=issuer.id, branch_id=branch.id))  # „Pôsobí aj na pobočkách“
+    await db.commit()
+    choices = (await client.get("/api/documents/conformity/branches")).json()
+    assert choices == [{"id": str(branch.id), "name": "Nitra", "ready": True}]
+    r = await client.send_json("POST", "/api/documents/conformity", {**BODY, "branch_id": str(branch.id)})
+    assert r.status_code == 201, r.text
+    r = await client.send_json("POST", "/api/documents/conformity", {**BODY, "branch_id": str(other.id)})
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "other_branch"
+
+
+async def test_139_admin_sees_every_branch_with_readiness(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, settings: Settings
+) -> None:
+    branch, _ = await _setup(client, db, mail_server, settings, role=Role.admin)
+    await make_branch(db, "Senica", people=0)
+    await db.commit()
+    choices = {c["name"]: c["ready"] for c in (await client.get("/api/documents/conformity/branches")).json()}
+    assert choices == {"Nitra": True, "Senica": False}
+    first = (await client.get("/api/documents/conformity/branches")).json()[0]
+    assert first["id"] == str(branch.id)  # own branch first
