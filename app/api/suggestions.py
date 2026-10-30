@@ -77,7 +77,13 @@ async def approve(
     proposed = str((row.payload or {}).get("body") or "")
     final = proposed if body.body is None else body.body.strip()
     checks = await recheck_reply(
-        db, mailbox, settings, message, body=final, language=(row.payload or {}).get("language")
+        db,
+        mailbox,
+        settings,
+        message,
+        body=final,
+        language=(row.payload or {}).get("language"),
+        knowledge_ids=list((row.payload or {}).get("knowledge_ids") or []),
     )
     if has_blocking(checks):
         raise fail(409, "suggestion_blocked", checks=checks)

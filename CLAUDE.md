@@ -154,8 +154,10 @@ threads (status open/waiting/done/snoozed, snoozed_until, assignee_id, category,
 money_company_id, last_message_at); messages (headers, body_text, body_html_sanitized, direction, flags, auth_results,
 raw_storage_key); attachments (sha256, av_status, storage_key); thread_notes (mentions); presence (ephemeral, Redis);
 classifications; ai_suggestions (type, payload, rationale, confidence, checks, status, decided_by, final_payload, diff);
-ai_runs (model, tokens, cost, latency, purpose); assistant_conversations + assistant_messages; rules (nl_text,
-structured JSON, enabled); knowledge_cards; style_profiles; followups; documents (source, kind, extracted,
+ai_runs (model, tokens, cost, latency, purpose); assistant_conversations + assistant_messages; ai_rules (nl_text,
+structured JSON, enabled, last_used_at); knowledge_cards (kind knowledge|style_guide — the company style guide is the
+single style_guide row; full-text search_vector, ADR-014); personal style profile = user_settings section
+`ai.style_profile` (no style_profiles table, #110); followups; documents (source, kind, extracted,
 field_confidence, validation, status, money_doc_id/number, template_source); document_library (type, tags, valid_until,
 storage_key); offers (draft in Smart Mail; after approval `CreateIssuedOffer` → money_offer_id + Money number, D5; issued_by_person_id;
 valid_from/to; texts) +

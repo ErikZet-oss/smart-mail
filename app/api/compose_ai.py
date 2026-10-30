@@ -15,6 +15,7 @@ from app.ai.models import AiRun
 from app.ai.pricing import estimate_purpose_cost_usd
 from app.ai.provider import get_llm_provider
 from app.ai.reply import thread_messages
+from app.ai.retrieval import default_retriever, knowledge_block, style_guide_text
 from app.ai.service import daily_spend_usd
 from app.api.compose import _get_draft
 from app.api.mail import _ai_provider_configured, fail
@@ -73,6 +74,12 @@ async def compose_ai(
         instruction=body.instruction,
         language=body.language,
         source_thread=thread,
+        style_guide=await style_guide_text(db),
+        knowledge=knowledge_block(
+            await default_retriever().knowledge(
+                db, "\n".join([body.instruction or "", body.text, *(m.body_text or m.preview or "" for m in thread)])
+            )
+        ),
     )
     db.add(
         AiRun(
