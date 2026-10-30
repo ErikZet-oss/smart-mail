@@ -913,6 +913,24 @@
           "fields": []
         },
         {
+          "id": "17c",
+          "path": "categories",
+          "title": "Kategórie",
+          "fields": [
+            {
+              "id": "ai.categories",
+              "label": "Kategórie ⚠",
+              "control": "table",
+              "default": null,
+              "help": "Popis pre AI sa použije pri triedení pošty. Vypnutá kategória zmizne z triedenia, už zatriedené správy zostanú.",
+              "scope": "G",
+              "options": [],
+              "validation": {},
+              "admin_only": true
+            }
+          ]
+        },
+        {
           "id": "17d",
           "path": "style",
           "title": "Štýl a znalosti",

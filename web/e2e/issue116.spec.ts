@@ -147,3 +147,64 @@ test('#116 17a budget: env source until saved, save needs the password', async (
   await expect.poll(() => saved.length).toBe(1);
   await expect(page.getByTestId('budget-source')).toContainText('nastavené v aplikácii');
 });
+
+test('#116 17c categories: switch off, edit description, add custom, re-auth', async ({ page }, info) => {
+  let reauthed = false;
+  const saved: { categories: { id: string | null; label: string | null; enabled: boolean }[] }[] = [];
+  const row = (id: string, label: string, extra: object = {}) => ({
+    id,
+    label,
+    description: `popis ${label}`,
+    default_description: `popis ${label}`,
+    color: 'info',
+    enabled: true,
+    builtin: true,
+    locked: id === 'other',
+    count_30d: 3,
+    ...extra,
+  });
+  let rows = [row('inquiry', 'Dopyty'), row('order', 'Objednávky'), row('other', 'Iné')];
+  await mockApi(page, {
+    'GET /api/auth/me': { body: ADMIN },
+    'GET /api/auth/persons': { body: { ...ME_PICKER, persons: [ADMIN.person] } },
+    'GET /api/settings/nav': {
+      body: {
+        ...NAV,
+        sections: [
+          NAV.sections[0],
+          { ...NAV.sections[1], subs: [{ id: '17c', path: 'categories', title: 'Kategórie' }] },
+        ],
+      },
+    },
+    'GET /api/system/maintenance': { body: { active: false, until: null } },
+    'GET /api/settings/ai/categories': () => ({ body: rows }),
+    'PUT /api/settings/ai/categories': (payload) => {
+      if (!reauthed) return { status: 401, body: { detail: { code: 'reauth_required' } } };
+      saved.push(payload as (typeof saved)[number]);
+      rows = [...rows, row('x_kurier', 'Kuriér', { builtin: false, count_30d: 0 })];
+      return { body: rows };
+    },
+    'POST /api/auth/reauth': () => {
+      reauthed = true;
+      return { body: { valid_s: 900 } };
+    },
+  });
+  await page.goto('/settings/ai-admin/categories');
+  const panel = page.getByTestId('settings-ai-categories');
+  await expect(panel.getByRole('switch', { name: 'Zapnutá: Iné' })).toBeDisabled();
+  await panel.getByRole('switch', { name: 'Zapnutá: Objednávky' }).uncheck();
+  await panel.getByLabel('Popis pre AI: Dopyty').fill('dopyty na skrutky');
+  await panel.getByRole('button', { name: /Pridať kategóriu/ }).click();
+  await panel.getByLabel('Názov', { exact: true }).fill('Kuriér');
+  await shot(page, `issue116-categories-${info.project.name}`);
+  await panel.getByRole('button', { name: 'Uložiť' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Potvrďte heslom' });
+  await dialog.getByLabel('Heslo k e-mailu').fill('Spravne-Heslo-1');
+  await dialog.getByRole('button', { name: 'Potvrdiť' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => saved.length).toBe(1);
+  const sent = saved[0]?.categories ?? [];
+  expect(sent.find((c) => c.id === 'order')?.enabled).toBe(false);
+  expect(sent.find((c) => c.id === null)?.label).toBe('Kuriér');
+  await expect(panel.getByTestId('category-x_kurier')).toBeVisible();
+});

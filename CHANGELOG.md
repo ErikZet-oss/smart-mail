@@ -2,6 +2,13 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — 2f: 17c categories
+
+- W12-17c „Kategórie“ (admin): one table with Názov, Farba, Zapnutá, Popis pre AI and Počet za 30 dní. Built-in categories keep their ids; you can edit the description and switch them off. Up to 15 custom categories can be added (ids `x_…`). Stored in `org_settings` (`ai.categories`) (#116).
+- The classify prompt lists only the enabled categories with the admin's descriptions, and the model may answer only those. An answer with a switched-off category counts as invalid output and falls back like any other.
+- Switching a category off removes it from the prompt and the triage list only. Stored classifications keep their category, and its view still opens. „Iné“ is the fallback and stays on.
+- Saving is a ⚠ change: password re-auth and audit `ai.categories_changed` with before/after per category.
+
 ## [Unreleased] — 2f: 17a provider and budget
 
 - W12-17a „Poskytovateľ a rozpočet“ (admin): daily budget, alert %, „Pri vyčerpaní“ and retention are stored in `org_settings` (`ai.limits`). `AI_DAILY_BUDGET_USD` stays the default until an admin saves a budget (1–500 USD, a decimal string); the panel shows „z nastavenia servera“ / „nastavené v aplikácii“, and clearing the field goes back to the server value (#116).

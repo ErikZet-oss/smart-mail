@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import and_, case, desc, func, or_, select
 
-from app.ai.categories import CATEGORY_BY_ID, TRIAGE_CATEGORIES
+from app.ai.category_settings import category_lookup, load_category_data, triage_categories
 from app.ai.models import AiSuggestion, Classification
 from app.ai.pipeline import normalize_message_id_header
 from app.ai.service import category_counts
@@ -96,7 +96,7 @@ async def list_ai_categories(ref: str, ctx: Auth, db: DB, settings: SettingsDep)
                 color_token=c.color_token,
                 count=counts.get(c.id, 0),
             )
-            for c in TRIAGE_CATEGORIES
+            for c in triage_categories(await load_category_data(db))
         ]
     )
 
@@ -113,10 +113,12 @@ async def list_category_messages(
     filter: FilterName = "all",
     q: str | None = None,
 ) -> CategoryListOut:
-    if category not in CATEGORY_BY_ID:
+    # every known category, also a switched-off one: stored classifications keep opening (17c, #116)
+    known = category_lookup(await load_category_data(db))
+    if category not in known:
         raise fail(404, "category_not_found")
     mailbox = await _mailbox(db, ctx, ref)
-    cdef = CATEGORY_BY_ID[category]
+    cdef = known[category]
     if not _ai_active(mailbox, settings):
         # AI off / no provider — empty list, never 500 (pilot #18 B3).
         return CategoryListOut(
