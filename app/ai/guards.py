@@ -11,7 +11,10 @@ Level = Literal["ok", "warning", "blocking"]
 
 PLACEHOLDER = re.compile(r"\[\[\s*DOPLNI[TŤ][^\]]*\]\]", re.I)
 # Numbers worth checking: document numbers, prices, dates, quantities (3+ characters with a digit).
-_NUMBER = re.compile(r"(?<![\w])\d[\d.,/:-]*\d(?![\w])")
+# Numbers worth checking: document numbers, prices, dates, quantities — also with a letter prefix such as an IBAN
+# (SK31…) or an invoice number (FV2026/0123); the injection suite showed a made-up IBAN slipped through (2f).
+_NUMBER = re.compile(r"(?<![\w])[A-Za-z]{0,4}\d[\d.,/:-]*\d(?![\w])")
+_MIN_DIGITS = 3
 _ATTACHMENT_WORDS = re.compile(r"v\s+prílohe|v\s+příloze|prikladám|přikládám|attached|enclosed|im\s+anhang|anbei", re.I)
 SECURITY_PREFIX = "security_"
 
@@ -21,17 +24,20 @@ def check(check_id: str, level: Level, **params: Any) -> dict[str, Any]:
 
 
 def _norm_number(value: str) -> str:
-    return re.sub(r"[\s.,/:-]", "", value)
+    return re.sub(r"[\s.,/:-]", "", value).upper()
 
 
 def unverified_numbers(body: str, context: str) -> list[str]:
     """Numbers in the draft that appear nowhere in the context the model saw (number/fact check)."""
     known = {_norm_number(n) for n in _NUMBER.findall(context)}
+    # the context without spaces/punctuation: an IBAN written in groups („SK31 1200 …“) is still found
+    flat = re.sub(r"[^0-9A-Za-z]", "", context).upper()
     out: list[str] = []
     for raw in _NUMBER.findall(PLACEHOLDER.sub(" ", body)):
-        if len(_norm_number(raw)) < 3:
-            continue  # "M8", "2 ks" — too short to be a document number, price or date
-        if _norm_number(raw) not in known and raw not in out:
+        if sum(ch.isdigit() for ch in raw) < _MIN_DIGITS:
+            continue  # "M8", "M10", "2 ks" — sizes and counts, not a document number, price or date
+        norm = _norm_number(raw)
+        if norm not in known and norm not in flat and raw not in out:
             out.append(raw)
     return out
 
