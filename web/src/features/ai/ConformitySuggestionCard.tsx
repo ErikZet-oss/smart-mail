@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileCheck2, Sparkles, TriangleAlert } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronUp, FileCheck2, Sparkles, TriangleAlert } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '../../components/Button';
 import { useToasts } from '../../components/toastContext';
 import { ConformityDialog } from '../documents/ConformityDialog';
+import { CollapsedSuggestion } from './CollapsedSuggestion';
 import { rejectSuggestion, suggestionsKey, type Suggestion } from './suggestionsApi';
 
 type Props = { suggestion: Suggestion; mailbox: string; messageId: string; readOnly: boolean };
@@ -17,6 +18,11 @@ export function ConformitySuggestionCard({ suggestion, mailbox, messageId, readO
   const toasts = useToasts();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false); // #156: collapsed by default
+  const headerToggle = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (expanded) headerToggle.current?.focus(); // keyboard focus stays on the card header (#156)
+  }, [expanded]);
   const form = suggestion.conformity ?? { customer: '', document_ref: '', items: [] };
   const done = () => void queryClient.invalidateQueries({ queryKey: suggestionsKey(mailbox, messageId) });
   const reject = useMutation({
@@ -28,6 +34,21 @@ export function ConformitySuggestionCard({ suggestion, mailbox, messageId, readO
     onError: () => toasts.error(t('mail.errors.generic')),
   });
   const warnings = suggestion.checks.filter((c) => c.level !== 'ok');
+  if (!expanded) {
+    return (
+      <CollapsedSuggestion
+        title={t('conformity.card.title')}
+        subline=""
+        status={warnings.length > 0 ? 'warning' : 'ok'}
+        warnings={warnings.length}
+        preview={[form.customer, form.document_ref].filter(Boolean).join(' · ')}
+        testId="ai-conformity-card"
+        onExpand={() => setExpanded(true)}
+        onReject={readOnly ? undefined : () => reject.mutate()}
+        rejectDisabled={reject.isPending}
+      />
+    );
+  }
   return (
     <section
       aria-label={t('conformity.card.title')}
@@ -40,6 +61,16 @@ export function ConformitySuggestionCard({ suggestion, mailbox, messageId, readO
           <h2 className="type-heading text-text-primary">{t('conformity.card.title')}</h2>
           <p className="type-small text-text-secondary">{t('conformity.card.subline')}</p>
         </div>
+        <button
+          type="button"
+          ref={headerToggle}
+          aria-expanded={true}
+          onClick={() => setExpanded(false)}
+          className="type-small inline-flex h-8 shrink-0 items-center gap-1 rounded-sm px-2 text-text-secondary hover:bg-bg-muted"
+        >
+          <ChevronUp size={16} aria-hidden="true" />
+          {t('ai.card.collapsed.hide')}
+        </button>
       </header>
       <dl className="type-small grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-text-primary">
         <dt className="text-text-secondary">{t('conformity.customer')}</dt>

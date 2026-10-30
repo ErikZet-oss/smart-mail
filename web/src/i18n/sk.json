@@ -1498,6 +1498,15 @@
     },
     "card": {
       "replyTitle": "Návrh odpovede",
+      "collapsed": {
+        "show": "Zobraziť návrh",
+        "hide": "Zbaliť",
+        "ok": "Kontroly v poriadku",
+        "warnings_one": "{{count}} upozornenie",
+        "warnings_few": "{{count}} upozornenia",
+        "warnings_other": "{{count}} upozornení",
+        "blocked": "Návrh treba doplniť – obsahuje blokujúcu kontrolu"
+      },
       "subline": "{{category}} · {{language}}",
       "approve": "Pripraviť koncept",
       "approveEdited": "Pripraviť upravený koncept",

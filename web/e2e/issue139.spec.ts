@@ -187,6 +187,9 @@ test('#139 C AI card opens the prefilled dialog; issuing sends the suggestion id
   await page.goto('/mail/default/inbox');
   await option(page, 'Reklamácia').click();
   const card = page.getByTestId('ai-conformity-card');
+  await expect(card).toHaveAttribute('data-collapsed', 'true'); // #156
+  await expect(card.getByRole('button', { name: 'Pripraviť prehlásenie…' })).toHaveCount(0);
+  await card.getByRole('button', { expanded: false }).click();
   await expect(card).toContainText('FV2026/0815');
   await expect(card).toContainText('Skrutka M8x40');
   await card.getByRole('button', { name: 'Pripraviť prehlásenie…' }).click();
