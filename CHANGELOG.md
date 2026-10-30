@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2 close-out report
+
+- `docs/phase2-closeout.md`: milestones 2a–2f, acceptance status, gates, open items and what is needed from Erik.
+
 ## [Unreleased] — CI: name the flaky unit test (#121)
 
 - `npm test` keeps failing on CI now and then, and the job log is not reachable through the proxy, so nobody can see which test fails. CI now also runs the vitest `github-actions` reporter: every failure becomes an annotation (test name, file, line), readable through the checks API. No retries.
