@@ -34,6 +34,7 @@ import { useToast } from '../../components/toastContext';
 import { ApiError, formatRef } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { AiSuggestionCard } from '../ai/AiSuggestionCard';
+import { ConformitySuggestionCard } from '../ai/ConformitySuggestionCard';
 import { fetchSuggestions, suggestionsKey } from '../ai/suggestionsApi';
 import { fetchMe } from '../auth/authApi';
 import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
@@ -747,16 +748,26 @@ function SuggestionCards({
   const shown = all ? list : list.slice(0, VISIBLE_CARDS);
   return (
     <div className="flex flex-col gap-2 py-3" data-testid="ai-suggestions">
-      {shown.map((s) => (
-        <AiSuggestionCard
-          key={s.id}
-          suggestion={s}
-          mailbox={mailbox}
-          messageId={messageId}
-          category={category}
-          readOnly={readOnly}
-        />
-      ))}
+      {shown.map((s) =>
+        s.type === 'conformity_declaration' ? (
+          <ConformitySuggestionCard
+            key={s.id}
+            suggestion={s}
+            mailbox={mailbox}
+            messageId={messageId}
+            readOnly={readOnly}
+          />
+        ) : (
+          <AiSuggestionCard
+            key={s.id}
+            suggestion={s}
+            mailbox={mailbox}
+            messageId={messageId}
+            category={category}
+            readOnly={readOnly}
+          />
+        ),
+      )}
       {list.length > VISIBLE_CARDS && !all ? (
         <button
           type="button"
