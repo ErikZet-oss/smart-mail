@@ -1,6 +1,6 @@
 import { PREFS_KEY } from '../prefs/prefsApi';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Check, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, FolderDown, Trash2 } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -27,6 +27,7 @@ import { buildNavItems, isItemActive, TABBED_SECTIONS } from './settingsNavModel
 import { AiKnowledgePanel } from './AiKnowledgePanel';
 import { AiRulesPanel } from './AiRulesPanel';
 import { AiUsagePanel } from './AiUsagePanel';
+import { ExportDialog } from '../mail/ExportDialog';
 import { AutonomyMatrix, AutonomyOverview } from './AiAutonomy';
 import { AiLimitsPanel } from './AiLimitsPanel';
 import { AiCategoriesPanel } from './AiCategoriesPanel';
@@ -374,7 +375,23 @@ function AdminOnly() {
 
 function FoldersHint() {
   const { t } = useTranslation();
-  return <p className="type-body text-text-secondary">{t('settings.foldersHint')}</p>;
+  const [exporting, setExporting] = useState(false);
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="type-body text-text-secondary">{t('settings.foldersHint')}</p>
+      {/* #127: backup of the whole mailbox (the folder menu offers single folders) */}
+      <Button
+        type="button"
+        variant="secondary"
+        className="self-start"
+        icon={<FolderDown size={16} aria-hidden="true" />}
+        onClick={() => setExporting(true)}
+      >
+        {t('settings.foldersExport')}
+      </Button>
+      {exporting ? <ExportDialog mailboxRef="default" folder={null} onClose={() => setExporting(false)} /> : null}
+    </div>
+  );
 }
 
 function PreferencesPanel({ sub }: { sub?: string }) {

@@ -5,6 +5,7 @@ import {
   Eraser,
   Flame,
   Folder as FolderIcon,
+  FolderDown,
   FolderPlus,
   HardDrive,
   Inbox,
@@ -20,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { ConfirmDialog, PromptDialog } from '../../components/Dialog';
+import { ExportDialog } from './ExportDialog';
 import { Menu, type MenuEntry } from '../../components/Menu';
 import { useToasts } from '../../components/toastContext';
 import { useMenu } from '../../components/useMenu';
@@ -62,7 +64,8 @@ type Dialog =
   | { kind: 'empty'; folder: Folder }
   | { kind: 'delete'; folder: Folder }
   | { kind: 'create'; parent: Folder }
-  | { kind: 'rename'; folder: Folder };
+  | { kind: 'rename'; folder: Folder }
+  | { kind: 'export'; folder: Folder | null };
 
 type Props = {
   mailboxRef: string;
@@ -200,6 +203,14 @@ export function FolderColumn({
         disabled: readOnly || special,
         onSelect: () => setDialog({ kind: 'rename', folder }),
       },
+      {
+        kind: 'item',
+        id: 'export',
+        label: t('folders.menu.export'),
+        icon: <FolderDown size={16} />,
+        disabled: readOnly, // the API needs an active person (ActivePerson) — same as the other folder actions
+        onSelect: () => setDialog({ kind: 'export', folder }),
+      },
       { kind: 'divider', id: 'd1' },
       {
         kind: 'item',
@@ -242,6 +253,14 @@ export function FolderColumn({
     entries.push(
       { kind: 'divider', id: 'd1' },
       { kind: 'label', id: 'l2', label: t('folders.mailboxMenu.actions') },
+      {
+        kind: 'item',
+        id: 'export-all',
+        label: t('folders.mailboxMenu.export'),
+        icon: <FolderDown size={16} />,
+        disabled: readOnly,
+        onSelect: () => setDialog({ kind: 'export', folder: null }),
+      },
       {
         kind: 'item',
         id: 'compact',
@@ -377,6 +396,21 @@ export function FolderColumn({
         />
       ) : null}
 
+      {dialog?.kind === 'export' ? (
+        <ExportDialog
+          mailboxRef={mailboxRef}
+          folder={
+            dialog.folder
+              ? {
+                  id: dialog.folder.id,
+                  label: labelOf(dialog.folder),
+                  hasChildren: view.folders.some((f) => f.parent_id === dialog.folder?.id),
+                }
+              : null
+          }
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
       {dialog?.kind === 'empty' ? (
         <ConfirmDialog
           title={t('folders.dialog.emptyTitle', { name: labelOf(dialog.folder) })}

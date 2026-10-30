@@ -249,7 +249,11 @@
     "group": { "today": "Dnes", "yesterday": "Včera", "older": "Staršie" },
     "kinds": {
       "sync_failed": { "title": "Synchronizácia zlyhala" },
-      "assigned": { "title": "Pridelené vám", "body": "{{subject}}" }
+      "assigned": { "title": "Pridelené vám", "body": "{{subject}}" },
+      "export_ready": {
+        "title": "Archív je pripravený",
+        "body": "{{filename}} – {{messages}} správ, odkaz platí 24 hodín."
+      }
     },
     "syncErrors": {
       "auth_failed": "Nesprávne heslo pre {{email}}.",
@@ -369,6 +373,40 @@
     "themeDark": "Tmavý",
     "themeSystem": "Podľa zariadenia"
   },
+  "mailExport": {
+    "titleFolder": "Stiahnuť priečinok {{name}}",
+    "titleMailbox": "Stiahnuť celú schránku",
+    "range": "Ktoré správy",
+    "all": "Všetky správy",
+    "olderThan": "Staršie ako",
+    "months": "Počet mesiacov",
+    "monthsUnit": "mesiacov",
+    "between": "Od – do",
+    "from": "Od dátumu",
+    "to": "Do dátumu",
+    "pickDates": "Vyberte dátum od a do.",
+    "children": "Vrátane podpriečinkov",
+    "estimating": "Zisťujem počet správ…",
+    "estimate": "Približne {{count}} správ, {{size}}.",
+    "format": "Archív ZIP: každá správa ako pôvodný súbor .eml, priečinky ako adresáre a zoznam manifest.csv. Správy zostanú v schránke, nič sa nevymaže.",
+    "start": "Pripraviť archív",
+    "cancel": "Zrušiť",
+    "close": "Zavrieť",
+    "preparing": "Pripravujem archív…",
+    "progress": "Spracované {{done}} z {{total}} správ",
+    "progressLabel": "Priebeh prípravy archívu",
+    "background": "Môžete pokračovať v práci. Keď bude archív pripravený, dáme vám vedieť v notifikáciách.",
+    "ready": "Archív je pripravený: {{count}} správ, {{size}}.",
+    "download": "Stiahnuť archív",
+    "validFor": "Odkaz platí 24 hodín, potom sa archív zo servera zmaže.",
+    "failed": "Archív sa nepodarilo pripraviť. Skúste to znova neskôr.",
+    "errors": {
+      "export_running": "Pre túto schránku sa už pripravuje iný archív. Počkajte, kým sa dokončí.",
+      "folder_private": "Súkromný priečinok iného používateľa sa nedá stiahnuť.",
+      "no_folders": "Nie je čo stiahnuť.",
+      "generic": "Archív sa nepodarilo spustiť."
+    }
+  },
   "folders": {
     "label": "Priečinky",
     "withUnread": "{{name}}, neprečítané: {{count}}",
@@ -384,6 +422,7 @@
       "switch": "Prepnúť schránku",
       "all": "Všetky schránky",
       "actions": "Akcie pre priečinky",
+      "export": "Stiahnuť celú schránku (.zip)…",
       "compact": "Zhustiť",
       "manage": "Spravovať priečinky"
     },
@@ -391,6 +430,7 @@
       "label": "Akcie priečinka {{name}}",
       "markRead": "Označiť všetko ako prečítané",
       "empty": "Vyprázdniť",
+      "export": "Stiahnuť priečinok (.zip)…",
       "newChild": "Nový podpriečinok",
       "rename": "Premenovať",
       "delete": "Vymazať"
@@ -708,6 +748,7 @@
     "save": "Uložiť",
     "saved": "Nastavenia uložené.",
     "adminOnly": "Túto sekciu môže upravovať len správca.",
+    "foldersExport": "Stiahnuť celú schránku (.zip)…",
     "foldersHint": "Priečinky spravujete aj v ľavom stĺpci pošty (Vytvoriť, Premenovať, Vyprázdniť). Tu nastavíte odber a súkromné priečinky.",
     "sieveError": "ManageSieve server neodpovedal – skontrolujte pripojenie schránky.",
     "sieveUnavailable": "Filtre a Mimo kancelárie nie sú na tomto serveri dostupné (ManageSieve, port 4190). Pošta funguje normálne.",
