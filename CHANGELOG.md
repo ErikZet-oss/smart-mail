@@ -2,6 +2,22 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 2f PR 2: W12-17f shadow mode, consumption and accuracy
+
+**Settings 17 › „Tieňový režim, spotreba a presnosť“** (admin):
+- **Shadow switch** for AI reply suggestions:
+  - it reads and writes the existing `ai_shadow_mode` flag; the default stays **on**;
+  - turning it off needs a confirm („Zobraziť AI návrhy odpovedí všetkým?“);
+  - audit `ai.shadow_mode_changed` (before/after).
+- **Read-only numbers, last 30 days:**
+  - cost per day (bars) and per purpose vs the daily budget;
+  - reply suggestions: created / in shadow / approved / approved without edits % / rejected;
+  - top reject reasons and the category distribution.
+- CSV export of the daily cost.
+- No mail text in the API.
+
+The switch is code only. Turning shadow off on the test server stays Erik's decision; no rows were changed.
+
 ## [Unreleased] — Phase 2f PR 1: injection suite + fact-check fix
 
 **Injection suite** (AI_ASSISTANT §12; `make injection`, also part of `pytest`):
