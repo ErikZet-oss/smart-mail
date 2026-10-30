@@ -20,11 +20,13 @@ from app.ai.category_settings import (
     CUSTOM_ID,
     FALLBACK_ID,
     MAX_CUSTOM,
+    MAX_DELETED,
     MAX_DESCRIPTION,
     MAX_LABEL,
     SECTION_CATEGORIES,
     all_categories,
     custom_id,
+    deleted_categories,
     load_category_data,
 )
 from app.ai.models import AiRule, AiRun, AiSuggestion, Classification, KnowledgeCard
@@ -839,7 +841,13 @@ async def put_categories(body: CategoriesIn, ctx: RecentReauth, db: DB) -> list[
         )
     if len(custom) > MAX_CUSTOM:
         raise fail(422, "too_many_categories")
-    data: dict[str, Any] = {"builtin": builtin, "custom": custom}
+    # removed custom categories stay known (hidden) so stored classifications keep their view (#126 review)
+    kept = {c["id"] for c in custom}
+    previous = [c for c, _, b in all_categories(before_data) if not b] + deleted_categories(before_data)
+    deleted = [{"id": c.id, "label": c.label_sk, "color": c.color_token} for c in previous if c.id not in kept][
+        :MAX_DELETED
+    ]
+    data: dict[str, Any] = {"builtin": builtin, "custom": custom, "deleted": deleted}
     await save_org_section(db, SECTION_CATEGORIES, data)
 
     def _snapshot(d: dict[str, Any] | None) -> dict[str, Any]:

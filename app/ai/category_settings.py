@@ -83,9 +83,27 @@ def triage_categories(data: dict[str, Any] | None) -> tuple[CategoryDef, ...]:
     return tuple(c for c in prompt_categories(data) if c.show_in_triage)
 
 
+MAX_DELETED: Final = 200
+
+
+def deleted_categories(data: dict[str, Any] | None) -> list[CategoryDef]:
+    """Custom categories removed in 17c: hidden everywhere, but stored classifications keep their view (#126)."""
+    raw = (data or {}).get("deleted")
+    out: list[CategoryDef] = []
+    for item in raw if isinstance(raw, list) else []:
+        item = _dict(item)
+        cid, label = item.get("id"), _text(item.get("label"))
+        if isinstance(cid, str) and CUSTOM_ID.match(cid) and label:
+            color = item.get("color") if item.get("color") in COLOR_TOKENS else "neutral"
+            out.append(CategoryDef(cid, label[:MAX_LABEL], "", str(color), show_in_triage=False))
+    return out[:MAX_DELETED]
+
+
 def category_lookup(data: dict[str, Any] | None) -> dict[str, CategoryDef]:
-    """Every known category, enabled or not: stored classifications keep opening (#116)."""
-    return {c.id: c for c, _, _ in all_categories(data)}
+    """Every known category, enabled, switched off or deleted: stored classifications keep opening (#116, #126)."""
+    known = {c.id: c for c in deleted_categories(data)}
+    known.update({c.id: c for c, _, _ in all_categories(data)})
+    return known
 
 
 async def load_category_data(db: AsyncSession) -> dict[str, Any] | None:

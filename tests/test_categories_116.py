@@ -141,3 +141,36 @@ async def test_116_categories_api_reauth_limit_audit_and_views(
 async def test_116_categories_admin_only(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
     await _admin(client, db, mail_server, role=Role.sales)
     assert (await client.get("/api/settings/ai/categories")).status_code == 403
+
+
+async def test_126_rule_naming_a_switched_off_category_goes_to_other(
+    db: AsyncSession, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.ai import service
+    from app.ai.models import AiRule, Classification
+    from tests.test_rules_2e import SUPPLIER, _live, _mailbox_with_message
+
+    db.add(OrgSettings(section=SECTION_CATEGORIES, data={"builtin": {"supplier_document": {"enabled": False}}}))
+    db.add(AiRule(nl_text="Faktúry od Fixtechu sú doklady dodávateľov", structured=SUPPLIER))
+    mailbox, msg = await _mailbox_with_message(db)
+    llm = ScriptedAnthropic([])
+    monkeypatch.setattr(service, "get_llm_provider", lambda _s: llm)
+    await process_mailbox_ai(db, mailbox, _live(settings))
+    row = await db.scalar(select(Classification).where(Classification.message_id == msg.id))
+    assert row is not None and row.category == "other"
+
+
+async def test_126_removed_custom_category_keeps_its_view(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer
+) -> None:
+    await _admin(client, db, mail_server)
+    assert (await client.reauth(PASSWORD)).status_code == 200
+    add = {"categories": [{"label": "Kuriér", "description": "DPD", "color": "info"}]}
+    assert (await client.send_json("PUT", "/api/settings/ai/categories", add)).status_code == 200
+    r = await client.send_json("PUT", "/api/settings/ai/categories", {"categories": []})
+    assert all(row["id"] != "x_kurier" for row in r.json())  # gone from 17c and the prompt
+    view = await client.get("/api/mail/mailboxes/default/ai/views/x_kurier/messages")
+    assert view.status_code == 200 and view.json()["category"]["label_sk"] == "Kuriér"
+    # re-adding the same name brings the same id back
+    r = await client.send_json("PUT", "/api/settings/ai/categories", add)
+    assert any(row["id"] == "x_kurier" for row in r.json())
