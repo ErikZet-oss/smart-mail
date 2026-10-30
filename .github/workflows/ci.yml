@@ -109,7 +109,9 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
-      - run: npm test
+      # #121: the flaky unit test is invisible (the job log is not reachable through the proxy) — the github-actions
+      # reporter turns every failure into an annotation (test name, file, line) readable via the checks API. No retries.
+      - run: npm test -- --reporter=default --reporter=github-actions
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
 
