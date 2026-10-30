@@ -24,6 +24,7 @@ from app.ai.categories import LANGUAGE_IDS
 from app.ai.classify import neutralize_untrusted_wrapper
 from app.ai.guards import SECURITY_PREFIX, reply_checks
 from app.ai.models import AiRun, AiSuggestion, Classification, KnowledgeCard
+from app.ai.org_settings import load_ai_limits
 from app.ai.pipeline import message_eligible_for_ai, normalize_message_id_header
 from app.ai.pricing import estimate_purpose_cost_usd
 from app.ai.provider import AnthropicLLMProvider, LLMProvider, LLMRequest, NullLLMProvider, get_llm_provider
@@ -244,7 +245,7 @@ async def suggest_replies(
     if isinstance(provider, NullLLMProvider) or not model:
         return stats.as_dict()  # drafts need the LLM; no fallback text
     estimate = estimate_purpose_cost_usd(model, "draft")
-    budget = Decimal(str(settings.ai_daily_budget_usd))
+    budget = (await load_ai_limits(db, settings)).budget_usd
     live = isinstance(provider, AnthropicLLMProvider)
     spent = spent_usd
     retriever = retriever or default_retriever()

@@ -817,6 +817,96 @@
       "admin_only": true,
       "subs": [
         {
+          "id": "17a",
+          "path": "limits",
+          "title": "Poskytovateľ a rozpočet",
+          "fields": [
+            {
+              "id": "ai.provider",
+              "label": "Poskytovateľ ⚠",
+              "control": "readonly",
+              "default": "anthropic",
+              "help": "Poskytovateľa a modely mení správca servera.",
+              "scope": "G",
+              "options": [],
+              "validation": {},
+              "admin_only": true
+            },
+            {
+              "id": "ai.daily_budget_usd",
+              "label": "Denný rozpočet (USD) ⚠",
+              "control": "number",
+              "default": null,
+              "help": "Bez vlastnej hodnoty platí suma z nastavenia servera.",
+              "scope": "G",
+              "options": [],
+              "validation": {
+                "min": 1,
+                "max": 500
+              },
+              "admin_only": true
+            },
+            {
+              "id": "ai.alert_pct",
+              "label": "Upozorniť pri (%)",
+              "control": "number",
+              "default": 80,
+              "help": null,
+              "scope": "G",
+              "options": [],
+              "validation": {
+                "min": 1,
+                "max": 100
+              },
+              "admin_only": true
+            },
+            {
+              "id": "ai.on_exhausted",
+              "label": "Pri vyčerpaní",
+              "control": "select",
+              "default": "rules_only",
+              "help": null,
+              "scope": "G",
+              "options": [
+                {
+                  "value": "rules_only",
+                  "label": "Triediť len podľa pravidiel"
+                },
+                {
+                  "value": "ai_off",
+                  "label": "Vypnúť AI"
+                }
+              ],
+              "validation": {},
+              "admin_only": true
+            },
+            {
+              "id": "ai.retention_days",
+              "label": "Uchovávať záznamy AI",
+              "control": "select",
+              "default": 90,
+              "help": null,
+              "scope": "G",
+              "options": [
+                {
+                  "value": "30",
+                  "label": "30 dní"
+                },
+                {
+                  "value": "90",
+                  "label": "90 dní"
+                },
+                {
+                  "value": "365",
+                  "label": "365 dní"
+                }
+              ],
+              "validation": {},
+              "admin_only": true
+            }
+          ]
+        },
+        {
           "id": "17b",
           "path": "autonomy",
           "title": "Samostatnosť AI",

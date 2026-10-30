@@ -1097,6 +1097,32 @@
     }
   },
   "ai": {
+    "limits": {
+      "title": "Poskytovateľ a rozpočet",
+      "provider": "Poskytovateľ",
+      "providers": {
+        "anthropic": "Anthropic",
+        "bedrock": "AWS Bedrock (EÚ)"
+      },
+      "purposes": {
+        "classify": "Model – triedenie",
+        "draft": "Model – návrhy",
+        "extract": "Model – extrakcia",
+        "assistant": "Model – asistent",
+        "embed": "Model – vyhľadávanie"
+      },
+      "noModel": "nenastavený",
+      "serverHint": "Poskytovateľa a modely mení správca servera.",
+      "budget": "Denný rozpočet (USD)",
+      "sourceEnv": "Teraz {{value}} USD z nastavenia servera. Zadajte sumu 1–500, ak ju chcete zmeniť v aplikácii.",
+      "sourceApp": "Teraz {{value}} USD nastavené v aplikácii. Po vymazaní poľa platí hodnota servera.",
+      "alert": "Upozorniť pri (%)",
+      "onExhausted": "Pri vyčerpaní",
+      "rulesOnly": "Triediť len podľa pravidiel",
+      "aiOff": "Vypnúť AI",
+      "retention": "Uchovávať záznamy AI",
+      "days": "{{count}} dní"
+    },
     "autonomy": {
       "title": "Samostatnosť",
       "help": "Koľko smie AI urobiť sama. Odoslanie von a zápis do Money vždy schvaľuje človek.",

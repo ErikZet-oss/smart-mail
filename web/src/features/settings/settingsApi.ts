@@ -324,3 +324,25 @@ export const fetchAutonomy = () => api<{ actions: AutonomyAction[] }>('GET', '/a
 export const saveAutonomy = (levels: Record<string, number>) =>
   api<{ actions: AutonomyAction[] }>('PUT', '/api/settings/ai/autonomy', { levels });
 export const fetchAutonomyOverview = () => api<AccountAutonomy[]>('GET', '/api/settings/ai/autonomy/overview');
+
+/** 17a Poskytovateľ a rozpočet (#116): budget from env until an admin saves one (1–500 USD). */
+export type AiLimits = {
+  provider: string;
+  region: string | null;
+  models: { purpose: string; model: string | null }[];
+  daily_budget_usd: string;
+  budget_source: 'env' | 'app';
+  env_budget_usd: string;
+  alert_pct: number;
+  on_exhausted: 'rules_only' | 'ai_off';
+  retention_days: 30 | 90 | 365;
+};
+export type AiLimitsIn = {
+  daily_budget_usd: string | null;
+  alert_pct: number;
+  on_exhausted: AiLimits['on_exhausted'];
+  retention_days: AiLimits['retention_days'];
+};
+export const limitsKey = ['settings', 'ai', 'limits'] as const;
+export const fetchLimits = () => api<AiLimits>('GET', '/api/settings/ai/limits');
+export const saveLimits = (body: AiLimitsIn) => api<AiLimits>('PUT', '/api/settings/ai/limits', body);

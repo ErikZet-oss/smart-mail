@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
@@ -15,6 +15,15 @@ from sqlalchemy import func, select
 
 from app.ai.budget import budget_allows_call
 from app.ai.models import AiRule, AiRun, AiSuggestion, Classification, KnowledgeCard
+from app.ai.org_settings import (
+    ALERT_DEFAULT,
+    SECTION_LIMITS,
+    AiLimits,
+    limits_from,
+    load_ai_limits,
+    parse_budget,
+    save_org_section,
+)
 from app.ai.pricing import estimate_purpose_cost_usd
 from app.ai.provider import get_llm_provider
 from app.ai.rule_parse import parse_rule
@@ -256,7 +265,7 @@ async def preview_rule(body: RulePreviewIn, admin: Admin, db: DB, settings: Sett
     if not budget_allows_call(
         spent_usd=await daily_spend_usd(db),
         estimate_usd=estimate_purpose_cost_usd(model, "classify"),
-        budget_usd=Decimal(str(settings.ai_daily_budget_usd)),
+        budget_usd=(await load_ai_limits(db, settings)).budget_usd,
     ):
         raise fail(429, "ai_budget_exceeded")
     result = await parse_rule(get_llm_provider(settings), model, body.nl_text.strip())
@@ -433,7 +442,7 @@ async def generate_style_profile(person: ActivePerson, db: DB, settings: Setting
     if not budget_allows_call(
         spent_usd=await daily_spend_usd(db),
         estimate_usd=estimate_purpose_cost_usd(model, "draft"),
-        budget_usd=Decimal(str(settings.ai_daily_budget_usd)),
+        budget_usd=(await load_ai_limits(db, settings)).budget_usd,
     ):
         raise fail(429, "ai_budget_exceeded")
     result = await generate_profile(get_llm_provider(settings), model, samples)
@@ -565,7 +574,7 @@ async def usage_stats(db: DB, settings: Settings, *, days: int = USAGE_DAYS) -> 
     return UsageOut(
         days=per_day,
         total_cost_usd=f"{total:.4f}",
-        budget_usd=f"{Decimal(str(settings.ai_daily_budget_usd)):.2f}",
+        budget_usd=f"{(await load_ai_limits(db, settings)).budget_usd:.2f}",
         cost_by_purpose=by_purpose,
         suggestions=SuggestionStats(
             total=len(suggestions),
@@ -622,3 +631,101 @@ async def put_shadow(body: ShadowIn, ctx: RecentReauth, db: DB) -> ShadowOut:
     )
     await db.commit()
     return ShadowOut(replies=await shadow_mode_enabled(db))
+
+
+# --- 17a Poskytovateľ a rozpočet (#116) ---
+
+
+class ModelOut(BaseModel):
+    purpose: str
+    model: str | None
+
+
+class LimitsOut(BaseModel):
+    provider: str  # read-only: LLM_PROVIDER on the server
+    region: str | None
+    models: list[ModelOut]
+    daily_budget_usd: str
+    budget_source: str  # env = „z nastavenia servera“, app = „nastavené v aplikácii“
+    env_budget_usd: str
+    alert_pct: int
+    on_exhausted: str
+    retention_days: int
+
+
+class LimitsIn(BaseModel):
+    # None = back to the server value (AI_DAILY_BUDGET_USD); a decimal string within 1–500 otherwise
+    daily_budget_usd: str | None = Field(default=None, max_length=12)
+    alert_pct: int = Field(default=ALERT_DEFAULT, ge=1, le=100)
+    on_exhausted: Literal["rules_only", "ai_off"] = "rules_only"
+    retention_days: Literal[30, 90, 365] = 90  # RETENTION_DEFAULT
+
+    @field_validator("daily_budget_usd")
+    @classmethod
+    def _budget(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        parsed = parse_budget(value.replace(",", "."))
+        if parsed is None:
+            raise ValueError("budget_out_of_range")
+        return str(parsed)
+
+
+def _limits_out(limits: AiLimits, settings: Settings) -> LimitsOut:
+    return LimitsOut(
+        provider=settings.llm_provider,
+        region=settings.aws_region if settings.llm_provider == "bedrock" else None,
+        models=[
+            ModelOut(purpose=purpose, model=(getattr(settings, f"llm_model_{purpose}") or "").strip() or None)
+            for purpose in ("classify", "draft", "extract", "assistant", "embed")
+        ],
+        daily_budget_usd=f"{limits.budget_usd:.2f}",
+        budget_source=limits.budget_source,
+        env_budget_usd=f"{Decimal(str(settings.ai_daily_budget_usd)):.2f}",
+        alert_pct=limits.alert_pct,
+        on_exhausted=limits.on_exhausted,
+        retention_days=limits.retention_days,
+    )
+
+
+@router.get("/limits")
+async def get_limits(admin: Admin, db: DB, settings: SettingsDep) -> LimitsOut:
+    return _limits_out(await load_ai_limits(db, settings), settings)
+
+
+@router.put("/limits")
+async def put_limits(body: LimitsIn, ctx: RecentReauth, db: DB, settings: SettingsDep) -> LimitsOut:
+    """⚠ company-wide AI change: re-auth (#54) and audit before/after (#116)."""
+    before = await load_ai_limits(db, settings)
+    data: dict[str, object] = {
+        "alert_pct": body.alert_pct,
+        "on_exhausted": body.on_exhausted,
+        "retention_days": body.retention_days,
+    }
+    if body.daily_budget_usd is not None:
+        data["daily_budget_usd"] = body.daily_budget_usd  # decimal as a string, never a float
+    await save_org_section(db, SECTION_LIMITS, data)
+    after = limits_from(data, settings)
+    audit(
+        db,
+        "ai.limits_changed",
+        person_id=ctx.person.id if ctx.person else None,
+        object_type="org_settings",
+        object_id=SECTION_LIMITS,
+        details={
+            "before": _limits_audit(before),
+            "after": _limits_audit(after),
+        },
+    )
+    await db.commit()
+    return _limits_out(after, settings)
+
+
+def _limits_audit(limits: AiLimits) -> dict[str, object]:
+    return {
+        "daily_budget_usd": f"{limits.budget_usd:.2f}",
+        "budget_source": limits.budget_source,
+        "alert_pct": limits.alert_pct,
+        "on_exhausted": limits.on_exhausted,
+        "retention_days": limits.retention_days,
+    }
