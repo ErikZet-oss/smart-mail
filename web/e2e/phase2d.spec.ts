@@ -37,7 +37,7 @@ const DRAFT = {
   updated_at: '2026-10-26T12:00:00Z',
 };
 
-async function setup(page: Page, ai = true) {
+async function setup(page: Page, ai = true, checks: unknown[] = []) {
   const view = foldersView();
   const calls: unknown[] = [];
   await mockApi(page, {
@@ -45,8 +45,8 @@ async function setup(page: Page, ai = true) {
     'GET /api/mail/mailboxes/default/folders': {
       body: { ...view, mailbox: { ...view.mailbox, ai_enabled: ai, ai_available: ai } },
     },
-    'GET /api/mail/compose/d-1': { body: DRAFT },
-    'PATCH /api/mail/compose/d-1': { body: DRAFT },
+    'GET /api/mail/compose/d-1': { body: { ...DRAFT, checks } },
+    'PATCH /api/mail/compose/d-1': { body: { ...DRAFT, checks } },
     'GET /api/mail/mailboxes/default/identities': {
       body: [{ id: 'id-1', display_name: 'Jana Testová', email: 'jana@smartmail.test', is_default: true }],
     },
@@ -100,6 +100,18 @@ test.describe('Phase 2d W4a / M17 @mobile', () => {
     await page.getByTestId('compose-ai-proposal').getByRole('button', { name: 'Zahodiť' }).click();
     await expect(page.getByTestId('compose-ai-proposal')).toHaveCount(0);
     await expect(editor(page)).toContainText('ahoj, posielam ponuku');
+  });
+
+  test('2d live checklist shows the draft checks and the passes', async ({ page }, info) => {
+    await setup(page, true, [{ code: 'placeholder', blocking: true, message: 'placeholder' }]);
+    await page.goto('/compose/d-1?mailbox=default');
+    await expect(editor(page)).toContainText('ahoj, posielam ponuku');
+    await page.getByRole('button', { name: 'AI pri písaní' }).click();
+    const list = page.getByTestId('compose-checklist').last();
+    await expect(list.getByText('V texte ostáva [[DOPLNIŤ]].')).toBeVisible();
+    await expect(list.getByText('Príjemcovia z jednej firmy')).toBeVisible();
+    await expect(list.getByText('Jazyk sedí so zákazníkom')).toBeVisible();
+    await shot(page, `phase2d-checklist-${info.project.name}`);
   });
 
   test('2d no AI button when AI is off for the mailbox', async ({ page }) => {
