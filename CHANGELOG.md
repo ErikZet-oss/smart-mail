@@ -18,6 +18,11 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   - The confirm dialog names the size and the folders.
 - Audit `mail.export_purged` records the count, folders, skipped folders and the archive sha256; a sync is scheduled afterwards.
 - Before an export starts (API and job), the free space of the temp directory is checked against the estimate × 1.1. Too little → 507 `export_no_space` with a Slovak hint to narrow the range (reviewer note on #130).
+## [Unreleased] — fix: Slovak reply drafts drifted into Czech
+
+- Pilot 2026-10-30: a Slovak reply suggestion mixed in Czech words. The draft prompt said only „Language: sk“; it now names the language in full („Slovak (slovenčina) … never Czech“), and the compose „Napíš za mňa“ task says never to mix Slovak and Czech.
+- New warning check `czech_in_slovak` on Slovak drafts (creation and approval): Czech-only letters (ř, ě, ů) or words („jsme“, „děkujeme“, „dotaz“, „zboží“ …) are listed on the card.
+
 ## [Unreleased] — reply suggestions also for „Iné“ (#132)
 
 - A reply suggestion is now prepared for every classified message with `needs_reply = true`, in any category, built-in or a 17c custom one. The exception is `NO_REPLY_CATEGORIES` (newsletter, spam, notification, internal, supplier_document). Before, only a fixed list of categories got one, so a customer's „pracujete aj cez víkend? … link na eshop?“ in „Iné“ got none (pilot 2026-10-30). Guards, autonomy (level 2 draft) and the daily budget are unchanged. AI_ASSISTANT §6 documents the rule.

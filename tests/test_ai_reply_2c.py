@@ -409,3 +409,32 @@ async def test_132_reply_follows_needs_reply_except_no_reply_categories(
     llm = ScriptedAnthropic([_draft_response()])
     await suggest_replies(db, mailbox, _settings(settings), spent_usd=Decimal("0"), shadow=False, provider=llm)
     assert len(llm.calls) == expected and len(await _replies(db, message)) == expected
+
+
+def test_czech_in_slovak_draft_is_flagged_and_prompt_names_slovak() -> None:
+    """Pilot 2026-10-30: a Slovak reply drifted into Czech; the prompt said only „Language: sk“."""
+    from app.ai.guards import reply_checks
+    from app.ai.language import czech_words, draft_language
+
+    assert "Slovak" in draft_language("sk") and "never Czech" in draft_language("sk")
+    assert draft_language(None) == "the language of the customer's last e-mail"
+    found = czech_words("Děkujeme za Váš dotaz, zboží jsme odeslali.")
+    assert {"Děkujeme", "dotaz", "zboží", "jsme"} <= set(found)
+    assert czech_words("Ďakujeme za Vašu otázku, tovar sme odoslali. S pozdravom") == []
+
+    def codes(body: str, lang: str) -> list[str]:
+        checks = reply_checks(
+            body=body,
+            context="",
+            recipient="a@example.com",
+            recipient_known=True,
+            internal_domains=[],
+            security_notes=[],
+            expected_language=lang,
+            proposal_language=lang,
+        )
+        return [str(c.get("id") or c.get("code")) for c in checks]
+
+    assert any("czech_in_slovak" in c for c in codes("Dobrý deň, děkujeme za dotaz.", "sk"))
+    assert not any("czech_in_slovak" in c for c in codes("Dobrý deň, ďakujeme za otázku.", "sk"))
+    assert not any("czech_in_slovak" in c for c in codes("Dobrý den, děkujeme za dotaz.", "cs"))
