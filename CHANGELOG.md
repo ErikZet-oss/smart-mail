@@ -2,6 +2,9 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — fix: reply drafts failed on claude-sonnet-5-5 (forced tool_choice)
+
+- Pilot 2026-10-30: every reply suggestion and every „Napíš za mňa“ ended with `BadRequestError` — the draft model answers 400 „tool_choice: type "tool" and "any" are not supported for this model“. The Anthropic provider now retries such a call once with `tool_choice: auto` plus an instruction to call the tool, and remembers the model for the rest of the process. Other 400s are still raised, never retried; the API's explanation is logged as `ai.llm_bad_request` (parameter errors only, no mail text). Messages whose draft failed are picked up again on the next AI run.
 ## [Unreleased] — #127 part 1: back up a folder or the whole mailbox to ZIP
 
 - W2 folder menu „Stiahnuť priečinok (.zip)…“, mailbox menu and Nastavenia › Priečinky „Stiahnuť celú schránku (.zip)…“. The dialog offers Všetky správy / Staršie ako N mesiacov / Od – do, an optional „Vrátane podpriečinkov“, and an estimate (count and size from the synced copy). Then progress, and a download link valid 24 h. The notification „Archív je pripravený“ downloads it too.
