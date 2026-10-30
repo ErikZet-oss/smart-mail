@@ -1,13 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download } from 'lucide-react';
+import { Download, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/Dialog';
 import { Switch } from '../../components/Switch';
 import { useToasts } from '../../components/toastContext';
 import { adminErrorText } from './adminUi';
-import { fetchShadow, fetchUsage, saveShadow, shadowKey, usageKey, type AiUsage } from './settingsApi';
+import { ApiError } from '../../lib/api';
+import {
+  downloadEvalSample,
+  fetchShadow,
+  fetchUsage,
+  saveShadow,
+  shadowKey,
+  uploadEvalLabels,
+  usageKey,
+  type AiUsage,
+} from './settingsApi';
+
+const MAX_UPLOAD = 1_000_000;
 
 /** W12-17f Tieňový režim, spotreba a presnosť (admin, Phase 2f): shadow switch + read-only numbers, CSV export. */
 export function AiUsagePanel() {
@@ -159,6 +172,7 @@ function EvalSection({ evalRun }: { evalRun: AiUsage['eval'] }) {
       <h2 id="ai-eval-title" className="type-heading text-text-primary">
         {t('ai.usage.eval.title')}
       </h2>
+      <EvalFiles />
       {evalRun === null ? (
         <p className="type-small text-text-secondary">{t('ai.usage.eval.never')}</p>
       ) : (
@@ -204,5 +218,83 @@ function EvalSection({ evalRun }: { evalRun: AiUsage['eval'] }) {
         </>
       )}
     </section>
+  );
+}
+
+/** Download a random sample to label in Excel, upload it back — the file is never kept, only aggregates (#129). */
+function EvalFiles() {
+  const { t } = useTranslation();
+  const toasts = useToasts();
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const download = useMutation({
+    mutationFn: downloadEvalSample,
+    onSuccess: (out) => {
+      const url = URL.createObjectURL(new Blob([out.csv], { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = out.filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      toasts.success(t('ai.usage.eval.downloaded', { count: out.rows }));
+    },
+    onError: (e) => toasts.error(adminErrorText(t, e)),
+  });
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      if (file.size > MAX_UPLOAD) throw new ApiError(422, { code: 'eval_file_too_large' });
+      return uploadEvalLabels(await file.text());
+    },
+    onSuccess: (summary) => {
+      setError(null);
+      queryClient.setQueryData<AiUsage>(usageKey, (old) => (old ? { ...old, eval: summary } : old));
+      toasts.success(t('ai.usage.eval.uploaded'));
+    },
+    onError: (e) => {
+      if (e instanceof ApiError && e.status === 422) {
+        const d = e.detail as { code: string; line?: number | null; value?: string | null };
+        setError(
+          t(`ai.usage.eval.errors.${d.code}`, { line: d.line ?? '', value: d.value ?? '', defaultValue: d.code }),
+        );
+      } else if (!(e instanceof ApiError && e.status === 401)) {
+        toasts.error(adminErrorText(t, e));
+      }
+    },
+  });
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="type-small text-text-secondary">{t('ai.usage.eval.filesHelp')}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          icon={<Download size={16} aria-hidden="true" />}
+          disabled={download.isPending}
+          onClick={() => download.mutate()}
+        >
+          {t('ai.usage.eval.download')} ⚠
+        </Button>
+        <label className="type-label inline-flex cursor-pointer items-center gap-1 text-brand-primary-700 hover:underline">
+          <Upload size={16} aria-hidden="true" />
+          {t('ai.usage.eval.upload')} ⚠
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="sr-only"
+            disabled={upload.isPending}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) upload.mutate(file);
+            }}
+          />
+        </label>
+      </div>
+      {error ? (
+        <p role="alert" className="type-small text-danger-600">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

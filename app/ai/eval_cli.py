@@ -13,24 +13,23 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import csv
 import os
 import sys
-import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import app.models  # noqa: F401  (register every table)
 from app.ai.budget import budget_allows_call
+from app.ai.categories import CategoryDef
 from app.ai.category_settings import category_lookup, load_category_data, prompt_categories
 from app.ai.classify import classify_message
 from app.ai.eval import ACCURACY_GATE, SECTION_EVAL, EvalReport, EvalRow, evaluate, format_report
+from app.ai.eval_labels import SAMPLE_DEFAULT, Label, LabelError, parse_labels, sample_csv, sample_rows
 from app.ai.models import AiRun, Classification
 from app.ai.org_settings import load_ai_limits, save_org_section
 from app.ai.pricing import estimate_purpose_cost_usd
@@ -40,7 +39,6 @@ from app.core.config import Settings, get_settings
 from app.mail.models import Attachment, Message
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-FIELDS = ("message_uuid", "received_at", "from_domain", "subject", "predicted", "category", "language", "notes")
 
 
 class EvalError(Exception):
@@ -56,63 +54,25 @@ def _check_out_path(out: Path) -> None:
 
 
 async def sample(db: AsyncSession, n: int, out: Path) -> int:
-    """Pick n classified messages at random and write a label template (0600). Returns the row count."""
+    """Write the label file (same format as the 17f download) readable by the owner only. Returns the row count."""
     _check_out_path(out)
-    rows = (
-        await db.execute(
-            select(Message, Classification)
-            .join(Classification, Classification.message_id == Message.id)
-            .where(Classification.status == "done")
-            .order_by(func.random())
-            .limit(n)
-        )
-    ).all()
+    rows = await sample_rows(db, n)
+    text = sample_csv(rows, prompt_categories(await load_category_data(db)))
     out.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=FIELDS)
-        writer.writeheader()
-        for message, cls in rows:
-            writer.writerow(
-                {
-                    "message_uuid": str(message.id),
-                    "received_at": message.received_at.isoformat() if message.received_at else "",
-                    "from_domain": (message.from_email or "").rsplit("@", 1)[-1],
-                    "subject": (message.subject or "")[:200],
-                    "predicted": cls.category or "",
-                    "category": "",
-                    "language": "",
-                    "notes": "",
-                }
-            )
+        fh.write(text)
     return len(rows)
 
 
-@dataclass(frozen=True, slots=True)
-class Label:
-    message_id: uuid.UUID
-    category: str
-    language: str | None
-
-
-def read_labels(path: Path, known: set[str]) -> list[Label]:
-    """Rows with a filled `category`; unknown categories or ids stop the run (a typo must not count as an error)."""
+def read_labels(path: Path, categories: dict[str, CategoryDef]) -> list[Label]:
     if not path.is_file():
         raise EvalError(f"CSV not found: {path}")
-    labels: list[Label] = []
-    with path.open(encoding="utf-8", newline="") as fh:
-        for line, row in enumerate(csv.DictReader(fh), start=2):
-            category = (row.get("category") or "").strip()
-            if not category:
-                continue
-            if category not in known:
-                raise EvalError(f"line {line}: unknown category {category!r}")
-            try:
-                message_id = uuid.UUID((row.get("message_uuid") or "").strip())
-            except ValueError as exc:
-                raise EvalError(f"line {line}: bad message_uuid") from exc
-            labels.append(Label(message_id, category, (row.get("language") or "").strip() or None))
-    return labels
+    try:
+        return parse_labels(path.read_text(encoding="utf-8"), categories)
+    except LabelError as exc:
+        where = f"line {exc.line}: " if exc.line else ""
+        raise EvalError(f"{where}{exc.code}" + (f" {exc.value!r}" if exc.value else "")) from exc
 
 
 async def _stored(db: AsyncSession, labels: list[Label]) -> list[EvalRow]:
@@ -218,20 +178,16 @@ async def save_summary(db: AsyncSession, report: EvalReport, *, mode: str, model
     return summary
 
 
-async def run(
+async def score(
     db: AsyncSession,
     settings: Settings,
-    csv_path: Path,
+    labels: list[Label],
     *,
     live: bool = False,
-    limit: int | None = None,
     save: bool = False,
     provider: LLMProvider | None = None,
 ) -> tuple[EvalReport, str]:
-    known = set(category_lookup(await load_category_data(db)))
-    labels = read_labels(csv_path, known)[: limit or None]
-    if not labels:
-        raise EvalError("no labeled rows (fill the `category` column first)")
+    """Score labels (from the CLI or the 17f upload); `save` keeps the aggregates for 17f. The caller commits."""
     notes = ""
     if live:
         rows, cost, skipped = await _live(db, settings, provider or get_llm_provider(settings), labels)
@@ -242,15 +198,30 @@ async def run(
     mode = "live" if live else "stored"
     if save:
         await save_summary(db, report, mode=mode, model=(settings.llm_model_classify or None) if live else None)
-    await db.commit()
     return report, format_report(report, mode=mode) + notes
+
+
+async def run(
+    db: AsyncSession,
+    settings: Settings,
+    csv_path: Path,
+    *,
+    live: bool = False,
+    limit: int | None = None,
+    save: bool = False,
+    provider: LLMProvider | None = None,
+) -> tuple[EvalReport, str]:
+    labels = read_labels(csv_path, category_lookup(await load_category_data(db)))[: limit or None]
+    result = await score(db, settings, labels, live=live, save=save, provider=provider)
+    await db.commit()
+    return result
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.ai.eval_cli", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
     p_sample = sub.add_parser("sample", help="write a label CSV of N random classified messages (server path)")
-    p_sample.add_argument("--sample", type=int, default=200)
+    p_sample.add_argument("--sample", type=int, default=SAMPLE_DEFAULT)
     p_sample.add_argument("--out", type=Path, required=True)
     p_run = sub.add_parser("run", help="score the AI against a labeled CSV")
     p_run.add_argument("--from-csv", type=Path, required=True)

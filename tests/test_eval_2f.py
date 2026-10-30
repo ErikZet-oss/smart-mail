@@ -12,8 +12,10 @@ from pydantic import SecretStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.category_settings import category_lookup, prompt_categories
 from app.ai.eval import SECTION_EVAL, EvalRow, evaluate, format_report
 from app.ai.eval_cli import EvalError, read_labels, run, sample
+from app.ai.eval_labels import LabelError, parse_labels, sample_csv
 from app.ai.models import AiRun, Classification, OrgSettings
 from app.core.config import Settings
 from app.mail.models import Message
@@ -75,6 +77,7 @@ def _write_labels(path: Path, rows: list[dict[str, str]]) -> None:
 
 
 def test_2f_read_labels_skips_empty_and_rejects_typos(tmp_path: Path) -> None:
+    known = category_lookup(None)
     path = tmp_path / "labels.csv"
     _write_labels(
         path,
@@ -83,10 +86,40 @@ def test_2f_read_labels_skips_empty_and_rejects_typos(tmp_path: Path) -> None:
             {"message_uuid": "00000000-0000-0000-0000-000000000002", "category": ""},
         ],
     )
-    assert len(read_labels(path, {"inquiry"})) == 1
+    assert len(read_labels(path, known)) == 1
     _write_labels(path, [{"message_uuid": "00000000-0000-0000-0000-000000000001", "category": "inqiury"}])
-    with pytest.raises(EvalError, match="unknown category"):
-        read_labels(path, {"inquiry"})
+    with pytest.raises(EvalError, match="line 2: eval_unknown_category"):
+        read_labels(path, known)
+
+
+def test_129_csv_is_excel_sk_and_lists_categories() -> None:
+    rows = [{"message_uuid": "00000000-0000-0000-0000-000000000001", "subject": "Dopyt", "predicted": "inquiry"}]
+    text = sample_csv(rows, prompt_categories(None))
+    assert text.startswith("\ufeff") and text.splitlines()[0].startswith("\ufeffmessage_uuid;")
+    assert "inquiry – Dopyty" in text and "supplier_document – Doklady dodávateľov" in text
+    # every category is listed even when the sample is shorter than the list
+    assert len(text.strip().splitlines()) == 1 + len(prompt_categories(None))
+
+
+def test_129_category_accepts_id_or_slovak_name_without_diacritics() -> None:
+    header = "\ufeffmessage_uuid;category;language\r\n"
+    body = (
+        "00000000-0000-0000-0000-000000000001;Doklady dodávateľov;\r\n"
+        "00000000-0000-0000-0000-000000000002;doklady DODAVATELOV;\r\n"
+        "00000000-0000-0000-0000-000000000003;supplier_document;SK\r\n"
+        ";;\r\n"  # legend-only rows stay empty
+    )
+    labels = parse_labels(header + body, category_lookup(None))
+    assert [lb.category for lb in labels] == ["supplier_document"] * 3 and labels[2].language == "sk"
+    comma = "message_uuid,category\n00000000-0000-0000-0000-000000000001,Dopyty\n"
+    assert parse_labels(comma, category_lookup(None))[0].category == "inquiry"  # Excel may save with commas
+    with pytest.raises(LabelError) as err:
+        parse_labels("message_uuid;category\nx;Dopyty\n", category_lookup(None))
+    assert err.value.code == "eval_bad_id" and err.value.line == 2
+    with pytest.raises(LabelError, match="eval_file_too_large"):
+        parse_labels("message_uuid;category\n" + "x" * 1_000_001, category_lookup(None))
+    with pytest.raises(LabelError, match="eval_bad_header"):
+        parse_labels("a;b\n1;2\n", category_lookup(None))
 
 
 async def _classified(db: AsyncSession, categories: list[str]) -> list[Message]:
@@ -115,9 +148,10 @@ async def test_2f_sample_writes_0600_csv_without_bodies(db: AsyncSession, tmp_pa
     assert stat.S_IMODE(out.stat().st_mode) == 0o600
     text = out.read_text(encoding="utf-8")
     assert "Prosím o cenu M8" not in text  # the body never goes into the CSV
-    with out.open(encoding="utf-8") as fh:
-        rows = list(csv.DictReader(fh))
-    assert {r["predicted"] for r in rows} == {"inquiry", "order"} and all(r["category"] == "" for r in rows)
+    with out.open(encoding="utf-8-sig") as fh:
+        rows = list(csv.DictReader(fh, delimiter=";"))
+    assert {r["predicted"] for r in rows if r["message_uuid"]} == {"inquiry", "order"}
+    assert all(r["category"] == "" for r in rows) and rows[0]["kategorie_na_vyber"].startswith("inquiry – ")
     with pytest.raises(EvalError, match="overwrite"):
         await sample(db, 1, out)
 
@@ -179,3 +213,45 @@ async def test_2f_usage_shows_last_eval(client: Client, db: AsyncSession, mail_s
     out = (await client.get("/api/settings/ai/usage")).json()["eval"]
     assert out["accuracy"] == "90.0" and out["passed"] is True
     assert out["confusion"] == [{"label": "inquiry", "predicted": "order", "count": 1}]
+
+
+async def test_129_download_and_upload_in_17f(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
+    from app.core.audit import AuditLog
+    from tests.test_knowledge_2e import PASSWORD
+
+    await _admin(client, db, mail_server)
+    messages = await _classified(db, ["inquiry", "order"])
+    await db.commit()
+    r = await client.send_json("POST", "/api/settings/ai/eval/sample", {})
+    assert r.status_code == 401 and r.json()["detail"]["code"] == "reauth_required"
+    assert (await client.reauth(PASSWORD)).status_code == 200
+    r = await client.send_json("POST", "/api/settings/ai/eval/sample", {})
+    out = r.json()
+    assert out["rows"] == 2 and out["filename"].endswith(".csv") and out["csv"].startswith("﻿")
+
+    lines = [f"{messages[0].id};Dopyty", f"{messages[1].id};Reklamácie"]
+    upload = "﻿message_uuid;category\r\n" + "\r\n".join(lines) + "\r\n"
+    r = await client.send_json("POST", "/api/settings/ai/eval/upload", {"csv": upload})
+    assert r.status_code == 200, r.text
+    assert r.json()["total"] == 2 and r.json()["accuracy"] == "50.0"
+    assert r.json()["confusion"] == [{"label": "complaint", "predicted": "order", "count": 1}]
+    actions = {a.action: a.details for a in (await db.scalars(select(AuditLog))).all()}
+    assert actions["ai.eval_sample_downloaded"] == {"rows": 2}
+    assert actions["ai.eval_uploaded"] == {"labeled": 2, "accuracy": "50.0", "passed": False}
+    row = await db.scalar(select(OrgSettings).where(OrgSettings.section == SECTION_EVAL))
+    assert row is not None and str(messages[0].id) not in str(row.data)  # the file itself is not kept
+
+    bad = await client.send_json("POST", "/api/settings/ai/eval/upload", {"csv": "message_uuid;category\nx;Nič\n"})
+    assert bad.status_code == 422 and bad.json()["detail"] == {
+        "code": "eval_unknown_category",
+        "line": 2,
+        "value": "Nič",
+    }
+
+
+async def test_129_eval_files_are_admin_only(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
+    from app.auth.models import Role
+
+    await _admin(client, db, mail_server, role=Role.sales)
+    assert (await client.send_json("POST", "/api/settings/ai/eval/sample", {})).status_code == 403
+    assert (await client.send_json("POST", "/api/settings/ai/eval/upload", {"csv": "x"})).status_code == 403

@@ -208,3 +208,93 @@ test('#116 17c categories: switch off, edit description, add custom, re-auth', a
   expect(sent.find((c) => c.id === null)?.label).toBe('Kuriér');
   await expect(panel.getByTestId('category-x_kurier')).toBeVisible();
 });
+
+test('#129 17f eval: download sample through re-auth, upload labels, show the confusion table', async ({ page }) => {
+  let reauthed = false;
+  const uploads: string[] = [];
+  const usage = {
+    days: [],
+    total_cost_usd: '0.0000',
+    budget_usd: '5.00',
+    cost_by_purpose: {},
+    suggestions: {
+      total: 0,
+      shadow: 0,
+      pending: 0,
+      approved: 0,
+      approved_unedited: 0,
+      rejected: 0,
+      approved_unedited_pct: null,
+    },
+    reject_reasons: {},
+    categories: {},
+    eval: null,
+  };
+  await mockApi(page, {
+    'GET /api/auth/me': { body: ADMIN },
+    'GET /api/auth/persons': { body: { ...ME_PICKER, persons: [ADMIN.person] } },
+    'GET /api/settings/nav': {
+      body: {
+        ...NAV,
+        sections: [
+          NAV.sections[0],
+          { ...NAV.sections[1], subs: [{ id: '17f', path: 'shadow', title: 'Tieňový režim' }] },
+        ],
+      },
+    },
+    'GET /api/system/maintenance': { body: { active: false, until: null } },
+    'GET /api/settings/ai/shadow': { body: { replies: true } },
+    'GET /api/settings/ai/usage': { body: usage },
+    'POST /api/settings/ai/eval/sample': () =>
+      reauthed
+        ? { body: { filename: 'smartmail-oznacenie-2026-10-30.csv', csv: '﻿message_uuid;category\r\n', rows: 200 } }
+        : { status: 401, body: { detail: { code: 'reauth_required' } } },
+    'POST /api/settings/ai/eval/upload': (payload) => {
+      const csv = (payload as { csv: string }).csv;
+      uploads.push(csv);
+      if (csv.includes('Nič'))
+        return { status: 422, body: { detail: { code: 'eval_unknown_category', line: 2, value: 'Nič' } } };
+      return {
+        body: {
+          run_at: '2026-10-30T11:00:00Z',
+          mode: 'stored',
+          total: 200,
+          accuracy: '92.5',
+          language_accuracy: null,
+          gate: '90',
+          passed: true,
+          too_small: false,
+          confusion: [{ label: 'supplier_document', predicted: 'invoice_request', count: 6 }],
+        },
+      };
+    },
+    'POST /api/auth/reauth': () => {
+      reauthed = true;
+      return { body: { valid_s: 900 } };
+    },
+  });
+  await page.goto('/settings/ai-admin/shadow');
+  const section = page.getByTestId('ai-eval');
+  await expect(section).toContainText('Hodnotenie zatiaľ neprebehlo');
+
+  await section.getByRole('button', { name: /Stiahnuť vzorku na označenie/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Potvrďte heslom' });
+  await dialog.getByLabel('Heslo k e-mailu').fill('Spravne-Heslo-1');
+  const downloadEvent = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Potvrdiť' }).click();
+  expect((await downloadEvent).suggestedFilename()).toBe('smartmail-oznacenie-2026-10-30.csv');
+
+  const input = section.locator('input[type="file"]');
+  await input.setInputFiles({
+    name: 'zle.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('message_uuid;category\nx;Nič\n'),
+  });
+  await expect(section.getByRole('alert')).toContainText('Riadok 2: kategóriu „Nič“ nepoznáme');
+
+  const good = 'message_uuid;category\n00000000-0000-0000-0000-000000000001;Dopyty\n';
+  await input.setInputFiles({ name: 'oznacene.csv', mimeType: 'text/csv', buffer: Buffer.from(good) });
+  await expect(section).toContainText('92.5 % zo 200 označených e-mailov');
+  await expect(section.getByRole('row', { name: /invoice_request|Žiadosti o faktúru/ })).toContainText('6');
+  expect(uploads.at(-1)).toBe(good);
+});

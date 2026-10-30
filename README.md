@@ -282,7 +282,10 @@ Testovací režim: `APP_ENV=test`, sync voči reálnemu IMAP, odosielanie len na
 ```
 Migrácie sa pri zlyhaní update **samy nevracajú** — skript vypíše postup `pg_restore` zo zálohy.
 
-**Presnosť AI (eval, len na serveri).** Označené e-maily nikdy nejdú do gitu. Na serveri:
+**Presnosť AI (eval).** Najjednoduchšie v aplikácii: Nastavenia › AI – správa › Tieňový režim, spotreba a presnosť ›
+„Stiahnuť vzorku na označenie“ (200 e-mailov, CSV pre Excel), v Exceli doplniť stĺpec `category` (kód alebo názov
+zo stĺpca `kategorie_na_vyber`) a „Nahrať označenú vzorku“. Obe akcie chcú heslo, aplikácia súbor neukladá – po
+označení ho zmažte. Označené e-maily nikdy nejdú do gitu. To isté z príkazového riadka na serveri:
 ```bash
 alias dc='docker compose --env-file /opt/smart-mail/deploy/.env -f /opt/smart-mail/deploy/docker-compose.yml'
 dc exec app python -m app.ai.eval_cli sample --sample 200 --out /var/lib/smartmail/eval/labels.csv

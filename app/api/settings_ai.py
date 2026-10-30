@@ -9,7 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,11 +25,15 @@ from app.ai.category_settings import (
     MAX_LABEL,
     SECTION_CATEGORIES,
     all_categories,
+    category_lookup,
     custom_id,
     deleted_categories,
     load_category_data,
+    prompt_categories,
 )
 from app.ai.eval import SECTION_EVAL
+from app.ai.eval_cli import score
+from app.ai.eval_labels import MAX_UPLOAD_BYTES, SAMPLE_DEFAULT, LabelError, parse_labels, sample_csv, sample_rows
 from app.ai.models import AiRule, AiRun, AiSuggestion, Classification, KnowledgeCard, OrgSettings
 from app.ai.org_settings import (
     ALERT_DEFAULT,
@@ -897,3 +901,56 @@ async def put_categories(body: CategoriesIn, ctx: RecentReauth, db: DB) -> list[
     )
     await db.commit()
     return await _category_rows(db, data)
+
+
+# --- 17f: eval label file download / upload (Erik's answer B on #129) ---
+
+
+class EvalSampleOut(BaseModel):
+    filename: str
+    csv: str  # UTF-8 with BOM, `;` — the browser saves it; the app keeps nothing
+    rows: int
+
+
+class EvalUploadIn(BaseModel):
+    csv: str = Field(max_length=MAX_UPLOAD_BYTES + 1000)  # chars ≥ bytes/4; the byte limit is checked in the parser
+
+
+@router.post("/eval/sample")
+async def download_eval_sample(ctx: RecentReauth, db: DB) -> EvalSampleOut:
+    """⚠ the file holds subjects and sender domains of real mail: admin + re-auth, audited; nothing stored."""
+    rows = await sample_rows(db, SAMPLE_DEFAULT)
+    text = sample_csv(rows, prompt_categories(await load_category_data(db)))
+    audit(
+        db,
+        "ai.eval_sample_downloaded",
+        person_id=ctx.person.id if ctx.person else None,
+        object_type="org_settings",
+        object_id=SECTION_EVAL,
+        details={"rows": len(rows)},
+    )
+    await db.commit()
+    stamp = datetime.now(UTC).strftime("%Y-%m-%d")
+    return EvalSampleOut(filename=f"smartmail-oznacenie-{stamp}.csv", csv=text, rows=len(rows))
+
+
+@router.post("/eval/upload")
+async def upload_eval_labels(body: EvalUploadIn, ctx: RecentReauth, db: DB, settings: SettingsDep) -> EvalSummary:
+    """Score the labeled file against the stored classifications; only aggregates are kept (`ai.eval_last`)."""
+    try:
+        labels = parse_labels(body.csv, category_lookup(await load_category_data(db)))
+    except LabelError as exc:
+        raise HTTPException(status_code=422, detail={"code": exc.code, "line": exc.line, "value": exc.value}) from exc
+    report, _ = await score(db, settings, labels, save=True)
+    audit(
+        db,
+        "ai.eval_uploaded",
+        person_id=ctx.person.id if ctx.person else None,
+        object_type="org_settings",
+        object_id=SECTION_EVAL,
+        details={"labeled": report.total, "accuracy": report.to_summary()["accuracy"], "passed": report.passes()},
+    )
+    await db.commit()
+    summary = await _eval_summary(db)
+    assert summary is not None  # just saved
+    return summary

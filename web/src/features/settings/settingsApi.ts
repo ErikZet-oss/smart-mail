@@ -383,3 +383,9 @@ export const categoriesKey = ['settings', 'ai', 'categories'] as const;
 export const fetchCategories = () => api<CategoryRow[]>('GET', '/api/settings/ai/categories');
 export const saveCategories = (categories: CategoryRowIn[]) =>
   api<CategoryRow[]>('PUT', '/api/settings/ai/categories', { categories });
+
+/** 17f eval label file (Erik's answer B on #129): admin + re-auth; the app keeps only aggregates. */
+export const downloadEvalSample = () =>
+  api<{ filename: string; csv: string; rows: number }>('POST', '/api/settings/ai/eval/sample', {});
+export const uploadEvalLabels = (csv: string) =>
+  api<NonNullable<AiUsage['eval']>>('POST', '/api/settings/ai/eval/upload', { csv });
