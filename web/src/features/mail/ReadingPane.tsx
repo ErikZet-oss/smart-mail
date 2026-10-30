@@ -6,6 +6,7 @@ import {
   CircleCheck,
   Code,
   Copy,
+  FileCheck2,
   Ellipsis,
   Flame,
   Flag,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConformityDialog } from '../documents/ConformityDialog';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Banner } from '../../components/Banner';
@@ -125,6 +127,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   const [plain, setPlain] = useState(false);
   const [markMenu, setMarkMenu] = useState<{ x: number; y: number } | null>(null);
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
+  const [conformity, setConformity] = useState(false);
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const readOnly = !me.data?.person || Boolean(me.data.read_only);
   const labelOf = useFolderLabel();
@@ -331,6 +334,18 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           },
         },
         { kind: 'divider', id: 'd-move' },
+        {
+          kind: 'item',
+          id: 'conformity',
+          label: t('conformity.menu'),
+          icon: <FileCheck2 size={16} />,
+          // #139: sales or admin with an active person; the server checks the branch, stamp and signature again
+          disabled: readOnly || !['sales', 'admin'].includes(me.data?.person?.role ?? ''),
+          onSelect: () => {
+            setMoreMenu(null);
+            setConformity(true);
+          },
+        },
         {
           kind: 'item',
           id: 'print',
@@ -662,6 +677,13 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           at={markMenu}
           width={220}
           onClose={() => setMarkMenu(null)}
+        />
+      ) : null}
+      {conformity && msg ? (
+        <ConformityDialog
+          messageId={msg.id}
+          initialCustomer={[msg.from_name, msg.from_email].filter(Boolean).join(', ')}
+          onClose={() => setConformity(false)}
         />
       ) : null}
       {moreMenu ? (

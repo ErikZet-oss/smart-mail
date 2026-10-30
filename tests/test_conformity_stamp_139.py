@@ -115,3 +115,13 @@ async def test_139_non_admin_cannot_upload_or_preview(
     url = f"/api/settings/admin/branches/{branch.id}/stamp"
     assert (await _upload(client, url, "p.png", transparent_png())).status_code == 403
     assert (await client.get(url)).status_code == 403
+
+
+def test_140_stamp_check_leaves_pillows_global_limit_alone() -> None:
+    from PIL import Image
+
+    from app.documents.images import normalize_stamp_png
+
+    before = Image.MAX_IMAGE_PIXELS
+    normalize_stamp_png(transparent_png())
+    assert before == Image.MAX_IMAGE_PIXELS

@@ -109,7 +109,21 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
-      - run: npm test
+      # #121: the job log is not reachable through the proxy, so failures must surface as annotations (checks API):
+      # the github-actions reporter names a failing test; if npm test dies outside a test (start-up, environment),
+      # the next step turns the end of its output into an annotation. No retries.
+      - name: npm test
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- --reporter=default --reporter=github-actions 2>&1 | tee vitest-output.txt
+      - name: npm test output (only when it failed)
+        if: failure()
+        shell: bash
+        run: |
+          tail -n 80 vitest-output.txt | sed 's/\x1b\[[0-9;]*m//g' > vitest-tail.txt || true
+          msg=$(sed -e 's/%/%25/g' vitest-tail.txt | awk 'BEGIN{ORS="%0A"} {print}')
+          echo "::error title=npm test output (last 80 lines)::${msg}"
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
 

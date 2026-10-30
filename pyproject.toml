@@ -27,6 +27,10 @@ dependencies = [
     "anthropic>=0.40",
     # signature images, person photos and branch logos are normalised at upload (app/mail/signature_images.py)
     "pillow>=11.0",
+    # print PDFs rendered by the app: Prehlásenie o zhode (#139, ADR-015; CLAUDE.md §2 stack — WeasyPrint + Jinja2;
+    # the image already has the WeasyPrint system libraries)
+    "weasyprint==70.0",
+    "jinja2>=3.1.4",
 ]
 
 [dependency-groups]
@@ -38,8 +42,6 @@ dev = [
     "hypothesis>=6.120",
     "respx>=0.21",
     # reference print renderer + golden tests (tools/render_print.py, DOCUMENTS_SPEC §4)
-    "weasyprint==70.0",
-    "jinja2>=3.1.4",
     "python-barcode>=0.15",
     # schema drift check (tools/validate_graphql.py)
     "graphql-core>=3.2",
@@ -75,7 +77,7 @@ packages = ["app"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["arq.*", "imapclient.*", "boto3.*", "botocore.*", "aiosmtplib.*", "sievelib.*", "anthropic.*"]
+module = ["arq.*", "imapclient.*", "boto3.*", "botocore.*", "aiosmtplib.*", "sievelib.*", "anthropic.*", "weasyprint.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
