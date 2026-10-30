@@ -415,3 +415,41 @@ test.describe('pilot: drop files into compose', () => {
     await expect(page.getByText('Nahrávanie dokladov zatiaľ nie je dostupné – súbor sme neotvorili.')).toHaveCount(0);
   });
 });
+
+test.describe('pilot: paste a screenshot into compose', () => {
+  test('W4 Ctrl+V of a Win+Shift+S screenshot uploads it as an inline image in the text', async ({ page }) => {
+    let uploads = 0;
+    await mockMail(page, {
+      'POST /api/mail/compose/d-1/attachments': () => {
+        uploads += 1;
+        return {
+          body: {
+            ...COMPOSE_DRAFT,
+            attachments: [
+              {
+                id: 'a-1',
+                filename: 'snimka.png',
+                content_type: 'image/png',
+                size: 900,
+                av_status: 'clean',
+                is_inline: true,
+                content_id: 'snimka-1@smartmail',
+              },
+            ],
+          },
+        };
+      },
+    });
+    await page.goto('/compose?mailbox=default');
+    await expect(page.getByLabel('Komu')).toBeEnabled();
+    const editor = page.locator('.ProseMirror').first();
+    await editor.click();
+    await editor.evaluate((node) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array([137, 80, 78, 71])], 'image.png', { type: 'image/png' }));
+      node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    });
+    await expect.poll(() => uploads).toBe(1);
+    await expect(editor.locator('img[src="cid:snimka-1@smartmail"]')).toHaveCount(1);
+  });
+});

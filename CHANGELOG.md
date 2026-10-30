@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — paste screenshots into compose
+
+- W4: Ctrl+V of an image (a Win+Shift+S / PrintScreen screenshot, a copied picture) inserts it as an inline image at the cursor, like Roundcube (PRODUCT_SPEC §1 „paste images“, SCREENS_SPEC W4). It uses the same upload as the toolbar image button (ClamAV, CID at send). Text and HTML pastes are unchanged. Screenshots get the name `snimka-<time>.png`.
+
 ## [Unreleased] — external links open in a new tab
 
 - Reading pane: an http(s) link in a received mail opens in a new tab (`noopener,noreferrer`), so Smart Mail stays open. This works for messages already stored too, because it is handled on click, not in the stored HTML. mailto: and in-page anchors are unchanged.

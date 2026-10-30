@@ -45,6 +45,7 @@ import {
   type ComposeMode,
 } from './composeApi';
 import { ComposeToolbar } from './ComposeToolbar';
+import { pastedImages } from './pastedImages';
 import { ComposeAiPanel } from './ComposeAiPanel';
 import { composeExtensions, signatureHtmlOf } from './composeExtensions';
 import { sendErrorMessage, sendErrorServerReply } from './sendCopy';
@@ -183,6 +184,7 @@ export function ScreenW4() {
     queryFn: () => listIdentities(mailbox),
   });
 
+  const pasteImageRef = useRef<((file: File) => void) | null>(null);
   const editor = useEditor({
     extensions: composeExtensions,
     content: '',
@@ -192,6 +194,14 @@ export function ScreenW4() {
       attributes: {
         class: 'compose-editor type-body min-h-[280px] focus:outline-none text-text-primary',
         'aria-label': t('compose.editor'),
+      },
+      // Ctrl+V of a screenshot (Win+Shift+S, PrintScreen) → inline image, like Roundcube (PRODUCT_SPEC „paste images“).
+      handlePaste: (_view, event) => {
+        const images = pastedImages(event.clipboardData);
+        if (!images.length) return false;
+        event.preventDefault();
+        for (const file of images) pasteImageRef.current?.(file);
+        return true;
       },
     },
   });
@@ -375,6 +385,31 @@ export function ScreenW4() {
     onSuccess: (d) => void qc.setQueryData(['compose', localId], d),
   });
   // One after another: each response carries the whole attachment list, so parallel uploads could hide a chip.
+  const insertInlineImage = (file: File) => {
+    if (!localId || !editor) return;
+    const known = new Set((draftQuery.data?.attachments ?? []).map((item) => item.id));
+    void uploadAttachment(localId, file, true)
+      .then((next) => {
+        void qc.setQueryData(['compose', localId], next);
+        const added = next.attachments.find((item) => !known.has(item.id) && item.content_id);
+        if (!added?.content_id) return;
+        editor
+          .chain()
+          .focus()
+          .setImage({ src: `cid:${added.content_id}`, alt: file.name })
+          .run();
+        setDirty(true);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ApiError && error.detail.code === 'image_type') {
+          toasts.error(t('compose.inlineImageType'));
+        }
+      });
+  };
+  useEffect(() => {
+    pasteImageRef.current = insertInlineImage;
+  });
+
   const attachFiles = async (files: FileList | File[] | null | undefined) => {
     for (const file of Array.from(files ?? [])) {
       try {
@@ -775,30 +810,7 @@ export function ScreenW4() {
                 mobile ? '' : 'mx-6 mb-3 rounded-md border border-border-default'
               }`}
             >
-              <ComposeToolbar
-                editor={editor}
-                onInlineImage={(file) => {
-                  if (!localId || !editor) return;
-                  const known = new Set((draftQuery.data?.attachments ?? []).map((item) => item.id));
-                  void uploadAttachment(localId, file, true)
-                    .then((next) => {
-                      void qc.setQueryData(['compose', localId], next);
-                      const added = next.attachments.find((item) => !known.has(item.id) && item.content_id);
-                      if (!added?.content_id) return;
-                      editor
-                        .chain()
-                        .focus()
-                        .setImage({ src: `cid:${added.content_id}`, alt: file.name })
-                        .run();
-                      setDirty(true);
-                    })
-                    .catch((error: unknown) => {
-                      if (error instanceof ApiError && error.detail.code === 'image_type') {
-                        toasts.error(t('compose.inlineImageType'));
-                      }
-                    });
-                }}
-              />
+              <ComposeToolbar editor={editor} onInlineImage={insertInlineImage} />
 
               <div className="type-body-lg min-h-0 flex-1 overflow-y-auto">
                 <EditorContent editor={editor} />
