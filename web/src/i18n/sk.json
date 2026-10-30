@@ -1044,6 +1044,8 @@
         "branch_not_found": "Pobočka neexistuje.",
         "image_type": "Nepodporovaný formát obrázka.",
         "image_too_large": "Obrázok je príliš veľký.",
+        "image_png_required": "Nahrajte obrázok vo formáte PNG (nie JPG ani PDF).",
+        "image_not_transparent": "Obrázok nemá priehľadné pozadie. Uložte pečiatku alebo podpis ako PNG s priehľadným pozadím.",
         "attachment_infected": "Súbor obsahuje vírus a nebol uložený."
       }
     },

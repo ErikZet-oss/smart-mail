@@ -2,6 +2,9 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — fix: stamp/signature upload showed only a generic error
+
+- Pilot 2026-10-30: a stamp upload ended with „Zmenu sa nepodarilo uložiť.“ — `image_png_required` and `image_not_transparent` had no Slovak text. Both added; a test checks that every error code of the stamp/signature check has its text.
 ## [Unreleased] — fix: complaints in replies to e-shop notifications were missed
 
 - Pilot 2026-10-30: „po otvorení zásielky … zistené množstvo 20 ks“, a reply to our „Odoslaná“ notification, was classified `other` with `needs_reply=false`, so no reply suggestion. The classify prompt now defines a complaint (missing/wrong quantity, wrong or damaged goods, defect, lost parcel — even without „reklamácia“) and says a reply to our automatic notification is judged by what the customer wrote. `needs_reply` got a description in the tool schema.
