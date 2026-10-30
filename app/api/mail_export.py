@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from arq.connections import ArqRedis
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
@@ -150,20 +150,36 @@ async def download_export(
     chunks = storage.iter_key(settings, state.storage_key)
     if chunks is None:
         raise fail(410, "export_expired")
-    state.downloaded_at = datetime.now(UTC).isoformat()
-    await export.save_state(_redis(request), state)
-    audit(
-        db,
-        "mail.export_downloaded",
-        account_id=ctx.account.id,
-        person_id=person.id,
-        object_type="mailbox",
-        object_id=state.mailbox_id,
-        details={"export_id": state.id, "messages": state.done, "bytes": state.archive_size, "sha256": state.sha256},
-    )
-    await db.commit()
+    redis = _redis(request)
+    maker = request.app.state.sessionmaker
+    account_id, person_id = ctx.account.id, person.id
+
+    async def downloaded() -> None:
+        # only after the whole archive went out: a broken download must not unlock the delete step (#134)
+        fresh = await export.load_state(redis, export_id)
+        if fresh is None:
+            return
+        fresh.downloaded_at = datetime.now(UTC).isoformat()
+        await export.save_state(redis, fresh)
+        async with maker() as session:
+            audit(
+                session,
+                "mail.export_downloaded",
+                account_id=account_id,
+                person_id=person_id,
+                object_type="mailbox",
+                object_id=fresh.mailbox_id,
+                details={
+                    "export_id": fresh.id,
+                    "messages": fresh.done,
+                    "bytes": fresh.archive_size,
+                    "sha256": fresh.sha256,
+                },
+            )
+            await session.commit()
+
     return StreamingResponse(
-        chunks,
+        export.stream_then(chunks, downloaded),
         media_type="application/zip",
         headers={
             "Content-Disposition": content_disposition_attachment(state.filename),
@@ -197,12 +213,24 @@ async def purge_export(
     mailbox = await db.get(Mailbox, uuid.UUID(state.mailbox_id))
     if mailbox is None:
         raise fail(404, "mailbox_not_found")
+    redis = _redis(request)
+    lock = export.purge_lock_key(state.id)
+    if not await redis.set(lock, "1", nx=True, ex=export.PURGE_LOCK_TTL_S):
+        raise fail(409, "export_purge_running")  # two clicks at once: only one delete runs
     try:
+        fresh = await export.load_state(redis, export_id)
+        if fresh is None or fresh.purged_at:
+            raise fail(409, "export_already_purged")
         result = await export.purge_exported(db, settings, state, mailbox)
     except export.ExportError as exc:
+        await redis.delete(lock)
         raise fail(409, exc.code) from exc
     except (SyncUnavailable, SyncAuthError) as exc:
+        await redis.delete(lock)
         raise fail(503, "mail_server_unavailable") from exc
+    except HTTPException:
+        await redis.delete(lock)
+        raise
     state.purged_at = datetime.now(UTC).isoformat()
     state.purged = result.deleted
     await export.save_state(_redis(request), state)
@@ -222,5 +250,6 @@ async def purge_export(
         },
     )
     await db.commit()
-    await schedule_sync(_redis(request), mailbox.id)
+    await redis.delete(lock)
+    await schedule_sync(redis, mailbox.id)
     return {"deleted": result.deleted, "folders": result.folders, "skipped": result.skipped}

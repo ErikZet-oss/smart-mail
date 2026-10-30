@@ -21,7 +21,7 @@ import time
 import unicodedata
 import uuid
 import zipfile
-from collections.abc import Awaitable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from email.parser import BytesHeaderParser
@@ -33,6 +33,7 @@ import structlog
 from redis.asyncio import Redis
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import iterate_in_threadpool
 
 from app.core.config import Settings
 from app.mail import storage
@@ -444,7 +445,9 @@ def _purge_folder(client: Any, name: str, uidvalidity: int, uids: list[int]) -> 
     """\\Deleted + EXPUNGE of exactly these UIDs (blocking). Returns (deleted, skip reason)."""
     selected = client.select_folder(name)
     current = int(selected.get(b"UIDVALIDITY", 0) or 0) if isinstance(selected, dict) else 0
-    if uidvalidity and current and current != uidvalidity:
+    if not uidvalidity or not current:
+        return 0, "uidvalidity_unknown"  # fail closed: without both values a UID could mean another message
+    if current != uidvalidity:
         return 0, "uidvalidity_changed"  # the folder was re-created: these UIDs mean other messages now
     present = sorted({int(u) for u in client.search("ALL")} & set(uids))  # gone meanwhile → nothing to do
     if not present:
@@ -512,3 +515,18 @@ async def archive_intact(settings: Settings, state: ExportState) -> bool:
         return h.hexdigest()
 
     return await asyncio.to_thread(digest) == state.sha256
+
+
+def purge_lock_key(export_id: str) -> str:
+    return f"smartmail:export:purge:{export_id}"
+
+
+PURGE_LOCK_TTL_S = 30 * 60
+
+
+async def stream_then(chunks: Iterator[bytes], on_complete: Callable[[], Awaitable[None]]) -> AsyncIterator[bytes]:
+    """Send the archive and call `on_complete` only after the last block went out. A broken download (closed tab,
+    network loss) cancels the generator first, so it never counts as downloaded (#134 review)."""
+    async for block in iterate_in_threadpool(chunks):  # S3 reads block — keep them off the event loop
+        yield block
+    await on_complete()

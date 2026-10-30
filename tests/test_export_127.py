@@ -433,3 +433,72 @@ async def test_127_no_disk_space_is_507(
     r = await client.send_json("POST", "/api/mail/mailboxes/default/exports", {})
     assert r.status_code == 507 and r.json()["detail"]["code"] == "export_no_space"
     assert export.enough_space(1000, free=1100) and not export.enough_space(1000, free=1099)
+
+
+# --- #134 review: fail closed, completed download only, one purge at a time ------------------------------------------
+
+
+def test_134_unknown_uidvalidity_never_deletes() -> None:
+    fake = PurgeImap({"INBOX": {1: (_raw("a"), NEW)}})
+    assert export._purge_folder(fake, "INBOX", 0, [1]) == (0, "uidvalidity_unknown")  # export did not store it
+    fake.uidvalidity = 0  # the server did not return it
+    assert export._purge_folder(fake, "INBOX", 77, [1]) == (0, "uidvalidity_unknown")
+    assert 1 in fake.folders["INBOX"]
+
+
+async def test_134_broken_download_does_not_count_as_downloaded() -> None:
+    calls: list[str] = []
+
+    async def done() -> None:
+        calls.append("done")
+
+    stream = export.stream_then(iter([b"PK", b"rest"]), done)
+    assert await anext(stream) == b"PK"
+    await stream.aclose()  # the client went away mid-download
+    assert calls == []
+    full = [block async for block in export.stream_then(iter([b"PK", b"rest"]), done)]
+    assert full == [b"PK", b"rest"] and calls == ["done"]
+
+
+async def test_134_interrupted_stream_leaves_purge_locked(
+    app: FastAPI,
+    client: Client,
+    db: AsyncSession,
+    mail_server: FakeMailServer,
+    settings: Settings,
+    purge_imap: PurgeImap,
+) -> None:
+    from tests.test_mail_sync_1c import PASSWORD
+
+    export_id = await _exported(app, client, db, mail_server, settings)
+    # what a broken download leaves behind: the stream started but `downloaded_at` was never written
+    state = await export.load_state(app.state.redis, export_id)
+    assert state is not None and state.downloaded_at is None
+    assert (await client.reauth(PASSWORD)).status_code == 200
+    r = await client.send_json("POST", f"/api/mail/exports/{export_id}/purge", {})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "export_not_downloaded"
+    assert (await client.get(f"/api/mail/exports/{export_id}/download")).status_code == 200
+    state = await export.load_state(app.state.redis, export_id)
+    assert state is not None and state.downloaded_at is not None  # set once the whole archive went out
+
+
+async def test_134_second_purge_at_the_same_time_is_409(
+    app: FastAPI,
+    client: Client,
+    db: AsyncSession,
+    mail_server: FakeMailServer,
+    settings: Settings,
+    purge_imap: PurgeImap,
+) -> None:
+    from tests.test_mail_sync_1c import PASSWORD
+
+    export_id = await _exported(app, client, db, mail_server, settings)
+    assert (await client.get(f"/api/mail/exports/{export_id}/download")).status_code == 200
+    assert (await client.reauth(PASSWORD)).status_code == 200
+    await app.state.redis.set(export.purge_lock_key(export_id), "1", ex=60)  # the other click is still running
+    r = await client.send_json("POST", f"/api/mail/exports/{export_id}/purge", {})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "export_purge_running"
+    assert sorted(purge_imap.folders["INBOX"]) == [1, 2]
+    await app.state.redis.delete(export.purge_lock_key(export_id))
+    assert (await client.send_json("POST", f"/api/mail/exports/{export_id}/purge", {})).status_code == 200
+    assert not await app.state.redis.exists(export.purge_lock_key(export_id))  # released after the delete

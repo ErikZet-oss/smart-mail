@@ -137,7 +137,9 @@ test('#127 part 2: delete the archived messages only after download, with confir
   await expect(purgeButton).toBeEnabled();
   await purgeButton.click();
   const confirm = page.getByRole('dialog', { name: 'Vymazať správy zo servera?' });
-  await expect(confirm).toContainText('Natrvalo vymaže 3 správ zo servera. Máte archív uložený?');
+  await expect(confirm).toContainText(
+    'Natrvalo vymaže 3 správ (3 kB) z priečinkov Doručená pošta. Máte archív uložený?',
+  );
   await confirm.getByRole('button', { name: 'Vymazať natrvalo' }).click();
   const password = page.getByRole('dialog', { name: 'Potvrďte heslom' });
   await password.getByLabel('Heslo k e-mailu').fill('Spravne-Heslo-1');

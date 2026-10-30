@@ -11,6 +11,11 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   - once per archive;
   - a re-created folder (UIDVALIDITY changed) is skipped;
   - on a server without UIDPLUS, a folder that has other `\Deleted` messages is skipped (a plain EXPUNGE would remove them too).
+- Review fixes (#134):
+  - UIDVALIDITY fails closed: a missing value on either side skips the folder (`uidvalidity_unknown`).
+  - „Downloaded“ is recorded only after the last block of the archive went out, so a broken download never unlocks the delete step.
+  - A Redis lock per export (30 min) stops two deletes at once (409 `export_purge_running`).
+  - The confirm dialog names the size and the folders.
 - Audit `mail.export_purged` records the count, folders, skipped folders and the archive sha256; a sync is scheduled afterwards.
 - Before an export starts (API and job), the free space of the temp directory is checked against the estimate × 1.1. Too little → 507 `export_no_space` with a Slovak hint to narrow the range (reviewer note on #130).
 

@@ -26,6 +26,15 @@ function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} kB`;
 }
 
+/** „Doručená pošta, Odoslané, Nitra a 3 ďalšie“ — the folders the delete step will touch. */
+function folderList(names: string[], t: (key: string, options?: Record<string, unknown>) => string): string {
+  const special: Record<string, string> = { INBOX: t('folders.special.inbox') };
+  const shown = names.slice(0, 4).map((n) => special[n] ?? n);
+  return names.length > 4
+    ? t('mailExport.andMore', { list: shown.join(', '), count: names.length - 4 })
+    : shown.join(', ');
+}
+
 type Props = {
   mailboxRef: string;
   /** null = the whole mailbox */
@@ -183,7 +192,11 @@ export function ExportDialog({ mailboxRef, folder, onClose }: Props) {
         {confirmPurge && state ? (
           <ConfirmDialog
             title={t('mailExport.purgeTitle')}
-            body={t('mailExport.purgeBody', { count: state?.done ?? 0 })}
+            body={t('mailExport.purgeBody', {
+              count: state.done,
+              size: formatSize(state.bytes),
+              folders: folderList(state.folder_names, t),
+            })}
             confirmLabel={t('mailExport.purgeConfirm')}
             busy={purge.isPending}
             onConfirm={() => purge.mutate()}
