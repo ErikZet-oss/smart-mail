@@ -74,7 +74,7 @@ describe('markSeenLocally (pilot: "prečítané" must show at once)', () => {
     expect(qc.getQueryData<FoldersView>(foldersKey('default'))?.folders[0]?.unread).toBe(3);
   });
 
-  it('lowers the thread unread count in Konverzácie mode', () => {
+  it('marks the whole conversation read in Konverzácie mode (pilot Nitra: bold again after refresh)', () => {
     const qc = new QueryClient();
     const key = [...messagesKey('default', 'f-in', 1, 'all'), ''];
     qc.setQueryData<MessagesList>(key, {
@@ -85,8 +85,8 @@ describe('markSeenLocally (pilot: "prečítané" must show at once)', () => {
     });
     qc.setQueryData(foldersKey('default'), folders(3));
     markSeenLocally(qc, 'default', 'm-1', 't-1', 'f-in');
-    expect(qc.getQueryData<MessagesList>(key)?.threads[0]?.unread_count).toBe(1);
-    expect(qc.getQueryData<FoldersView>(foldersKey('default'))?.folders[0]?.unread).toBe(2);
+    expect(qc.getQueryData<MessagesList>(key)?.threads[0]?.unread_count).toBe(0);
+    expect(qc.getQueryData<FoldersView>(foldersKey('default'))?.folders[0]?.unread).toBe(1);
   });
 });
 

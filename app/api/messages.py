@@ -416,6 +416,41 @@ async def _list_threads(
     return ListOut(mode="conversations", total=total, page=page, page_size=size, prefs=prefs, threads=items)
 
 
+async def _mark_thread_seen(request: Request, db: DB, settings: Settings, mailbox: Mailbox, message: Message) -> None:
+    """\\Seen on the other unread messages of the thread in this mailbox, one IMAP action per folder."""
+    rows = (
+        await db.execute(
+            select(Message).where(
+                Message.mailbox_id == mailbox.id,
+                Message.thread_id == message.thread_id,
+                Message.id != message.id,
+                Message.seen.is_(False),
+            )
+        )
+    ).scalars()
+    by_folder: dict[uuid.UUID, list[Message]] = {}
+    for row in rows:
+        by_folder.setdefault(row.folder_id, []).append(row)
+    for folder_id, group in by_folder.items():
+        folder = await db.get(FolderMeta, folder_id)
+        if folder is None:
+            continue
+        try:
+            await _run(
+                request,
+                db,
+                settings,
+                mailbox,
+                MsgAction.mark_seen,
+                folder,
+                group,
+                audit_action="mail.thread_seen",
+                details={"n": len(group), "folder": folder.name},
+            )
+        except HTTPException:
+            pass  # the open still works; the next sync shows the real state
+
+
 @router.get("/mailboxes/{ref}/messages/{message_id}")
 async def get_message(
     ref: str,
@@ -425,6 +460,7 @@ async def get_message(
     db: DB,
     settings: SettingsDep,
     mark_read: bool = True,
+    mark_thread: bool = False,
 ) -> MessageDetail:
     mailbox = await _mailbox(db, ctx, ref)
     message = await db.get(Message, message_id)
@@ -461,6 +497,11 @@ async def get_message(
                 )
             except HTTPException:
                 pass
+
+    if mark_read and mark_thread and message.thread_id is not None and ctx.session.active_person_id is not None:
+        # Konverzácie (Roundcube): opening a conversation marks every message of it read, not only the newest one —
+        # otherwise the thread is bold again after a refresh (pilot, Nitra).
+        await _mark_thread_seen(request, db, settings, mailbox, message)
 
     atts = await load_attachments(db, message.id)
     thread = await db.get(Thread, message.thread_id) if message.thread_id else None
