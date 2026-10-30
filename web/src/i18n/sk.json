@@ -1098,6 +1098,35 @@
     }
   },
   "ai": {
+    "usage": {
+      "shadowTitle": "Tieňový režim",
+      "shadowReplies": "AI návrhy odpovedí – tieňový režim (návrhy sa tvoria, ale nezobrazujú)",
+      "shadowHelp": "V tieňovom režime AI pripravuje návrhy a meriame ich presnosť, no nikto ich nevidí. Ostatné funkcie (Príjem tovaru, Objednávky, Ponuky) prídu v ďalších fázach.",
+      "shadowOffTitle": "Zobraziť AI návrhy odpovedí všetkým?",
+      "shadowOffBody": "Nové návrhy odpovedí sa začnú zobrazovať v čítaní pošty. Odoslanie bude stále vyžadovať schválenie človekom.",
+      "shadowOffConfirm": "Zobraziť návrhy",
+      "costTitle": "Náklady za 30 dní",
+      "total": "Spolu: {{total}} USD · denný rozpočet {{budget}} USD",
+      "perDay": "{{date}}: {{cost}} USD ({{runs}} volaní)",
+      "csv": "Stiahnuť CSV",
+      "purposes": {
+        "classify": "Triedenie",
+        "draft": "Návrhy a písanie",
+        "extract": "Čítanie dokladov",
+        "assistant": "Asistent",
+        "embed": "Vyhľadávanie"
+      },
+      "accuracyTitle": "Návrhy odpovedí (30 dní)",
+      "created": "Vytvorené",
+      "inShadow": "z toho v tieňovom režime",
+      "approved": "Schválené",
+      "unedited": "Schválené bez úprav",
+      "rejected": "Zamietnuté",
+      "noDecisions": "zatiaľ nikto nerozhodol",
+      "reasonsTitle": "Dôvody zamietnutia",
+      "categoriesTitle": "Kategórie (30 dní)",
+      "none": "Zatiaľ žiadne údaje."
+    },
     "styleProfile": {
       "title": "Môj štýl písania",
       "help": "AI sa naučí, ako píšete vy, z vašich posledných 200 odoslaných e-mailov (len váš text, bez citácií a podpisu). Profil platí len pre vás a môžete ho upraviť alebo kedykoľvek vypnúť – vypnutím sa vymaže.",

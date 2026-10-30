@@ -283,3 +283,28 @@ export const fetchStyleProfile = () => api<StyleProfile>('GET', '/api/settings/a
 export const saveStyleProfile = (body: { opt_in: boolean; text: string }) =>
   api<StyleProfile>('PUT', '/api/settings/ai/style-profile', body);
 export const generateStyleProfile = () => api<StyleProfile>('POST', '/api/settings/ai/style-profile/generate', {});
+
+// 17f Tieňový režim, spotreba a presnosť (admin, Phase 2f)
+export type AiUsage = {
+  days: { date: string; cost_usd: string; runs: number }[];
+  total_cost_usd: string;
+  budget_usd: string;
+  cost_by_purpose: Record<string, string>;
+  suggestions: {
+    total: number;
+    shadow: number;
+    pending: number;
+    approved: number;
+    approved_unedited: number;
+    rejected: number;
+    approved_unedited_pct: number | null;
+  };
+  reject_reasons: Record<string, number>;
+  categories: Record<string, number>;
+};
+export const usageKey = ['settings', 'ai', 'usage'] as const;
+export const shadowKey = ['settings', 'ai', 'shadow'] as const;
+export const fetchUsage = () => api<AiUsage>('GET', '/api/settings/ai/usage');
+export const fetchShadow = () => api<{ replies: boolean }>('GET', '/api/settings/ai/shadow');
+export const saveShadow = (replies: boolean) =>
+  api<{ replies: boolean }>('PUT', '/api/settings/ai/shadow', { replies });

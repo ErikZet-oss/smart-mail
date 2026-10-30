@@ -263,3 +263,65 @@ test.describe('Phase 2e W12-07 style profile @mobile', () => {
     ]);
   });
 });
+
+test.describe('Phase 2f W12-17f @mobile', () => {
+  test('2f shadow switch asks before showing suggestions; numbers are shown', async ({ page }, info) => {
+    let replies = true;
+    const puts: unknown[] = [];
+    await mockApi(page, {
+      'GET /api/auth/me': { body: ADMIN },
+      'GET /api/auth/persons': { body: { ...ME_PICKER, persons: [ADMIN.person] } },
+      'GET /api/settings/nav': { body: NAV },
+      'GET /api/system/maintenance': { body: { active: false, until: null } },
+      'GET /api/settings/ai/shadow': () => ({ body: { replies } }),
+      'PUT /api/settings/ai/shadow': (payload) => {
+        puts.push(payload);
+        replies = (payload as { replies: boolean }).replies;
+        return { body: { replies } };
+      },
+      'GET /api/settings/ai/usage': {
+        body: {
+          days: [
+            { date: '2026-10-29', cost_usd: '0.0100', runs: 4 },
+            { date: '2026-10-30', cost_usd: '0.0500', runs: 9 },
+          ],
+          total_cost_usd: '0.0600',
+          budget_usd: '5.00',
+          cost_by_purpose: { classify: '0.0100', draft: '0.0500' },
+          suggestions: {
+            total: 5,
+            shadow: 5,
+            pending: 1,
+            approved: 2,
+            approved_unedited: 1,
+            rejected: 2,
+            approved_unedited_pct: 25,
+          },
+          reject_reasons: { tone: 2, wrong_data: 1 },
+          categories: { inquiry: 3, order: 2 },
+        },
+      },
+    });
+    await page.goto('/settings/ai-admin/shadow');
+    const panel = page.getByTestId('settings-ai-usage');
+    await expect(panel.getByText('Spolu: 0.0600 USD · denný rozpočet 5.00 USD')).toBeVisible();
+    await expect(panel.getByText('25 %')).toBeVisible();
+    await expect(panel.getByText('tón')).toBeVisible();
+    await shot(page, `phase2f-W12-17f-${info.project.name}`);
+    const axe = await new AxeBuilder({ page })
+      .include('[data-testid="settings-ai-usage"]')
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(axe.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+
+    await panel.getByRole('switch').click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Zobraziť AI návrhy odpovedí všetkým?')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Zrušiť' }).click();
+    expect(puts).toEqual([]); // cancel changes nothing
+    await panel.getByRole('switch').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Zobraziť návrhy' }).click();
+    await expect(panel.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+    expect(puts).toEqual([{ replies: false }]);
+  });
+});

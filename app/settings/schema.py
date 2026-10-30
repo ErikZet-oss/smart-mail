@@ -469,6 +469,7 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
         "subs": [
             {"id": "17d", "path": "style", "title": "Štýl a znalosti", "fields": []},
             {"id": "17e", "path": "rules", "title": "Pravidlá", "fields": []},
+            {"id": "17f", "path": "shadow", "title": "Tieňový režim, spotreba a presnosť", "fields": []},
         ],
         "fields": [],
     },

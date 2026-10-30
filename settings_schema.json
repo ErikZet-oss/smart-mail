@@ -816,6 +816,12 @@
           "path": "rules",
           "title": "Pravidlá",
           "fields": []
+        },
+        {
+          "id": "17f",
+          "path": "shadow",
+          "title": "Tieňový režim, spotreba a presnosť",
+          "fields": []
         }
       ],
       "fields": []

@@ -5,20 +5,20 @@ The audit records which card changed, never its text (#110)."""
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.ai.budget import budget_allows_call
-from app.ai.models import AiRule, AiRun, KnowledgeCard
+from app.ai.models import AiRule, AiRun, AiSuggestion, Classification, KnowledgeCard
 from app.ai.pricing import estimate_purpose_cost_usd
 from app.ai.provider import get_llm_provider
 from app.ai.rule_parse import parse_rule
-from app.ai.service import daily_spend_usd
+from app.ai.service import daily_spend_usd, ensure_shadow_flag, shadow_mode_enabled
 from app.ai.style_profile import MIN_MAILS, PROFILE_CHARS, load_profile, save_profile, sent_samples
 from app.ai.style_profile import generate as generate_profile
 from app.ai.user_rules import MailFacts, StructuredRule, describe, rule_matches
@@ -27,6 +27,7 @@ from app.api.settings import require_admin
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
 from app.auth.models import Person
 from app.core.audit import audit
+from app.core.config import Settings
 from app.mail.mailboxes import accessible_mailboxes
 from app.mail.models import Attachment, Message
 
@@ -471,3 +472,149 @@ async def generate_style_profile(person: ActivePerson, db: DB, settings: Setting
     )
     await db.commit()
     return StyleProfileOut(**await load_profile(db, person.id))
+
+
+# ----- 17f Tieňový režim, spotreba a presnosť (admin) -----
+
+USAGE_DAYS = 30
+
+
+class DayCost(BaseModel):
+    date: str
+    cost_usd: str  # Decimal as string
+    runs: int
+
+
+class SuggestionStats(BaseModel):
+    total: int
+    shadow: int
+    pending: int
+    approved: int
+    approved_unedited: int
+    rejected: int
+    approved_unedited_pct: int | None
+
+
+class UsageOut(BaseModel):
+    days: list[DayCost]
+    total_cost_usd: str
+    budget_usd: str
+    cost_by_purpose: dict[str, str]
+    suggestions: SuggestionStats
+    reject_reasons: dict[str, int]
+    categories: dict[str, int]
+
+
+class ShadowOut(BaseModel):
+    replies: bool  # True = reply suggestions are created but hidden (shadow week)
+
+
+class ShadowIn(BaseModel):
+    replies: bool
+
+
+async def usage_stats(db: DB, settings: Settings, *, days: int = USAGE_DAYS) -> UsageOut:
+    since = datetime.now(UTC) - timedelta(days=days)
+    day = func.date_trunc("day", AiRun.created_at)
+    rows = await db.execute(
+        select(day, func.coalesce(func.sum(AiRun.cost_usd), 0), func.count())
+        .where(AiRun.created_at >= since)
+        .group_by(day)
+        .order_by(day)
+    )
+    per_day = [DayCost(date=d.date().isoformat(), cost_usd=f"{Decimal(c):.4f}", runs=n) for d, c, n in rows.all()]
+    by_purpose = {
+        str(p): f"{Decimal(c):.4f}"
+        for p, c in (
+            await db.execute(
+                select(AiRun.purpose, func.coalesce(func.sum(AiRun.cost_usd), 0))
+                .where(AiRun.created_at >= since)
+                .group_by(AiRun.purpose)
+            )
+        ).all()
+    }
+    total = sum((Decimal(d.cost_usd) for d in per_day), Decimal("0"))
+
+    suggestions = list(
+        (
+            await db.execute(
+                select(AiSuggestion).where(AiSuggestion.created_at >= since, AiSuggestion.suggestion_type == "reply")
+            )
+        ).scalars()
+    )
+    approved = [s for s in suggestions if s.status == "approved"]
+    unedited = [s for s in approved if not (s.diff or {}).get("edited")]
+    rejected = [s for s in suggestions if s.status == "rejected"]
+    reasons: dict[str, int] = {}
+    for s in rejected:
+        for r in (s.final_payload or {}).get("reject_reasons") or []:
+            reasons[str(r)] = reasons.get(str(r), 0) + 1
+    decided = len(approved) + len(rejected)
+    categories = {
+        str(c): int(n)
+        for c, n in (
+            await db.execute(
+                select(Classification.category, func.count())
+                .where(Classification.created_at >= since, Classification.status == "done")
+                .group_by(Classification.category)
+            )
+        ).all()
+        if c
+    }
+    return UsageOut(
+        days=per_day,
+        total_cost_usd=f"{total:.4f}",
+        budget_usd=f"{Decimal(str(settings.ai_daily_budget_usd)):.2f}",
+        cost_by_purpose=by_purpose,
+        suggestions=SuggestionStats(
+            total=len(suggestions),
+            shadow=sum(1 for s in suggestions if s.shadow),
+            pending=sum(1 for s in suggestions if s.status == "pending"),
+            approved=len(approved),
+            approved_unedited=len(unedited),
+            rejected=len(rejected),
+            approved_unedited_pct=round(100 * len(unedited) / decided) if decided else None,
+        ),
+        reject_reasons=dict(sorted(reasons.items(), key=lambda kv: -kv[1])),
+        categories=dict(sorted(categories.items(), key=lambda kv: -kv[1])),
+    )
+
+
+@router.get("/usage")
+async def get_usage(admin: Admin, db: DB, settings: SettingsDep) -> UsageOut:
+    """Read-only 17f numbers for the last 30 days (no mail text)."""
+    return await usage_stats(db, settings)
+
+
+@router.get("/usage.csv")
+async def get_usage_csv(admin: Admin, db: DB, settings: SettingsDep) -> Response:
+    usage = await usage_stats(db, settings)
+    lines = ["datum;naklady_usd;volania"] + [f"{d.date};{d.cost_usd};{d.runs}" for d in usage.days]
+    return Response(
+        "\n".join(lines) + "\n",
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="ai-spotreba.csv"'},
+    )
+
+
+@router.get("/shadow")
+async def get_shadow(admin: Admin, db: DB) -> ShadowOut:
+    return ShadowOut(replies=await shadow_mode_enabled(db))
+
+
+@router.put("/shadow")
+async def put_shadow(body: ShadowIn, admin: Admin, db: DB) -> ShadowOut:
+    """Turning shadow off makes new reply suggestions visible to everybody (Erik decides on the server — #116)."""
+    row = await ensure_shadow_flag(db)
+    before = row.enabled
+    row.enabled = body.replies
+    audit(
+        db,
+        "ai.shadow_mode_changed",
+        person_id=admin.id,
+        object_type="feature_flag",
+        object_id=str(row.id),
+        details={"feature": "replies", "before": before, "after": body.replies},
+    )
+    await db.commit()
+    return ShadowOut(replies=await shadow_mode_enabled(db))

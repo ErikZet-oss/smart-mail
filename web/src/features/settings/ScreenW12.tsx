@@ -26,6 +26,7 @@ import { SettingsBreadcrumb, SettingsNav, SettingsSubList, SettingsSubTabs } fro
 import { buildNavItems, isItemActive, TABBED_SECTIONS } from './settingsNavModel';
 import { AiKnowledgePanel } from './AiKnowledgePanel';
 import { AiRulesPanel } from './AiRulesPanel';
+import { AiUsagePanel } from './AiUsagePanel';
 import { StyleProfileSection } from './StyleProfile';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
@@ -307,7 +308,9 @@ function SectionBody({
   if (section === 'mailboxes') return meRole === 'admin' ? <MailboxesPanel /> : <AdminOnly />;
   if (section === 'ai-admin') {
     if (meRole !== 'admin') return <AdminOnly />;
-    return sub === 'rules' ? <AiRulesPanel /> : <AiKnowledgePanel />;
+    if (sub === 'rules') return <AiRulesPanel />;
+    if (sub === 'shadow') return <AiUsagePanel />;
+    return <AiKnowledgePanel />;
   }
   return <p className="type-body text-text-secondary">…</p>;
 }
