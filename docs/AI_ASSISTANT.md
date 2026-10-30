@@ -176,6 +176,12 @@ There is **no** tool that sends e-mail or writes to Money. Those are backend fun
 ---------------------------------------------------------------------------------------------------
 ## 6. Reply drafting
 
+**Which mail gets a reply suggestion (#132):** every classified message with `needs_reply = true`, in any category —
+built-in or a 17c custom one — **except** `NO_REPLY_CATEGORIES` (`app/ai/reply.py`): newsletter, spam, notification,
+internal, supplier_document (bulk/marketing, spam and phishing, automatic notifications, colleagues, supplier documents
+that become received delivery notes). A suggestion is a draft in Koncepty at autonomy level 2; guards and the budget
+apply as for every draft.
+
 Context given to the model: last 5 messages (trimmed), customer card (only needed fields), tool results, the company
 **style guide** (Settings › AI › Štýl), the user's **personal style profile** (learned from their sent mails, opt-in),
 up to 3 approved past replies of the same category & language (semantic retrieval), relevant knowledge base snippets

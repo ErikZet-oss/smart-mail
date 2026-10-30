@@ -36,7 +36,12 @@ from app.mail.models import FolderMeta, Mailbox, Message
 log = structlog.get_logger(__name__)
 
 COMPANY_NAME = "Smart s.r.o."
-# Categories that get a reply card (§2 step 6 without the Money-backed ones' tools).
+# Categories where a reply never makes sense (#132): every other category — built-in or a 17c custom one (x_…) — gets
+# a reply suggestion when the classifier says needs_reply. Bulk/marketing mail, spam and phishing, automatic
+# notifications, colleagues, and supplier documents (they become received delivery notes, not replies).
+NO_REPLY_CATEGORIES = frozenset({"newsletter", "spam", "notification", "internal", "supplier_document"})
+
+# Default `needs_reply` for mail decided by a 17e rule that does not say it (no classifier ran).
 REPLY_CATEGORIES = frozenset(
     {
         "inquiry",
@@ -167,7 +172,8 @@ async def _candidates(db: AsyncSession, mailbox: Mailbox) -> list[tuple[Message,
         .where(
             Message.mailbox_id == mailbox.id,
             Classification.status == "done",
-            Classification.category.in_(REPLY_CATEGORIES),
+            Classification.category.is_not(None),
+            Classification.category.not_in(NO_REPLY_CATEGORIES),
             ~has_reply,
         )
     )

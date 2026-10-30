@@ -388,3 +388,24 @@ async def test_2c_endpoint_never_shows_a_copy_from_another_mailbox(
     r = await client.get(f"/api/mail/mailboxes/default/messages/{copy.id}/suggestions")
     assert r.status_code == 200, r.text
     assert r.json() == []
+
+
+@pytest.mark.parametrize(
+    ("category", "needs_reply", "expected"),
+    [
+        ("other", True, 1),  # pilot: „pracujete aj cez víkend? … link na eshop?“
+        ("other", False, 0),
+        ("newsletter", True, 0),
+        ("spam", True, 0),
+        ("supplier_document", True, 0),
+        ("x_kurier", True, 1),  # a 17c custom category follows needs_reply only
+        ("supplier_info", True, 1),
+    ],
+)
+async def test_132_reply_follows_needs_reply_except_no_reply_categories(
+    db: AsyncSession, settings: Settings, category: str, needs_reply: bool, expected: int
+) -> None:
+    mailbox, message = await _seed(db, category=category, needs_reply=needs_reply)
+    llm = ScriptedAnthropic([_draft_response()])
+    await suggest_replies(db, mailbox, _settings(settings), spent_usd=Decimal("0"), shadow=False, provider=llm)
+    assert len(llm.calls) == expected and len(await _replies(db, message)) == expected
