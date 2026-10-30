@@ -166,6 +166,7 @@ export type AdminPerson = {
   mobile: string | null;
   personal_email: string | null;
   photo_url?: string | null;
+  has_signature?: boolean;
   cover_branch_ids?: string[];
 };
 
@@ -389,3 +390,9 @@ export const downloadEvalSample = () =>
   api<{ filename: string; csv: string; rows: number }>('POST', '/api/settings/ai/eval/sample', {});
 export const uploadEvalLabels = (csv: string) =>
   api<NonNullable<AiUsage['eval']>>('POST', '/api/settings/ai/eval/upload', { csv });
+
+/** #139 „Pečiatka“ (branch) / „Podpis“ (person): transparent PNG, admin + re-auth; preview only for admins. */
+export const stampUrl = (branchId: string) => `/api/settings/admin/branches/${branchId}/stamp`;
+export const signatureUrl = (personId: string) => `/api/settings/admin/people/${personId}/signature`;
+export const uploadPrivateImage = (url: string, file: File) => uploadImage<Record<string, boolean>>(url, file);
+export const removePrivateImage = (url: string) => api<Record<string, boolean>>('DELETE', url);

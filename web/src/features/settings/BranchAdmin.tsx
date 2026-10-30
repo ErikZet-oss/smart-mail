@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Link2, Pencil, Plus, Trash2, UserPlus, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PrivateImageField } from './PrivateImageField';
 
 import { Avatar } from '../../components/Avatar';
 import { Banner } from '../../components/Banner';
@@ -23,6 +24,8 @@ import {
   saveBranch,
   savePersonAdmin,
   fetchPersonalPeople,
+  signatureUrl,
+  stampUrl,
   uploadBranchLogo,
   uploadPersonPhoto,
   type AdminPerson,
@@ -365,6 +368,14 @@ export function BranchDetails({ branch }: { branch: Branch }) {
       </FormRow>
       <FormRow label={t('settings.branches.logo')} help={t('settings.branches.logoHelp')}>
         <BranchLogo branch={branch} />
+      </FormRow>
+      <FormRow label={`${t('settings.branches.stamp')} ⚠`} help={t('settings.branches.stampHelp')}>
+        <PrivateImageField
+          url={stampUrl(String(branch.id))}
+          present={Boolean(branch.has_stamp)}
+          kind="stamp"
+          queryKey={BRANCHES}
+        />
       </FormRow>
       <FormRow label={t('settings.branches.folders')} help={t('settings.branches.foldersHelp')}>
         <ChipPicker
@@ -817,6 +828,18 @@ function PersonDrawer({
             </label>
           </div>
           {person ? <PersonPhoto person={person} /> : null}
+          {person ? (
+            <div className="flex flex-col gap-1">
+              <span className="type-label text-text-primary">{t('settings.branches.signature')} ⚠</span>
+              <PrivateImageField
+                url={signatureUrl(person.id)}
+                present={Boolean(person.has_signature)}
+                kind="signature"
+                queryKey={BRANCHES}
+              />
+              <span className="type-caption text-text-secondary">{t('settings.branches.signatureHelp')}</span>
+            </div>
+          ) : null}
           <label className="flex flex-col gap-1">
             <span className="type-label text-text-primary">{t('settings.branches.person.role')}</span>
             <select

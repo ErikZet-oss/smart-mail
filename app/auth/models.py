@@ -49,6 +49,8 @@ class Branch(IdMixin, TimestampMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(32))
     hours: Mapped[str | None] = mapped_column(String(120))
     logo_key: Mapped[str | None] = mapped_column(String(255))
+    # #139 branch stamp (PNG, transparent) — only for server-side PDF rendering, never served publicly
+    stamp_key: Mapped[str | None] = mapped_column(String(255))
     idle_ask_minutes: Mapped[int | None] = mapped_column(Integer)
     remember_days: Mapped[int] = mapped_column(Integer, default=30, server_default="30")
     signature_template_html: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict, server_default="{}")
@@ -74,6 +76,8 @@ class Person(IdMixin, TimestampMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(32))
     mobile: Mapped[str | None] = mapped_column(String(32))
     photo_key: Mapped[str | None] = mapped_column(String(255))
+    # #139 handwritten signature (PNG, transparent) — only for server-side PDF rendering, never served publicly
+    signature_key: Mapped[str | None] = mapped_column(String(255))
     personal_email: Mapped[str | None] = mapped_column(String(254))
     languages: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default='["sk"]')
     style_guide: Mapped[str | None] = mapped_column(Text)

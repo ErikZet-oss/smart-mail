@@ -208,3 +208,32 @@ test('#55 „Vymazať pobočku“ explains a branch with people and deletes an e
     .click();
   await expect(page.getByText('Pobočka bola vymazaná.')).toBeVisible();
 });
+
+test('#139 W12-11a Pečiatka: transparent PNG upload goes through the password dialog', async ({ page }) => {
+  let reauthed = false;
+  let uploads = 0;
+  await open(page, '/settings/branches/details', {
+    'GET /api/settings/admin/branches/b-trnava/stamp': { body: {} }, // the admin preview <img>
+    'POST /api/settings/admin/branches/b-trnava/stamp': () => {
+      if (!reauthed) return { status: 401, body: { detail: { code: 'reauth_required' } } };
+      uploads += 1;
+      return { body: { has_stamp: true } };
+    },
+    'POST /api/auth/reauth': () => {
+      reauthed = true;
+      return { body: { valid_s: 900 } };
+    },
+  });
+  const field = page.getByTestId('private-image-stamp');
+  await expect(field).toContainText('Nenahraté');
+  await field.getByTestId('private-image-stamp-input').setInputFiles({
+    name: 'peciatka.png',
+    mimeType: 'image/png',
+    buffer: PNG,
+  });
+  const dialog = page.getByRole('dialog', { name: 'Potvrďte heslom' });
+  await dialog.getByLabel('Heslo k e-mailu').fill('Spravne-Heslo-1');
+  await dialog.getByRole('button', { name: 'Potvrdiť' }).click();
+  await expect.poll(() => uploads).toBe(1);
+  await expect(field.getByRole('button', { name: /Zmeniť/ })).toBeVisible();
+});

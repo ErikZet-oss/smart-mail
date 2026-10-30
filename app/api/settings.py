@@ -21,6 +21,8 @@ from app.auth.reauth import RecentReauth, require_recent_reauth
 from app.auth.security import decrypt
 from app.auth.sessions import RevokeReason, forget_revoked_reauth, revoke_account_sessions
 from app.core.audit import AuditLog, audit
+from app.core.config import Settings
+from app.documents.images import MAX_STAMP_BYTES, normalize_stamp_png
 from app.mail import storage
 from app.mail.clamav import scan_bytes
 from app.mail.compose_models import CannedResponse, ComposeDraft, Identity
@@ -1268,6 +1270,7 @@ def _admin_person(p: Person, covers: list[str] | None = None) -> dict[str, Any]:
         "mobile": p.mobile,
         "personal_email": p.personal_email,
         "photo_url": f"/api/settings/people/{p.id}/photo?v={p.updated_at.timestamp():.0f}" if p.photo_key else None,
+        "has_signature": p.signature_key is not None,  # #139: the image itself only via the admin preview
         # „Pôsobí aj na pobočkách“ (person_branches, #55)
         "cover_branch_ids": covers or [],
     }
@@ -1342,6 +1345,7 @@ async def admin_branches(ctx: Auth, db: DB) -> list[dict[str, Any]]:
                 "logo_url": f"/api/settings/branches/{b.id}/logo?v={b.updated_at.timestamp():.0f}"
                 if b.logo_key
                 else None,
+                "has_stamp": b.stamp_key is not None,  # #139: the image itself only via the admin preview
             }
         )
     return out
@@ -2178,3 +2182,137 @@ async def settings_nav(ctx: Auth) -> dict[str, Any]:
             }
         )
     return {"sections": sections, "paths": SECTION_PATHS}
+
+
+# ----- 11 „Pečiatka“ (branch) and „Podpis“ (person) for the Prehlásenie o zhode (#139) -----
+# ⚠ admin + re-auth; the images are only ever read back by an admin preview and by the server-side PDF render —
+# no public URL, no signature variable (#139).
+
+
+async def _store_stamp_image(settings: Settings, upload: UploadFile, prefix: str) -> str:
+    try:
+        payload = normalize_stamp_png(await upload.read(MAX_STAMP_BYTES + 1))
+    except SignatureImageError as exc:
+        raise fail(422, exc.code) from exc
+    if await scan_bytes(settings, payload) == "infected":
+        raise fail(422, "attachment_infected")
+    key, _digest = storage.put_bytes(settings, payload, prefix=prefix)
+    return key
+
+
+def _private_png(data: bytes | None) -> Response:
+    if not data:
+        raise fail(404, "not_found")
+    return Response(content=data, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@router.get("/admin/branches/{branch_id}/stamp")
+async def branch_stamp_preview(branch_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep) -> Response:
+    require_admin(ctx)
+    branch = await db.get(Branch, branch_id)
+    if branch is None or not branch.stamp_key:
+        raise fail(404, "not_found")
+    return _private_png(storage.get_bytes(settings, branch.stamp_key))
+
+
+@router.post("/admin/branches/{branch_id}/stamp")
+async def upload_branch_stamp(
+    branch_id: uuid.UUID,
+    request: Request,
+    ctx: RecentReauth,
+    db: DB,
+    settings: SettingsDep,
+    file: Annotated[UploadFile, File()],
+) -> dict[str, Any]:
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        raise fail(404, "branch_not_found")
+    replaced = branch.stamp_key is not None
+    branch.stamp_key = await _store_stamp_image(settings, file, "branch-stamps")
+    audit(
+        db,
+        "settings.stamp_saved",
+        account_id=ctx.account.id,
+        person_id=ctx.person.id if ctx.person else None,
+        object_type="branch",
+        object_id=str(branch.id),
+        ip=client_ip(request),
+        details={"replaced": replaced},
+    )
+    await db.commit()
+    return {"has_stamp": True}
+
+
+@router.delete("/admin/branches/{branch_id}/stamp")
+async def delete_branch_stamp(branch_id: uuid.UUID, request: Request, ctx: RecentReauth, db: DB) -> dict[str, Any]:
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        raise fail(404, "branch_not_found")
+    branch.stamp_key = None
+    audit(
+        db,
+        "settings.stamp_removed",
+        account_id=ctx.account.id,
+        person_id=ctx.person.id if ctx.person else None,
+        object_type="branch",
+        object_id=str(branch.id),
+        ip=client_ip(request),
+    )
+    await db.commit()
+    return {"has_stamp": False}
+
+
+@router.get("/admin/people/{person_id}/signature")
+async def person_signature_preview(person_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep) -> Response:
+    require_admin(ctx)
+    person = await db.get(Person, person_id)
+    if person is None or not person.signature_key:
+        raise fail(404, "not_found")
+    return _private_png(storage.get_bytes(settings, person.signature_key))
+
+
+@router.post("/admin/people/{person_id}/signature")
+async def upload_person_signature(
+    person_id: uuid.UUID,
+    request: Request,
+    ctx: RecentReauth,
+    db: DB,
+    settings: SettingsDep,
+    file: Annotated[UploadFile, File()],
+) -> dict[str, Any]:
+    person = await db.get(Person, person_id)
+    if person is None:
+        raise fail(404, "person_not_found")
+    replaced = person.signature_key is not None
+    person.signature_key = await _store_stamp_image(settings, file, "person-signatures")
+    audit(
+        db,
+        "settings.signature_saved",
+        account_id=ctx.account.id,
+        person_id=ctx.person.id if ctx.person else None,
+        object_type="person",
+        object_id=str(person.id),
+        ip=client_ip(request),
+        details={"replaced": replaced},
+    )
+    await db.commit()
+    return {"has_signature": True}
+
+
+@router.delete("/admin/people/{person_id}/signature")
+async def delete_person_signature(person_id: uuid.UUID, request: Request, ctx: RecentReauth, db: DB) -> dict[str, Any]:
+    person = await db.get(Person, person_id)
+    if person is None:
+        raise fail(404, "person_not_found")
+    person.signature_key = None
+    audit(
+        db,
+        "settings.signature_removed",
+        account_id=ctx.account.id,
+        person_id=ctx.person.id if ctx.person else None,
+        object_type="person",
+        object_id=str(person.id),
+        ip=client_ip(request),
+    )
+    await db.commit()
+    return {"has_signature": False}

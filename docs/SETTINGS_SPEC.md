@@ -274,6 +274,7 @@ Middle: list of branches (Názov, Schránka, Osoby, Vedúci) + "Pridať pobočku
 | Telefón pobočky | tel | — | E.164 | — | B |
 | Otváracie hodiny | text | — | max 120 | Napr. Po–Pi 7:00–15:30. | B |
 | Logo do podpisu | upload | firemné logo (`design/brand/logo-smart.png`) | PNG/SVG, max 200 kB | — | B |
+| Pečiatka ⚠ | upload (admin + re-auth), náhľad len pre správcu | — | PNG s priehľadným pozadím, max 1 MB | Použije sa len v Prehlásení o zhode (atest 2.1), nikdy v podpise e-mailu. | B |
 | Priečinky pobočky | multi-select priečinkov zdieľaných schránok (napr. „Senica“ v eshop@) | — | — | E-maily, ktoré sem presúvajú vaše filtre, dostanú túto pobočku (doklady, objednávky, podpis). | B |
 
 **11b Osoby** (table: fotka, meno, funkcia, mobil, rola, vedúci, aktívna; row → drawer)
@@ -283,6 +284,7 @@ Middle: list of branches (Názov, Schránka, Osoby, Vedúci) + "Pridať pobočku
 | Funkcia | text | — | max 60 | — | B |
 | Telefón, Mobil | tel | — | E.164 | — | B |
 | Fotka | upload + crop | iniciály | max 5 MB | — | B |
+| Podpis ⚠ | upload (admin + re-auth), náhľad len pre správcu | — | PNG s priehľadným pozadím, max 1 MB | Vlastnoručný podpis; Prehlásenie o zhode podpisuje vedúci pobočky. | B |
 | Rola | select (as 10) | Obchod | — | Určuje, čo osoba smie (napr. schvaľovať zápisy do Money). | B |
 | Vedúci pobočky | switch | vypnuté | ≥ 1 vedúci (warning if 0) | Vedúci vidí Prehľad pobočky a môže meniť osoby. | B |
 | Obchodník v Money | select (Money staff via REST) | — | — | Zapíše sa do objednávok, ktoré osoba schváli. | B |
