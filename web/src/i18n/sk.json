@@ -1185,6 +1185,19 @@
       "customized": "upravené"
     },
     "usage": {
+      "eval": {
+        "title": "Presnosť kategórií",
+        "never": "Hodnotenie zatiaľ neprebehlo. Správca servera ho spustí príkazom make eval nad označenými e-mailmi.",
+        "result": "Posledné hodnotenie {{date}}: {{accuracy}} % zo {{total}} označených e-mailov (cieľ {{gate}} %).",
+        "passed": "Splnené",
+        "failed": "Nesplnené",
+        "tooSmall": "Označených e-mailov je menej ako 200 – na prijatie to nestačí.",
+        "noConfusion": "Žiadne zámeny.",
+        "label": "Správne",
+        "predicted": "AI zaradila",
+        "count": "Počet",
+        "none": "nezaradené"
+      },
       "shadowTitle": "Tieňový režim",
       "shadowReplies": "AI návrhy odpovedí – tieňový režim (návrhy sa tvoria, ale nezobrazujú)",
       "shadowHelp": "V tieňovom režime AI pripravuje návrhy a meriame ich presnosť, no nikto ich nevidí. Ostatné funkcie (Príjem tovaru, Objednávky, Ponuky) prídu v ďalších fázach.",

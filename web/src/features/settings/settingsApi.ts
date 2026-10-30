@@ -301,6 +301,18 @@ export type AiUsage = {
   };
   reject_reasons: Record<string, number>;
   categories: Record<string, number>;
+  /** Last `make eval --save` on the server (aggregates only, #116). */
+  eval: {
+    run_at: string;
+    mode: 'stored' | 'live';
+    total: number;
+    accuracy: string | null;
+    language_accuracy: string | null;
+    gate: string;
+    passed: boolean;
+    too_small: boolean;
+    confusion: { label: string; predicted: string; count: number }[];
+  } | null;
 };
 export const usageKey = ['settings', 'ai', 'usage'] as const;
 export const shadowKey = ['settings', 'ai', 'shadow'] as const;

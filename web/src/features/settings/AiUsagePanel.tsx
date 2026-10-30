@@ -7,7 +7,7 @@ import { ConfirmDialog } from '../../components/Dialog';
 import { Switch } from '../../components/Switch';
 import { useToasts } from '../../components/toastContext';
 import { adminErrorText } from './adminUi';
-import { fetchShadow, fetchUsage, saveShadow, shadowKey, usageKey } from './settingsApi';
+import { fetchShadow, fetchUsage, saveShadow, shadowKey, usageKey, type AiUsage } from './settingsApi';
 
 /** W12-17f Tieňový režim, spotreba a presnosť (admin, Phase 2f): shadow switch + read-only numbers, CSV export. */
 export function AiUsagePanel() {
@@ -117,6 +117,8 @@ export function AiUsagePanel() {
         </section>
       ) : null}
 
+      {u ? <EvalSection evalRun={u.eval ?? null} /> : null}
+
       {confirmOff ? (
         <ConfirmDialog
           title={t('ai.usage.shadowOffTitle')}
@@ -144,5 +146,63 @@ function Counts({ values, label }: { values: Record<string, number>; label: (key
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Presnosť kategórií — the last server eval (`make eval … --save`): accuracy vs the 90 % gate and the confusions. */
+function EvalSection({ evalRun }: { evalRun: AiUsage['eval'] }) {
+  const { t } = useTranslation();
+  const cat = (k: string) =>
+    k === '(none)' ? t('ai.usage.eval.none') : t(`ai.categories.${k}.label`, { defaultValue: k });
+  return (
+    <section className="flex flex-col gap-2" aria-labelledby="ai-eval-title" data-testid="ai-eval">
+      <h2 id="ai-eval-title" className="type-heading text-text-primary">
+        {t('ai.usage.eval.title')}
+      </h2>
+      {evalRun === null ? (
+        <p className="type-small text-text-secondary">{t('ai.usage.eval.never')}</p>
+      ) : (
+        <>
+          <p className="type-small text-text-primary">
+            {t('ai.usage.eval.result', {
+              accuracy: evalRun.accuracy ?? '–',
+              gate: evalRun.gate,
+              total: evalRun.total,
+              date: new Date(evalRun.run_at).toLocaleDateString('sk-SK'),
+            })}{' '}
+            <strong>{evalRun.passed ? t('ai.usage.eval.passed') : t('ai.usage.eval.failed')}</strong>
+          </p>
+          {evalRun.too_small ? <p className="type-small text-text-secondary">{t('ai.usage.eval.tooSmall')}</p> : null}
+          {evalRun.confusion.length === 0 ? (
+            <p className="type-small text-text-secondary">{t('ai.usage.eval.noConfusion')}</p>
+          ) : (
+            <table className="type-small w-full border-collapse text-text-primary">
+              <thead>
+                <tr className="border-b border-border-default text-left">
+                  <th scope="col" className="py-1 pr-2 font-medium">
+                    {t('ai.usage.eval.label')}
+                  </th>
+                  <th scope="col" className="px-2 py-1 font-medium">
+                    {t('ai.usage.eval.predicted')}
+                  </th>
+                  <th scope="col" className="py-1 pl-2 text-right font-medium">
+                    {t('ai.usage.eval.count')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {evalRun.confusion.map((c) => (
+                  <tr key={`${c.label}>${c.predicted}`} className="border-b border-border-default">
+                    <td className="py-1 pr-2">{cat(c.label)}</td>
+                    <td className="px-2 py-1">{cat(c.predicted)}</td>
+                    <td className="py-1 pl-2 text-right">{c.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+    </section>
   );
 }

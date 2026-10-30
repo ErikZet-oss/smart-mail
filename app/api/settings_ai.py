@@ -29,7 +29,8 @@ from app.ai.category_settings import (
     deleted_categories,
     load_category_data,
 )
-from app.ai.models import AiRule, AiRun, AiSuggestion, Classification, KnowledgeCard
+from app.ai.eval import SECTION_EVAL
+from app.ai.models import AiRule, AiRun, AiSuggestion, Classification, KnowledgeCard, OrgSettings
 from app.ai.org_settings import (
     ALERT_DEFAULT,
     SECTION_LIMITS,
@@ -520,6 +521,24 @@ class SuggestionStats(BaseModel):
     approved_unedited_pct: int | None
 
 
+class EvalConfusion(BaseModel):
+    label: str
+    predicted: str
+    count: int
+
+
+class EvalSummary(BaseModel):
+    run_at: str
+    mode: str  # stored | live
+    total: int
+    accuracy: str | None
+    language_accuracy: str | None
+    gate: str
+    passed: bool
+    too_small: bool
+    confusion: list[EvalConfusion]
+
+
 class UsageOut(BaseModel):
     days: list[DayCost]
     total_cost_usd: str
@@ -528,6 +547,7 @@ class UsageOut(BaseModel):
     suggestions: SuggestionStats
     reject_reasons: dict[str, int]
     categories: dict[str, int]
+    eval: EvalSummary | None = None  # the last `make eval --save` on the server (aggregates only)
 
 
 class ShadowOut(BaseModel):
@@ -602,7 +622,18 @@ async def usage_stats(db: DB, settings: Settings, *, days: int = USAGE_DAYS) -> 
         ),
         reject_reasons=dict(sorted(reasons.items(), key=lambda kv: -kv[1])),
         categories=dict(sorted(categories.items(), key=lambda kv: -kv[1])),
+        eval=await _eval_summary(db),
     )
+
+
+async def _eval_summary(db: AsyncSession) -> EvalSummary | None:
+    row = await db.scalar(select(OrgSettings).where(OrgSettings.section == SECTION_EVAL))
+    if row is None:
+        return None
+    try:
+        return EvalSummary.model_validate({**row.data, "confusion": row.data.get("confusion", [])[:30]})
+    except ValidationError:
+        return None
 
 
 @router.get("/usage")

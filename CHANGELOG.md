@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — 2f close-out: `make eval` on the server and the category confusion table
+
+- `python -m app.ai.eval_cli sample` picks N random classified messages and writes a label CSV on the server: mode 0600, never inside the repository, no mail bodies. An admin fills `category` (and optionally `language`).
+- `make eval` (`eval_cli run`) scores the AI against that CSV: accuracy against the 90 % gate (exit code 1 when missed), precision and recall per category, language accuracy and the confusions. It flags a set smaller than 200. Typos in the labels stop the run instead of counting as errors.
+  - Default mode compares the stored classifications and costs nothing.
+  - `--live` classifies again with today's prompt and 17c categories. Each call is an `ai_runs` row with purpose `eval` and counts against the daily budget. Stored classifications are never rewritten.
+- `--save` stores aggregates only (no ids, no mail text) in `org_settings` (`ai.eval_last`). W12-17f now shows „Presnosť kategórií“: the last result, pass/fail and the confusion table (správne → AI zaradila).
+- `tools/eval_label.py` keeps `list-smoke`/`stats` and hands `sample`/`run` to the server CLI.
+
 ## [Unreleased] — 2f: 17c categories
 
 - W12-17c „Kategórie“ (admin): one table with Názov, Farba, Zapnutá, Popis pre AI and Počet za 30 dní. Built-in categories keep their ids; you can edit the description and switch them off. Up to 15 custom categories can be added (ids `x_…`). Stored in `org_settings` (`ai.categories`) (#116).

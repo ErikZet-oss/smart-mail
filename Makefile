@@ -1,5 +1,5 @@
 # Smart Mail — common commands (see README "Vývoj")
-.PHONY: up down logs test lint fmt types check tokens web-dev api-dev e2e imap-seed injection
+.PHONY: up down logs test lint fmt types check tokens web-dev api-dev e2e imap-seed injection eval
 
 up:            ## start the whole stack (web http://localhost:8080)
 	docker compose up -d --build
@@ -28,6 +28,10 @@ types:
 	cd bridge && uv run mypy
 	cd web && npm run typecheck
 check: lint types test   ## everything CI runs except docker compose
+EVAL_CSV ?= /var/lib/smartmail/eval/labels.csv
+eval:          ## category eval on the SERVER against its labeled CSV (never in git); EVAL_ARGS="--live --save"
+	docker compose exec app python -m app.ai.eval_cli run --from-csv $(EVAL_CSV) $(EVAL_ARGS)
+
 injection:     ## AI injection suite (AI_ASSISTANT §12; fictional fixtures/ai/injection) — must pass before each release
 	uv run pytest -q tests/test_injection_2f.py
 
