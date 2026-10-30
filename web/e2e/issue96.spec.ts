@@ -110,7 +110,7 @@ test.describe('#96 move / copy @mobile', () => {
     await picker.getByRole('menuitem', { name: 'Faktúry' }).click();
     await expect(page.getByText('Presunuté do priečinka Faktúry.')).toBeVisible();
     await expect(option(page, 'Kópia faktúry 2026123')).toHaveCount(0);
-    expect(bulkCalls).toEqual([{ action: 'move', message_ids: ['m1'], dest_folder_id: FAKTURY }]);
+    await expect.poll(() => bulkCalls).toEqual([{ action: 'move', message_ids: ['m1'], dest_folder_id: FAKTURY }]);
   });
 
   test('#96 Kopírovať do… keeps the row', async ({ page }) => {
@@ -120,7 +120,7 @@ test.describe('#96 move / copy @mobile', () => {
     await page.getByRole('menuitem', { name: 'Kopírovať do…' }).click();
     await page.getByRole('menu', { name: 'Kopírovať do…' }).getByRole('menuitem', { name: 'Faktúry' }).click();
     await expect(page.getByText('Skopírované do priečinka Faktúry.')).toBeVisible();
-    expect(bulkCalls).toEqual([{ action: 'copy', message_ids: ['m1'], dest_folder_id: FAKTURY }]);
+    await expect.poll(() => bulkCalls).toEqual([{ action: 'copy', message_ids: ['m1'], dest_folder_id: FAKTURY }]);
     await page.goto('/mail/default/inbox');
     await expect(option(page, 'Kópia faktúry 2026123')).toHaveCount(1);
   });
@@ -143,7 +143,7 @@ test.describe('#96 move from the list', () => {
     await page.keyboard.press('l');
     await page.getByRole('menu', { name: 'Presunúť do…' }).getByRole('menuitem', { name: 'Faktúry' }).click();
     await expect(option(page, 'Kópia faktúry 2026123')).toHaveCount(0);
-    expect(bulkCalls).toEqual([{ action: 'move', message_ids: ['m1'], dest_folder_id: FAKTURY }]);
+    await expect.poll(() => bulkCalls).toEqual([{ action: 'move', message_ids: ['m1'], dest_folder_id: FAKTURY }]);
   });
 
   test('#96 bulk bar Presunúť moves every selected row', async ({ page }) => {
@@ -155,7 +155,9 @@ test.describe('#96 move from the list', () => {
     await page.getByRole('button', { name: 'Presunúť', exact: true }).click();
     await page.getByRole('menu', { name: 'Presunúť do…' }).getByRole('menuitem', { name: 'Faktúry' }).click();
     await expect(page.getByRole('option')).toHaveCount(0);
-    expect(bulkCalls).toEqual([{ action: 'move', message_ids: ['m1', 'm2', 'm3'], dest_folder_id: FAKTURY }]);
+    await expect
+      .poll(() => bulkCalls)
+      .toEqual([{ action: 'move', message_ids: ['m1', 'm2', 'm3'], dest_folder_id: FAKTURY }]);
   });
 });
 
@@ -167,7 +169,7 @@ test.describe('#96 drag & drop', () => {
     await option(page, 'Cenová ponuka M10×30 A2').dragTo(faktury);
     await expect(page.getByText('Presunuté do priečinka Faktúry.')).toBeVisible();
     await expect(option(page, 'Cenová ponuka M10×30 A2')).toHaveCount(0);
-    expect(bulkCalls).toEqual([{ action: 'move', message_ids: ['m2'], dest_folder_id: FAKTURY }]);
+    await expect.poll(() => bulkCalls).toEqual([{ action: 'move', message_ids: ['m2'], dest_folder_id: FAKTURY }]);
   });
 
   test('#96 dragging the selection moves every selected row; the own folder is no target', async ({ page }) => {
@@ -181,6 +183,8 @@ test.describe('#96 drag & drop', () => {
     await page.keyboard.press('Control+a');
     await option(page, 'Reklamácia').dragTo(page.locator(`[data-folder-id="${FAKTURY}"]`));
     await expect(page.getByRole('option')).toHaveCount(0);
-    expect(bulkCalls).toEqual([{ action: 'move', message_ids: ['m1', 'm2', 'm3'], dest_folder_id: FAKTURY }]);
+    await expect
+      .poll(() => bulkCalls)
+      .toEqual([{ action: 'move', message_ids: ['m1', 'm2', 'm3'], dest_folder_id: FAKTURY }]);
   });
 });
