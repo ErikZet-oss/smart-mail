@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3 plan (#144)
+
+- `docs/plans/phase-3.md`: Money read with a mock bridge first — milestones 3a–3h, [PROBE] items, bridge deployment draft (ADR-016), acceptance, questions for Erik. Waiting for approval; no code yet.
+
 ## [Unreleased] — #143 „Zmeniť kategóriu“ and „Znova zaradiť (AI)“
 
 - Review (#148): „Znova zaradiť (AI)“ — one message or in bulk — follows the same rule as the pipeline (`message_eligible_for_ai`): a private folder, Koncepty/Odoslané/Kôš/Nevyžiadaná pošta and mail from before `ai_enabled_at` answer 409 `ai_not_allowed_here` without a model call; the bulk job counts them as `skipped`. „Zmeniť kategóriu“ by hand stays allowed everywhere.
