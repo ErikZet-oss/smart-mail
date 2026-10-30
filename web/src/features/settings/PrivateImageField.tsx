@@ -49,7 +49,7 @@ export function PrivateImageField({ url, present, kind, queryKey }: Props) {
     },
     onError: (error) => toasts.error(adminErrorText(t, error)),
   });
-  const label = t(`settings.branches.${kind}`);
+  const label = t(kind === 'signature' ? 'settings.branches.handSignature' : 'settings.branches.stamp');
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid={`private-image-${kind}`}>
       <span
@@ -91,7 +91,9 @@ export function PrivateImageField({ url, present, kind, queryKey }: Props) {
       {confirm ? (
         <ConfirmDialog
           title={t('settings.branches.imageRemoveTitle', { what: label })}
-          body={t(`settings.branches.${kind}RemoveBody`)}
+          body={t(
+            kind === 'signature' ? 'settings.branches.handSignatureRemoveBody' : 'settings.branches.stampRemoveBody',
+          )}
           confirmLabel={t('settings.branches.imageRemove')}
           busy={remove.isPending}
           onConfirm={() => remove.mutate()}

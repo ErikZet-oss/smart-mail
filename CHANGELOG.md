@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — fix: „Šablóna podpisu pobočky“ label on the person's hand signature
+
+- Pilot 2026-10-30: the person's hand-signature upload (#140) reused the label key `settings.branches.signature` = „Šablóna podpisu pobočky“ (the e-mail signature template), so Erik uploaded the signature in the wrong place. New labels „Vlastnoručný podpis (pre doklady)“ and „Pečiatka (pre doklady)“, with help texts that say they are never used in e-mail signatures.
+
 ## [Unreleased] — Phase 3a: Money bridge core + mock (#144)
 
 - The bridge answers the Phase 3 read endpoints of MONEY_API §6, all behind HMAC (key id + timestamp ±5 min + body hash, replay refused):
