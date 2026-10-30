@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -34,6 +35,8 @@ async def _mail(
     mailbox = await _signed_in(client, db, mail_server, role=role)
     inbox = await db.scalar(select(FolderMeta).where(FolderMeta.mailbox_id == mailbox.id, FolderMeta.name == "INBOX"))
     assert inbox is not None
+    mailbox.ai_enabled = True
+    mailbox.ai_enabled_at = datetime.now(UTC) - timedelta(days=1)
     message = Message(
         mailbox_id=mailbox.id,
         folder_id=inbox.id,
@@ -42,6 +45,7 @@ async def _mail(
         subject="Faktúra 2026/0815",
         from_email="faktury@fixtech.example",
         body_text="V prílohe posielame faktúru.",
+        received_at=datetime.now(UTC),
     )
     db.add(message)
     await db.flush()
@@ -173,3 +177,44 @@ async def test_143_bulk_reclassify_enqueues_one_job_max_50(
     assert jobs and jobs[0][0] == "reclassify_messages_job" and jobs[0][2] == [str(message.id)]
     too_many = {"message_ids": [str(message.id)] * 51}
     assert (await client.send_json("POST", "/api/mail/mailboxes/default/ai/reclassify", too_many)).status_code == 422
+
+
+async def test_143_reclassify_refuses_mail_the_ai_may_not_read(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, settings: Settings
+) -> None:
+    """Review #148: private folder / excluded folder / mail before ai_enabled_at → 409, no model call; bulk skips."""
+    from app.ai.reclassify import ReclassifyError, reclassify
+    from app.workers.worker import reclassify_messages_job
+    from tests.test_ai_catchup_135 import _Maker
+
+    mailbox, message = await _mail(client, db, mail_server)
+    folder = await db.get(FolderMeta, message.folder_id)
+    assert folder is not None
+    folder.private = True
+    await db.commit()
+    live = settings.model_copy(update={"anthropic_api_key": SecretStr("sk"), "llm_model_classify": MODEL})
+    llm = ScriptedAnthropic([_ok_response()])
+    with pytest.raises(ReclassifyError) as err:
+        await reclassify(db, mailbox, message, live, person_id=None, account_id=None, provider=llm)
+    assert err.value.code == "ai_not_allowed_here" and err.value.status == 409 and llm.calls == []
+
+    r = await client.send_json("POST", _url(message, "reclassify"), {})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "ai_not_allowed_here"
+    # the manual correction stays allowed everywhere
+    r = await client.send_json("POST", _url(message, "category"), {"category": "supplier_document"})
+    assert r.status_code == 200
+
+    folder.private = False
+    message.received_at = mailbox.ai_enabled_at - timedelta(days=2)  # type: ignore[operator]
+    cls = await db.scalar(select(Classification).where(Classification.message_id == message.id))
+    assert cls is not None
+    cls.payload = {}  # drop the correction so only the date guard decides
+    await db.commit()
+    stats = await reclassify_messages_job(
+        {"sessionmaker": _Maker(db), "settings": live},
+        str(mailbox.id),
+        [str(message.id)],
+        str(message.id),
+        str(message.id),
+    )
+    assert stats["skipped"] == 1 and stats["reclassified"] == 0

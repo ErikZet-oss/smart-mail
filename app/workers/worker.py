@@ -224,11 +224,11 @@ async def reclassify_messages_job(
     ctx: dict[str, Any], mailbox_id: str, message_ids: list[str], person_id: str, account_id: str
 ) -> dict[str, int]:
     """#143 bulk „Znova zaradiť (AI)“ from an AI view: one message after another, stops when the budget is spent;
-    manually corrected messages are skipped."""
+    manually corrected messages and mail the AI may not read (private folder, …) are skipped."""
     from app.ai.reclassify import ReclassifyError, reclassify
     from app.mail.models import Message
 
-    stats = {"reclassified": 0, "skipped_corrected": 0, "failed": 0, "stopped_budget": 0}
+    stats = {"reclassified": 0, "skipped_corrected": 0, "skipped": 0, "failed": 0, "stopped_budget": 0}
     async with ctx["sessionmaker"]() as db:
         mailbox = await db.get(Mailbox, uuid.UUID(mailbox_id))
         if mailbox is None:
@@ -250,6 +250,8 @@ async def reclassify_messages_job(
             except ReclassifyError as exc:
                 if exc.code == "category_corrected_manually":
                     stats["skipped_corrected"] += 1
+                elif exc.code == "ai_not_allowed_here":
+                    stats["skipped"] += 1
                 elif exc.code in ("ai_budget_exceeded", "ai_unavailable"):
                     stats["stopped_budget"] += 1
                     await db.commit()

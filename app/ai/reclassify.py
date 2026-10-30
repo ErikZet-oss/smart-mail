@@ -20,13 +20,13 @@ from app.ai.category_settings import FALLBACK_ID, category_ids, load_category_da
 from app.ai.classify import classify_message
 from app.ai.models import AiRun, Classification
 from app.ai.org_settings import load_ai_limits
-from app.ai.pipeline import normalize_message_id_header
+from app.ai.pipeline import message_eligible_for_ai, normalize_message_id_header
 from app.ai.pricing import estimate_purpose_cost_usd
 from app.ai.provider import AnthropicLLMProvider, LLMProvider, get_llm_provider
 from app.ai.service import daily_spend_usd, shadow_mode_enabled
 from app.core.audit import audit
 from app.core.config import Settings
-from app.mail.models import Attachment, Mailbox, Message
+from app.mail.models import Attachment, FolderMeta, Mailbox, Message
 
 
 class ReclassifyError(Exception):
@@ -96,8 +96,12 @@ async def reclassify(
     account_id: uuid.UUID | None,
     provider: LLMProvider | None = None,
 ) -> Classification:
-    """One classify call with today's prompt and 17c categories. Refuses a manual correction (409) and a spent
-    budget (429). The caller commits."""
+    """One classify call with today's prompt and 17c categories. Refuses mail the pipeline may not send to the model
+    (private folder, Koncepty/Odoslané/Kôš/Nevyžiadaná, mail before `ai_enabled_at` → 409 `ai_not_allowed_here`), a
+    manual correction (409) and a spent budget (429). The caller commits."""
+    folder = await db.get(FolderMeta, message.folder_id)
+    if folder is None or not message_eligible_for_ai(mailbox, folder, message):
+        raise ReclassifyError("ai_not_allowed_here", 409)
     cls = await _classification(db, message)
     if is_corrected(cls):
         raise ReclassifyError("category_corrected_manually", 409)

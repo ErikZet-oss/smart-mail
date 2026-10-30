@@ -631,6 +631,7 @@
         "category_corrected_manually": "Kategóriu zmenil človek – AI ju neprepíše. Zmeňte ju ručne cez „Zmeniť kategóriu“.",
         "ai_budget_exceeded": "Denný rozpočet AI je vyčerpaný. Skúste to zajtra.",
         "ai_unavailable": "AI nie je dostupná.",
+        "ai_not_allowed_here": "AI túto správu nečíta (súkromný priečinok, Koncepty, Odoslané, Kôš, Nevyžiadaná pošta alebo pošta spred zapnutia AI). Kategóriu môžete zmeniť ručne.",
         "ai_failed": "AI správu nezaradila. Pôvodná kategória ostala."
       }
     },
