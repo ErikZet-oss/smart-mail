@@ -10,4 +10,5 @@ import app.contacts.models
 import app.core.audit
 import app.documents.models
 import app.mail.compose_models
-import app.mail.models  # noqa: F401
+import app.mail.models
+import app.money.models  # noqa: F401

@@ -284,6 +284,14 @@ async def ai_catchup(ctx: dict[str, Any]) -> int:
     return len(mailboxes)
 
 
+async def money_sync(ctx: dict[str, Any], force: bool = False) -> int:
+    """Phase 3b: Money read cache (MONEY_API §4) — checked every 5 min, runs what Settings 13e says is due."""
+    from app.money.jobs import run_money_sync
+
+    results = await run_money_sync(ctx["sessionmaker"], ctx["settings"], ctx["redis"], force=force)
+    return sum(r.changed for r in results)
+
+
 async def export_mail_job(ctx: dict[str, Any], export_id: str) -> str | None:
     """#127: back up folders to a ZIP of raw .eml in object storage (BODY.PEEK[], never changes \\Seen)."""
     from app.mail.export import run_export
@@ -317,6 +325,7 @@ class WorkerSettings:
         func(delete_expired_exports, keep_result=0),
         func(ai_catchup, keep_result=0),
         func(reclassify_messages_job, keep_result=0, timeout=30 * 60),
+        func(money_sync, keep_result=0, timeout=15 * 60, max_tries=1),
     ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, minute=set(range(60)), run_at_startup=True),
@@ -332,6 +341,8 @@ class WorkerSettings:
         cron(delete_expired_exports, minute={20}, unique=True),
         # #135 AI catch-up: failed classify/draft calls are retried without waiting for new mail
         cron(ai_catchup, minute={7, 22, 37, 52}, unique=True),
+        # Phase 3b Money read cache; the job itself decides what is due (13e interval, nightly full)
+        cron(money_sync, minute=set(range(2, 60, 5)), unique=True),
     ]
     on_startup = startup
     on_shutdown = shutdown

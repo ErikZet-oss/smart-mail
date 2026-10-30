@@ -1,0 +1,131 @@
+{
+  "_comment": "FICTIONAL data from the bridge mock — the contract between bridge and app (Phase 3b)",
+  "healthz": {
+    "status": "ok",
+    "version": "0.2.0",
+    "backend": "mock",
+    "agenda": "TEST",
+    "writes_enabled": false
+  },
+  "sync_companies": {
+    "items": [
+      {
+        "id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+        "code": "F0001",
+        "name": "Fiktívna firma 01 s.r.o.",
+        "ico": "83856082",
+        "dic": null,
+        "icdph": null,
+        "email": "info@firma01.example",
+        "discount_pct": "10",
+        "own_discount": false,
+        "due_days": 30,
+        "connections": [
+          {
+            "kind": "E-mail",
+            "value": "faktury@firma01.example"
+          },
+          {
+            "kind": "Telefón",
+            "value": "+421 900 001 001"
+          }
+        ]
+      },
+      {
+        "id": "e06677b3-c0c3-5fab-924e-8be9b063b36e",
+        "code": "F0002",
+        "name": "Fiktívna firma 02 s.r.o.",
+        "ico": "04257864",
+        "dic": null,
+        "icdph": null,
+        "email": "info@firma02.example",
+        "discount_pct": "3",
+        "own_discount": false,
+        "due_days": 14,
+        "connections": [
+          {
+            "kind": "E-mail",
+            "value": "faktury@firma02.example"
+          },
+          {
+            "kind": "Telefón",
+            "value": "+421 900 002 002"
+          }
+        ]
+      }
+    ],
+    "next_from": 2
+  },
+  "sync_persons": {
+    "items": [
+      {
+        "id": "c28178cf-eec6-567a-b1f1-4a1640a094a4",
+        "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+        "first_name": "Tomáš",
+        "last_name": "Fiktívny",
+        "name": "Tomáš Fiktívny",
+        "function": "účtovníčka",
+        "email": "t.fiktvny1@firma01.example",
+        "phone": null
+      },
+      {
+        "id": "13ccb2f6-19ea-539f-a888-0cace683f149",
+        "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+        "first_name": "Tomáš",
+        "last_name": "Vzorová",
+        "name": "Tomáš Vzorová",
+        "function": "konateľ",
+        "email": "t.vzorov2@firma01.example",
+        "phone": null
+      }
+    ],
+    "next_from": 2
+  },
+  "sync_codebook_currencies": {
+    "items": [
+      {
+        "id": "c170a71a-1799-5629-b68a-887c58d0755e",
+        "code": "EUR",
+        "name": "Euro"
+      },
+      {
+        "id": "251d3d6c-fffe-55f6-a77e-7940edab91c3",
+        "code": "CZK",
+        "name": "Česká koruna"
+      }
+    ],
+    "next_from": null
+  },
+  "receivables": [
+    {
+      "id": "b648e755-f7f9-52e0-a58b-049cdaebfaa0",
+      "kind": "invoice",
+      "number": "FV2600226",
+      "variable_symbol": "26000226",
+      "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+      "issued_on": "2026-07-04",
+      "due_on": "2026-08-03",
+      "paid_on": null,
+      "total": "1730.45",
+      "remaining": "1730.45",
+      "currency_id": "c170a71a-1799-5629-b68a-887c58d0755e",
+      "reference": null,
+      "doc_type": 0
+    },
+    {
+      "id": "1f9c2f98-db23-5555-8f68-3702e2a1454d",
+      "kind": "invoice",
+      "number": "FV2600018",
+      "variable_symbol": "26000018",
+      "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+      "issued_on": "2026-06-05",
+      "due_on": "2026-07-05",
+      "paid_on": null,
+      "total": "754.43",
+      "remaining": "754.43",
+      "currency_id": "c170a71a-1799-5629-b68a-887c58d0755e",
+      "reference": null,
+      "doc_type": 0
+    }
+  ]
+}

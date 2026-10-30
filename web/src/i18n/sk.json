@@ -1598,5 +1598,70 @@
       "attachment_unscanned": "príloha ešte nebola skontrolovaná",
       "attachment_infected": "príloha obsahuje vírus a nebola spracovaná"
     }
+  },
+  "money": {
+    "never": "ešte nie",
+    "connection": {
+      "title": "Prepojenie",
+      "card": "Stav prepojenia s Money S4",
+      "checking": "Overujem…",
+      "ok": "Money S4 je pripojené",
+      "down": "Money S4 je nedostupné",
+      "unavailable": "Money S4 je teraz nedostupné. Pošta funguje ďalej, údaje z Money sa doplnia po obnovení spojenia.",
+      "agenda": "Agenda",
+      "agendas": {
+        "TEST": "TESTOVACIA",
+        "PROD": "OSTRÁ"
+      },
+      "mock": "simulované Money (vymyslené údaje)",
+      "apiVersion": "Verzia API",
+      "bridgeVersion": "Verzia Money mostu",
+      "latency": "Odozva",
+      "lastSync": "Posledná synchronizácia",
+      "writes": "Zápisy do Money",
+      "writesOff": "vypnuté – vo fáze 3 Smart Mail z Money len číta",
+      "test": "Otestovať"
+    },
+    "cache": {
+      "title": "Údaje načítané z Money",
+      "entity": "Údaje",
+      "rows": "Záznamy",
+      "lastRun": "Naposledy",
+      "status": "Stav",
+      "ok": "v poriadku"
+    },
+    "entities": {
+      "companies": "Firmy",
+      "persons": "Osoby",
+      "codebooks": "Číselníky"
+    },
+    "sync": {
+      "title": "Synchronizácia",
+      "interval": "Interval synchronizácie",
+      "intervalHelp": "Firmy, artikle, kódy dodávateľov, číselníky.",
+      "minutes_one": "{{count}} min",
+      "minutes_few": "{{count}} min",
+      "minutes_other": "{{count}} min",
+      "now": "Synchronizovať teraz",
+      "started": "Synchronizácia sa spustila.",
+      "running": "Synchronizuje sa…",
+      "history": "História (posledných 20 behov)",
+      "at": "Čas",
+      "duration": "Trvanie",
+      "changed": "Zmenené záznamy",
+      "errors": "Chyby",
+      "full": "celá",
+      "empty": "Synchronizácia ešte neprebehla."
+    },
+    "errors": {
+      "money_unavailable": "Money alebo Money most neodpovedá.",
+      "money_circuit_open": "Money most opakovane neodpovedal – ďalší pokus o minútu.",
+      "bridge_contract": "Money most poslal údaje v neočakávanom tvare.",
+      "hmac_key_unknown": "Money most nepozná kľúč aplikácie (BRIDGE_HMAC_KEY_ID).",
+      "hmac_invalid": "Podpis pre Money most nesedí (BRIDGE_HMAC_SECRET).",
+      "hmac_expired": "Čas servera a Money mostu sa líši o viac ako 5 minút.",
+      "money_disabled": "Prepojenie s Money je na tomto serveri vypnuté.",
+      "money_sync_running": "Synchronizácia už prebieha."
+    }
   }
 }
