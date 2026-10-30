@@ -8,6 +8,10 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - The card has no approve: „Pripraviť prehlásenie…“ opens the issue dialog prefilled, and the person checks and issues it. Issuing from the card marks the suggestion approved with the final values (and whether the person changed the products). `POST /suggestions/{id}/approve` answers 422 for this type, so the AI can never issue. „Netreba“ rejects the card.
 - Products from the invoice or delivery note in Money come with Phase 3.
 
+## [Unreleased] — CI: name the flaky unit test (#121)
+
+- `npm test` keeps failing on CI now and then, and the job log is not reachable through the proxy, so nobody can see which test fails. CI now also runs the vitest `github-actions` reporter: every failure becomes an annotation (test name, file, line), readable through the checks API. No retries.
+- `formatMailDate.test.ts` built its times with a fixed `+01:00` but the code counts calendar days in the local time zone, so it failed in UTC+14. The test now uses local times and passes in every time zone tried (UTC, UTC+14, UTC−11, Bratislava).
 ## [Unreleased] — #139 part B: issue the Prehlásenie o zhode (atest 2.1)
 
 - W3 Viac › „Vystaviť prehlásenie o zhode…“ opens a dialog: customer prefilled from the sender, document, place (default: the branch's town), date, and an editable products table. „Náhľad PDF“ shows the document without a number and stores nothing. „Vystaviť“ is the person's click (sales or admin of the branch, or covering it) and:
