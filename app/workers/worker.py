@@ -220,6 +220,18 @@ async def backfill_attachment_flags(ctx: dict[str, Any]) -> dict[str, int | None
     return {}
 
 
+async def ai_catchup(ctx: dict[str, Any]) -> int:
+    """#135: every 15 min — enqueue the AI job for mailboxes with unclassified mail or a missing reply draft."""
+    from app.ai.catchup import mailboxes_with_work
+
+    async with ctx["sessionmaker"]() as db:
+        mailboxes = await mailboxes_with_work(db)
+    for mailbox in mailboxes:
+        # same job id as after a sync: an already queued or running job is not duplicated
+        await ctx["redis"].enqueue_job("process_mailbox_ai_job", str(mailbox.id), _job_id=f"mail-ai:{mailbox.id}")
+    return len(mailboxes)
+
+
 async def export_mail_job(ctx: dict[str, Any], export_id: str) -> str | None:
     """#127: back up folders to a ZIP of raw .eml in object storage (BODY.PEEK[], never changes \\Seen)."""
     from app.mail.export import run_export
@@ -251,6 +263,7 @@ class WorkerSettings:
         # a whole mailbox can take hours; the per-mailbox lock (export.LOCK_TTL_S) has the same bound
         func(export_mail_job, keep_result=0, timeout=6 * 3600, max_tries=1),
         func(delete_expired_exports, keep_result=0),
+        func(ai_catchup, keep_result=0),
     ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, minute=set(range(60)), run_at_startup=True),
@@ -264,6 +277,8 @@ class WorkerSettings:
         cron(backfill_attachment_flags, minute={5, 35}, unique=True),
         # #127 hourly: archives whose 24 h link expired are deleted
         cron(delete_expired_exports, minute={20}, unique=True),
+        # #135 AI catch-up: failed classify/draft calls are retried without waiting for new mail
+        cron(ai_catchup, minute={7, 22, 37, 52}, unique=True),
     ]
     on_startup = startup
     on_shutdown = shutdown
