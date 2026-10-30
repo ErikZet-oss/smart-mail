@@ -18,6 +18,11 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   - The confirm dialog names the size and the folders.
 - Audit `mail.export_purged` records the count, folders, skipped folders and the archive sha256; a sync is scheduled afterwards.
 - Before an export starts (API and job), the free space of the temp directory is checked against the estimate × 1.1. Too little → 507 `export_no_space` with a Slovak hint to narrow the range (reviewer note on #130).
+## [Unreleased] — #139 part C: AI suggestion for the Prehlásenie o zhode
+
+- A mail classified `document_request` that asks for an atest 2.1 / prehlásenie o zhode (keywords in SK, CZ, EN and DE, ignoring case and diacritics) gets a card „Návrh: Prehlásenie o zhode (atest 2.1)“. The extract model prefills customer, document and products from the e-mail only; the e-mail is wrapped as untrusted, and budget and shadow mode apply. Numbers or codes that are not in the e-mail are flagged as a warning.
+- The card has no approve: „Pripraviť prehlásenie…“ opens the issue dialog prefilled, and the person checks and issues it. Issuing from the card marks the suggestion approved with the final values (and whether the person changed the products). `POST /suggestions/{id}/approve` answers 422 for this type, so the AI can never issue. „Netreba“ rejects the card.
+- Products from the invoice or delivery note in Money come with Phase 3.
 
 ## [Unreleased] — CI: name the flaky unit test (#121)
 

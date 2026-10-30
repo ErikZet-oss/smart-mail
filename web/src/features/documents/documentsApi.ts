@@ -9,6 +9,7 @@ export type ConformityRequest = {
   issued_on: string | null;
   items: ConformityItem[];
   message_id: string | null;
+  suggestion_id?: string | null;
 };
 export type ConformityIssued = {
   id: string;

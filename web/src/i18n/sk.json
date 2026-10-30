@@ -423,6 +423,15 @@
     }
   },
   "conformity": {
+    "card": {
+      "title": "Návrh: Prehlásenie o zhode (atest 2.1)",
+      "subline": "AI predvyplnila údaje z e-mailu. Pred vystavením ich skontrolujte.",
+      "items": "Výrobky",
+      "noItems": "zákazník výrobky nevymenoval – doplňte ich z faktúry",
+      "checkNumbers": "Niektoré čísla alebo kódy nie sú v e-maile – skontrolujte ich.",
+      "open": "Pripraviť prehlásenie…",
+      "reject": "Netreba"
+    },
     "menu": "Vystaviť prehlásenie o zhode…",
     "title": "Prehlásenie o zhode (atest 2.1)",
     "customer": "Odberateľ",
