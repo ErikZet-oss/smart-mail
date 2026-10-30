@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.budget import budget_allows_call, budget_day_start
 from app.ai.classify import MAX_LLM_ATTEMPTS, ClassifyOutcome, classify_message
 from app.ai.models import AiRule, AiRun, Classification, FeatureFlag
+from app.ai.org_settings import load_ai_limits
 from app.ai.pipeline import (
     folder_eligible_for_ai,
     message_eligible_for_ai,
@@ -112,7 +113,9 @@ async def process_mailbox_ai(
 
     model = (settings.llm_model_classify or "").strip() or None
     estimate = estimate_purpose_cost_usd(model or "unknown", "classify")
-    budget = Decimal(str(settings.ai_daily_budget_usd))
+    limits = await load_ai_limits(db, settings)
+    budget = limits.budget_usd
+    exhausted = False  # 17a „Pri vyčerpaní“: rules_only keeps applying 17e rules, ai_off stops
     spent = await daily_spend_usd(db)
     provider = get_llm_provider(settings)
     shadow = await shadow_mode_enabled(db)
@@ -180,10 +183,16 @@ async def process_mailbox_ai(
             stats["eligible"] += 1
             outcome = user_rule_outcome(user_hit, message, list(plan.note_codes), settings.internal_domain_list)
         else:
-            if live_llm and not budget_allows_call(spent_usd=spent, estimate_usd=estimate, budget_usd=budget):
+            if live_llm and (
+                exhausted or not budget_allows_call(spent_usd=spent, estimate_usd=estimate, budget_usd=budget)
+            ):
                 stats["skipped_budget"] += 1
-                log.info("ai.pipeline_budget_stop", mailbox_id=str(mailbox.id), spent_usd=str(spent))
-                break
+                if not exhausted:
+                    log.info("ai.pipeline_budget_stop", mailbox_id=str(mailbox.id), spent_usd=str(spent))
+                exhausted = True
+                if limits.on_exhausted == "ai_off":
+                    break
+                continue  # rules_only: the message waits for tomorrow's budget; rule-matched mail goes on
 
             stats["eligible"] += 1
             try:
@@ -307,9 +316,11 @@ async def process_mailbox_ai(
             and recorded_paid
             and not budget_allows_call(spent_usd=spent, estimate_usd=estimate, budget_usd=budget)
         ):
-            stats["skipped_budget"] += 1
+            exhausted = True
             log.info("ai.pipeline_budget_stop", mailbox_id=str(mailbox.id), spent_usd=str(spent))
-            break
+            if limits.on_exhausted == "ai_off":
+                stats["skipped_budget"] += 1
+                break
 
     await mark_rules_used(db, used_rule_ids)
     if stats["classified"] or stats["llm_error"] or stats["llm_invalid"]:

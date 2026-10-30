@@ -157,6 +157,13 @@ Not all items block 2a; call out blockers explicitly.
 
 ---------------------------------------------------------------------------------------------------
 
+## Open items (stored but not wired yet)
+
+- **17a „Upozorniť pri (%)“** is stored in `org_settings` (`ai.limits.alert_pct`, default 80), but no alert is sent yet; the admin notification channel comes with 08 Notifikácie (Phase 5).
+- **17a „Uchovávať záznamy AI“** (30 / 90 / 365 days) is stored, but there's no purge job for `ai_runs` / classifications yet.
+- **17a provider** is read-only from env (reviewer decision on #125): switching providers needs server credentials.
+- **07 autonomy levels** are stored per login (#124); each action reads `autonomy_level()` when it lands.
+
 ## Definition of done for the phase
 
 Acceptance table above green + quality gates in CLAUDE.md §0.1 that apply (strict typing, no mail bodies in logs,

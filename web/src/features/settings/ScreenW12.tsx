@@ -28,6 +28,7 @@ import { AiKnowledgePanel } from './AiKnowledgePanel';
 import { AiRulesPanel } from './AiRulesPanel';
 import { AiUsagePanel } from './AiUsagePanel';
 import { AutonomyMatrix, AutonomyOverview } from './AiAutonomy';
+import { AiLimitsPanel } from './AiLimitsPanel';
 import { StyleProfileSection } from './StyleProfile';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
@@ -312,7 +313,8 @@ function SectionBody({
     if (sub === 'rules') return <AiRulesPanel />;
     if (sub === 'shadow') return <AiUsagePanel />;
     if (sub === 'style') return <AiKnowledgePanel />;
-    return <AutonomyOverview />; // 17b is the first tab
+    if (sub === 'autonomy') return <AutonomyOverview />;
+    return <AiLimitsPanel />; // 17a is the first tab
   }
   return <p className="type-body text-text-secondary">…</p>;
 }

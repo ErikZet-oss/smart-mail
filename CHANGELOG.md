@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — 2f: 17a provider and budget
+
+- W12-17a „Poskytovateľ a rozpočet“ (admin): daily budget, alert %, „Pri vyčerpaní“ and retention are stored in `org_settings` (`ai.limits`). `AI_DAILY_BUDGET_USD` stays the default until an admin saves a budget (1–500 USD, a decimal string); the panel shows „z nastavenia servera“ / „nastavené v aplikácii“, and clearing the field goes back to the server value (#116).
+- Saving is a ⚠ change: password re-auth and audit `ai.limits_changed` with before/after.
+- All budget checks (pipeline, reply drafts, compose AI, rules preview, usage) read the effective budget.
+- „Pri vyčerpaní“: `rules_only` (default) keeps applying 17e rules and leaves other mail for the next day's budget; `ai_off` stops the run as before.
+- Provider, region and models are shown read-only from the server environment.
+
 ## [Unreleased] — 2f: autonomy per login (W12-07) and 17b overview
 
 - New tables `account_settings` (per login) and `org_settings` (company), migration 0016, reversible, no change to existing tables (#116, Erik's answer A). `org_settings` is used by 17a/17c in the next PRs.

@@ -4,7 +4,6 @@ Doplniť odpoveď na všetky otázky. Returns a proposal only — the editor sho
 from __future__ import annotations
 
 import uuid
-from decimal import Decimal
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -12,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.ai.budget import budget_allows_call
 from app.ai.compose_assist import Action, TargetLanguage, assist
 from app.ai.models import AiRun
+from app.ai.org_settings import load_ai_limits
 from app.ai.pricing import estimate_purpose_cost_usd
 from app.ai.provider import get_llm_provider
 from app.ai.reply import thread_messages
@@ -59,7 +59,7 @@ async def compose_ai(
         raise fail(422, "text_required")
     if body.action == "translate" and body.language is None:
         raise fail(422, "language_required")
-    budget = Decimal(str(settings.ai_daily_budget_usd))
+    budget = (await load_ai_limits(db, settings)).budget_usd
     if not budget_allows_call(
         spent_usd=await daily_spend_usd(db), estimate_usd=estimate_purpose_cost_usd(model, "draft"), budget_usd=budget
     ):
