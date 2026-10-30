@@ -452,9 +452,7 @@ _PREVIEW_TYPES = frozenset({"image/png", "image/jpeg", "image/gif"})
 
 
 @router.get("/compose/{draft_id}/inline/{content_id}")
-async def inline_image(
-    draft_id: uuid.UUID, content_id: str, ctx: Auth, db: DB, settings: SettingsDep
-) -> Response:
+async def inline_image(draft_id: uuid.UUID, content_id: str, ctx: Auth, db: DB, settings: SettingsDep) -> Response:
     """Editor preview of an inline image (pasted screenshot / toolbar image): the body keeps `cid:…`, which a browser
     can't show. Own drafts only, inline images only, never an infected file."""
     draft = await _get_draft(db, ctx, draft_id)

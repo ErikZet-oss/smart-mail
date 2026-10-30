@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — inline image preview in compose
+
+- W4: a pasted screenshot or a toolbar image showed as a broken image in the editor, because the body keeps `src="cid:…"` for the sent mail and a browser can't load `cid:`. The editor now shows the draft's own copy from the new `GET /api/mail/compose/{draft}/inline/{content_id}` (own drafts, inline png/jpeg/gif only, never an infected file, `nosniff`). The saved and sent HTML still says `cid:`, so the recipient gets the related MIME part as before.
+
 ## [Unreleased] — paste screenshots into compose
 
 - W4: Ctrl+V of an image (a Win+Shift+S / PrintScreen screenshot, a copied picture) inserts it as an inline image at the cursor, like Roundcube (PRODUCT_SPEC §1 „paste images“, SCREENS_SPEC W4). It uses the same upload as the toolbar image button (ClamAV, CID at send). Text and HTML pastes are unchanged. Screenshots get the name `snimka-<time>.png`.
