@@ -85,6 +85,13 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run pytest -q
+      - name: Schema drift — GraphQL queries and docs blocks vs graphql_schema.json
+        run: uv run python ../tools/validate_graphql.py --schema schema/graphql_schema.json app/queries ../docs
+      - name: No floats for money (CLAUDE.md §0.1)
+        run: |
+          if grep -rn --include='*.py' 'float(' app ../app/money ../app/orders ../app/purchasing ../app/offers 2>/dev/null; then
+            echo "::error title=float( found::Use Decimal for money and quantities"; exit 1
+          fi
       - name: Dependency audit (pip-audit)
         run: |
           uv export --frozen --format requirements-txt > /tmp/requirements.txt

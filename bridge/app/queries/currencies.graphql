@@ -1,0 +1,5 @@
+query Currencies($filter: String, $from: Int, $count: Int, $changeFrom: DateTime) {
+  Currencies(Filter: $filter, From: $from, Count: $count, ChangeFrom: $changeFrom) {
+    ID Kod Nazev
+  }
+}

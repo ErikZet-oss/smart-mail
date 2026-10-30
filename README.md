@@ -80,9 +80,25 @@ docker compose down               # zastaviť
 |---|---|
 | http://localhost:8080 | webová aplikácia (od fázy 1a prihlásenie e-mailom a heslom k pošte) |
 | http://localhost:8000/api/docs | API backendu |
-| http://localhost:8100/healthz | Money most (vo fáze 0 len testovacie dáta, zápisy vypnuté) |
+| http://localhost:8100/healthz | Money most (simulované Money s vymyslenými firmami, len čítanie, zápisy vypnuté) |
 | http://localhost:8025 | Mailpit – testovacia pošta, nič neodíde von |
 | http://localhost:8333 | úložisko príloh (S3) |
+
+### Money most – simulované Money (fáza 3a)
+
+Most (`bridge/`) je jediná služba, ktorá sa rozpráva s Money S4. Kým nie je nainštalovaný na serveri pri Money,
+beží so **simulovaným Money** (`MONEY_BACKEND=mock`): 20 vymyslených firiem na doménach `*.example`, IČO so zámerne
+chybnou kontrolnou číslicou, 300 faktúr (časť po splatnosti), zálohové faktúry, objednávky, dodacie listy, aktivity
+a číselníky. Všetky dotazy okrem `/healthz` a `/readyz` musia byť podpísané (HMAC, `BRIDGE_HMAC_KEY_ID` /
+`BRIDGE_HMAC_SECRET` – rovnaké hodnoty v aplikácii aj v moste).
+
+```bash
+cd bridge && uv run pytest -q                       # testy mostu vrátane spoločnej „contract“ sady
+cd bridge && uv run pytest -q tests/test_contract.py --money-live   # tá istá sada proti TEST agende (MONEY_* v .env)
+```
+
+Skutočné Money (`MONEY_BACKEND=api`) sa spustí len s `MONEY_AGENDA_LABEL=TEST` a s vlastným `BRIDGE_HMAC_SECRET` –
+inak most odmietne štart. Ostrú agendu bez Erikovho súhlasu nepoužívame.
 
 ### Prihlásenie (fáza 1a)
 Prihlasuje sa e-mailom a heslom k pošte – heslo overí IMAP server (ten istý ako pre Roundcube). Server nastavte v `.env`:

@@ -1,0 +1,6 @@
+query IssuedInvoices($filter: String, $from: Int, $count: Int, $changeFrom: DateTime) {
+  IssuedInvoices(Filter: $filter, From: $from, Count: $count, ChangeFrom: $changeFrom) {
+    ID CisloDokladu VariabilniSymbol Firma_ID DatumVystaveni DatumSplatnosti DatumUhrady CelkovaCastka UhradyZbyva
+    Mena_ID Odkaz TypDokladu
+  }
+}
