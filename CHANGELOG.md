@@ -18,6 +18,19 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   - The confirm dialog names the size and the folders.
 - Audit `mail.export_purged` records the count, folders, skipped folders and the archive sha256; a sync is scheduled afterwards.
 - Before an export starts (API and job), the free space of the temp directory is checked against the estimate × 1.1. Too little → 507 `export_no_space` with a Slovak hint to narrow the range (reviewer note on #130).
+## [Unreleased] — fix: stamp/signature upload showed only a generic error
+
+- Pilot 2026-10-30: a stamp upload ended with „Zmenu sa nepodarilo uložiť.“ — `image_png_required` and `image_not_transparent` had no Slovak text. Both added; a test checks that every error code of the stamp/signature check has its text.
+## [Unreleased] — fix: complaints in replies to e-shop notifications were missed
+
+- Pilot 2026-10-30: „po otvorení zásielky … zistené množstvo 20 ks“, a reply to our „Odoslaná“ notification, was classified `other` with `needs_reply=false`, so no reply suggestion. The classify prompt now defines a complaint (missing/wrong quantity, wrong or damaged goods, defect, lost parcel — even without „reklamácia“) and says a reply to our automatic notification is judged by what the customer wrote. `needs_reply` got a description in the tool schema.
+
+## [Unreleased] — #139 part A: Prehlásenie o zhode — data model, Pečiatka and Podpis
+
+- Migration 0017 (approved by Erik): `branches.stamp_key`, `persons.signature_key`, and the table `conformity_declarations` (number unique, branch, prepared_by, signer, account, customer, document, items, place, date, PDF key, sha256, message/thread). Part B uses the table.
+- Settings 11: „Pečiatka“ for a branch and „Podpis“ for a person. Both take a PNG with a transparent background, max 1 MB, scaled down to 1200 px. Upload and removal are ⚠ (admin + re-auth), audited as `settings.stamp_saved`/`stamp_removed` and `settings.signature_saved`/`signature_removed`. The images are never served publicly: there is only an admin preview with `no-store`, and no e-mail signature variable.
+- ADR-015 records Erik's decisions (numbering, branch header, the manager signs, render with WeasyPrint and Liberation Sans). SETTINGS_SPEC 11 has the two new fields.
+
 ## [Unreleased] — AI catch-up cron (#135)
 
 - The AI job used to start only when a sync found new mail, so classifications and reply drafts that failed (e.g. before #131) waited for the next incoming message. The new cron `ai_catchup` runs every 15 min. For every mailbox with AI on, it enqueues `process_mailbox_ai_job` (same `_job_id=mail-ai:<id>`, never twice) **only when there is work**: an eligible unclassified message with < 3 attempts, or a reply candidate without a suggestion.
