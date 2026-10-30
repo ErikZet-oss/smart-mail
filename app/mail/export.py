@@ -15,6 +15,7 @@ import hashlib
 import io
 import json
 import re
+import shutil
 import tempfile
 import time
 import unicodedata
@@ -186,6 +187,8 @@ class ExportState:
     finished_at: str | None = None
     expires_at: str | None = None
     downloaded_at: str | None = None
+    purged_at: str | None = None
+    purged: int = 0
     error: str | None = None
     # what the archive contains — the safe-delete step may delete exactly these UIDs (#127)
     manifest: dict[str, dict[str, Any]] = field(default_factory=dict)  # folder_id → {uidvalidity, uids}
@@ -339,6 +342,9 @@ async def run_export(
             date_to=date.fromisoformat(state.range["date_to"]) if state.range.get("date_to") else None,
         )
         criteria = rng.imap_criteria(today or datetime.now(UTC).date())
+        _, estimated = await estimate(db, folders, rng, today or datetime.now(UTC).date())
+        if not enough_space(estimated):
+            raise ExportError("export_no_space")
         state.status = "running"
         await save_state(redis, state)
 
@@ -411,3 +417,98 @@ def is_expired(state: ExportState, now: datetime | None = None) -> bool:
     if state.expires_at is None:
         return False
     return (now or datetime.now(UTC)) >= datetime.fromisoformat(state.expires_at)
+
+
+# --- part 2: safe delete after the backup (#127) -------------------------------------------------------------------
+
+PURGE_CHUNK = 500
+SPACE_FACTOR = 1.1  # the ZIP on disk plus headroom, against the estimate (reviewer note on #130)
+
+
+def temp_free_bytes() -> int:
+    return shutil.disk_usage(tempfile.gettempdir()).free
+
+
+def enough_space(estimated_bytes: int, free: int | None = None) -> bool:
+    return (free if free is not None else temp_free_bytes()) >= int(estimated_bytes * SPACE_FACTOR)
+
+
+@dataclass(slots=True)
+class PurgeResult:
+    deleted: int = 0
+    folders: list[str] = field(default_factory=list)
+    skipped: dict[str, str] = field(default_factory=dict)  # folder name → reason code
+
+
+def _purge_folder(client: Any, name: str, uidvalidity: int, uids: list[int]) -> tuple[int, str | None]:
+    """\\Deleted + EXPUNGE of exactly these UIDs (blocking). Returns (deleted, skip reason)."""
+    selected = client.select_folder(name)
+    current = int(selected.get(b"UIDVALIDITY", 0) or 0) if isinstance(selected, dict) else 0
+    if uidvalidity and current and current != uidvalidity:
+        return 0, "uidvalidity_changed"  # the folder was re-created: these UIDs mean other messages now
+    present = sorted({int(u) for u in client.search("ALL")} & set(uids))  # gone meanwhile → nothing to do
+    if not present:
+        return 0, None
+    uidplus = b"UIDPLUS" in client.capabilities()
+    if not uidplus:
+        # without UID EXPUNGE a plain EXPUNGE removes every \Deleted message — only safe when there is no other one
+        others = set(int(u) for u in client.search(["DELETED"])) - set(present)
+        if others:
+            return 0, "other_deleted_present"
+    for i in range(0, len(present), PURGE_CHUNK):
+        chunk = present[i : i + PURGE_CHUNK]
+        client.add_flags(chunk, [b"\\Deleted"], silent=True)
+        if uidplus:
+            client.expunge(chunk)  # UID EXPUNGE: nothing that arrived meanwhile, no other \Deleted message
+    if not uidplus:
+        client.expunge()
+    return len(present), None
+
+
+async def purge_exported(db: AsyncSession, settings: Settings, state: ExportState, mailbox: Mailbox) -> PurgeResult:
+    """Delete from the server exactly the messages the archive contains (UIDs of the manifest), per folder."""
+    creds = await credentials_for(db, mailbox, settings)
+    if creds is None:
+        raise ExportError("no_credentials")
+    folders = {str(f.id): f for f in (await db.scalars(select(FolderMeta).where(FolderMeta.mailbox_id == mailbox.id)))}
+
+    def work() -> PurgeResult:
+        result = PurgeResult()
+        client = connect(server_of(mailbox, settings), creds)
+        try:
+            for folder_id, entry in state.manifest.items():
+                folder = folders.get(folder_id)
+                uids = [int(u) for u in entry.get("uids", [])]
+                if folder is None:
+                    result.skipped[folder_id] = "folder_gone"
+                    continue
+                if not uids:
+                    continue
+                deleted, reason = _purge_folder(client, folder.name, int(entry.get("uidvalidity") or 0), uids)
+                if reason:
+                    result.skipped[folder.name] = reason
+                if deleted:
+                    result.deleted += deleted
+                    result.folders.append(folder.name)
+        finally:
+            logout_quietly(client)
+        return result
+
+    return await asyncio.to_thread(work)
+
+
+async def archive_intact(settings: Settings, state: ExportState) -> bool:
+    """The stored archive still hashes to the sha256 recorded when it was built (before anything is deleted)."""
+    if not state.storage_key or not state.sha256:
+        return False
+
+    def digest() -> str | None:
+        chunks = storage.iter_key(settings, state.storage_key or "")
+        if chunks is None:
+            return None
+        h = hashlib.sha256()
+        for block in chunks:
+            h.update(block)
+        return h.hexdigest()
+
+    return await asyncio.to_thread(digest) == state.sha256

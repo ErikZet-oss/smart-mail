@@ -291,3 +291,145 @@ async def test_127_failed_imap_frees_the_lock(
 async def test_127_mailbox_model_has_no_new_columns() -> None:
     # job state lives in Redis (no data-model change, #127)
     assert "export" not in " ".join(c.name for c in Mailbox.__table__.columns)
+
+
+# --- part 2: safe delete after the backup -------------------------------------------------------------------------
+
+
+class PurgeImap(FakeImap):
+    def __init__(self, folders: dict[str, dict[int, tuple[bytes, datetime]]], *, uidplus: bool = True) -> None:
+        super().__init__(folders)
+        self.uidplus = uidplus
+        self.deleted: dict[str, set[int]] = {name: set() for name in folders}
+        self.uidvalidity = 77
+        self.expunge_calls: list[list[int] | None] = []
+
+    def select_folder(self, name: str, readonly: bool = False) -> dict[bytes, Any]:
+        self.selected.append((name, readonly))
+        self.current = name
+        return {b"UIDVALIDITY": self.uidvalidity}
+
+    def capabilities(self) -> tuple[bytes, ...]:
+        return (b"IMAP4REV1", b"UIDPLUS") if self.uidplus else (b"IMAP4REV1",)
+
+    def search(self, criteria: Any) -> list[int]:
+        if criteria == ["DELETED"]:
+            return sorted(self.deleted[self.current])
+        if criteria == "ALL":
+            return sorted(self.folders[self.current])
+        return super().search(criteria)
+
+    def add_flags(self, uids: list[int], flags: list[bytes], silent: bool = False) -> None:
+        assert flags == [b"\\Deleted"]
+        self.deleted[self.current] |= set(uids)
+
+    def expunge(self, uids: list[int] | None = None) -> None:
+        self.expunge_calls.append(uids)
+        gone = self.deleted[self.current] if uids is None else set(uids) & self.deleted[self.current]
+        for uid in gone:
+            self.folders[self.current].pop(uid, None)
+        self.deleted[self.current] -= gone
+
+
+@pytest.fixture
+def purge_imap(monkeypatch: pytest.MonkeyPatch) -> PurgeImap:
+    fake = PurgeImap({k: dict(v) for k, v in SERVER.items()})
+    monkeypatch.setattr("app.mail.export.connect", lambda *_a, **_k: fake)
+    monkeypatch.setattr("app.mail.export.logout_quietly", lambda *_a, **_k: None)
+    return fake
+
+
+async def _exported(
+    app: FastAPI, client: Client, db: AsyncSession, mail_server: FakeMailServer, settings: Settings
+) -> str:
+    await _signed_in(client, db, mail_server)
+    export_id, state = await _run(app, client, db, settings, {})
+    assert state.status == "ready"
+    return export_id
+
+
+async def test_127_purge_deletes_only_manifest_uids_with_reauth(
+    app: FastAPI,
+    client: Client,
+    db: AsyncSession,
+    mail_server: FakeMailServer,
+    settings: Settings,
+    purge_imap: PurgeImap,
+) -> None:
+    from tests.test_mail_sync_1c import PASSWORD
+
+    export_id = await _exported(app, client, db, mail_server, settings)
+    purge_imap.folders["INBOX"][9] = (_raw("Prišlo po exporte"), NEW)  # arrived after the export
+
+    url = f"/api/mail/exports/{export_id}/purge"
+    r = await client.send_json("POST", url, {})
+    assert r.status_code == 401 and r.json()["detail"]["code"] == "reauth_required"
+    assert (await client.reauth(PASSWORD)).status_code == 200
+    r = await client.send_json("POST", url, {})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "export_not_downloaded"
+
+    assert (await client.get(f"/api/mail/exports/{export_id}/download")).status_code == 200
+    r = await client.send_json("POST", url, {})
+    assert r.status_code == 200, r.text
+    assert r.json()["deleted"] == 3 and sorted(r.json()["folders"]) == ["INBOX", "Nitra"]
+    assert sorted(purge_imap.folders["INBOX"]) == [9] and purge_imap.folders["Nitra"] == {}
+    assert all(call is not None for call in purge_imap.expunge_calls)  # UID EXPUNGE only
+    entry = await db.scalar(select(AuditLog).where(AuditLog.action == "mail.export_purged"))
+    assert entry is not None and entry.details is not None and entry.details["deleted"] == 3
+
+    again = await client.send_json("POST", url, {})
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "export_already_purged"
+
+
+async def test_127_purge_refuses_when_archive_changed(
+    app: FastAPI,
+    client: Client,
+    db: AsyncSession,
+    mail_server: FakeMailServer,
+    settings: Settings,
+    purge_imap: PurgeImap,
+) -> None:
+    from pathlib import Path
+
+    from tests.test_mail_sync_1c import PASSWORD
+
+    export_id = await _exported(app, client, db, mail_server, settings)
+    assert (await client.get(f"/api/mail/exports/{export_id}/download")).status_code == 200
+    state = await export.load_state(app.state.redis, export_id)
+    assert state is not None and state.storage_key
+    (Path(settings.storage_path) / state.storage_key).write_bytes(b"broken")
+    assert (await client.reauth(PASSWORD)).status_code == 200
+    r = await client.send_json("POST", f"/api/mail/exports/{export_id}/purge", {})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "export_archive_mismatch"
+    assert sorted(purge_imap.folders["INBOX"]) == [1, 2]  # nothing deleted
+
+
+def test_127_purge_folder_without_uidplus_and_other_deleted_is_skipped() -> None:
+    fake = PurgeImap({"INBOX": {1: (_raw("a"), NEW), 2: (_raw("b"), NEW), 3: (_raw("c"), NEW)}}, uidplus=False)
+    fake.deleted["INBOX"] = {3}  # someone else's \Deleted message — a plain EXPUNGE would remove it too
+    assert export._purge_folder(fake, "INBOX", 77, [1, 2]) == (0, "other_deleted_present")
+    assert sorted(fake.folders["INBOX"]) == [1, 2, 3]
+    fake.deleted["INBOX"] = set()
+    assert export._purge_folder(fake, "INBOX", 77, [1, 2]) == (2, None)  # safe: plain EXPUNGE, nothing else marked
+    assert sorted(fake.folders["INBOX"]) == [3]
+
+
+def test_127_purge_folder_recreated_is_skipped() -> None:
+    fake = PurgeImap({"INBOX": {1: (_raw("a"), NEW)}})
+    fake.uidvalidity = 99  # the folder was re-created: UID 1 is another message now
+    assert export._purge_folder(fake, "INBOX", 77, [1]) == (0, "uidvalidity_changed")
+    assert 1 in fake.folders["INBOX"]
+
+
+async def test_127_no_disk_space_is_507(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("app.mail.export.temp_free_bytes", lambda: 0)
+    mailbox = await _signed_in(client, db, mail_server)
+    inbox = await db.scalar(select(FolderMeta).where(FolderMeta.mailbox_id == mailbox.id, FolderMeta.name == "INBOX"))
+    assert inbox is not None
+    db.add(Message(mailbox_id=mailbox.id, folder_id=inbox.id, uid=1, size=10_000, received_at=NEW))
+    await db.commit()
+    r = await client.send_json("POST", "/api/mail/mailboxes/default/exports", {})
+    assert r.status_code == 507 and r.json()["detail"]["code"] == "export_no_space"
+    assert export.enough_space(1000, free=1100) and not export.enough_space(1000, free=1099)

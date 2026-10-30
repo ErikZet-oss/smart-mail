@@ -2,6 +2,18 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #127 part 2: delete the archived messages from the server, and check disk space first
+
+- After the archive is downloaded, the export dialog offers „Vymazať správy zahrnuté v archíve…“. It confirms („Natrvalo vymaže N správ zo servera. Máte archív uložený?“) and needs the password (re-auth). It deletes **exactly the UIDs in the manifest**, per folder, with `\Deleted` + UID EXPUNGE (not the Kôš, so the quota is freed). Mail that arrived after the export stays.
+- Guards, each tested:
+  - only after the archive was downloaded (409 `export_not_downloaded`);
+  - the stored archive must still match its sha256 (409 `export_archive_mismatch`);
+  - once per archive;
+  - a re-created folder (UIDVALIDITY changed) is skipped;
+  - on a server without UIDPLUS, a folder that has other `\Deleted` messages is skipped (a plain EXPUNGE would remove them too).
+- Audit `mail.export_purged` records the count, folders, skipped folders and the archive sha256; a sync is scheduled afterwards.
+- Before an export starts (API and job), the free space of the temp directory is checked against the estimate × 1.1. Too little → 507 `export_no_space` with a Slovak hint to narrow the range (reviewer note on #130).
+
 ## [Unreleased] — #127 part 1: back up a folder or the whole mailbox to ZIP
 
 - W2 folder menu „Stiahnuť priečinok (.zip)…“, mailbox menu and Nastavenia › Priečinky „Stiahnuť celú schránku (.zip)…“. The dialog offers Všetky správy / Staršie ako N mesiacov / Od – do, an optional „Vrátane podpriečinkov“, and an estimate (count and size from the synced copy). Then progress, and a download link valid 24 h. The notification „Archív je pripravený“ downloads it too.
