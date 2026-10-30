@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — fix(#121): the CI `npm test` flake found
+
+- The #145 annotation showed it: every test passed, but vitest reported an unhandled `ReferenceError: document is not defined` from a ProseMirror `DOMObserver` timer — `aiText.test.ts` created TipTap editors and never destroyed them, so a timer fired after jsdom was torn down. The editors are now destroyed after each test.
+
 ## [Unreleased] — Phase 2 close-out report
 
 - `docs/phase2-closeout.md`: milestones 2a–2f, acceptance status, gates, open items and what is needed from Erik.
