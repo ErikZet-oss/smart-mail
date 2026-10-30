@@ -1,12 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CircleAlert, CircleCheck, Pencil, Sparkles, TriangleAlert, X } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronUp, CircleAlert, CircleCheck, Pencil, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '../../components/Button';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
+import { CollapsedSuggestion } from './CollapsedSuggestion';
 import { cardChecks, cardState, type CardCheck, type CardState } from './cardChecks';
 import {
   approveSuggestion,
@@ -49,6 +50,11 @@ export function AiSuggestionCard({ suggestion, mailbox, messageId, category, rea
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const toasts = useToasts();
+  const [open, setOpen] = useState(false); // #156: collapsed by default
+  const headerToggle = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open) headerToggle.current?.focus(); // keyboard focus stays on the card header (#156)
+  }, [open]);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(suggestion.body);
   const [expanded, setExpanded] = useState(false);
@@ -93,11 +99,35 @@ export function AiSuggestionCard({ suggestion, mailbox, messageId, category, rea
   });
   const busy = approve.isPending || reject.isPending;
 
+  if (!open) {
+    return (
+      <CollapsedSuggestion
+        title={t('ai.card.replyTitle')}
+        subline={subline}
+        status={state === 'blocked' ? 'blocked' : checks.some((c) => c.level === 'warning') ? 'warning' : 'ok'}
+        warnings={checks.filter((c) => c.level === 'warning').length}
+        preview={suggestion.body}
+        testId="ai-suggestion-card"
+        onExpand={() => setOpen(true)}
+        onReject={
+          readOnly
+            ? undefined
+            : () => {
+                setOpen(true);
+                setRejecting(true);
+              }
+        }
+        rejectDisabled={busy}
+      />
+    );
+  }
+
   return (
     <section
       aria-label={t('ai.card.replyTitle')}
       data-testid="ai-suggestion-card"
       data-state={state}
+      data-collapsed="false"
       className={`flex max-w-[760px] flex-col gap-3 rounded-lg border bg-ai-50 p-4 ${BORDER[state]}`}
     >
       <header className="flex items-start gap-2">
@@ -106,6 +136,16 @@ export function AiSuggestionCard({ suggestion, mailbox, messageId, category, rea
           <h2 className="type-heading text-text-primary">{t('ai.card.replyTitle')}</h2>
           <p className="type-small text-text-secondary">{subline}</p>
         </div>
+        <button
+          type="button"
+          ref={headerToggle}
+          aria-expanded={true}
+          onClick={() => setOpen(false)}
+          className="type-small inline-flex h-8 shrink-0 items-center gap-1 rounded-sm px-2 text-text-secondary hover:bg-bg-muted"
+        >
+          <ChevronUp size={16} aria-hidden="true" />
+          {t('ai.card.collapsed.hide')}
+        </button>
       </header>
 
       {state === 'lowconf' ? <p className="type-small text-text-secondary">{t('ai.card.lowconf')}</p> : null}

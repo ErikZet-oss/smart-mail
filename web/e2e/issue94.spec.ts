@@ -110,12 +110,18 @@ async function setup(page: Page, card: typeof CARD = CARD): Promise<Calls> {
 }
 
 const card = (page: Page) => page.getByTestId('ai-suggestion-card');
+/** #156: the card starts collapsed; approving needs the expanded card. */
+const expand = async (page: Page) => {
+  await card(page).getByRole('button', { expanded: false }).click();
+  await expect(card(page)).toHaveAttribute('data-collapsed', 'false');
+};
 
 test.describe('#94 AiSuggestionCard @mobile', () => {
   test('#94 card shows checks, preview and the AI footer; approve opens the draft', async ({ page }, info) => {
     const calls = await setup(page);
     await page.goto('/mail/default/inbox/t-m1');
     await expect(card(page)).toBeVisible();
+    await expand(page);
     await expect(card(page)).toHaveAttribute('data-state', 'attention');
     await expect(card(page).getByRole('heading', { name: 'Návrh odpovede' })).toBeVisible();
     await expect(card(page).getByText('Žiadosti o faktúru · slovenčina')).toBeVisible();
@@ -136,6 +142,7 @@ test.describe('#94 AiSuggestionCard @mobile', () => {
   test('#94 edited text is sent with approve', async ({ page }) => {
     const calls = await setup(page);
     await page.goto('/mail/default/inbox/t-m1');
+    await expand(page);
     await card(page).getByRole('button', { name: 'Upraviť' }).click();
     await card(page).getByLabel('Text odpovede').fill('Dobrý deň, faktúru 2026123 posielame.');
     await card(page).getByRole('button', { name: 'Pripraviť upravený koncept' }).click();
@@ -163,10 +170,28 @@ test.describe('#94 AiSuggestionCard @mobile', () => {
       blocked: true,
     });
     await page.goto('/mail/default/inbox/t-m1');
+    await expand(page);
     await expect(card(page)).toHaveAttribute('data-state', 'blocked');
     await expect(card(page).getByRole('button', { name: 'Pripraviť koncept' })).toBeDisabled();
     await card(page).getByRole('button', { name: 'Upraviť' }).click();
     await card(page).getByLabel('Text odpovede').fill('Cena je 0,12 € za kus.');
     await expect(card(page).getByRole('button', { name: 'Pripraviť upravený koncept' })).toBeEnabled();
+  });
+
+  test('#156 card is collapsed by default: one line, no approve, reject and expand by keyboard', async ({ page }) => {
+    await setup(page);
+    await page.goto('/mail/default/inbox/t-m1');
+    await expect(card(page)).toHaveAttribute('data-collapsed', 'true');
+    await expect(card(page).getByRole('button', { name: 'Pripraviť koncept' })).toHaveCount(0);
+    await expect(card(page).getByRole('button', { name: 'Zamietnuť' })).toBeVisible();
+    const box = await card(page).boundingBox();
+    expect(box?.height ?? 0).toBeLessThanOrEqual(56);
+    await card(page).getByRole('button', { expanded: false }).focus();
+    await page.keyboard.press('Enter');
+    await expect(card(page)).toHaveAttribute('data-collapsed', 'false');
+    await expect(card(page).getByRole('button', { name: 'Zbaliť' })).toBeFocused();
+    await expect(card(page).getByRole('button', { name: 'Pripraviť koncept' })).toBeVisible();
+    await card(page).getByRole('button', { name: 'Zbaliť' }).click();
+    await expect(card(page)).toHaveAttribute('data-collapsed', 'true');
   });
 });
