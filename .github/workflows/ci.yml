@@ -216,6 +216,17 @@ jobs:
     # Independent of unit/e2e jobs so a backend failure cannot skip the deploy smoke.
     steps:
       - uses: actions/checkout@v4
+      - name: Windows bridge scripts parse (ADR-016, PowerShell syntax only)
+        shell: pwsh
+        run: |
+          $bad = 0
+          foreach ($f in Get-ChildItem deploy/bridge-windows/*.ps1) {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors)
+            if ($errors) { $errors | ForEach-Object { Write-Host "::error file=$($f.Name)::$_" }; $bad++ }
+            else { Write-Host "OK $($f.Name)" }
+          }
+          exit $bad
       - name: install.sh + update.sh (SMARTMAIL_CI=1)
         run: |
           chmod +x deploy/*.sh

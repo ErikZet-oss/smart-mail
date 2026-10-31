@@ -347,3 +347,21 @@ async def test_3b_nav_shows_money_only_with_the_feature(
         assert [s["id"] for s in money["subs"]] == ["13a", "13b", "13e"]  # 13c / 13f hidden in Phase 3 (#150)
     finally:
         app.state.settings.feature_money = False
+
+
+async def test_3h_cloudflare_access_headers_only_when_configured(settings: Settings) -> None:
+    """ADR-016: the app sends the Access service token to the tunnel hostname; nothing in dev."""
+    from pydantic import SecretStr
+
+    from app.money.bridge_client import access_headers
+
+    assert access_headers(settings) == {}
+    tunnel = settings.model_copy(
+        update={"bridge_cf_access_client_id": "id.access", "bridge_cf_access_client_secret": SecretStr("s3cret")}
+    )
+    assert access_headers(tunnel) == {"CF-Access-Client-Id": "id.access", "CF-Access-Client-Secret": "s3cret"}
+    client = BridgeClient(tunnel)
+    try:
+        assert client._http.headers["CF-Access-Client-Id"] == "id.access"
+    finally:
+        await client.aclose()

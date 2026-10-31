@@ -52,6 +52,16 @@ def sign(secret: str, method: str, path_qs: str, timestamp: str, body: bytes = b
     return hmac.new(secret.encode(), canonical, hashlib.sha256).hexdigest()
 
 
+def access_headers(settings: Settings) -> dict[str, str]:
+    """Cloudflare Access service token for the tunnel to the office server (ADR-016); empty in dev and on the mock."""
+    if settings.bridge_cf_access_client_id and settings.bridge_cf_access_client_secret:
+        return {
+            "CF-Access-Client-Id": settings.bridge_cf_access_client_id,
+            "CF-Access-Client-Secret": settings.bridge_cf_access_client_secret.get_secret_value(),
+        }
+    return {}
+
+
 class _Circuit:
     def __init__(self) -> None:
         self.fails = 0
@@ -80,7 +90,7 @@ class BridgeClient:
         self._key_id = settings.bridge_hmac_key_id
         self._secret = settings.bridge_hmac_secret.get_secret_value()
         self._own = http is None
-        self._http = http or httpx.AsyncClient(timeout=TIMEOUT)
+        self._http = http or httpx.AsyncClient(timeout=TIMEOUT, headers=access_headers(settings))
 
     async def aclose(self) -> None:
         if self._own:
