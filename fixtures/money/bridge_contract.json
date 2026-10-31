@@ -184,5 +184,40 @@
       "started_at": "2026-08-23T06:00:00Z",
       "done": true
     }
-  ]
+  ],
+  "overdue": {
+    "items": [
+      {
+        "id": "4c6bc4cb-fc2e-53fc-9137-d7e580dc2aba",
+        "kind": "invoice",
+        "number": "FV2600003",
+        "variable_symbol": "26000003",
+        "company_id": "582e09bf-b8b2-55c8-8757-9e05c413d60f",
+        "issued_on": "2026-06-12",
+        "due_on": "2026-06-26",
+        "paid_on": null,
+        "total": "1378.26",
+        "remaining": "1378.26",
+        "currency_id": "c170a71a-1799-5629-b68a-887c58d0755e",
+        "reference": null,
+        "doc_type": 0
+      },
+      {
+        "id": "657d19de-f3f7-52a2-96e8-bf3cc197b873",
+        "kind": "invoice",
+        "number": "FV2600007",
+        "variable_symbol": "26000007",
+        "company_id": "2da4ac07-daed-5b6c-a0f0-a067830c84ec",
+        "issued_on": "2026-08-03",
+        "due_on": "2026-08-17",
+        "paid_on": null,
+        "total": "2591.76",
+        "remaining": "2591.76",
+        "currency_id": "c170a71a-1799-5629-b68a-887c58d0755e",
+        "reference": null,
+        "doc_type": 0
+      }
+    ],
+    "next_from": 2
+  }
 }

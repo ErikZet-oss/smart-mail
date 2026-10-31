@@ -230,6 +230,7 @@
     "compose": "Vytvoriť správu",
     "mail": "E-mail",
     "contacts": "Kontakty",
+    "documents": "Doklady",
     "settings": "Nastavenia",
     "darkMode": "Tmavý režim",
     "classic": "Klasické zobrazenie",
@@ -1624,6 +1625,60 @@
     "notes": {
       "attachment_unscanned": "príloha ešte nebola skontrolovaná",
       "attachment_infected": "príloha obsahuje vírus a nebola spracovaná"
+    }
+  },
+  "reminders": {
+    "title": "Upomienky",
+    "tabs": { "open": "Po splatnosti", "history": "Odoslané upomienky" },
+    "loading": "Načítavam faktúry po splatnosti z Money…",
+    "retry": "Skúsiť znova",
+    "roleOnly": "Upomienky pripravuje účtovníctvo, obchod alebo správca.",
+    "emptyTitle": "Nikto nemá faktúry po splatnosti",
+    "emptyText": "Keď Money nájde neuhradenú faktúru po splatnosti, zákazník sa zobrazí tu.",
+    "tone": "Tón",
+    "tones": { "polite": "Zdvorilá", "firm": "Dôrazná" },
+    "prepare_one": "Pripraviť upomienku ({{count}})",
+    "prepare_few": "Pripraviť upomienky ({{count}})",
+    "prepare_other": "Pripraviť upomienky ({{count}})",
+    "hint": "Pre každého zákazníka vznikne koncept s tabuľkou a PDF faktúr z Money. Skontrolujete a odošlete ho sami.",
+    "select": "Vybrať",
+    "selectOne": "Vybrať {{name}}",
+    "cols": {
+      "customer": "Zákazník",
+      "sum": "Po splatnosti suma",
+      "count": "Počet faktúr",
+      "oldest": "Najstaršia",
+      "last": "Posledná upomienka",
+      "contact": "Kontakt"
+    },
+    "days_one": "{{count}} deň",
+    "days_few": "{{count}} dni",
+    "days_other": "{{count}} dní",
+    "noContact": "chýba e-mail firmy v Money",
+    "results": "Pripravené koncepty",
+    "openDraft": "Otvoriť koncept",
+    "historyEmpty": "Zatiaľ žiadne upomienky.",
+    "hist": { "at": "Pripravená", "invoices": "Faktúry", "state": "Stav" },
+    "states": {
+      "editing": "koncept – čaká na odoslanie",
+      "queued": "odosiela sa",
+      "scheduled": "naplánovaná",
+      "sending": "odosiela sa",
+      "sent": "odoslaná",
+      "failed": "odoslanie zlyhalo",
+      "deleted": "koncept zmazaný"
+    },
+    "errors": {
+      "money_unavailable": "Money je teraz nedostupné. Pošta funguje ďalej – skúste to o chvíľu.",
+      "money_disabled": "Prepojenie s Money je vypnuté.",
+      "no_contact": "Firma nemá v Money e-mail – doplňte ho v Money.",
+      "recipient_unconfirmed": "E-mail firmy nie je jednoznačný – upomienka sa nepripravila.",
+      "recipient_not_document_owner": "Faktúra {{number}} nepatrí tejto firme.",
+      "report_not_configured": "Chýba tlačová zostava faktúry (Nastavenia › Money S4 › Tlačové zostavy).",
+      "pdf_missing": "Money pre faktúru {{number}} nevrátilo PDF.",
+      "nothing_overdue": "Zákazník už nemá faktúry po splatnosti.",
+      "role_not_allowed": "Upomienky pripravuje účtovníctvo, obchod alebo správca.",
+      "generic": "Upomienka sa nepripravila."
     }
   },
   "money": {

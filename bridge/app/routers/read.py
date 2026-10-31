@@ -22,6 +22,7 @@ from app.models import (
     InvoiceSearch,
     IssuedInvoice,
     Order,
+    OverduePage,
     PersonPage,
 )
 
@@ -73,6 +74,14 @@ async def get_company(request: Request, company_id: uuid.UUID) -> Company:
 @router.get("/companies/{company_id}/receivables")
 async def company_receivables(request: Request, company_id: uuid.UUID) -> list[IssuedInvoice]:
     return await _backend(request).receivables(company_id)
+
+
+@router.get("/receivables/overdue")
+async def overdue_receivables(
+    request: Request, before: date | None = None, start: Start = 0, count: Count = 200
+) -> OverduePage:
+    """W8b Upomienky: open invoices due before `before` (default today), all customers."""
+    return await _backend(request).overdue(before or date.today(), start, count)
 
 
 @router.get("/companies/{company_id}/orders")

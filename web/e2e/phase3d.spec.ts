@@ -127,7 +127,8 @@ test('3d invoice card: collapsed, then approve prepares the draft @mobile', asyn
       approved.push(payload);
       return { body: { suggestion_id: 's-inv', draft_id: 'd-9', edited: false } };
     },
-    'GET /api/compose/d-9': { status: 404, body: { detail: { code: 'draft_not_found' } } },
+    'GET /api/mail/compose/d-9': { status: 404, body: { detail: { code: 'draft_not_found' } } },
+    'GET /api/mail/mailboxes/default/identities': { body: [] },
     'GET /api/money/messages/m1/customer': {
       body: {
         email: 'jan@firma01.example',
@@ -188,7 +189,8 @@ test('3d „Poslať“ in the Zákazník card prepares a draft', async ({ page }
       sent.push(payload);
       return { body: { draft_id: 'd-10' } };
     },
-    'GET /api/compose/d-10': { status: 404, body: { detail: { code: 'draft_not_found' } } },
+    'GET /api/mail/compose/d-10': { status: 404, body: { detail: { code: 'draft_not_found' } } },
+    'GET /api/mail/mailboxes/default/identities': { body: [] },
   });
   await page.goto('/mail/default/inbox/m1?panel=customer');
   await page.getByRole('button', { name: 'Poslať faktúru FV2600042 zákazníkovi' }).click();

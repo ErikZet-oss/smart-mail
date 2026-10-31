@@ -14,6 +14,7 @@ export const ROUTES = {
   W2n: { id: 'W2n', path: '/mail/:mailbox/:folder/:threadId/source/:messageId', signedIn: true },
   W4: { id: 'W4', path: '/compose', signedIn: true },
   W4draft: { id: 'W4', path: '/compose/:draftId', signedIn: true },
+  W8b: { id: 'W8b', path: '/docs/reminders', signedIn: true },
   W9: { id: 'W9', path: '/contacts/:book', signedIn: true },
   W10: { id: 'W10', path: '/search?q=', signedIn: true },
   W12: { id: 'W12', path: '/settings/:section/:sub?', signedIn: true },

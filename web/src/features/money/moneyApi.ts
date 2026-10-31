@@ -77,6 +77,37 @@ export const linkEmail = (email: string, companyMoneyId: string) =>
   api<CustomerMatch>('POST', '/api/money/links', { email, company_money_id: companyMoneyId });
 export const createInvoiceDraft = (messageId: string, number: string) =>
   api<{ draft_id: string }>('POST', `/api/money/messages/${encodeURIComponent(messageId)}/invoice-draft`, { number });
+export type ReminderTone = 'polite' | 'firm';
+export type Debtor = {
+  company: CompanyBrief;
+  contact: string | null;
+  overdue_total: string;
+  invoice_count: number;
+  oldest_days: number;
+  last_reminder_at: string | null;
+  invoices: Invoice[];
+};
+export type ReminderResult = {
+  company_money_id: string;
+  draft_id: string | null;
+  error: string | null;
+  number?: string | null;
+};
+export type ReminderHistoryRow = {
+  at: string;
+  company_money_id: string;
+  company_name: string | null;
+  draft_id: string | null;
+  draft_status: string | null;
+  tone: string | null;
+  invoices: string[];
+};
+export const debtorsKey = ['money', 'reminders'] as const;
+export const reminderHistoryKey = ['money', 'reminders', 'history'] as const;
+export const fetchDebtors = () => api<Debtor[]>('GET', '/api/money/reminders');
+export const fetchReminderHistory = () => api<ReminderHistoryRow[]>('GET', '/api/money/reminders/history');
+export const prepareReminders = (companyMoneyIds: string[], tone: ReminderTone) =>
+  api<ReminderResult[]>('POST', '/api/money/reminders/drafts', { company_money_ids: companyMoneyIds, tone });
 export const unlinkEmail = (email: string) =>
   api<{ deleted: boolean }>('DELETE', `/api/money/links?email=${encodeURIComponent(email)}`);
 

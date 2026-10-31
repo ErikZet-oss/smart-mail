@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.models import CodebookPage, Company, CompanyPage, InvoiceSearch, IssuedInvoice, PersonPage
+from app.models import CodebookPage, Company, CompanyPage, InvoiceSearch, IssuedInvoice, OverduePage, PersonPage
 from tests.conftest import SignedClient
 
 
@@ -81,3 +81,8 @@ def test_contract_orders_and_deliveries_shape(contract_client: SignedClient) -> 
 def test_contract_pdf_report_id_is_validated(contract_client: SignedClient) -> None:
     r = contract_client.get("/invoices/issued/invoice/00000000-0000-4000-8000-00000000dead/pdf?report_id=x;y")
     assert r.status_code == 422 and r.json()["detail"]["code"] == "report_id_invalid"
+
+
+def test_contract_overdue_receivables(contract_client: SignedClient) -> None:
+    page = OverduePage.model_validate(contract_client.get("/receivables/overdue?before=2026-10-01&count=50").json())
+    assert all(i.remaining > Decimal("0") and i.due_on is not None and str(i.due_on) < "2026-10-01" for i in page.items)
