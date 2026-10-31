@@ -85,6 +85,22 @@ def _llm_attempts(row: Classification | None) -> int:
         return 0
 
 
+async def _load_body_for_ai(db: AsyncSession, settings: Settings, mailbox: Mailbox, message: Message) -> None:
+    """Body + attachments + auth results for the classifier. A failed fetch falls back to the subject (as before)
+    and is logged — mail processing never stops because of it."""
+    if message.body_fetched_at is not None or not settings.sync_host_allowed(mailbox.imap_host or ""):
+        return
+    from app.mail.body import ensure_body
+    from app.mail.sync import credentials_for
+
+    try:
+        creds = await credentials_for(db, mailbox, settings)
+        if creds is not None:
+            await ensure_body(db, settings, mailbox, message, creds)
+    except Exception as exc:  # IMAP/storage/AV trouble must not stop the pipeline
+        log.warning("ai.body_fetch_failed", message_id=str(message.id), error=type(exc).__name__)
+
+
 async def process_mailbox_ai(
     db: AsyncSession,
     mailbox: Mailbox,
@@ -164,6 +180,9 @@ async def process_mailbox_ai(
                 existing.payload = payload
             continue
 
+        # Pilot 2026-10-31: new mail has no body until someone opens it, so classification saw only the subject
+        # („Faktura“ → Polish, no attachments, no DMARC result). Fetch the body (BODY.PEEK, never \\Seen) first.
+        await _load_body_for_ai(db, settings, mailbox, message)
         atts = list((await db.execute(select(Attachment).where(Attachment.message_id == message.id))).scalars())
         plan = plan_attachments_for_ai(atts)
         if plan.note_codes:

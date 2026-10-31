@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Fix: the classifier saw only the subject of new mail (pilot 2026-10-31)
+
+- New messages have no body until someone opens them, and the AI pipeline classified them from the subject alone. A Slovak mail with the subject „Faktura“ came out as Polish (the reply was drafted in Polish), and attachment names and the DMARC result were unknown to rules and phishing checks.
+- `process_mailbox_ai` now fetches the body first (`ensure_body`, BODY.PEEK, never \\Seen), including attachments with ClamAV and auth results. A failed fetch is logged and the message is classified from the subject as before.
+- Tests in `tests/test_ai_classify_body_fetch.py`.
+
 ## [Unreleased] — Fix: reply drafted in the wrong language (pilot 2026-10-31)
 
 - The classifier LLM's language replaced the heuristic one. A plain Slovak e-mail came back as `pl` and the reply suggestion was written in Polish.
