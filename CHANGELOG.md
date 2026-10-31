@@ -2,6 +2,13 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Fix: deleted Money records were shown (pilot 2026-10-31)
+
+- Money keeps deleted records and the API returns them (`Deleted: true`). On the TEST agenda 603 of 1104 unpaid issued invoices were deleted ones, and invoice 372100492 existed twice: deleted for customer A, live and paid for customer B. Customer A's card listed it as unpaid.
+- The bridge now requests `Deleted` in every GraphQL query and drops deleted rows in all reads: invoices (search, receivables, overdue), companies, company detail, orders, delivery notes, codebooks, REST persons and activity types. Paging uses the raw page size, so dropped rows never end a sync early.
+- Companies already cached become inactive at the next nightly full sync. Persons and codebooks drop them at the next sync.
+- Tests in `bridge/tests/test_api_backend.py`.
+
 ## [Unreleased] — Probe results from the TEST agenda (#176)
 
 - `docs/probe-findings-2026-10-31.md`: every probe finding turned into a decision. Covers the API envelope, PascalCase REST, which GraphQL filters work, that REST filters do not, the PDF report, `ProdejniCeny` (analysis and proposal), received orders and branches. Questions for Erik are at the end.

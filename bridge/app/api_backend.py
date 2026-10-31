@@ -203,6 +203,13 @@ def person_from(raw: dict[str, Any]) -> Person:
     )
 
 
+def _alive(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Money keeps deleted records and the API returns them (`Deleted: true`): on the TEST agenda 603 of 1104 unpaid
+    issued invoices were deleted ones, and an invoice number existed twice (deleted + live, different customers,
+    pilot 2026-10-31). Every read drops them; keys are matched case-insensitively (REST is PascalCase)."""
+    return [r for r in rows if _ci(r).get("deleted") is not True]
+
+
 def _newest_first(items: list[Any]) -> list[Any]:
     """The server has no `Order` argument (MONEY_API §2) — sort client-side."""
     return sorted(items, key=lambda i: (i.issued_on or date.min, i.number), reverse=True)
@@ -243,32 +250,53 @@ class ApiBackend:
             variables["filter"] = filter_
         if since is not None:
             variables["changeFrom"] = since.isoformat()
+        return _alive(await self._raw(query, root, variables))
+
+    async def _raw(self, query: str, root: str, variables: dict[str, Any]) -> list[dict[str, Any]]:
         data = await self._money.graphql(query, variables)
         rows = data.get(root) or []
         if not isinstance(rows, list):
             raise MoneyError(f"{root}: not a list")
         return [r for r in rows if isinstance(r, dict)]
 
+    async def _page_rows(
+        self,
+        query: str,
+        root: str,
+        *,
+        filter_: str | None = None,
+        start: int,
+        count: int,
+        since: datetime | None = None,
+    ) -> tuple[list[dict[str, Any]], int | None]:
+        """A page without deleted rows + the next offset computed from the RAW page size (dropping deleted rows must
+        not end the paging early)."""
+        variables: dict[str, Any] = {"from": start, "count": count}
+        if filter_:
+            variables["filter"] = filter_
+        if since is not None:
+            variables["changeFrom"] = since.isoformat()
+        raw = await self._raw(query, root, variables)
+        return _alive(raw), (start + len(raw) if len(raw) == count else None)
+
     async def version(self) -> str:
         return str((await self._money.graphql("version")).get("Version") or "")
 
     async def companies(self, since: datetime | None, start: int, count: int) -> CompanyPage:
         count = min(count, self._page)
-        rows = await self._list("companies", "Companies", start=start, count=count, since=since)
-        return CompanyPage(
-            items=[company_from(r) for r in rows], next_from=start + len(rows) if len(rows) == count else None
-        )
+        rows, next_from = await self._page_rows("companies", "Companies", start=start, count=count, since=since)
+        return CompanyPage(items=[company_from(r) for r in rows], next_from=next_from)
 
     async def company(self, company_id: uuid.UUID) -> Company | None:
         raw = (await self._money.graphql("company", {"id": str(company_id)})).get("Company")
-        return company_from(raw) if isinstance(raw, dict) and raw.get("ID") else None
+        return company_from(raw) if isinstance(raw, dict) and raw.get("ID") and _alive([raw]) else None
 
     async def persons(self, since: datetime | None, start: int, count: int) -> PersonPage:
         """REST paging `/Person/{from}/{count}` needs no filter. `since` is ignored (full list): REST filters do not
         work (probe 2026-10-31), so the cache sync treats persons as a full refresh."""
         count = min(count, self._page)
         rows = _rest_rows(await self._money.rest_json(f"Person/{start}/{count}") or [])
-        items = [person_from(r) for r in rows]
+        items = [person_from(r) for r in _alive(rows)]
         return PersonPage(items=items, next_from=start + len(rows) if len(rows) == count else None)
 
     async def codebook(self, name: CodebookName, start: int, count: int) -> CodebookPage:
@@ -276,11 +304,11 @@ class ApiBackend:
             return await self._activity_types(start, count)
         query, root = CODEBOOK_QUERIES[name]
         count = min(count, self._page)
-        rows = await self._list(query, root, start=start, count=count)
+        rows, next_from = await self._page_rows(query, root, start=start, count=count)
         items = [
             CodebookItem(id=_required_uuid(r.get("ID")), code=_s(r.get("Kod")), name=_s(r.get("Nazev"))) for r in rows
         ]
-        return CodebookPage(items=items, next_from=start + len(rows) if len(rows) == count else None)
+        return CodebookPage(items=items, next_from=next_from)
 
     async def _invoices(self, filter_: str) -> list[IssuedInvoice]:
         rows = await self._list("issued_invoices", "IssuedInvoices", filter_=filter_, count=SEARCH_LIMIT)
@@ -325,10 +353,10 @@ class ApiBackend:
         """MONEY_API §5.2 for all customers: `UhradyZbyva~gt~0#DatumSplatnosti~lt~<date>`, paged."""
         count = min(count, self._page)
         filter_ = all_(cond("UhradyZbyva", "gt", Decimal("0")), cond("DatumSplatnosti", "lt", before))
-        rows = await self._list("issued_invoices", "IssuedInvoices", filter_=filter_, start=start, count=count)
-        return OverduePage(
-            items=[invoice_from(r) for r in rows], next_from=start + len(rows) if len(rows) == count else None
+        rows, next_from = await self._page_rows(
+            "issued_invoices", "IssuedInvoices", filter_=filter_, start=start, count=count
         )
+        return OverduePage(items=[invoice_from(r) for r in rows], next_from=next_from)
 
     async def orders(self, company_id: uuid.UUID, since: date) -> list[Order]:
         filter_ = all_(cond("Firma_ID", "eq", company_id), cond("DatumVystaveni", "gte", since))
@@ -347,7 +375,7 @@ class ApiBackend:
         """REST `TypeOfActivity/{from}/{count}` (no filter needed; swagger v1/v2)."""
         count = min(count, self._page)
         rows = _rest_rows(await self._money.rest_json(f"TypeOfActivity/{start}/{count}") or [])
-        items = [codebook_item_from_rest(r) for r in rows]
+        items = [codebook_item_from_rest(r) for r in _alive(rows)]
         return CodebookPage(items=items, next_from=start + len(rows) if len(rows) == count else None)
 
     async def create_activity(self, activity: ActivityIn) -> ActivityOut:

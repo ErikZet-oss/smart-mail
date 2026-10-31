@@ -1,5 +1,5 @@
 query NumericalSeries($filter: String, $from: Int, $count: Int, $changeFrom: DateTime) {
   NumericalSeries(Filter: $filter, From: $from, Count: $count, ChangeFrom: $changeFrom) {
-    ID Kod Nazev
+    ID Deleted Kod Nazev
   }
 }

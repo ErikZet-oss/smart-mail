@@ -1,5 +1,5 @@
 query Company($id: ID!) {
   Company(ID: $id) {
-    ID Kod Nazev ICO DIC ICDPH Email HodnotaSlevy VlastniSleva SplatnostPohledavek SeznamSpojeni { SpojeniCislo TypSpojeni { Kod } }
+    ID Deleted Kod Nazev ICO DIC ICDPH Email HodnotaSlevy VlastniSleva SplatnostPohledavek SeznamSpojeni { SpojeniCislo TypSpojeni { Kod } }
   }
 }
