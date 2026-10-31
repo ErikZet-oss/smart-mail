@@ -62,3 +62,29 @@ def test_orders_and_branches_do_not_overwrite_report_md() -> None:
     text = (ROOT / "tools" / "money_probe.py").read_text(encoding="utf-8")
     assert "write_orders_report()\n        write_report()" not in text
     assert "write_branches_report()\n        write_report()" not in text
+
+
+class _FindHttp:
+    """GraphQL finds the invoice by number, REST detail returns it; REST paging never contains it."""
+
+    def __init__(self) -> None:
+        self.paths: list[str] = []
+
+    def request(self, method: str, url: str, **__: Any) -> tuple[int, str, Any, int]:
+        self.paths.append(url)
+        return 200, "application/json", {"IssuedInvoices": [{"ID": "abc", "CisloDokladu": "37261473"}]}, 5
+
+    def get(self, path: str, params: Any = None, raw: bool = False) -> tuple[int, str, Any, int]:
+        self.paths.append(path)
+        if path.endswith("/IssuedInvoice/abc"):
+            return 200, "application/json", {"ID": "abc", "CisloDokladu": "37261473"}, 5
+        return 200, "application/json", [], 5
+
+
+def test_probe_invoice_is_found_by_graphql_not_only_by_paging() -> None:
+    """Pilot 2026-10-31: a recent invoice is beyond the first 2000 REST rows (oldest first)."""
+    probe = _probe()
+    http = _FindHttp()
+    inv = probe.find_probe_invoice(http, "37261473")
+    assert inv is not None and inv["ID"] == "abc"
+    assert any(p.endswith("/IssuedInvoice/abc") for p in http.paths)

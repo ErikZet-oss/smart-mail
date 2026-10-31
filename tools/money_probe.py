@@ -278,8 +278,18 @@ def page_limit(http):
 
 
 def find_probe_invoice(http, number):
-    """Find the probe invoice by scanning pages (independent of filter syntax)."""
+    """Find the probe invoice: GraphQL `CisloDokladu~eq~` -> REST detail by ID; fallback = scan the first pages
+    (REST pages are oldest first - with 27 750 invoices a recent number was never reached, pilot 2026-10-31)."""
     target = norm(number)
+    _, data, err, _ = gql(http, 'query($f:String){ IssuedInvoices(Filter:$f, Count:5){ ID CisloDokladu } }',
+                          {"f": f"CisloDokladu~eq~{number}"})
+    for row in (data or {}).get("IssuedInvoices") or []:
+        if norm(row.get("CisloDokladu")) == target and row.get("ID"):
+            status, _, res, _ = http.get(f"{API}/IssuedInvoice/{row['ID']}")
+            if isinstance(res, list):
+                res = res[0] if res else None
+            if status == 200 and isinstance(res, dict):
+                return res
     for start in range(0, 2000, 200):
         status, _, res, _ = http.get(f"{API}/IssuedInvoice/{start}/200")
         rows = as_list(res)
