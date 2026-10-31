@@ -43,3 +43,9 @@ def test_install_does_not_require_winget_for_cloudflared() -> None:
     text = ROOT.joinpath("deploy/bridge-windows/install-bridge.ps1").read_text(encoding="utf-8-sig")
     assert "cloudflared-windows-amd64.msi" in text
     assert "winget install --id Cloudflare.cloudflared" not in text
+
+
+def test_update_sh_pulls_explicit_branch() -> None:
+    """Pilot 2026-10-31: `git pull --ff-only` without upstream → "Cannot fast-forward to multiple branches"."""
+    text = ROOT.joinpath("deploy/update.sh").read_text(encoding="utf-8")
+    assert 'git pull --ff-only origin "$BRANCH"' in text
