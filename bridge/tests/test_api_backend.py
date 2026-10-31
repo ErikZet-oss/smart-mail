@@ -224,3 +224,29 @@ async def test_money_envelope_with_invoice_rows_keeps_decimals() -> None:
     inv = (await backend.receivables(CID))[0]
     assert inv.total == Decimal("123.45") and isinstance(inv.total, Decimal)
     await backend.aclose()
+
+
+@respx.mock
+async def test_persons_from_real_api_envelope_with_pascal_case_fields() -> None:
+    """Pilot 2026-10-31: `/v2.0/Person/{from}/{count}` answers the envelope with PascalCase keys (`ID`, `Parent_ID`,
+    `Tel1Cislo`), the swagger says camelCase — the person sync failed with 502 on every run."""
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    pid, cid = uuid.uuid4(), uuid.uuid4()
+    row = {
+        "ID": str(pid),
+        "Parent_ID": str(cid),
+        "Jmeno": "Jana",
+        "Prijmeni": "Testová",
+        "Nazev": "Jana Testová",
+        "Funkce": "nákup",
+        "Email": "jana@example.test",
+        "Tel1Cislo": "0900 000 000",
+    }
+    respx.get(f"{BASE}/v2.0/Person/0/2").mock(return_value=_envelope([row]))
+    backend = ApiBackend(settings())
+    page = await backend.persons(None, 0, 2)
+    person = page.items[0]
+    assert person.id == pid and person.company_id == cid
+    assert person.email == "jana@example.test" and person.phone == "0900 000 000"
+    assert person.last_name == "Testová" and page.next_from is None
+    await backend.aclose()

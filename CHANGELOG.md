@@ -5,6 +5,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 ## [Unreleased] — Fix: Money S4 response envelope (first real TEST agenda connection)
 
 - The real Money S4 API (1.15.11) wraps answers as `{"PageCount", "RowCount", "Data": {...}, "Status": 1, "Message", "StackTrace"}` instead of GraphQL's `{"data", "errors"}`. The bridge unwraps it for GraphQL and REST (`Status` ≠ 1 → `MoneyError`, message never logged); before, `/readyz` stayed 503 and every read answered 502.
+- REST persons: the real API answers PascalCase keys (`ID`, `Parent_ID`, `Tel1Cislo`) although the swagger says camelCase — `person_from` matches keys case-insensitively (person sync answered 502 on every run).
 - `tools/money_probe.py` understands the same envelope (otherwise every GraphQL check would report a failure).
 - Tests in `bridge/tests/test_api_backend.py`.
 ## [Unreleased] — Fix: Windows bridge scripts on PowerShell 5.1

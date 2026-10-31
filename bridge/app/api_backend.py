@@ -166,16 +166,18 @@ def delivery_from(raw: dict[str, Any]) -> Delivery:
 
 
 def person_from(raw: dict[str, Any]) -> Person:
-    """REST `PersonOutputDto` (camelCase, swagger v1/v2)."""
+    """REST `PersonOutputDto`. Swagger documents camelCase, the real API 1.15.11 answers PascalCase (`ID`,
+    `Parent_ID`, `Jmeno`, `Tel1Cislo`, …; TEST agenda 2026-10-31) — keys are matched case-insensitively."""
+    raw = {str(k).lower(): v for k, v in raw.items()}
     return Person(
         id=_required_uuid(raw.get("id")),
-        company_id=_uuid(raw.get("parent_ID")),
+        company_id=_uuid(raw.get("parent_id")),
         first_name=_s(raw.get("jmeno")),
         last_name=_s(raw.get("prijmeni")),
         name=_s(raw.get("nazev")),
         function=_s(raw.get("funkce")),
         email=_s(raw.get("email")),
-        phone=_s(raw.get("tel1Cislo")),
+        phone=_s(raw.get("tel1cislo")),
     )
 
 
