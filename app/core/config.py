@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     bridge_url: str = "http://localhost:8100"
     bridge_hmac_key_id: str = "dev"
     bridge_hmac_secret: SecretStr = SecretStr("dev-only-change-me")
+    # ADR-016: the bridge on the office server is reached through Cloudflare Tunnel + Access (service token)
+    bridge_cf_access_client_id: str | None = None
+    bridge_cf_access_client_secret: SecretStr | None = None
     approval_jwt_private_key: SecretStr | None = None
 
     eshop_feed_url: str | None = None

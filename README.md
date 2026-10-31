@@ -328,3 +328,97 @@ Testy prihlásenia potrebujú PostgreSQL a Redis (`docker compose up -d db redis
 v CI: `docker compose up -d imap-test && make imap-seed` a `TEST_IMAP_HOST=localhost TEST_IMAP_PORT=1143
 REQUIRE_IMAP=1`. `make e2e` spustí Playwright (desktop + mobil, API simulované) a uloží snímky obrazoviek do
 `web/test-results/screens/`.
+
+## Bridge na serveri Money
+
+Money most (bridge) je malá služba, ktorá ako jediná číta Money S4. Beží na **serveri v kancelárii, kde je Money**,
+a s aplikáciou na VPS sa spája cez **Cloudflare Tunnel** – v kancelárii sa neotvára žiadny port. Podrobnosti:
+`docs/adr/016-bridge-windows-service.md`. Do Money most zatiaľ **nič nezapisuje** a beží len proti **testovacej
+agende**.
+
+Budete potrebovať:
+- prístup správcu (Administrator) na serveri s Money,
+- z Money: adresu API a **Kľúče API** (Client ID a Client Secret) testovacej agendy
+  (Money › Administrácia › Výmena dát › REST API › Konfigurácia API),
+- z VPS: hodnoty `BRIDGE_HMAC_KEY_ID` a `BRIDGE_HMAC_SECRET` zo súboru `deploy/.env`,
+- prístup do Cloudflare (ten istý účet ako pre doménu aplikácie).
+
+### 1. Cloudflare – tunel a ochrana
+1. Cloudflare › **Zero Trust** › Networks › **Tunnels** › Create a tunnel › typ **Cloudflared** › meno napr.
+   `smartmail-money`. Na ďalšej stránke skopírujte **token** (dlhý text za `cloudflared service install`) –
+   budete ho potrebovať v kroku 2.
+2. V tom istom tuneli › **Public hostname** › Add: subdoména `money-bridge`, doména vašej aplikácie,
+   Service: **HTTP**, URL: `127.0.0.1:8100`.
+3. Zero Trust › Access › **Service Auth** › Create Service Token (meno `smartmail-app`). Skopírujte **Client ID**
+   a **Client Secret** (Secret sa ukáže len raz).
+4. Zero Trust › Access › **Applications** › Add › Self-hosted › doména `money-bridge.<vaša doména>` › politika
+   **Service Auth** s tokenom `smartmail-app`. Nikto iný sa k mostu cez internet nedostane.
+
+### 2. Inštalácia na serveri Money
+1. Na GitHube (prihlásený) otvorte repozitár › **Code › Download ZIP** a rozbaľte ho napr. do `C:\SmartMail\src`.
+2. Spustite **PowerShell ako správca** (Štart › PowerShell › pravý klik › Spustiť ako správca) a zadajte:
+
+```powershell
+cd C:\SmartMail\src\smart-mail-main
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\bridge-windows\install-bridge.ps1
+```
+
+3. Skript sa postupne spýta na adresu API Money, Client ID, Client Secret, `BRIDGE_HMAC_KEY_ID`,
+   `BRIDGE_HMAC_SECRET` a token tunela. Heslá sa pri písaní nezobrazujú. Všetko sa uloží len do
+   `C:\SmartMail\bridge\.env`, ktorý vidia iba správcovia a služba.
+4. Na konci uvidíte „Most beží … agenda=TEST“ a „Spojenie s Money: OK“. Služba **Smart Mail – Money most**
+   sa spúšťa sama po reštarte servera; logy sú v `C:\SmartMail\bridge\logs`.
+
+### 3. Prepojenie s aplikáciou na VPS
+Do `deploy/.env` na VPS doplňte (hodnoty z kroku 1) a spustite `./deploy/update.sh`:
+
+```bash
+BRIDGE_URL=https://money-bridge.<vaša doména>
+BRIDGE_CF_ACCESS_CLIENT_ID=<Client ID service tokenu>
+BRIDGE_CF_ACCESS_CLIENT_SECRET=<Client Secret service tokenu>
+FEATURE_MONEY=true
+```
+
+V aplikácii potom **Nastavenia › Money S4 › Prepojenie › Otestovať** ukáže „Money S4 je pripojené“ a agendu
+TESTOVACIA.
+
+### Aktualizácia mostu
+Stiahnite nový ZIP, rozbaľte ho a ako správca spustite:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\bridge-windows\update-bridge.ps1
+```
+
+`.env` a logy ostávajú. Ak most po aktualizácii neodpovedá, skript to oznámi a ukáže, kde je log.
+
+### Spustenie money_probe.py na Windows Serveri
+Testovací skript overí, čo z Money potrebujeme (filtre, polia, PDF zostavy). **Iba číta**, nič nemení. Výsledok
+`probe_output\report.md` neobsahuje zákaznícke údaje (len názvy polí a typy), takže ho môžete poslať.
+
+1. V rozbalenom ZIP otvorte priečinok `tools` a vytvorte v ňom súbor `probe.env` (Poznámkový blok) s obsahom
+   podľa návodu na začiatku `tools\money_probe.py` – adresa API, Client ID, Client Secret, číslo jednej
+   existujúcej faktúry, e-mail jednej kontaktnej osoby, jeden artikel a IČO jedného zákazníka.
+   **Prístupy píšte len do tohto súboru na serveri – nikdy do GitHubu ani do chatu.**
+2. V PowerShelli (nemusí byť ako správca):
+
+```powershell
+cd C:\SmartMail\src\smart-mail-main\tools
+```
+
+```powershell
+py -3.12 money_probe.py --env probe.env
+```
+
+```powershell
+py -3.12 money_probe.py --env probe.env --orders
+```
+
+```powershell
+py -3.12 money_probe.py --env probe.env --branches
+```
+
+3. Výsledky sú v `tools\probe_output\` (`report.md`, `orders.md`, `branches.md`). Pošlite ich (alebo ich pridajte do
+   repozitára do `probe_output/`) a súbor `probe.env` po použití zmažte.

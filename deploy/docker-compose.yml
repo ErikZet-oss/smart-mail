@@ -19,8 +19,12 @@ x-app-env: &app-env
   SMTP_SECURITY: ${SMTP_SECURITY:-ssl}
   UNDO_SEND_SECONDS: ${UNDO_SEND_SECONDS:-10}
   CLAMAV_HOST: clamav
-  BRIDGE_URL: http://bridge:8100
+  # ADR-016: the mock bridge in this stack by default; the office bridge via its Cloudflare hostname
+  BRIDGE_URL: ${BRIDGE_URL:-http://bridge:8100}
+  BRIDGE_HMAC_KEY_ID: ${BRIDGE_HMAC_KEY_ID:-dev}
   BRIDGE_HMAC_SECRET: ${BRIDGE_HMAC_SECRET}
+  BRIDGE_CF_ACCESS_CLIENT_ID: ${BRIDGE_CF_ACCESS_CLIENT_ID:-}
+  BRIDGE_CF_ACCESS_CLIENT_SECRET: ${BRIDGE_CF_ACCESS_CLIENT_SECRET:-}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   IMAP_LOGIN_HOST: ${IMAP_LOGIN_HOST:-mail.nameserver.sk}
   IMAP_LOGIN_PORT: ${IMAP_LOGIN_PORT:-993}

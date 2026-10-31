@@ -2,6 +2,24 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3h: bridge on the office Windows Server (ADR-016, #144)
+
+- **ADR-016:**
+  - the bridge runs on the Money server as a Windows service through **NSSM** (approved by Erik in #150; Docker on the server rejected);
+  - it is reached through **Cloudflare Tunnel** + **Access service token**, with HMAC on top;
+  - no inbound port in the office.
+- **`deploy/bridge-windows/install-bridge.ps1`:**
+  - Python 3.12 + uv (winget when missing), code into `C:\SmartMail\bridge`, `uv sync --frozen --no-dev`;
+  - `.env` from prompts (secrets read hidden, never printed, never overwritten), ACL: Administrators, SYSTEM, LocalService (read);
+  - service `SmartMailBridge` on `127.0.0.1:8100`, automatic start, LocalService, restart on exit, logs with rotation at 10 MB;
+  - optional `cloudflared service install`;
+  - check of `/healthz` and `/readyz`.
+- **`update-bridge.ps1`** keeps `.env` and logs, and stops on a failed `uv sync`.
+- **App:**
+  - `BRIDGE_CF_ACCESS_CLIENT_ID` / `…_SECRET` are sent as `CF-Access-Client-*` headers when set;
+  - the VPS compose lets `BRIDGE_URL` and `BRIDGE_HMAC_KEY_ID` point at the office bridge (default: the mock bridge of the stack).
+- **README (SK):** „Bridge na serveri Money“ step by step (Cloudflare, install, link to the VPS, update) and „Spustenie money_probe.py na Windows Serveri“.
+
 ## [Unreleased] — Phase 3g: Zákazník 360 + Money in search (#144)
 
 - **W9a `/contacts/company/:moneyId`** (viewer+, only with FEATURE_MONEY):
