@@ -200,10 +200,22 @@ class BridgeClient:
         return await self._model(OverduePage, "/receivables/overdue", params)
 
     async def search_invoices(
-        self, *, number: str | None = None, vs: str | None = None, company_id: uuid.UUID | None = None
+        self,
+        *,
+        number: str | None = None,
+        vs: str | None = None,
+        company_id: uuid.UUID | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> InvoiceSearch:
         """MONEY_API §5.1 cascade in the bridge. A value with `~ # | ( )` answers 422 there → `bridge_422`."""
-        params = {"number": number, "vs": vs, "company_id": str(company_id) if company_id else None}
+        params = {
+            "number": number,
+            "vs": vs,
+            "company_id": str(company_id) if company_id else None,
+            "date_from": date_from.isoformat() if date_from else None,
+            "date_to": date_to.isoformat() if date_to else None,
+        }
         return await self._model(InvoiceSearch, "/invoices/issued/search", params)
 
     async def create_activity(self, payload: dict[str, Any], approval_token: str) -> ActivityOut:

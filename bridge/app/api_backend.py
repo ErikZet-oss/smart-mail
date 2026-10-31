@@ -310,8 +310,8 @@ class ApiBackend:
         ]
         return CodebookPage(items=items, next_from=next_from)
 
-    async def _invoices(self, filter_: str) -> list[IssuedInvoice]:
-        rows = await self._list("issued_invoices", "IssuedInvoices", filter_=filter_, count=SEARCH_LIMIT)
+    async def _invoices(self, filter_: str, count: int = SEARCH_LIMIT) -> list[IssuedInvoice]:
+        rows = await self._list("issued_invoices", "IssuedInvoices", filter_=filter_, count=count)
         return _newest_first([invoice_from(r) for r in rows])
 
     async def search_invoices(self, query: InvoiceQuery) -> InvoiceSearch:
@@ -339,7 +339,9 @@ class ApiBackend:
         if digits and digits != query.number:
             steps.append(("number_digits", cond("CisloDokladu", "ct", digits)))
         for matched_by, filter_ in steps:
-            found = await self._invoices(filter_)
+            # a company + date window can hold more than 20 invoices; the server cannot sort, so fetch the whole
+            # (bounded) window and sort here — „the latest invoice“ (#182) must not depend on the server's order
+            found = await self._invoices(filter_, HISTORY_LIMIT if matched_by == "company_dates" else SEARCH_LIMIT)
             if found:
                 return InvoiceSearch(matched_by=matched_by, items=found)
         return InvoiceSearch(matched_by="none", items=[])
