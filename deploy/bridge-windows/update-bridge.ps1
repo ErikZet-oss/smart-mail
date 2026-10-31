@@ -10,7 +10,8 @@
 param(
     [string]$InstallDir = 'C:\SmartMail\bridge',
     [string]$ServiceName = 'SmartMailBridge',
-    [int]$Port = 8100
+    [int]$Port = 8100,
+    [string]$PythonDir = 'C:\SmartMail\python'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,9 +32,20 @@ Stop-Service -Name $ServiceName
 Say 'Kopírujem nový kód (.env a logy ostávajú)'
 robocopy $Source $InstallDir /MIR /XD .venv tests __pycache__ logs /XF .env *.pyc /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { Fail 'Kopírovanie zlyhalo (robocopy).' }
+# The virtualenv must use the Python in $PythonDir (readable by LocalService), never a per-user one.
+$env:UV_PYTHON_INSTALL_DIR = $PythonDir
+& $python -m uv python install 3.12
+if ($LASTEXITCODE -ne 0) { Fail 'Inštalácia Pythonu pre most zlyhala (uv python install).' }
+$bridgePython = (& $python -m uv python find 3.12 --managed-python)
+if (-not $bridgePython -or -not $bridgePython.StartsWith($PythonDir)) { Fail "Python pre most sa nenašiel v $PythonDir." }
+icacls $PythonDir /grant 'NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX' | Out-Null
+$venvCfg = Join-Path $InstallDir '.venv\pyvenv.cfg'
+if ((Test-Path $venvCfg) -and -not (Select-String -Path $venvCfg -SimpleMatch "home = $PythonDir" -Quiet)) {
+    Remove-Item -Recurse -Force (Join-Path $InstallDir '.venv')
+}
 Push-Location $InstallDir
 try {
-    $env:UV_PYTHON = $python
+    $env:UV_PYTHON = $bridgePython
     & $python -m uv sync --frozen --no-dev
     if ($LASTEXITCODE -ne 0) { Fail 'uv sync zlyhal – služba ostáva zastavená, pozrite výpis vyššie.' }
 } finally { Pop-Location }

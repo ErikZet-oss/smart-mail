@@ -22,6 +22,7 @@ param(
     [string]$ServiceName = 'SmartMailBridge',
     [int]$Port = 8100,
     [string]$NssmPath = '',
+    [string]$PythonDir = 'C:\SmartMail\python',
     [switch]$SkipCloudflared
 )
 
@@ -66,9 +67,23 @@ New-Item -ItemType Directory -Force -Path $InstallDir, (Join-Path $InstallDir 'l
 robocopy $Source $InstallDir /MIR /XD .venv tests __pycache__ logs /XF .env *.pyc /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { Fail 'Kopírovanie zlyhalo (robocopy).' }
 
+# The service runs as LocalService, which cannot read a per-user Python in C:\Users\… („No Python at …“, pilot
+# 2026-10-31). uv installs its own Python 3.12 into $PythonDir and the virtualenv is always built from it.
+Say "Inštalujem Python pre most do $PythonDir"
+$env:UV_PYTHON_INSTALL_DIR = $PythonDir
+& $python -m uv python install 3.12
+if ($LASTEXITCODE -ne 0) { Fail 'Inštalácia Pythonu pre most zlyhala (uv python install).' }
+$bridgePython = (& $python -m uv python find 3.12 --managed-python)
+if (-not $bridgePython -or -not $bridgePython.StartsWith($PythonDir)) { Fail "Python pre most sa nenašiel v $PythonDir." }
+icacls $PythonDir /grant 'NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX' | Out-Null
+$venvCfg = Join-Path $InstallDir '.venv\pyvenv.cfg'
+if ((Test-Path $venvCfg) -and -not (Select-String -Path $venvCfg -SimpleMatch "home = $PythonDir" -Quiet)) {
+    Say 'Starý virtualenv používa iný Python – vytváram ho znova'
+    Remove-Item -Recurse -Force (Join-Path $InstallDir '.venv')
+}
 Push-Location $InstallDir
 try {
-    $env:UV_PYTHON = $python
+    $env:UV_PYTHON = $bridgePython
     & $python -m uv sync --frozen --no-dev
     if ($LASTEXITCODE -ne 0) { Fail 'Inštalácia závislostí zlyhala (uv sync).' }
 } finally { Pop-Location }
@@ -163,15 +178,17 @@ if (-not $SkipCloudflared) {
     if (-not (Get-Service -Name cloudflared -ErrorAction SilentlyContinue)) {
         $answer = Read-Host 'Nainštalovať Cloudflare Tunnel teraz? (a/n)'
         if ($answer -match '^[aAyY]') {
-            if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
-                if (Get-Command winget -ErrorAction SilentlyContinue) {
-                    winget install --id Cloudflare.cloudflared --exact --silent --accept-package-agreements --accept-source-agreements
-                } else {
-                    Fail 'cloudflared chýba a winget nie je k dispozícii – nainštalujte cloudflared podľa README.'
-                }
+            $cloudflared = 'C:\Program Files (x86)\cloudflared\cloudflared.exe'
+            if (-not (Test-Path $cloudflared)) {
+                # Windows Server usually has no winget – install the official MSI from GitHub.
+                $msi = Join-Path $env:TEMP 'cloudflared-windows-amd64.msi'
+                Say 'Sťahujem cloudflared (oficiálny MSI z GitHubu)'
+                Invoke-WebRequest -UseBasicParsing 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.msi' -OutFile $msi
+                Start-Process msiexec.exe -Wait -ArgumentList "/i `"$msi`" /quiet"
+                if (-not (Test-Path $cloudflared)) { Fail 'Inštalácia cloudflared zlyhala – nainštalujte ho podľa README.' }
             }
             $token = Read-Secret 'Token tunela z Cloudflare Zero Trust (Networks › Tunnels)'
-            & cloudflared service install $token | Out-Null
+            & $cloudflared service install $token | Out-Null
             $token = $null
             Say 'cloudflared beží ako služba. Verejný hostname nastavte v Cloudflare na http://127.0.0.1:8100.'
         }

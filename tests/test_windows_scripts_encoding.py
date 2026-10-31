@@ -23,3 +23,22 @@ def test_env_file_is_written_without_bom() -> None:
     text = ROOT.joinpath("deploy/bridge-windows/install-bridge.ps1").read_text(encoding="utf-8-sig")
     assert "Set-Content -Path $envFile" not in text
     assert "UTF8Encoding $false" in text
+
+
+def test_bridge_virtualenv_uses_python_readable_by_local_service() -> None:
+    """Pilot 2026-10-31: the venv pointed at C:\\Users\\smartadmin\\…\\Python312 and the LocalService account could not
+    start it („No Python at …“, NSSM SERVICE_PAUSED). Both scripts must build the venv from uv's Python in
+    C:\\SmartMail\\python and grant LocalService read access to it."""
+    for name in ("install-bridge.ps1", "update-bridge.ps1"):
+        text = ROOT.joinpath("deploy/bridge-windows", name).read_text(encoding="utf-8-sig")
+        assert "C:\\SmartMail\\python" in text, name
+        assert "uv python install 3.12" in text, name
+        assert "--managed-python" in text, name
+        assert "$env:UV_PYTHON = $bridgePython" in text, name
+        assert "LOCAL SERVICE:(OI)(CI)RX" in text, name
+
+
+def test_install_does_not_require_winget_for_cloudflared() -> None:
+    text = ROOT.joinpath("deploy/bridge-windows/install-bridge.ps1").read_text(encoding="utf-8-sig")
+    assert "cloudflared-windows-amd64.msi" in text
+    assert "winget install --id Cloudflare.cloudflared" not in text
