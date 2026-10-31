@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Smart Mail – aktualizácia Money mostu na Windows Serveri (ADR-016).
 .DESCRIPTION

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Smart Mail – inštalácia Money mostu (bridge) na Windows Server pri Money S4 (ADR-016).
 
@@ -109,7 +109,8 @@ if (Test-Path $envFile) {
         "APPROVAL_JWT_PUBLIC_KEY=$publicKey",
         'LOG_LEVEL=INFO'
     )
-    Set-Content -Path $envFile -Value $lines -Encoding UTF8
+    # UTF-8 without BOM: python-dotenv would read a BOM as part of the first line.
+    [IO.File]::WriteAllLines($envFile, [string[]]$lines, (New-Object Text.UTF8Encoding $false))
     $clientSecret = $null; $hmac = $null
 }
 Say 'Nastavujem prístup k .env len pre správcov, SYSTEM a službu'
