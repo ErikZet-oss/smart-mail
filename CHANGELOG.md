@@ -2,6 +2,13 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Fix: money_probe.py on the real Money API
+
+- The probe unwraps the Money envelope for every REST/GraphQL answer; before, the base run stopped at the REST smoke check (so filter syntax, PDF report, address book and articles were never probed).
+- The smoke check no longer prints a slice of the response body (it echoed real invoice fields) — only type and key names.
+- `--orders` / `--branches` no longer overwrite `report.md` of the base run.
+- Tests `tests/test_money_probe_envelope.py`.
+
 ## [Unreleased] — Fix: Money S4 response envelope (first real TEST agenda connection)
 
 - The real Money S4 API (1.15.11) wraps answers as `{"PageCount", "RowCount", "Data": {...}, "Status": 1, "Message", "StackTrace"}` instead of GraphQL's `{"data", "errors"}`. The bridge unwraps it for GraphQL and REST (`Status` ≠ 1 → `MoneyError`, message never logged); before, `/readyz` stayed 503 and every read answered 502.

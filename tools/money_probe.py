@@ -134,7 +134,7 @@ class Http:
                 ctype = resp.headers.get("Content-Type", "")
                 if raw:
                     return resp.status, ctype, body, ms
-                return resp.status, ctype, _json(body), ms
+                return resp.status, ctype, _unwrap(_json(body)), ms
         except urllib.error.HTTPError as e:
             body = e.read()
             ms = int((time.time() - started) * 1000)
@@ -147,6 +147,14 @@ class Http:
         if params:
             qs = "?" + urllib.parse.urlencode(params, doseq=True)
         return self.request("GET", path + qs, raw=raw)
+
+
+def _unwrap(res):
+    """Money S4 API 1.15.11 wraps every answer: {"PageCount","RowCount","Data":...,"Status":1,"Message","StackTrace"}.
+    Status 1 -> return Data (REST list / GraphQL root object); any other status keeps the envelope (= error)."""
+    if isinstance(res, dict) and "Status" in res and "Data" in res and res.get("Status") == 1:
+        return res["Data"]
+    return res
 
 
 def _json(body):
@@ -257,7 +265,8 @@ def smoke(http, show):
     sample = res[0] if ok and res else None
     step("smoke GET REST /IssuedInvoice/0/1", ok, status=status, ms=ms, content_type=ctype,
          fields=len(sample) if isinstance(sample, dict) else None,
-         note=f"HTTP {status}, {ms} ms" + ("" if ok else f", body: {str(res)[:200]}"))
+         note=f"HTTP {status}, {ms} ms" + ("" if ok else f", body type {type(res).__name__}, keys "
+                                            f"{sorted(res)[:8] if isinstance(res, dict) else '-'}"))  # never values
     return sample
 
 
@@ -541,9 +550,10 @@ def gql(http, query, variables=None):
     body = json.dumps({"query": query, "variables": variables or {}}).encode()
     status, ctype, res, ms = http.request("POST", "/graphql", data=body, headers={"Content-Type": "application/json"})
     if isinstance(res, dict) and "Status" in res and "data" not in res:
-        # Money S4 envelope {"PageCount","RowCount","Data":{...},"Status":1,"Message","StackTrace"} (API 1.15.11)
-        ok = res.get("Status") == 1
-        return status, (res.get("Data") if ok else None), (None if ok else [{"status": res.get("Status")}]), ms
+        # Money S4 envelope with an error status (OK envelopes are unwrapped in HttpClient.request)
+        return status, None, [{"status": res.get("Status")}], ms
+    if isinstance(res, dict) and status == 200 and "data" not in res and "errors" not in res:
+        return status, res, None, ms  # unwrapped Money envelope: the root object itself
     data = res.get("data") if isinstance(res, dict) else None
     errors = res.get("errors") if isinstance(res, dict) else None
     return status, data, errors, ms
@@ -1038,8 +1048,7 @@ def main():
     if args.branches:
         if gql_basic(http):
             branches_probe(http)
-        write_branches_report()
-        write_report()
+        write_branches_report()  # report.md of the base run is kept (pilot 2026-10-31: it was overwritten)
         return
     if args.orders:
         if gql_basic(http):
@@ -1048,8 +1057,7 @@ def main():
             orders_codebooks_prices(http, args.show_values)
             if args.allow_write_test:
                 orders_write_test(http)
-        write_orders_report()
-        write_report()
+        write_orders_report()  # report.md of the base run is kept
         return
     if gql_basic(http):
         if env("PROBE_INVOICE_NUMBER"):
