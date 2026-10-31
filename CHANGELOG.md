@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Fix: Money S4 response envelope (first real TEST agenda connection)
+
+- The real Money S4 API (1.15.11) wraps answers as `{"PageCount", "RowCount", "Data": {...}, "Status": 1, "Message", "StackTrace"}` instead of GraphQL's `{"data", "errors"}`. The bridge unwraps it for GraphQL and REST (`Status` ≠ 1 → `MoneyError`, message never logged); before, `/readyz` stayed 503 and every read answered 502.
+- `tools/money_probe.py` understands the same envelope (otherwise every GraphQL check would report a failure).
+- Tests in `bridge/tests/test_api_backend.py`.
+
 ## [Unreleased] — Phase 3: changes after the Figma review (#167)
 
 From the reviewer's Figma notes on #158, #160, #163 and #164:

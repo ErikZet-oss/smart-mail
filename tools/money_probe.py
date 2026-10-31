@@ -192,6 +192,8 @@ def get_ci(obj, name):
 
 
 def as_list(res):
+    if isinstance(res, dict) and "Status" in res and isinstance(res.get("Data"), list):
+        return res["Data"]  # Money S4 envelope
     return res if isinstance(res, list) else []
 
 
@@ -538,6 +540,10 @@ def codebooks(http):
 def gql(http, query, variables=None):
     body = json.dumps({"query": query, "variables": variables or {}}).encode()
     status, ctype, res, ms = http.request("POST", "/graphql", data=body, headers={"Content-Type": "application/json"})
+    if isinstance(res, dict) and "Status" in res and "data" not in res:
+        # Money S4 envelope {"PageCount","RowCount","Data":{...},"Status":1,"Message","StackTrace"} (API 1.15.11)
+        ok = res.get("Status") == 1
+        return status, (res.get("Data") if ok else None), (None if ok else [{"status": res.get("Status")}]), ms
     data = res.get("data") if isinstance(res, dict) else None
     errors = res.get("errors") if isinstance(res, dict) else None
     return status, data, errors, ms
