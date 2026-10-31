@@ -353,6 +353,10 @@ series per centre (own series per branch?), warehouse per centre (stredisko code
 only — D13–D15 are decided), document discounts, `Nazev` = first item, `Odkaz` usage; with `PROBE_DL_NUMBER` +
 `PROBE_DL_DOKLAD_PRIJATY` it confirms that "Doklad prijatý" is stored in `Odkaz`. Output `probe_output/branches.md`.
 
+Results on TEST (2026-10-31): `docs/probe-findings-2026-10-31.md` §9 — centres 10/20/30/40 = warehouse codes (+ 99
+Externý sklad), series `DLP TT/SE/NR/TN` per centre, `Predkontace` FP010 everywhere, items without `Cenik_ID` and
+without the header centre (question to Erik), `Odkaz` in 233/300 (max 18 chars), `PartnerskyKod` in 616/3 206 items.
+
 ---------------------------------------------------------------------------------------------------
 ## 9. Figma
 Frames: `W6h Dodací list prijatý – karta (návrh)`, `W6h … (v Money)`, `W6h … Poplatky`, `W6h … Originál + Kontrola`,

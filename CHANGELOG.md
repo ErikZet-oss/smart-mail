@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Probe results from the TEST agenda (#176)
+
+- `docs/probe-findings-2026-10-31.md`: every probe finding turned into a decision. Covers the API envelope, PascalCase REST, which GraphQL filters work, that REST filters do not, the PDF report, `ProdejniCeny` (analysis and proposal), received orders and branches. Questions for Erik are at the end.
+- `docs/phase3-acceptance-test.md`: SK checklist for the Phase 3 acceptance on the TEST agenda — 10 invoice requests, negative recipient tests, Money offline.
+- Bridge: every REST mapper reads keys case-insensitively (`_ci`, `_rest_rows`); activity types now read PascalCase. Tests use the real envelope and PascalCase shape (fictional values), plus the PDF octet-stream and the bridge timeout.
+- `[PROBE]` notes in the bridge, MONEY_API, DOCUMENTS_SPEC and ORDERS_SPEC replaced with the results. MONEY_API §9 gets question 12 (`ProdejniCeny`).
+- `money_probe.py`: new read-only step „ProdejniCeny with SkladID (per warehouse)“.
+- Activity writes (3f) stay off; Phase 4 is not started.
 ## [Unreleased] — Invoice print report per branch (#174)
 
 - Settings 11e Money (pobočka): new fields „Stredisko“ (select from Money's centre codebook) and the branch's own print reports for „faktúra vydaná (SK)“ and „zálohová faktúra (SK)“, with „Vyskúšať PDF“ (only an invoice of this branch's centre). 13b gets the info line about branch reports.
