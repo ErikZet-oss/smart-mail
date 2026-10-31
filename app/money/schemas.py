@@ -86,6 +86,7 @@ class IssuedInvoice(_Model):
     currency_id: uuid.UUID | None
     reference: str | None
     doc_type: int | None
+    centre_id: uuid.UUID | None = None  # Stredisko_ID (#174)
 
 
 class OverduePage(_Model):

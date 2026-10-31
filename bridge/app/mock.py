@@ -181,6 +181,7 @@ def build(seed: int = 20261030) -> MockData:
                 currency_id=eur,
                 reference=f"PO-{n:04d}" if rng.random() < 0.3 else None,
                 doc_type=0,
+                centre_id=None if n % 7 == 0 else mid("centre", n % 3 + 1),  # no rng: keeps the seed stable
             )
         )
     for n in range(1, 61):

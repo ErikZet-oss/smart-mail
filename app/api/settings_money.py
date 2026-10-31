@@ -20,7 +20,7 @@ from app.ai.models import OrgSettings
 from app.api.mail import fail
 from app.api.settings import require_admin
 from app.auth.deps import DB, Auth, SettingsDep
-from app.auth.models import Person
+from app.auth.models import Branch, Person
 from app.auth.reauth import RecentReauth
 from app.core.audit import audit
 from app.core.config import Settings
@@ -265,6 +265,138 @@ async def test_report(
             invoice = next((i for i in found.items if i.kind == kind), None)
             if invoice is None:
                 raise fail(404, "invoice_not_found")
+            pdf = await bridge.invoice_pdf(kind, invoice.id, report)
+        except BridgeUnavailable as exc:
+            raise fail(503, "money_unavailable", reason=exc.code) from None
+    if not pdf:
+        raise fail(404, "pdf_missing")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Cache-Control": "no-store", "Content-Disposition": "inline; filename=test.pdf"},
+    )
+
+
+# ----- 11e Money (pobočka): centre + own print reports, SK only (#174) -----
+
+
+class CentreOption(BaseModel):
+    id: str
+    code: str | None
+    name: str | None
+
+
+class BranchMoneyOut(BaseModel):
+    id: str
+    name: str
+    centre_id: str | None
+    centre_missing: bool  # the saved centre is no longer in Money's codebook
+    reports: dict[str, str]  # {"invoice": "", "proforma": ""}
+
+
+class BranchMoneyList(BaseModel):
+    centres: list[CentreOption]
+    branches: list[BranchMoneyOut]
+
+
+class BranchMoneyIn(BaseModel):
+    centre_id: str | None = None
+    reports: dict[str, str]
+
+
+async def _centres(db: DB) -> list[MoneyCodebook]:
+    rows = await db.scalars(
+        select(MoneyCodebook)
+        .where(MoneyCodebook.kind == "centres", MoneyCodebook.active.is_(True))
+        .order_by(MoneyCodebook.code)
+    )
+    return list(rows)
+
+
+def _branch_money(branch: Branch, known: set[str]) -> BranchMoneyOut:
+    centre = (branch.money_centre_id or "").strip().lower() or None
+    ids = branch.money_report_ids or {}
+    return BranchMoneyOut(
+        id=str(branch.id),
+        name=branch.name,
+        centre_id=centre,
+        centre_missing=bool(centre and centre not in known),
+        reports={kind: str(ids.get(kind) or "") for kind in REPORT_KINDS},
+    )
+
+
+@router.get("/branches")
+async def get_branch_money(admin: Admin, db: DB) -> BranchMoneyList:
+    centres = await _centres(db)
+    known = {str(c.money_id) for c in centres}
+    branches = await db.scalars(select(Branch).order_by(Branch.name))
+    return BranchMoneyList(
+        centres=[CentreOption(id=str(c.money_id), code=c.code, name=c.name) for c in centres],
+        branches=[_branch_money(b, known) for b in branches],
+    )
+
+
+@router.put("/branches/{branch_id}")
+async def put_branch_money(
+    branch_id: uuid.UUID, body: BranchMoneyIn, admin: Admin, ctx: Auth, db: DB
+) -> BranchMoneyOut:
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        raise fail(404, "branch_not_found")
+    known = {str(c.money_id) for c in await _centres(db)}
+    centre = (body.centre_id or "").strip().lower() or None
+    if centre is not None and centre not in known:
+        raise fail(422, "centre_unknown")  # only centres from Money's own codebook, never a typed GUID
+    reports: dict[str, str] = {}
+    for kind in REPORT_KINDS:
+        value = str(body.reports.get(kind) or "").strip()
+        if value and not report_id_valid(value):
+            raise fail(422, "report_id_invalid", kind=kind)
+        if value:
+            reports[kind] = value
+    before = {"centre_id": branch.money_centre_id, "reports": dict(branch.money_report_ids or {})}
+    branch.money_centre_id = centre
+    branch.money_report_ids = reports
+    audit(
+        db,
+        "settings.branch_money",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="branch",
+        object_id=str(branch.id),
+        details={"before": before, "after": {"centre_id": centre, "reports": reports}},
+    )
+    await db.commit()
+    return _branch_money(branch, known)
+
+
+@router.get("/branches/{branch_id}/test")
+async def test_branch_report(
+    branch_id: uuid.UUID,
+    admin: Admin,
+    db: DB,
+    settings: SettingsDep,
+    kind: Literal["invoice", "proforma"],
+    number: str = Query(min_length=3, max_length=40),
+) -> Response:
+    """„Vyskúšať PDF“ (11e): the branch report with one invoice of this branch's centre that the admin names."""
+    if not settings.feature_money:
+        raise fail(409, "money_disabled")
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        raise fail(404, "branch_not_found")
+    report = str((branch.money_report_ids or {}).get(kind) or "")
+    if not report:
+        raise fail(409, "report_not_configured")
+    async with BridgeClient(settings) as bridge:
+        try:
+            found = await bridge.search_invoices(number=number.strip())
+            invoice = next((i for i in found.items if i.kind == kind), None)
+            if invoice is None:
+                raise fail(404, "invoice_not_found")
+            centre = (branch.money_centre_id or "").strip().lower()
+            if not centre or str(invoice.centre_id or "").lower() != centre:
+                raise fail(409, "invoice_other_branch")
             pdf = await bridge.invoice_pdf(kind, invoice.id, report)
         except BridgeUnavailable as exc:
             raise fail(503, "money_unavailable", reason=exc.code) from None
