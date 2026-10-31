@@ -14,7 +14,7 @@ from app.mail.compose import create_draft, text_to_html
 from app.mail.compose_models import ComposeAttachment, ComposeDraft
 from app.mail.models import Mailbox, Message
 from app.money.bridge_client import BridgeClient
-from app.money.invoice_attach import Evaluation, load_reports, pick_report, storage_prefix
+from app.money.invoice_attach import Evaluation, load_branch_reports, load_reports, report_for_invoice, storage_prefix
 
 FILE_PREFIX = {"invoice": "Faktura", "proforma": "Zalohova_faktura"}
 
@@ -49,9 +49,10 @@ async def build_invoice_draft(
     if evaluation.blocked or evaluation.company_money_id is None:
         raise InvoiceDraftError("suggestion_blocked")
     reports = await load_reports(db)
+    branch_reports = await load_branch_reports(db)
     pdfs: list[tuple[str, bytes]] = []
     for inv in evaluation.invoices:
-        report_id = pick_report(reports, inv.kind, language)
+        report_id = report_for_invoice(reports, branch_reports, inv, language)
         if report_id is None:
             raise InvoiceDraftError("report_not_configured", inv.number)
         data = await bridge.invoice_pdf(inv.kind, inv.id, report_id)

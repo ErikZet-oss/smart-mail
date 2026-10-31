@@ -25,7 +25,7 @@ from app.mail.compose import create_draft
 from app.mail.compose_models import ComposeAttachment, ComposeDraft
 from app.mail.models import Mailbox
 from app.money.bridge_client import BridgeClient
-from app.money.invoice_attach import STRONG, load_reports, pick_report, storage_prefix
+from app.money.invoice_attach import STRONG, load_branch_reports, load_reports, report_for_invoice, storage_prefix
 from app.money.invoice_draft import InvoiceDraftError, pdf_filename
 from app.money.matching import match_sender
 from app.money.models import MoneyCompany, MoneyPerson
@@ -196,11 +196,12 @@ async def build_reminder_draft(
         raise InvoiceDraftError("recipient_unconfirmed")
     invoices = debtor.invoices[:MAX_PER_REMINDER]
     reports = await load_reports(db)
+    branch_reports = await load_branch_reports(db)
     pdfs: list[tuple[str, bytes]] = []
     for inv in invoices:
         if inv.company_id != debtor.company.money_id:
             raise InvoiceDraftError("recipient_not_document_owner", inv.number)
-        report_id = pick_report(reports, inv.kind, "sk")
+        report_id = report_for_invoice(reports, branch_reports, inv, "sk")
         if report_id is None:
             raise InvoiceDraftError("report_not_configured", inv.number)
         data = await bridge.invoice_pdf(inv.kind, inv.id, report_id)

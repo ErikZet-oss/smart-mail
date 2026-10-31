@@ -135,6 +135,7 @@ def invoice_from(raw: dict[str, Any], kind: InvoiceKind = "invoice") -> IssuedIn
         currency_id=_uuid(raw.get("Mena_ID")),
         reference=_s(raw.get("Odkaz")),
         doc_type=_int(raw.get("TypDokladu")),
+        centre_id=_uuid(raw.get("Stredisko_ID")),
     )
 
 

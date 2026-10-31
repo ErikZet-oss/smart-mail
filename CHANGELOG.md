@@ -2,6 +2,14 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Invoice print report per branch (#174)
+
+- Settings 11e Money (pobočka): new fields „Stredisko“ (select from Money's centre codebook) and the branch's own print reports for „faktúra vydaná (SK)“ and „zálohová faktúra (SK)“, with „Vyskúšať PDF“ (only an invoice of this branch's centre). 13b gets the info line about branch reports.
+- invoice_attach, approval and reminders choose the report by the invoice's centre (`Stredisko_ID`) — rules in ADR-018 / SETTINGS_SPEC 11e.
+- Bridge: `IssuedInvoices` reads `Stredisko_ID` (`centre_id`); the mock gives invoices fictional centres; the contract fixture is regenerated.
+- Migration 0019 adds `branches.money_report_ids` (approved by Erik in #174).
+- Tests in `tests/test_money_174.py`: rules SK/EN/DE, branch without a report or without a centre, validation, re-selection at approval, 11e API.
+
 ## [Unreleased] — Fix: money_probe.py on the real Money API
 
 - The probe unwraps the Money envelope for every REST/GraphQL answer; before, the base run stopped at the REST smoke check (so filter syntax, PDF report, address book and articles were never probed).

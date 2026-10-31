@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.guards import check
 from app.ai.models import OrgSettings
+from app.auth.models import Branch
 from app.core.config import Settings
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.matching import match_sender
@@ -98,6 +99,36 @@ def pick_report(reports: dict[str, dict[str, str]], kind: str, language: str | N
     return per_kind.get(report_language(language)) or per_kind.get("sk") or None
 
 
+async def load_branch_reports(db: AsyncSession) -> dict[str, dict[str, str]]:
+    """#174: branch reports by Money centre id (lower-case GUID) — only branches with a centre and a report."""
+    out: dict[str, dict[str, str]] = {}
+    for branch in await db.scalars(select(Branch).where(Branch.money_centre_id.is_not(None))):
+        ids: dict[str, str] = {
+            str(k): str(v) for k, v in (branch.money_report_ids or {}).items() if k in REPORT_KINDS and v
+        }
+        if ids and branch.money_centre_id:
+            out[branch.money_centre_id.strip().lower()] = ids
+    return out
+
+
+def report_for_invoice(
+    reports: dict[str, dict[str, str]],
+    branch_reports: dict[str, dict[str, str]],
+    inv: IssuedInvoice,
+    language: str | None,
+) -> str | None:
+    """#174: the branch of the invoice = the branch whose centre is the invoice's `Stredisko_ID`.
+    SK (or empty language) → branch report, else company SK (13b). EN/DE → company report of that language, else the
+    branch report (SK), else company SK. No centre / no branch → 13b as before. None → `report_not_configured`."""
+    branch = branch_reports.get(str(inv.centre_id).lower()) if inv.centre_id else None
+    own = (branch or {}).get(inv.kind) or None
+    lang = report_language(language)
+    company = reports.get(inv.kind) or {}
+    if lang == "sk":
+        return own or company.get("sk") or None
+    return company.get(lang) or own or company.get("sk") or None
+
+
 def draft_body(language: str | None, numbers: list[str]) -> str:
     lang = (language or "sk").lower()[:2]
     lang = lang if lang in BODIES else "sk"
@@ -138,6 +169,7 @@ async def evaluate(
     if match.company is None or match.method not in STRONG:
         out.checks.append(check("recipient_unconfirmed", "blocking", email=email))
     reports = await load_reports(db)
+    branch_reports = await load_branch_reports(db)
     for ref in refs:
         found = await bridge.search_invoices(number=ref)
         if not found.items and any(c.isdigit() for c in ref):
@@ -153,7 +185,7 @@ async def evaluate(
             if inv.id in {i.id for i in out.invoices}:
                 continue
             out.invoices.append(inv)
-            if pick_report(reports, inv.kind, language) is None:
+            if report_for_invoice(reports, branch_reports, inv, language) is None:
                 out.checks.append(check("report_not_configured", "blocking", kind=inv.kind))
     if not out.invoices:
         out.checks.append(check("no_invoice", "blocking"))
@@ -219,8 +251,10 @@ __all__ = [
     "draft_body",
     "evaluate",
     "invoice_refs",
+    "load_branch_reports",
     "load_reports",
     "pick_report",
     "recipient_block",
+    "report_for_invoice",
     "storage_prefix",
 ]

@@ -110,7 +110,8 @@
       "remaining": "1730.45",
       "currency_id": "c170a71a-1799-5629-b68a-887c58d0755e",
       "reference": null,
-      "doc_type": 0
+      "doc_type": 0,
+      "centre_id": "ff0c7c15-73d8-5d99-81d8-1e45f7539519"
     },
     {
       "id": "1f9c2f98-db23-5555-8f68-3702e2a1454d",
@@ -125,7 +126,8 @@
       "remaining": "754.43",
       "currency_id": "c170a71a-1799-5629-b68a-887c58d0755e",
       "reference": null,
-      "doc_type": 0
+      "doc_type": 0,
+      "centre_id": "c216e8a8-0b43-500e-9bcc-73bda4cf82ed"
     }
   ],
   "orders": [
@@ -200,7 +202,8 @@
         "remaining": "1378.26",
         "currency_id": "c170a71a-1799-5629-b68a-887c58d0755e",
         "reference": null,
-        "doc_type": 0
+        "doc_type": 0,
+        "centre_id": "c216e8a8-0b43-500e-9bcc-73bda4cf82ed"
       },
       {
         "id": "657d19de-f3f7-52a2-96e8-bf3cc197b873",
@@ -215,7 +218,8 @@
         "remaining": "2591.76",
         "currency_id": "c170a71a-1799-5629-b68a-887c58d0755e",
         "reference": null,
-        "doc_type": 0
+        "doc_type": 0,
+        "centre_id": null
       }
     ],
     "next_from": 2

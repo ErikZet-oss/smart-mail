@@ -31,7 +31,14 @@ import { ExportDialog } from '../mail/ExportDialog';
 import { AutonomyMatrix, AutonomyOverview } from './AiAutonomy';
 import { AiLimitsPanel } from './AiLimitsPanel';
 import { AiCategoriesPanel } from './AiCategoriesPanel';
-import { MoneyActivitiesPanel, MoneyConnectionPanel, MoneyReportsPanel, MoneySyncPanel } from './MoneyPanels';
+import { useFeatures } from '../system/features';
+import {
+  BranchMoneyPanel,
+  MoneyActivitiesPanel,
+  MoneyConnectionPanel,
+  MoneyReportsPanel,
+  MoneySyncPanel,
+} from './MoneyPanels';
 import { StyleProfileSection } from './StyleProfile';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
@@ -1397,6 +1404,7 @@ function BranchesPanel({
     queryFn: fetchSignaturePresets,
     enabled: sub === 'signature' || sub === 'podpis',
   });
+  const features = useFeatures();
   const [lang, setLang] = useState<SignatureLang>('sk');
   const [personId, setPersonId] = useState<string>('');
   const [templatesById, setTemplatesById] = useState<Record<string, Record<string, string>>>({});
@@ -1535,7 +1543,8 @@ function BranchesPanel({
 
   if (sub === 'money') {
     // Pilot deploy keeps FEATURE_MONEY=false — no Money bindings in the UI (ADR-010).
-    return <Banner kind="info" message={t('settings.branches.moneyHidden')} />;
+    if (!features.money) return <Banner kind="info" message={t('settings.branches.moneyHidden')} />;
+    return <BranchMoneyPanel branchId={branchId} />;
   }
 
   return <BranchDetails key={branchId} branch={current} />;

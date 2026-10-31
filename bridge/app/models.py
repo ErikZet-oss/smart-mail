@@ -67,6 +67,7 @@ class IssuedInvoice(_Model):
     currency_id: uuid.UUID | None
     reference: str | None  # Odkaz
     doc_type: int | None  # TypDokladu, raw
+    centre_id: uuid.UUID | None = None  # Stredisko_ID — selects the branch print report (#174)
 
 
 class Order(_Model):

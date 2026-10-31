@@ -449,6 +449,28 @@ export const testMoneyReport = (kind: string, lang: string, number: string) =>
     `/api/settings/money/reports/test?kind=${encodeURIComponent(kind)}&lang=${encodeURIComponent(lang)}&number=${encodeURIComponent(number)}`,
   );
 
+/** 11e Money (pobočka): centre + own print reports (SK) per branch (#174). */
+export type BranchMoney = {
+  id: string;
+  name: string;
+  centre_id: string | null;
+  centre_missing: boolean;
+  reports: Record<'invoice' | 'proforma', string>;
+};
+export type BranchMoneyList = {
+  centres: { id: string; code: string | null; name: string | null }[];
+  branches: BranchMoney[];
+};
+export const branchMoneyKey = ['settings', 'money', 'branches'] as const;
+export const fetchBranchMoney = () => api<BranchMoneyList>('GET', '/api/settings/money/branches');
+export const saveBranchMoney = (id: string, body: { centre_id: string | null; reports: Record<string, string> }) =>
+  api<BranchMoney>('PUT', `/api/settings/money/branches/${encodeURIComponent(id)}`, body);
+export const testBranchReport = (id: string, kind: string, number: string) =>
+  apiBlob(
+    'GET',
+    `/api/settings/money/branches/${encodeURIComponent(id)}/test?kind=${encodeURIComponent(kind)}&number=${encodeURIComponent(number)}`,
+  );
+
 /** 13a „Zápisy do Money povolené“ ⚠ and 13d Aktivity (Phase 3f). */
 export type MoneyWrites = { enabled: boolean; key_configured: boolean };
 export type MoneyActivities = {

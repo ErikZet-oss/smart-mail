@@ -9,6 +9,12 @@ import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { INPUT } from './adminUi';
 import {
+  branchMoneyKey,
+  fetchBranchMoney,
+  saveBranchMoney,
+  testBranchReport,
+  type BranchMoney,
+  type BranchMoneyList,
   fetchMoneyActivities,
   fetchMoneyReports,
   fetchMoneyWrites,
@@ -382,6 +388,119 @@ function ReportsForm({ initial }: { initial: MoneyReports }) {
         </div>
       </section>
       <p className="type-small text-text-secondary">{t('money.reports.info')}</p>
+      <p className="type-small text-text-secondary">{t('money.reports.branchInfo')}</p>
+    </div>
+  );
+}
+
+/** W12-11e Money (pobočka), #174: centre of the branch (Money codebook, never typed) and its own print reports, SK
+ * only. Price list, warehouse, series and the template delivery note come with Phase 4. */
+export function BranchMoneyPanel({ branchId }: { branchId: string }) {
+  const { t } = useTranslation();
+  const query = useQuery({ queryKey: branchMoneyKey, queryFn: fetchBranchMoney });
+  if (query.isError) return <Banner kind="danger" message={t('money.errors.money_unavailable')} />;
+  const branch = query.data?.branches.find((b) => b.id === branchId);
+  if (!query.data || !branch) return null;
+  return <BranchMoneyForm key={`${branchId}-${query.dataUpdatedAt}`} branch={branch} centres={query.data.centres} />;
+}
+
+function BranchMoneyForm({ branch, centres }: { branch: BranchMoney; centres: BranchMoneyList['centres'] }) {
+  const { t } = useTranslation();
+  const toasts = useToasts();
+  const qc = useQueryClient();
+  const [centre, setCentre] = useState(branch.centre_id ?? '');
+  const [reports, setReports] = useState(branch.reports);
+  const [number, setNumber] = useState('');
+  const invalid = REPORT_KINDS.some((k) => reports[k] && !REPORT_ID.test(reports[k]));
+  const fail = (e: unknown) => {
+    const code = e instanceof ApiError ? e.detail.code : 'generic';
+    toasts.error(t(`money.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
+  };
+  const save = useMutation({
+    mutationFn: () => saveBranchMoney(branch.id, { centre_id: centre || null, reports }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: branchMoneyKey });
+      toasts.success(t('settings.saved'));
+    },
+    onError: fail,
+  });
+  const tryPdf = useMutation({
+    mutationFn: (kind: string) => testBranchReport(branch.id, kind, number.trim()),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    },
+    onError: fail,
+  });
+  return (
+    <div className="flex max-w-[var(--layout-settings-form-max)] flex-col gap-4" data-testid="settings-branch-money">
+      <label className="flex flex-col gap-1">
+        <span className="type-label text-text-primary">{t('money.branch.centre')}</span>
+        <select
+          value={centre}
+          onChange={(e) => setCentre(e.target.value)}
+          className={INPUT}
+          aria-invalid={branch.centre_missing}
+        >
+          <option value="">{t('money.branch.centreNone')}</option>
+          {branch.centre_missing && branch.centre_id ? (
+            <option value={branch.centre_id}>{t('money.branch.centreMissing')}</option>
+          ) : null}
+          {centres.map((c) => (
+            <option key={c.id} value={c.id}>
+              {[c.code, c.name].filter(Boolean).join(' – ')}
+            </option>
+          ))}
+        </select>
+        <span className="type-small text-text-secondary">{t('money.branch.centreHelp')}</span>
+        {branch.centre_missing ? (
+          <span className="type-small text-danger-600">{t('money.branch.centreMissing')}</span>
+        ) : null}
+      </label>
+      {REPORT_KINDS.map((k) => {
+        const bad = Boolean(reports[k]) && !REPORT_ID.test(reports[k]);
+        return (
+          <label key={k} className="flex flex-col gap-1">
+            <span className="type-label text-text-primary">{t(`money.branch.report.${k}`)}</span>
+            <input
+              value={reports[k]}
+              aria-invalid={bad}
+              onChange={(e) => setReports({ ...reports, [k]: e.target.value.trim() })}
+              placeholder={t('money.reports.placeholder')}
+              className={`${INPUT} ${bad ? 'border-danger-600' : ''}`}
+            />
+            <span className="type-small text-text-secondary">{t('money.branch.reportHelp')}</span>
+          </label>
+        );
+      })}
+      {invalid ? <p className="type-small text-danger-600">{t('money.reports.invalid')}</p> : null}
+      <div>
+        <Button type="button" disabled={invalid || save.isPending} onClick={() => save.mutate()}>
+          {t('settings.save')}
+        </Button>
+      </div>
+      <section className="flex flex-col gap-2 rounded-lg border border-border-default p-3">
+        <h3 className="type-label text-text-primary">{t('money.reports.tryTitle')}</h3>
+        <label className="flex flex-col gap-1">
+          <span className="type-small text-text-secondary">{t('money.branch.tryNumber')}</span>
+          <input value={number} onChange={(e) => setNumber(e.target.value)} className={INPUT} />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {REPORT_KINDS.map((k) => (
+            <Button
+              key={k}
+              type="button"
+              variant="secondary"
+              disabled={number.trim().length < 3 || !branch.reports[k] || tryPdf.isPending}
+              onClick={() => tryPdf.mutate(k)}
+            >
+              {t('money.reports.try', { kind: t(`money.reports.short.${k}`), lang: 'SK' })}
+            </Button>
+          ))}
+        </div>
+      </section>
+      <p className="type-small text-text-secondary">{t('money.branch.later')}</p>
     </div>
   );
 }
