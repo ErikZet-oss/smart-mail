@@ -191,6 +191,7 @@
     "serverBusy": "Prehľadávanie servera ešte beží – skúste o chvíľu.",
     "scopeLabel": "Rozsah",
     "fieldLabel": "Pole",
+    "moneyGroup": "Firmy a doklady z Money",
     "emailsGroup": "E-maily ({{count}})",
     "noSubject": "(bez predmetu)",
     "scope": {
@@ -221,7 +222,9 @@
     "groups": {
       "commands": "Príkazy",
       "mail": "E-maily",
-      "contacts": "Kontakty"
+      "contacts": "Kontakty",
+      "companies": "Firmy",
+      "documents": "Doklady"
     }
   },
   "rail": {
@@ -1695,6 +1698,15 @@
       "try": "Vyskúšať {{kind}} {{lang}}",
       "info": "Faktúry sa v Smart Mail nikdy nevytvárajú ani neprekresľujú – k e-mailu sa priloží vždy originálne PDF z Money. Dodacie listy a objednávky Money cez API ako PDF neposkytuje."
     },
+    "c360": {
+      "title": "Zákazník 360",
+      "dic": "DIČ {{dic}}",
+      "tabs": { "overview": "Prehľad", "emails": "E-maily", "documents": "Doklady", "contacts": "Kontakty a aktivity" },
+      "noMail": "Žiadne e-maily s touto firmou v schránkach, ktoré vidíte.",
+      "incoming": "prijatý",
+      "outgoing": "odoslaný",
+      "unavailable": "Údaje z Money sa teraz nedajú načítať. Pošta funguje ďalej."
+    },
     "customer": {
       "title": "Zákazník",
       "panel": "Asistent a zákazník",
@@ -1712,6 +1724,7 @@
       "lateDays_few": "{{count}} dni po splatnosti",
       "lateDays_other": "{{count}} dní po splatnosti",
       "send": "Poslať",
+      "open360": "Otvoriť Zákazník 360",
       "sendInvoice": "Poslať faktúru {{number}} zákazníkovi",
       "statement": "Výpis",
       "statementLong": "Výpis neuhradených",

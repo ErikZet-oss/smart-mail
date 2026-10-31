@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Mail, Search } from 'lucide-react';
+import { ArrowLeft, Building2, FileText, Mail, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Button } from '../../components/Button';
+import { money as formatMoney, moneySearch, type MoneySearch } from '../money/moneyApi';
+import { useFeatures } from '../system/features';
 import { AppShell } from '../../components/shell/AppShell';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { formatMailDate } from '../mail/formatMailDate';
@@ -105,6 +107,14 @@ export function ScreenW10() {
     setParams(next, { replace: true });
   }
 
+  const features = useFeatures();
+  const moneyQ = qParam.trim();
+  const moneyHits = useQuery({
+    queryKey: ['money', 'search', moneyQ],
+    queryFn: () => moneySearch(moneyQ),
+    enabled: features.money && moneyQ.length >= 2,
+    retry: false,
+  });
   const messages = shown?.messages ?? [];
   const empty = enabled && result.isSuccess && !serverResult.isFetching && messages.length === 0;
 
@@ -248,62 +258,104 @@ export function ScreenW10() {
               ) : null}
             </div>
           ) : (
-            <section className="m-4 overflow-hidden rounded-md border border-border-default sm:mx-6">
-              <h2 className="type-heading flex h-11 items-center border-b border-border-default px-3.5 text-text-primary">
-                {t('search.emailsGroup', { count: shown?.total ?? 0 })}
-              </h2>
-              <ul className="divide-y divide-border-default">
-                {messages.map((m) => (
-                  <li key={m.id} className="flex items-start gap-3 px-3.5 py-2.5 hover:bg-bg-subtle">
-                    <Mail size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-text-secondary" />
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="type-small min-w-0 truncate text-text-primary">
-                        {m.from_name ? <span className="font-semibold">{m.from_name}</span> : null}
-                        {m.from_email ? (
-                          <>
-                            {m.from_name ? ' ' : null}
-                            <button
-                              type="button"
-                              className="text-text-secondary hover:text-brand-primary-600 hover:underline"
-                              onClick={() => {
-                                const email = m.from_email;
-                                if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
-                              }}
-                            >
-                              {m.from_email}
-                            </button>
-                          </>
-                        ) : !m.from_name ? (
-                          '—'
+            <>
+              <MoneyHits data={moneyHits.data} />
+              <section className="m-4 overflow-hidden rounded-md border border-border-default sm:mx-6">
+                <h2 className="type-heading flex h-11 items-center border-b border-border-default px-3.5 text-text-primary">
+                  {t('search.emailsGroup', { count: shown?.total ?? 0 })}
+                </h2>
+                <ul className="divide-y divide-border-default">
+                  {messages.map((m) => (
+                    <li key={m.id} className="flex items-start gap-3 px-3.5 py-2.5 hover:bg-bg-subtle">
+                      <Mail size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-text-secondary" />
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="type-small min-w-0 truncate text-text-primary">
+                          {m.from_name ? <span className="font-semibold">{m.from_name}</span> : null}
+                          {m.from_email ? (
+                            <>
+                              {m.from_name ? ' ' : null}
+                              <button
+                                type="button"
+                                className="text-text-secondary hover:text-brand-primary-600 hover:underline"
+                                onClick={() => {
+                                  const email = m.from_email;
+                                  if (email) navigate(`/compose?to=${encodeURIComponent(email)}`);
+                                }}
+                              >
+                                {m.from_email}
+                              </button>
+                            </>
+                          ) : !m.from_name ? (
+                            '—'
+                          ) : null}
+                          {' · '}
+                          <Link
+                            to={`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`}
+                            className="text-text-primary hover:underline"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigate(`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`);
+                            }}
+                          >
+                            {m.subject || t('search.noSubject')}
+                          </Link>
+                        </span>
+                        {m.preview ? (
+                          <span className="type-caption line-clamp-2 font-normal text-text-secondary">{m.preview}</span>
                         ) : null}
-                        {' · '}
-                        <Link
-                          to={`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`}
-                          className="text-text-primary hover:underline"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            navigate(`/mail/${encodeURIComponent(mailbox)}/inbox/${encodeURIComponent(m.id)}`);
-                          }}
-                        >
-                          {m.subject || t('search.noSubject')}
-                        </Link>
-                      </span>
-                      {m.preview ? (
-                        <span className="type-caption line-clamp-2 font-normal text-text-secondary">{m.preview}</span>
+                      </div>
+                      {m.received_at ? (
+                        <span className="type-caption shrink-0 font-normal text-text-secondary">
+                          {formatMailDate(m.received_at)}
+                        </span>
                       ) : null}
-                    </div>
-                    {m.received_at ? (
-                      <span className="type-caption shrink-0 font-normal text-text-secondary">
-                        {formatMailDate(m.received_at)}
-                      </span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </section>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </>
           )}
         </div>
       </div>
     </AppShell>
+  );
+}
+
+/** Phase 3g: Money group of the global search — companies from the read cache, invoices by number (live). */
+function MoneyHits({ data }: { data: MoneySearch | undefined }) {
+  const { t } = useTranslation();
+  if (!data || (data.companies.length === 0 && data.invoices.length === 0)) return null;
+  return (
+    <section className="m-4 overflow-hidden rounded-md border border-border-default sm:mx-6" data-testid="search-money">
+      <h2 className="type-heading flex h-11 items-center border-b border-border-default px-3.5 text-text-primary">
+        {t('search.moneyGroup')}
+      </h2>
+      <ul className="divide-y divide-border-default">
+        {data.companies.map((c) => (
+          <li key={c.money_id}>
+            <Link
+              to={`/contacts/company/${c.money_id}`}
+              className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-bg-subtle"
+            >
+              <Building2 size={16} aria-hidden="true" className="shrink-0 text-text-secondary" />
+              <span className="type-small min-w-0 flex-1 truncate text-text-primary">{c.name}</span>
+              <span className="type-caption shrink-0 text-text-secondary">{c.ico ?? c.code ?? ''}</span>
+            </Link>
+          </li>
+        ))}
+        {data.invoices.map((i) => (
+          <li key={i.id}>
+            <Link
+              to={i.company_id ? `/contacts/company/${i.company_id}?tab=documents` : '#'}
+              className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-bg-subtle"
+            >
+              <FileText size={16} aria-hidden="true" className="shrink-0 text-text-secondary" />
+              <span className="type-small min-w-0 flex-1 truncate text-text-primary">{i.number}</span>
+              <span className="type-caption shrink-0 text-text-secondary">{formatMoney(i.remaining)}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

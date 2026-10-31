@@ -23,6 +23,7 @@ export type CustomerMatch = {
 };
 export type Invoice = {
   id: string;
+  company_id?: string | null;
   kind: 'invoice' | 'proforma';
   number: string;
   due_on: string | null;
@@ -69,8 +70,8 @@ export const customerKey = (messageId: string) => ['money', 'customer', messageI
 export const cardKey = (moneyId: string) => ['money', 'card', moneyId] as const;
 export const fetchCustomer = (messageId: string) =>
   api<CustomerMatch>('GET', `/api/money/messages/${encodeURIComponent(messageId)}/customer`);
-export const fetchCard = (moneyId: string) =>
-  api<CompanyCard>('GET', `/api/money/companies/${encodeURIComponent(moneyId)}/card`);
+export const fetchCard = (moneyId: string, rows = 5) =>
+  api<CompanyCard>('GET', `/api/money/companies/${encodeURIComponent(moneyId)}/card?rows=${rows}`);
 export const searchCompanies = (q: string) =>
   api<CompanyBrief[]>('GET', `/api/money/companies/search?q=${encodeURIComponent(q)}`);
 export const linkEmail = (email: string, companyMoneyId: string) =>
@@ -108,6 +109,20 @@ export const fetchDebtors = () => api<Debtor[]>('GET', '/api/money/reminders');
 export const fetchReminderHistory = () => api<ReminderHistoryRow[]>('GET', '/api/money/reminders/history');
 export const prepareReminders = (companyMoneyIds: string[], tone: ReminderTone) =>
   api<ReminderResult[]>('POST', '/api/money/reminders/drafts', { company_money_ids: companyMoneyIds, tone });
+export type MoneySearch = { companies: CompanyBrief[]; invoices: Invoice[]; invoices_error: string | null };
+export const moneySearch = (q: string) => api<MoneySearch>('GET', `/api/money/search?q=${encodeURIComponent(q)}`);
+export type CompanyMail = {
+  id: string;
+  mailbox_id: string;
+  thread_id: string | null;
+  subject: string | null;
+  from_name: string | null;
+  from_email: string | null;
+  received_at: string | null;
+  direction: 'in' | 'out';
+};
+export const fetchCompanyMail = (moneyId: string) =>
+  api<CompanyMail[]>('GET', `/api/money/companies/${encodeURIComponent(moneyId)}/emails`);
 export const unlinkEmail = (email: string) =>
   api<{ deleted: boolean }>('DELETE', `/api/money/links?email=${encodeURIComponent(email)}`);
 

@@ -13,7 +13,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from app.ai.models import Classification
 from app.api.mail import _mailbox, fail
@@ -147,7 +147,7 @@ async def message_customer(message_id: uuid.UUID, ctx: Auth, db: DB, settings: S
     )
 
 
-def receivables_summary(rows: list[IssuedInvoice], today: date) -> Receivables:
+def receivables_summary(rows: list[IssuedInvoice], today: date, limit: int = LIST_ROWS) -> Receivables:
     overdue = [r for r in rows if r.due_on is not None and r.due_on < today]
     oldest = min((r.due_on for r in overdue if r.due_on), default=None)
     return Receivables(
@@ -157,12 +157,15 @@ def receivables_summary(rows: list[IssuedInvoice], today: date) -> Receivables:
         overdue_total=sum((r.remaining for r in overdue), Decimal("0")),
         oldest_overdue_days=(today - oldest).days if oldest else None,
         mixed_currency=len({r.currency_id for r in rows}) > 1,
-        items=sorted(rows, key=lambda r: r.due_on or date.max)[:LIST_ROWS],
+        items=sorted(rows, key=lambda r: r.due_on or date.max)[:limit],
     )
 
 
 @router.get("/companies/{money_id}/card")
-async def company_card(money_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep) -> CardOut:
+async def company_card(
+    money_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep, rows: int = Query(default=LIST_ROWS, ge=1, le=50)
+) -> CardOut:
+    """Zákazník panel (5 rows) and W9a Doklady (`rows` up to 50)."""
     _enabled(settings)
     company = await db.scalar(select(MoneyCompany).where(MoneyCompany.money_id == money_id))
     if company is None:
@@ -183,19 +186,19 @@ async def company_card(money_id: uuid.UUID, ctx: Auth, db: DB, settings: Setting
     activities: Part[Activity] = Part()
     async with BridgeClient(settings) as bridge:
         try:
-            receivables = receivables_summary(await bridge.receivables(money_id), today)
+            receivables = receivables_summary(await bridge.receivables(money_id), today, rows)
         except BridgeUnavailable as exc:
             receivables.error = exc.code
         try:
-            orders.items = (await bridge.orders(money_id, since))[:LIST_ROWS]
+            orders.items = (await bridge.orders(money_id, since))[:rows]
         except BridgeUnavailable as exc:
             orders.error = exc.code
         try:
-            deliveries.items = (await bridge.deliveries(money_id, since))[:LIST_ROWS]
+            deliveries.items = (await bridge.deliveries(money_id, since))[:rows]
         except BridgeUnavailable as exc:
             deliveries.error = exc.code
         try:
-            activities.items = (await bridge.activities(money_id))[:LIST_ROWS]
+            activities.items = (await bridge.activities(money_id))[:rows]
         except BridgeUnavailable as exc:
             activities.error = exc.code
     return CardOut(
@@ -547,4 +550,104 @@ async def reminder_history(ctx: Auth, person: ActivePerson, db: DB, settings: Se
                 invoices=[str(n) for n in details.get("invoices") or []],
             )
         )
+    return out
+
+
+# ----- W9a Zákazník 360 + Money in global search (Phase 3g) -----
+
+
+class CompanyMailOut(BaseModel):
+    id: str
+    mailbox_id: str
+    thread_id: str | None
+    subject: str | None
+    from_name: str | None
+    from_email: str | None
+    received_at: datetime | None
+    direction: Literal["in", "out"]
+
+
+async def company_addresses(db: DB, money_id: uuid.UUID) -> set[str]:
+    """Every address that belongs to the company: Money e-mails, Money persons, person-confirmed links."""
+    company = await db.scalar(select(MoneyCompany).where(MoneyCompany.money_id == money_id))
+    if company is None:
+        raise fail(404, "company_not_found")
+    found = set(company.emails or [])
+    found |= {
+        e
+        for e in await db.scalars(
+            select(MoneyPerson.email).where(MoneyPerson.company_money_id == money_id, MoneyPerson.email.is_not(None))
+        )
+        if e
+    }
+    found |= set(await db.scalars(select(EmailCompanyLink.email).where(EmailCompanyLink.company_money_id == money_id)))
+    return {e.lower() for e in found if "@" in e}
+
+
+@router.get("/companies/{money_id}/emails")
+async def company_emails(
+    money_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep, limit: int = Query(default=50, ge=1, le=200)
+) -> list[CompanyMailOut]:
+    """W9a E-maily: mail from or to the company's addresses in the mailboxes this login sees (private folders of
+    other persons excluded, ADR-009)."""
+    _enabled(settings)
+    addresses = await company_addresses(db, money_id)
+    if not addresses:
+        return []
+    mailboxes = [m.id for m in await accessible_mailboxes(db, ctx.account.id)]
+    to_match = [Message.to_addrs.contains([{"email": a}]) for a in sorted(addresses)[:50]]
+    rows = await db.execute(
+        select(Message, FolderMeta)
+        .join(FolderMeta, FolderMeta.id == Message.folder_id)
+        .where(Message.mailbox_id.in_(mailboxes), Message.deleted.is_(False))
+        .where(or_(func.lower(Message.from_email).in_(addresses), *to_match))
+        .order_by(Message.received_at.desc().nulls_last())
+        .limit(limit * 2)
+    )
+    person_id = ctx.person.id if ctx.person else None
+    out: list[CompanyMailOut] = []
+    for message, folder in rows.all():
+        if not visible_to(folder, person_id):
+            continue
+        out.append(
+            CompanyMailOut(
+                id=str(message.id),
+                mailbox_id=str(message.mailbox_id),
+                thread_id=str(message.thread_id) if message.thread_id else None,
+                subject=message.subject,
+                from_name=message.from_name,
+                from_email=message.from_email,
+                received_at=message.received_at,
+                direction="in" if (message.from_email or "").lower() in addresses else "out",
+            )
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
+class MoneySearchOut(BaseModel):
+    companies: list[CompanyBrief]
+    invoices: list[IssuedInvoice]
+    invoices_error: str | None = None
+
+
+@router.get("/search")
+async def money_search(
+    ctx: Auth, db: DB, settings: SettingsDep, q: str = Query(min_length=2, max_length=80)
+) -> MoneySearchOut:
+    """Global search / Ctrl+K group „Firmy“ (cache) and „Doklady“ (invoice number, live). Invoices only for the
+    roles that may send them; Money down never breaks the rest of the search."""
+    _enabled(settings)
+    companies = await search_companies(ctx, db, settings, q)
+    out = MoneySearchOut(companies=companies[:8], invoices=[])
+    text = q.strip()
+    role = ctx.person.role if ctx.person else None
+    if role in SEND_ROLES and sum(c.isdigit() for c in text) >= 4 and not any(c in "~#|()" for c in text):
+        async with BridgeClient(settings) as bridge:
+            try:
+                found = await bridge.search_invoices(number=text.replace(" ", ""))
+                out.invoices = found.items[:8]
+            except BridgeUnavailable as exc:
+                out.invoices_error = exc.code
     return out
