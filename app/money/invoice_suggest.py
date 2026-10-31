@@ -6,6 +6,7 @@ at least one written invoice number belongs to that company. Money down → noth
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import structlog
@@ -19,8 +20,18 @@ from app.core.audit import audit
 from app.core.config import Settings
 from app.mail.models import FolderMeta, Mailbox, Message
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
-from app.money.invoice_attach import SUGGESTION_TYPE, draft_body, evaluate, invoice_json, invoice_refs
-from app.money.matching import counterparty
+from app.money.invoice_attach import (
+    STRONG,
+    SUGGESTION_TYPE,
+    draft_body,
+    evaluate,
+    invoice_json,
+    invoice_refs,
+    latest_invoice,
+    wants_latest,
+)
+from app.money.matching import counterparty, match_sender
+from app.money.schemas import IssuedInvoice
 
 log = structlog.get_logger(__name__)
 CATEGORY = "invoice_request"
@@ -49,6 +60,16 @@ async def _candidates(db: AsyncSession, mailbox: Mailbox) -> list[tuple[Message,
     return [(m, c) for m, folder, c in rows.all() if message_eligible_for_ai(mailbox, folder, m)]
 
 
+async def _guess_latest(
+    db: AsyncSession, settings: Settings, bridge: BridgeClient, email: str, body_text: str | None
+) -> IssuedInvoice | None:
+    """#182: only for a sender matched STRONGLY to a Money company; otherwise the old behaviour (no attachment)."""
+    match = await match_sender(db, email, body_text, settings)
+    if match.company is None or match.method not in STRONG:
+        return None
+    return await latest_invoice(bridge, match.company.money_id, datetime.now(UTC).date())
+
+
 async def suggest_invoice_attach(
     db: AsyncSession, mailbox: Mailbox, settings: Settings, *, shadow: bool, client: BridgeClient | None = None
 ) -> dict[str, int]:
@@ -64,11 +85,17 @@ async def suggest_invoice_attach(
         for message, cls in candidates:
             stats["candidates"] += 1
             email = counterparty(message, settings)
-            refs = invoice_refs(f"{message.subject or ''}\n{message.body_text or message.preview or ''}")
-            if email is None or not refs:
-                stats["no_refs"] += 1
-                continue
+            text = f"{message.subject or ''}\n{message.body_text or message.preview or ''}"
+            refs = invoice_refs(text)  # written numbers always win over „the last invoice“
+            guessed: IssuedInvoice | None = None
             try:
+                if email is not None and not refs and wants_latest(text):
+                    guessed = await _guess_latest(db, settings, bridge, email, message.body_text)
+                    if guessed is not None:
+                        refs = [guessed.number]
+                if email is None or not refs:
+                    stats["no_refs"] += 1
+                    continue
                 ev = await evaluate(
                     db, settings, bridge, email=email, body_text=message.body_text, refs=refs, language=cls.language
                 )
@@ -87,6 +114,9 @@ async def suggest_invoice_attach(
                 else c
                 for c in ev.checks
             ]
+            if guessed is not None:
+                when = guessed.issued_on.strftime("%d.%m.%Y") if guessed.issued_on else ""
+                checks.append(check("invoice_guessed_latest", "warning", number=guessed.number, date=when))
             suggestion = AiSuggestion(
                 mailbox_id=mailbox.id,
                 message_id=message.id,
@@ -100,10 +130,12 @@ async def suggest_invoice_attach(
                     "refs": refs,
                     "language": cls.language,
                     "body": draft_body(cls.language, numbers),
+                    "guessed_latest": guessed is not None,
                 },
                 rationale=None,
                 confidence=Decimal("0.95") if not any(c["level"] == "blocking" for c in checks) else Decimal("0.5"),
                 checks=checks,
+                batch_safe=False,  # never batch-approved; a guessed invoice (#182) always needs a look
                 status="pending",
                 shadow=shadow,
                 classification_id=cls.id,

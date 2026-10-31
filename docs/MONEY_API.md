@@ -113,6 +113,13 @@ DatumSplatnosti CelkovaCastka UhradyZbyva Mena_ID Odkaz TypDokladu }` → fallba
 **Blocking check:** `Firma_ID` == company of the recipient address. PDF: REST
 `GET /v2.0/IssuedInvoice/{ID}/Report/{reportId}` (report per customer language from Settings). After approved send:
 REST `POST /v1.0/Activity`.
+**„Pošlite poslednú faktúru“ (#182, Erik 2026-10-31):** no number in the mail + a deterministic phrase (SK/CZ
+„posledn… faktúr…/FA“, EN „last/latest invoice“, DE „letzte Rechnung“) and a STRONG sender match → the newest issued
+invoice of that company: `Firma_ID~eq~<company>#DatumVystaveni~gte~<today−31 d>#DatumVystaveni~lte~<today>` (then
+400 days), whole window (≤ 200 rows), sorted client-side by `DatumVystaveni`, then number; no proforma, no document
+with total ≤ 0, deleted records dropped (#179). Same `invoice_attach` card with the warning `invoice_guessed_latest`,
+never `batch_safe`; all owner checks as above. Possible extensions (not built): „faktúra z minulého týždňa“, „za
+október“ (date window from the phrase).
 
 ### 5.2 Receivables, payment questions, reminders
 `IssuedInvoices(Filter:"Firma_ID~eq~<X>#UhradyZbyva~gt~0")` (+ REST prepayments). Overdue = `DatumSplatnosti` < today.

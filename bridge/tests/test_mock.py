@@ -58,3 +58,21 @@ def test_mock_activities_endpoint() -> None:
     company = next(a.company_id for a in build().activities)
     rows = client.get(f"/companies/{company}/activities").json()
     assert rows and all(r["company_id"] == str(company) for r in rows)
+
+
+def test_182_company_window_returns_the_whole_window_not_20() -> None:
+    from datetime import date as _date
+
+    from tests.conftest import make_client
+
+    client = make_client()
+    companies = client.get("/sync/companies?count=50").json()["items"]
+    best = None
+    for c in companies:
+        out = client.get(
+            f"/invoices/issued/search?company_id={c['id']}&date_from=2020-01-01&date_to={_date(2030, 1, 1).isoformat()}"
+        ).json()
+        if best is None or len(out["items"]) > len(best["items"]):
+            best = out
+    assert best is not None and best["matched_by"] == "company_dates"
+    assert len(best["items"]) > 20  # fictional seed: some customer has more than one page of 20

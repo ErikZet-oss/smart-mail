@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -47,6 +48,14 @@ _AFTER_WORD = re.compile(
     re.IGNORECASE,
 )
 
+# #182 „pošlite poslednú faktúru“ (SK/CZ), „last/latest invoice“, „letzte Rechnung“ — deterministic, no model
+_LATEST = re.compile(
+    r"\b(?:posledn\w*\s+(?:fakt[úu]r\w*|FA\b)|(?:last|latest|most\s+recent)\s+invoice\w*|letzte\w*\s+rechnung\w*)",
+    re.IGNORECASE,
+)
+# windows tried in order: a short one first so a busy customer never exceeds the bridge page (200 rows)
+LATEST_WINDOWS_DAYS: tuple[int, ...] = (31, 400)
+
 BODIES: dict[str, str] = {
     "sk": "Dobrý deň,\n\nv prílohe Vám posielame {what} {numbers}.\n\nS pozdravom",
     "cs": "Dobrý den,\n\nv příloze Vám zasíláme {what} {numbers}.\n\nS pozdravem",
@@ -76,6 +85,29 @@ def invoice_refs(text: str | None) -> list[str]:
             seen.add(ref)
             out.append(ref)
     return out[:MAX_REFS]
+
+
+def wants_latest(text: str | None) -> bool:
+    """#182: the mail asks for „the last invoice“. Callers use it only when the mail names no invoice number."""
+    return bool(_LATEST.search(text or ""))
+
+
+async def latest_invoice(bridge: BridgeClient, company_money_id: uuid.UUID, today: date) -> IssuedInvoice | None:
+    """#182 (Erik): „posledná faktúra“ = the newest ISSUED invoice of the company by `DatumVystaveni`, then by
+    number. Not a proforma; a document with a total ≤ 0 (credit note) is skipped — the meaning of `TypDokladu` is
+    unconfirmed and never guessed. Deleted records never reach the app (bridge, #179). Raises `BridgeUnavailable`."""
+    for days in LATEST_WINDOWS_DAYS:
+        found = await bridge.search_invoices(
+            company_id=company_money_id, date_from=today - timedelta(days=days), date_to=today
+        )
+        own = [
+            i
+            for i in found.items
+            if i.kind == "invoice" and i.company_id == company_money_id and i.issued_on is not None and i.total > 0
+        ]
+        if own:
+            return max(own, key=lambda i: (i.issued_on or date.min, i.number))
+    return None
 
 
 def report_language(language: str | None) -> ReportLang:
@@ -245,16 +277,19 @@ def total_remaining(invoices: list[IssuedInvoice]) -> Decimal:
 
 
 __all__ = [
+    "LATEST_WINDOWS_DAYS",
     "SUGGESTION_TYPE",
     "BridgeUnavailable",
     "Evaluation",
     "draft_body",
     "evaluate",
     "invoice_refs",
+    "latest_invoice",
     "load_branch_reports",
     "load_reports",
     "pick_report",
     "recipient_block",
     "report_for_invoice",
     "storage_prefix",
+    "wants_latest",
 ]

@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — „Pošlite poslednú faktúru“ (#182)
+
+- invoice_attach recognises „the last invoice“ (SK/CZ/EN/DE, deterministic regex) when the mail names no number. A sender matched strongly to a Money company gets a card with the newest issued invoice (by issue date, then number; no proforma, no credit note, deleted records dropped). The card carries the warning `invoice_guessed_latest` „Faktúra určená odhadom…“ and is never `batch_safe`. Written numbers always win. Without a strong match nothing changes (no attachment).
+- Bridge: the company + date window step of the invoice search fetches up to 200 rows (was 20), so the client-side sort sees the whole window. `BridgeClient.search_invoices` passes `date_from` / `date_to`.
+- MONEY_API §5.1 documents the rule and the possible extensions („z minulého týždňa“, „za október“).
+
 ## [Unreleased] — Fix: the classifier saw only the subject of new mail (pilot 2026-10-31)
 
 - New messages have no body until someone opens them, and the AI pipeline classified them from the subject alone. A Slovak mail with the subject „Faktura“ came out as Polish (the reply was drafted in Polish), and attachment names and the DMARC result were unknown to rules and phishing checks.

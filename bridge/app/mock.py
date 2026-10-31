@@ -287,7 +287,8 @@ class MockBackend:
         ]
         for matched_by, active, pred in steps:
             if active:
-                found = _newest_first([i for i in inv if pred(i)])[:20]
+                limit = 200 if matched_by == "company_dates" else 20  # as the API backend (HISTORY_LIMIT)
+                found = _newest_first([i for i in inv if pred(i)])[:limit]
                 if found:
                     return InvoiceSearch(matched_by=matched_by, items=found)
         return InvoiceSearch(matched_by="none", items=[])
