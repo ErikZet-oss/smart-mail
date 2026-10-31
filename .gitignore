@@ -34,3 +34,6 @@ probe_output/raw/
 !.vscode/extensions.json
 # Local output
 out/
+
+# local Redis snapshot (redis-server started in the repo)
+dump.rdb

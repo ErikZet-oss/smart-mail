@@ -127,5 +127,62 @@
       "reference": null,
       "doc_type": 0
     }
+  ],
+  "orders": [
+    {
+      "id": "f3b64c4c-060f-5c12-95d1-52538a88f282",
+      "number": "OP260041",
+      "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+      "issued_on": "2026-09-17",
+      "reference": "OBJ-0041",
+      "state": 1,
+      "done": 1,
+      "total": "269.05"
+    },
+    {
+      "id": "d2cbc957-0496-5230-857e-c3fd5e9bd5ab",
+      "number": "OP260033",
+      "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+      "issued_on": "2026-07-21",
+      "reference": "OBJ-0033",
+      "state": 2,
+      "done": 1,
+      "total": "1292.65"
+    }
+  ],
+  "deliveries": [
+    {
+      "id": "772d0af7-ed9e-55e7-9016-0412e395f541",
+      "number": "DV260041",
+      "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+      "issued_on": "2026-09-19",
+      "moved_on": "2026-09-19",
+      "reference": "OBJ-0041",
+      "state": 0,
+      "transport": null,
+      "total": "1047.44"
+    },
+    {
+      "id": "20282562-ac52-539d-9755-f1363fb3d835",
+      "number": "DV260033",
+      "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+      "issued_on": "2026-07-23",
+      "moved_on": "2026-07-23",
+      "reference": "OBJ-0033",
+      "state": 1,
+      "transport": null,
+      "total": "2695.97"
+    }
+  ],
+  "activities": [
+    {
+      "id": "7d119e37-b432-58e8-9f2a-56f357908f89",
+      "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+      "person_id": null,
+      "type_id": "f73a0130-e8c9-5af5-8603-78b6f00124b1",
+      "description": "Telefonát (fiktívny)",
+      "started_at": "2026-08-23T06:00:00Z",
+      "done": true
+    }
   ]
 }

@@ -7,7 +7,7 @@ from the fixture and the app suite parses the fixture with these models (`extra=
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -86,6 +86,39 @@ class IssuedInvoice(_Model):
     currency_id: uuid.UUID | None
     reference: str | None
     doc_type: int | None
+
+
+class Order(_Model):
+    id: uuid.UUID
+    number: str
+    company_id: uuid.UUID | None
+    issued_on: date | None
+    reference: str | None
+    state: int | None
+    done: int | None
+    total: Decimal
+
+
+class Delivery(_Model):
+    id: uuid.UUID
+    number: str
+    company_id: uuid.UUID | None
+    issued_on: date | None
+    moved_on: date | None
+    reference: str | None
+    state: int | None
+    transport: str | None
+    total: Decimal
+
+
+class Activity(_Model):
+    id: uuid.UUID
+    company_id: uuid.UUID | None
+    person_id: uuid.UUID | None
+    type_id: uuid.UUID | None
+    description: str | None
+    started_at: datetime | None
+    done: bool | None
 
 
 class Health(_Model):
