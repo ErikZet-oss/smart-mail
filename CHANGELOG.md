@@ -2,6 +2,29 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3c: sender → company, Zákazník panel (#144)
+
+- **Sender matching** (`app/money/matching.py`, MONEY_API §5.4) runs on the read cache when the panel opens. The steps, in order:
+  - a confirmed link (1.0);
+  - a Money person e-mail (0.98);
+  - a company `Email` / `SeznamSpojeni` (0.95);
+  - an IČO from the mail body with a mod-11 check (0.9);
+  - the same company domain (0.7, a person confirms it once; never free-mail or our own domains).
+- Two companies on one step → no guess: the candidates are offered. For our own outgoing mail the first external recipient is used.
+- **API** `/api/money/…` (404 `money_disabled` without `FEATURE_MONEY`):
+  - customer of a message;
+  - company card;
+  - cache search;
+  - „Priradiť k firme“ link / unlink (person with a role other than viewer, audited; internal addresses refused).
+- The card loads receivables, orders, deliveries and activities from the bridge **one by one**: one part down („Money je teraz nedostupné“ / „čaká sa na test prepojenia“) never hides the others.
+- Bridge client: 501 `waiting_for_probe` is not counted as an outage, and 404 company → none. The contract fixture now includes orders, deliveries and activities.
+- **W3b / M10 Zákazník panel**:
+  - toolbar button „Zákazník“ (only with `FEATURE_MONEY`), `?panel=customer`;
+  - 380 px panel on desktop, full screen on mobile;
+  - `CustomerCard`: header (IČO, IČ DPH, code, discount, splatnosť), KPIs „otvorené / po splatnosti“, invoices, last orders and delivery notes, activities, contacts;
+  - not matched → search the cache and assign. „Založiť firmu v Money“ is disabled until Phase 4.
+- **No data model change:** the company is evaluated on the fly instead of storing `threads.money_company_id` (not in the approved migration 0018).
+
 ## [Unreleased] — fix: duplicate key in sk.json
 
 - `settings.branches.signature` was defined twice („Podpis“ from #140 and „Šablóna podpisu pobočky“); JSON keeps the last one silently. The unused #140 entry is removed and a vitest check now fails on any duplicate key inside one object of `sk.json` (found by the agent in #158).

@@ -27,6 +27,9 @@ def current() -> dict[str, Any]:
         "sync_persons": client.get("/sync/persons?count=2").json(),
         "sync_codebook_currencies": client.get("/sync/codebooks/currencies").json(),
         "receivables": receivables[:2],
+        "orders": client.get(f"/companies/{first}/orders?since=2020-01-01").json()[:2],
+        "deliveries": client.get(f"/companies/{first}/deliveries?since=2020-01-01").json()[:2],
+        "activities": client.get(f"/companies/{first}/activities").json()[:2],
     }
 
 

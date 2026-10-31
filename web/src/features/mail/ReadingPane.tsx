@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Building2,
   AlarmClock,
   Archive,
   ArrowLeft,
@@ -28,7 +29,7 @@ import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'r
 import { useTranslation } from 'react-i18next';
 import { ConformityDialog } from '../documents/ConformityDialog';
 import { CategoryDialog } from './CategoryDialog';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Banner } from '../../components/Banner';
 import { Menu, type MenuEntry } from '../../components/Menu';
@@ -40,6 +41,8 @@ import { AiSuggestionCard } from '../ai/AiSuggestionCard';
 import { ConformitySuggestionCard } from '../ai/ConformitySuggestionCard';
 import { fetchSuggestions, suggestionsKey } from '../ai/suggestionsApi';
 import { fetchMe } from '../auth/authApi';
+import { CustomerPanel } from '../money/CustomerPanel';
+import { useFeatures } from '../system/features';
 import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
 import { useTheme } from '../prefs/ThemeProvider';
 import { AttachmentLightbox } from './AttachmentLightbox';
@@ -134,6 +137,20 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   const [conformity, setConformity] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
+  // Phase 3c: W3b Zákazník panel (`?panel=customer`), only with FEATURE_MONEY
+  const features = useFeatures();
+  const [params, setParams] = useSearchParams();
+  const customerOpen = features.money && params.get('panel') === 'customer';
+  const toggleCustomer = (open: boolean) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (open) next.set('panel', 'customer');
+        else next.delete('panel');
+        return next;
+      },
+      { replace: true },
+    );
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const readOnly = !me.data?.person || Boolean(me.data.read_only);
   // #143 „Znova zaradiť (AI)“: one classify call; a manual correction or a spent budget is explained in the toast
@@ -533,6 +550,13 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           onClick={(event) => setSnoozeMenu(menuAt(event))}
           disabled={!threadId}
         />
+        {features.money ? (
+          <ToolBtn
+            icon={<Building2 size={18} />}
+            label={t('money.customer.title')}
+            onClick={() => toggleCustomer(!customerOpen)}
+          />
+        ) : null}
       </div>
 
       {detail.isError && !msg ? (
@@ -722,6 +746,14 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           at={markMenu}
           width={220}
           onClose={() => setMarkMenu(null)}
+        />
+      ) : null}
+      {customerOpen && messageId ? (
+        <CustomerPanel
+          messageId={messageId}
+          readOnly={readOnly}
+          mobile={mobile}
+          onClose={() => toggleCustomer(false)}
         />
       ) : null}
       {categoryOpen && msg ? (

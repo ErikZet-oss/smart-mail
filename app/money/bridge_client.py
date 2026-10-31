@@ -10,7 +10,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
-from datetime import datetime
+import uuid
+from datetime import date, datetime
 from typing import Any, TypeVar
 from urllib.parse import urlencode
 
@@ -18,7 +19,18 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings
-from app.money.schemas import CodebookName, CodebookPage, CompanyPage, Health, PersonPage
+from app.money.schemas import (
+    Activity,
+    CodebookName,
+    CodebookPage,
+    Company,
+    CompanyPage,
+    Delivery,
+    Health,
+    IssuedInvoice,
+    Order,
+    PersonPage,
+)
 
 TIMEOUT = httpx.Timeout(15.0, connect=3.0)
 FAILS_TO_OPEN = 3
@@ -78,7 +90,9 @@ class BridgeClient:
     async def __aexit__(self, *_exc: object) -> None:
         await self.aclose()
 
-    async def _get(self, path: str, params: dict[str, Any] | None = None, *, signed: bool = True) -> Any:
+    async def _get(
+        self, path: str, params: dict[str, Any] | None = None, *, signed: bool = True, allow_404: bool = False
+    ) -> Any:
         _circuit.check()
         query = urlencode({k: v for k, v in (params or {}).items() if v is not None})
         path_qs = f"{path}?{query}" if query else path
@@ -95,6 +109,8 @@ class BridgeClient:
         except httpx.HTTPError as exc:
             _circuit.failure()
             raise BridgeUnavailable() from exc
+        if resp.status_code == 501:  # the bridge knows the call but waits for the probe report — not an outage
+            raise BridgeUnavailable("waiting_for_probe")
         if resp.status_code >= 500 or resp.status_code in (401, 403):
             _circuit.failure()
             code = "money_unavailable"
@@ -104,6 +120,8 @@ class BridgeClient:
                 pass
             raise BridgeUnavailable(code)
         _circuit.success()
+        if resp.status_code == 404 and allow_404:
+            return None
         if resp.status_code != 200:
             raise BridgeUnavailable(f"bridge_{resp.status_code}")
         return resp.json()
@@ -134,6 +152,34 @@ class BridgeClient:
     async def persons(self, since: datetime | None, start: int, count: int) -> PersonPage:
         params = {"since": since.isoformat() if since else None, "from": start, "count": count}
         return await self._model(PersonPage, "/sync/persons", params)
+
+    async def _list(self, model: type[M], path: str, params: dict[str, Any] | None = None) -> list[M]:
+        data = await self._get(path, params)
+        try:
+            return [model.model_validate(row) for row in data]
+        except (ValidationError, TypeError) as exc:
+            raise BridgeUnavailable("bridge_contract") from exc
+
+    async def company(self, money_id: uuid.UUID) -> Company | None:
+        data = await self._get(f"/companies/{money_id}", allow_404=True)
+        if data is None:
+            return None
+        try:
+            return Company.model_validate(data)
+        except ValidationError as exc:
+            raise BridgeUnavailable("bridge_contract") from exc
+
+    async def receivables(self, money_id: uuid.UUID) -> list[IssuedInvoice]:
+        return await self._list(IssuedInvoice, f"/companies/{money_id}/receivables")
+
+    async def orders(self, money_id: uuid.UUID, since: date) -> list[Order]:
+        return await self._list(Order, f"/companies/{money_id}/orders", {"since": since.isoformat()})
+
+    async def deliveries(self, money_id: uuid.UUID, since: date) -> list[Delivery]:
+        return await self._list(Delivery, f"/companies/{money_id}/deliveries", {"since": since.isoformat()})
+
+    async def activities(self, money_id: uuid.UUID) -> list[Activity]:
+        return await self._list(Activity, f"/companies/{money_id}/activities")
 
     async def codebook(self, name: CodebookName, start: int, count: int) -> CodebookPage:
         return await self._model(CodebookPage, f"/sync/codebooks/{name}", {"from": start, "count": count})
