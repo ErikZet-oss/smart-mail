@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -311,3 +312,48 @@ def test_bridge_timeout_covers_slow_pdf_report() -> None:
     from app.gql_client import TIMEOUT
 
     assert TIMEOUT.read is not None and TIMEOUT.read >= 15
+
+
+DELETED_INV = {**INV, "ID": "33333333-3333-4333-8333-333333333333", "Deleted": True}
+
+
+@respx.mock
+async def test_deleted_invoices_are_dropped_everywhere() -> None:
+    """Pilot 2026-10-31 (TEST agenda): Money returns deleted documents (`Deleted: true`) — 603 of 1104 unpaid
+    invoices; one number existed as a deleted invoice of customer A and a live paid one of customer B, and the
+    customer card of A listed the deleted invoice as unpaid."""
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    respx.post(f"{BASE}/graphql").mock(
+        return_value=_envelope({"IssuedInvoices": [{**INV, "Deleted": False}, DELETED_INV]})
+    )
+    backend = ApiBackend(settings())
+    assert [i.number for i in await backend.receivables(CID)] == ["FV2600042"]
+    found = await backend.search_invoices(InvoiceQuery(number="FV2600042"))
+    assert [str(i.id) for i in found.items] == [INV["ID"]]
+    await backend.aclose()
+
+
+@respx.mock
+async def test_dropping_deleted_rows_does_not_end_paging_early() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    respx.post(f"{BASE}/graphql").mock(return_value=_envelope({"IssuedInvoices": [INV, DELETED_INV]}))
+    backend = ApiBackend(settings())
+    page = await backend.overdue(date(2026, 10, 31), 0, 2)
+    assert len(page.items) == 1 and page.next_from == 2  # raw page was full -> keep paging
+    await backend.aclose()
+
+
+@respx.mock
+async def test_deleted_company_and_persons_are_dropped() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    respx.post(f"{BASE}/graphql").mock(
+        return_value=_envelope({"Company": {"ID": str(CID), "Nazev": "Zmazaná s.r.o.", "Deleted": True}})
+    )
+    pid = uuid.uuid4()
+    rows = [{"ID": str(pid), "Deleted": False, "Email": "a@example.test"}, {"ID": str(uuid.uuid4()), "Deleted": True}]
+    respx.get(f"{BASE}/v2.0/Person/0/2").mock(return_value=_envelope(rows))
+    backend = ApiBackend(settings())
+    assert await backend.company(CID) is None
+    page = await backend.persons(None, 0, 2)
+    assert [p.id for p in page.items] == [pid] and page.next_from == 2
+    await backend.aclose()

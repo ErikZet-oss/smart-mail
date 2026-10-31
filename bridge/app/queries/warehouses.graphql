@@ -1,5 +1,5 @@
 query Warehouses($filter: String, $from: Int, $count: Int, $changeFrom: DateTime) {
   Warehouses(Filter: $filter, From: $from, Count: $count, ChangeFrom: $changeFrom) {
-    ID Kod Nazev
+    ID Deleted Kod Nazev
   }
 }

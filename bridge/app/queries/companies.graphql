@@ -1,5 +1,5 @@
 query Companies($filter: String, $from: Int, $count: Int, $changeFrom: DateTime) {
   Companies(Filter: $filter, From: $from, Count: $count, ChangeFrom: $changeFrom) {
-    ID Kod Nazev ICO DIC ICDPH Email HodnotaSlevy VlastniSleva SplatnostPohledavek SeznamSpojeni { SpojeniCislo TypSpojeni { Kod } }
+    ID Deleted Kod Nazev ICO DIC ICDPH Email HodnotaSlevy VlastniSleva SplatnostPohledavek SeznamSpojeni { SpojeniCislo TypSpojeni { Kod } }
   }
 }

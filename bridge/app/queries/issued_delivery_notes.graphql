@@ -1,5 +1,5 @@
 query IssuedDeliveryNotes($filter: String, $from: Int, $count: Int, $changeFrom: DateTime) {
   IssuedDeliveryNotes(Filter: $filter, From: $from, Count: $count, ChangeFrom: $changeFrom) {
-    ID CisloDokladu Firma_ID DatumVystaveni DatumSkladovehoPohybu Odkaz Stav ZpusobDopravy { Nazev } CelkovaCastka
+    ID Deleted CisloDokladu Firma_ID DatumVystaveni DatumSkladovehoPohybu Odkaz Stav ZpusobDopravy { Nazev } CelkovaCastka
   }
 }
