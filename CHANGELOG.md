@@ -2,6 +2,23 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3c follow-up: Zákazník panel as in Figma (#160 review)
+
+- **Desktop W3b (36:31480):**
+  - The panel is a 380 px column next to the reading pane, which narrows; it no longer overlays it.
+  - Header tabs „Asistent | Zákazník“; Asistent stays disabled until Phase 5.
+  - The toolbar button „Asistent“ opens it, and so does a **company chip next to the sender** in the message header.
+- **Card:**
+  - avatar initials, IČO · IČ DPH;
+  - chips Zľava / Splatnosť / „✓ V Money“;
+  - KPI tiles with a coloured left edge;
+  - upper-case section titles;
+  - invoices with „N dní po splatnosti“ and „Poslať“ (disabled until 3d);
+  - contacts with avatars;
+  - bottom actions: Napísať (opens compose to the sender), Výpis neuhradených (3e), Pripraviť ponuku (Phase 6), Otvoriť v Money (after the probe) — the last three are disabled with a reason.
+- **Mobile M10 (84:3510):** header with back arrow and company name, tabs Prehľad · Doklady · Kontakty, bottom bar Volať (when a contact has a phone) + Napísať.
+- Not done: the price-list chip („Cenník 20-bez DPH“) — the cache has no price list of the company yet (MONEY_API `CompanyPriceLists`, Phase 4/6).
+
 ## [Unreleased] — Phase 3c: sender → company, Zákazník panel (#144)
 
 - **Sender matching** (`app/money/matching.py`, MONEY_API §5.4) runs on the read cache when the panel opens. The steps, in order:
