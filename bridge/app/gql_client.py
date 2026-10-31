@@ -23,6 +23,17 @@ QUERIES = Path(__file__).parent / "queries"
 TIMEOUT = httpx.Timeout(20.0, connect=5.0)
 
 
+def unwrap(body: Any, what: str) -> Any:
+    """Money S4 API wraps answers: `{"PageCount", "RowCount", "Data": {...}, "Status": 1, "Message", "StackTrace"}`
+    (TEST agenda 2026-10-31, API 1.15.11). `Status` 1 = OK. Plain GraphQL `{"data", "errors"}` and unwrapped REST
+    bodies pass through unchanged. Message/StackTrace are never logged (they may echo payload values)."""
+    if isinstance(body, dict) and "Status" in body and ("Data" in body or "Message" in body):
+        if body.get("Status") != 1:
+            raise MoneyError(f"{what}: Money status {body.get('Status')}")
+        return body.get("Data")
+    return body
+
+
 @cache
 def load_query(name: str) -> str:
     return (QUERIES / f"{name}.graphql").read_text(encoding="utf-8")
@@ -99,6 +110,8 @@ class MoneyHttp:
         if resp.status_code != 200:
             raise MoneyError(f"graphql {name} answered {resp.status_code}")
         body = _json(resp)
+        if isinstance(body, dict) and "Status" in body and "data" not in body:
+            body = {"data": unwrap(body, f"graphql {name}")}
         if body.get("errors"):
             raise MoneyError(f"graphql {name}: {len(body['errors'])} error(s)")  # never log the payload
         data = body.get("data")
@@ -112,7 +125,7 @@ class MoneyHttp:
             return None
         if resp.status_code != 200:
             raise MoneyError(f"REST {path.split('/')[0]} answered {resp.status_code}")
-        return _json(resp)
+        return unwrap(_json(resp), f"REST {path.split('/')[0]}")
 
     async def rest_bytes(self, path: str) -> bytes | None:
         resp = await self._send("GET", f"{self._base}/{self._rest}/{path.lstrip('/')}")

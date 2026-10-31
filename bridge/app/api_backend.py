@@ -245,7 +245,7 @@ class ApiBackend:
         count = min(count, self._page)
         rows = await self._money.rest_json(f"Person/{start}/{count}") or []
         if isinstance(rows, dict):  # some versions wrap lists
-            rows = rows.get("data") or rows.get("items") or []
+            rows = rows.get("Data") or rows.get("data") or rows.get("items") or []
         items = [person_from(r) for r in rows if isinstance(r, dict)]
         return PersonPage(items=items, next_from=start + len(rows) if len(rows) == count else None)
 
@@ -326,7 +326,7 @@ class ApiBackend:
         count = min(count, self._page)
         rows = await self._money.rest_json(f"TypeOfActivity/{start}/{count}") or []
         if isinstance(rows, dict):
-            rows = rows.get("data") or rows.get("items") or []
+            rows = rows.get("Data") or rows.get("data") or rows.get("items") or []
         items = [
             CodebookItem(id=_required_uuid(r.get("id")), code=_s(r.get("kod")), name=_s(r.get("nazev")))
             for r in rows

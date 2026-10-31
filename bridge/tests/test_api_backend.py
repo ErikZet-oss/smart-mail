@@ -188,3 +188,39 @@ def test_endpoints_map_probe_and_outage_to_codes() -> None:
         r = client.get(f"/companies/{CID}")
         assert r.status_code == 503 and r.json()["detail"]["code"] == "money_unavailable"
         assert client.client.get("/readyz").status_code == 503
+
+
+def _envelope(data: Any, status: int = 1) -> httpx.Response:
+    """Real Money S4 API 1.15.11 answer shape (TEST agenda, pilot 2026-10-31)."""
+    body = {"PageCount": 5, "RowCount": 833, "Data": data, "Status": status, "Message": "", "StackTrace": ""}
+    return httpx.Response(200, content=json.dumps(body).encode(), headers={"content-type": "application/json"})
+
+
+@respx.mock
+async def test_money_envelope_is_unwrapped_for_graphql() -> None:
+    """Pilot 2026-10-31: Money answers `{"Data": {...}, "Status": 1}`, not `{"data": ...}` — /readyz stayed 503."""
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    respx.post(f"{BASE}/graphql").mock(return_value=_envelope({"Version": "1.15.11.7730"}))
+    backend = ApiBackend(settings())
+    assert await backend.version() == "1.15.11.7730"
+    await backend.aclose()
+
+
+@respx.mock
+async def test_money_envelope_with_error_status_raises() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    respx.post(f"{BASE}/graphql").mock(return_value=_envelope(None, status=0))
+    backend = ApiBackend(settings())
+    with pytest.raises(MoneyError):
+        await backend.version()
+    await backend.aclose()
+
+
+@respx.mock
+async def test_money_envelope_with_invoice_rows_keeps_decimals() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    respx.post(f"{BASE}/graphql").mock(return_value=_envelope({"IssuedInvoices": [INV]}))
+    backend = ApiBackend(settings())
+    inv = (await backend.receivables(CID))[0]
+    assert inv.total == Decimal("123.45") and isinstance(inv.total, Decimal)
+    await backend.aclose()
