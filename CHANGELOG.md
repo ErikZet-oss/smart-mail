@@ -2,6 +2,23 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3d: invoice_attach — send the original Money invoice PDF (#144)
+
+- **Suggestion `invoice_attach`** for „Žiadosti o faktúru“ (deterministic, no model call):
+  - invoice numbers and variable symbols are found in the mail and looked up in Money;
+  - a card appears only when an invoice belongs to the sender's company;
+  - another customer's number stays out of the draft (warning only, its company is never named).
+- **Blocking checks** (MONEY_API §5.1, CLAUDE.md §11):
+  - `Firma_ID` of every invoice equals the recipient's company;
+  - the recipient is matched strongly (confirmed link, Money person, company e-mail — an IČO or domain guess is not enough);
+  - a report id is set for the document and language;
+  - one customer per draft.
+- **Approve** re-runs every check live in Money, then prepares a reply draft in Koncepty: only the checked recipient, Money's own PDF attached (never rendered by Smart Mail). Nothing is sent automatically (level 2). Money down → 503 and nothing is created.
+- **At send** (also the undo-delay job) a draft with a Money invoice is checked again: every external recipient (to / cc / bcc) must belong to the invoice's company, otherwise `recipient_not_document_owner`. Changing the recipient in W4 cannot mail an invoice to another company. The attachment carries the company in its storage key — no schema change.
+- **Zákazník card „Poslať“** at an open invoice: the same checks, then the draft (obchod, účtovníctvo, správca).
+- **Settings 13b Tlačové zostavy**: report id (GUID or config id) for Faktúra vydaná / Zálohová faktúra vydaná × SK / EN / DE, empty language → SK, validation, audit, „Vyskúšať PDF“ with an invoice number.
+- Bridge client: `search_invoices`, `invoice_pdf` (checks the `%PDF` header).
+
 ## [Unreleased] — Phase 3c follow-up: Zákazník panel as in Figma (#160 review)
 
 - **Desktop W3b (36:31480):**

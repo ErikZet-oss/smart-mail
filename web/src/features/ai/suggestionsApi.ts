@@ -15,6 +15,18 @@ export type Suggestion = {
   checks: SuggestionCheck[];
   blocked: boolean;
   /** #139 C: prefilled Prehlásenie o zhode (type `conformity_declaration`) */
+  /** Phase 3d: invoice_attach — Money invoices whose original PDF goes with the draft */
+  invoices?:
+    | {
+        id: string;
+        kind: 'invoice' | 'proforma';
+        number: string;
+        due_on: string | null;
+        total: string;
+        remaining: string;
+      }[]
+    | null;
+  company_name?: string | null;
   conformity?: {
     customer: string;
     document_ref: string;

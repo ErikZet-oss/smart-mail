@@ -125,7 +125,7 @@ test('3c Zákazník: card with KPIs, one part down, contacts @mobile', async ({ 
   await expect(card).toContainText('40 dní');
   if (isMobile) await panel.getByRole('tab', { name: 'Doklady' }).click();
   await expect(card).toContainText('FV2600042');
-  await expect(card.getByRole('button', { name: 'Poslať' })).toBeDisabled(); // invoice_attach comes in 3d
+  await expect(card.getByRole('button', { name: 'Poslať faktúru FV2600042 zákazníkovi' })).toBeEnabled(); // invoice_attach comes in 3d
   await expect(card).toContainText('Money je teraz nedostupné.');
   if (isMobile) await panel.getByRole('tab', { name: 'Kontakty' }).click();
   await expect(card).toContainText('Zatiaľ nedostupné – čaká sa na test prepojenia s Money.');

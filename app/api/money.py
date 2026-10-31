@@ -15,21 +15,26 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, select
 
+from app.ai.models import Classification
 from app.api.mail import fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
-from app.auth.models import Role
+from app.auth.models import Branch, Person, Role
 from app.core.audit import audit
 from app.core.config import Settings
+from app.mail.compose import sync_draft_to_imap
 from app.mail.export import visible_to
 from app.mail.mailboxes import accessible_mailboxes
-from app.mail.models import FolderMeta, Message
+from app.mail.models import FolderMeta, Mailbox, Message
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
+from app.money.invoice_attach import draft_body, evaluate
+from app.money.invoice_draft import InvoiceDraftError, build_invoice_draft
 from app.money.matching import counterparty, match_sender
 from app.money.models import EmailCompanyLink, MoneyCompany, MoneyPerson
 from app.money.schemas import Activity, Delivery, IssuedInvoice, Order
 
 router = APIRouter(prefix="/api/money", tags=["money"])
 LINK_ROLES = frozenset({Role.admin, Role.sales, Role.accounting, Role.warehouse})
+SEND_ROLES = frozenset({Role.admin, Role.sales, Role.accounting})  # sending invoices (PRODUCT_SPEC §4)
 LIST_ROWS = 5
 HISTORY_DAYS = 365
 
@@ -304,3 +309,73 @@ async def unlink_email(
     await db.delete(link)
     await db.commit()
     return {"deleted": True}
+
+
+class InvoiceDraftIn(BaseModel):
+    number: str = Field(min_length=3, max_length=40)
+
+
+class InvoiceDraftOut(BaseModel):
+    draft_id: str
+
+
+@router.post("/messages/{message_id}/invoice-draft")
+async def invoice_draft(
+    message_id: uuid.UUID, body: InvoiceDraftIn, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
+) -> InvoiceDraftOut:
+    """Zákazník card „Poslať“ (Phase 3d): the same checks as the AI suggestion, then a reply draft with the PDF.
+    Nothing is sent here — the person checks and sends the draft in W4."""
+    _enabled(settings)
+    if person.role not in SEND_ROLES:
+        raise fail(403, "role_not_allowed")
+    message = await _message(db, ctx.account.id, person.id, message_id)
+    email = counterparty(message, settings)
+    if email is None:
+        raise fail(409, "no_recipient")
+    mailbox = await db.get(Mailbox, message.mailbox_id)
+    assert mailbox is not None
+    cls = await db.scalar(select(Classification).where(Classification.message_id == message.id).limit(1))
+    language = cls.language if cls else None
+    async with BridgeClient(settings) as bridge:
+        try:
+            ev = await evaluate(
+                db,
+                settings,
+                bridge,
+                email=email,
+                body_text=message.body_text,
+                refs=[body.number.strip()],
+                language=language,
+            )
+            if ev.blocked:
+                raise fail(409, "suggestion_blocked", checks=ev.checks)
+            draft = await build_invoice_draft(
+                db,
+                settings,
+                bridge,
+                mailbox=mailbox,
+                message=message,
+                account_id=ctx.account.id,
+                person=await db.get(Person, person.id),
+                branch=await db.get(Branch, person.branch_id) if person.branch_id else None,
+                evaluation=ev,
+                body=draft_body(language, [i.number for i in ev.invoices]),
+                language=language,
+            )
+        except BridgeUnavailable as exc:
+            raise fail(503, "money_unavailable", reason=exc.code) from None
+        except InvoiceDraftError as exc:
+            raise fail(409, exc.code, number=exc.number) from None
+    audit(
+        db,
+        "money.invoice_draft",
+        account_id=ctx.account.id,
+        person_id=person.id,
+        object_type="compose_draft",
+        object_id=str(draft.id),
+        details={"invoices": [i.number for i in ev.invoices], "company_money_id": str(ev.company_money_id)},
+    )
+    await db.commit()
+    await sync_draft_to_imap(db, settings, draft)
+    await db.commit()
+    return InvoiceDraftOut(draft_id=str(draft.id))

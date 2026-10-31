@@ -90,4 +90,4 @@ async def test_1f_schema_endpoint(client: Client, db: AsyncSession, mail_server:
     assert (await client.login(acc.email, PASSWORD)).status_code == 200
     r = await client.get("/api/settings/schema")
     assert r.status_code == 200
-    assert r.json()["phase"] == "3b"
+    assert r.json()["phase"] == "3d"

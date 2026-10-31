@@ -1,4 +1,4 @@
-import { api, apiForm } from '../../lib/api';
+import { api, apiBlob, apiForm } from '../../lib/api';
 
 export type NavSection = {
   id: string;
@@ -437,3 +437,14 @@ export const fetchMoneySync = () => api<MoneySync>('GET', '/api/settings/money/s
 export const saveMoneyInterval = (interval_min: number) =>
   api<MoneySync>('PUT', '/api/settings/money/sync', { interval_min });
 export const startMoneySync = () => api<{ queued: boolean }>('POST', '/api/settings/money/sync-now');
+
+/** 13b Tlačové zostavy (Phase 3d): report id (GUID or config id) per document kind and language; empty → SK. */
+export type MoneyReports = Record<'invoice' | 'proforma', Record<'sk' | 'en' | 'de', string>>;
+export const moneyReportsKey = ['settings', 'money', 'reports'] as const;
+export const fetchMoneyReports = () => api<MoneyReports>('GET', '/api/settings/money/reports');
+export const saveMoneyReports = (body: MoneyReports) => api<MoneyReports>('PUT', '/api/settings/money/reports', body);
+export const testMoneyReport = (kind: string, lang: string, number: string) =>
+  apiBlob(
+    'GET',
+    `/api/settings/money/reports/test?kind=${encodeURIComponent(kind)}&lang=${encodeURIComponent(lang)}&number=${encodeURIComponent(number)}`,
+  );

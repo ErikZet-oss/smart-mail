@@ -24,6 +24,7 @@ import { useToast } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import {
   cardKey,
+  createInvoiceDraft,
   customerKey,
   day,
   fetchCard,
@@ -36,7 +37,7 @@ import {
   type CustomerMatch,
 } from './moneyApi';
 
-type Props = { messageId: string; readOnly: boolean; mobile: boolean; onClose: () => void };
+type Props = { messageId: string; mailbox: string; readOnly: boolean; mobile: boolean; onClose: () => void };
 type MobileTab = 'overview' | 'documents' | 'contacts';
 
 /**
@@ -44,7 +45,7 @@ type MobileTab = 'overview' | 'documents' | 'contacts';
  * Phase 5) / M10 (mobile: full screen, tabs Prehľad · Doklady · Kontakty, bottom bar Volať + Napísať). Phase 3c,
  * Figma 36:31480, 36:31615, 84:3510. Read-only towards Money; „Založiť firmu v Money“ comes in Phase 4.
  */
-export function CustomerPanel({ messageId, readOnly, mobile, onClose }: Props) {
+export function CustomerPanel({ messageId, mailbox, readOnly, mobile, onClose }: Props) {
   const { t } = useTranslation();
   const match = useQuery({ queryKey: customerKey(messageId), queryFn: () => fetchCustomer(messageId) });
   const [tab, setTab] = useState<MobileTab>('overview');
@@ -63,6 +64,7 @@ export function CustomerPanel({ messageId, readOnly, mobile, onClose }: Props) {
         <Matched
           match={match.data}
           messageId={messageId}
+          mailbox={mailbox}
           readOnly={readOnly}
           card={card.data}
           cardPending={card.isPending}
@@ -180,6 +182,7 @@ function Skeleton() {
 function Matched({
   match,
   messageId,
+  mailbox,
   readOnly,
   card,
   cardPending,
@@ -188,6 +191,7 @@ function Matched({
 }: {
   match: CustomerMatch;
   messageId: string;
+  mailbox: string;
   readOnly: boolean;
   card: CompanyCard | undefined;
   cardPending: boolean;
@@ -210,6 +214,9 @@ function Matched({
         pending={cardPending}
         error={cardError}
         only={only}
+        messageId={messageId}
+        mailbox={mailbox}
+        readOnly={readOnly}
       />
     </>
   );
@@ -415,6 +422,9 @@ export function CustomerCard({
   pending,
   error,
   only = null,
+  messageId,
+  mailbox,
+  readOnly,
 }: {
   company: CompanyBrief;
   method: string;
@@ -423,9 +433,22 @@ export function CustomerCard({
   pending: boolean;
   error: boolean;
   only?: MobileTab | null;
+  messageId: string;
+  mailbox: string;
+  readOnly: boolean;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const toast = useToast();
+  // Phase 3d „Poslať“: reply draft with Money's original PDF after the owner check — sending stays in W4
+  const sendInvoice = useMutation({
+    mutationFn: (number: string) => createInvoiceDraft(messageId, number),
+    onSuccess: (out) => navigate(`/compose/${out.draft_id}?mailbox=${encodeURIComponent(mailbox)}`),
+    onError: (err) => {
+      const code = err instanceof ApiError ? err.detail.code : 'generic';
+      toast({ message: t(`ai.invoice.errors.${code}`, { defaultValue: t('mail.errors.generic') }) });
+    },
+  });
   const r = card?.receivables;
   const show = (tab: MobileTab) => only === null || only === tab;
   return (
@@ -528,8 +551,9 @@ export function CustomerCard({
                           <Button
                             type="button"
                             variant="secondary"
-                            disabled
-                            title={t('money.customer.later3d')}
+                            disabled={readOnly || sendInvoice.isPending}
+                            onClick={() => sendInvoice.mutate(i.number)}
+                            aria-label={t('money.customer.sendInvoice', { number: i.number })}
                             icon={<Send size={14} aria-hidden="true" />}
                           >
                             {t('money.customer.send')}

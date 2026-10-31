@@ -7,7 +7,6 @@ opens, checks and sends from W4 like any other mail (AI_ASSISTANT §1 — extern
 from __future__ import annotations
 
 import difflib
-import html
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -23,7 +22,8 @@ from app.api.mail import fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
 from app.auth.models import Branch, Person
 from app.core.audit import audit
-from app.mail.compose import create_draft, sync_draft_to_imap
+from app.core.config import Settings
+from app.mail.compose import create_draft, sync_draft_to_imap, text_to_html
 from app.mail.mailboxes import accessible_mailboxes
 from app.mail.models import Mailbox, Message
 
@@ -58,10 +58,7 @@ async def _pending(db: DB, ctx: Auth, suggestion_id: uuid.UUID) -> tuple[AiSugge
     return row, allowed[row.mailbox_id]
 
 
-def body_to_html(body: str) -> str:
-    """Plain text from the model → paragraphs for the editor (escaped: the text is never HTML)."""
-    paragraphs = [p.strip() for p in body.replace("\r\n", "\n").split("\n\n") if p.strip()]
-    return "".join(f"<p>{html.escape(p).replace(chr(10), '<br>')}</p>" for p in paragraphs) or "<p></p>"
+body_to_html = text_to_html  # kept name: tests and callers of Phase 2c
 
 
 @router.post("/{suggestion_id}/approve")
@@ -69,6 +66,8 @@ async def approve(
     suggestion_id: uuid.UUID, body: ApproveIn, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
 ) -> ApproveOut:
     row, mailbox = await _pending(db, ctx, suggestion_id)
+    if row.suggestion_type == "invoice_attach":
+        return await _approve_invoice(row, mailbox, body, ctx, person, db, settings)
     if row.suggestion_type != "reply":
         raise fail(422, "unsupported_type")
     message = await db.get(Message, row.message_id) if row.message_id else None
@@ -123,6 +122,86 @@ async def approve(
     )
     await db.commit()
     await sync_draft_to_imap(db, settings, draft)  # level 2: the draft waits in Koncepty, nothing is sent
+    await db.commit()
+    return ApproveOut(suggestion_id=str(row.id), draft_id=str(draft.id), edited=edited)
+
+
+async def _approve_invoice(
+    row: AiSuggestion, mailbox: Mailbox, body: ApproveIn, ctx: Auth, person: Person, db: DB, settings: Settings
+) -> ApproveOut:
+    """Phase 3d: every check again, live against Money (owner, recipient, report), then the draft with the PDFs."""
+    from app.money.bridge_client import BridgeClient, BridgeUnavailable
+    from app.money.invoice_attach import evaluate
+    from app.money.invoice_draft import InvoiceDraftError, build_invoice_draft
+
+    if not settings.feature_money:
+        raise fail(409, "money_disabled")
+    message = await db.get(Message, row.message_id) if row.message_id else None
+    if message is None:
+        raise fail(409, "message_gone")
+    payload = row.payload or {}
+    proposed = str(payload.get("body") or "")
+    final = proposed if body.body is None else body.body.strip()
+    numbers = [str(i.get("number")) for i in payload.get("invoices") or [] if i.get("number")]
+    to = [str(e) for e in payload.get("to") or []]
+    if not numbers or len(to) != 1:
+        raise fail(409, "suggestion_blocked", checks=[{"id": "no_invoice", "level": "blocking", "params": {}}])
+    person_row = await db.get(Person, person.id)
+    branch = await db.get(Branch, person.branch_id) if person.branch_id else None
+    async with BridgeClient(settings) as bridge:
+        try:
+            ev = await evaluate(
+                db,
+                settings,
+                bridge,
+                email=to[0],
+                body_text=message.body_text,
+                refs=numbers,
+                language=payload.get("language"),
+            )
+            if ev.blocked or str(ev.company_money_id) != str(payload.get("company_money_id")):
+                raise fail(409, "suggestion_blocked", checks=ev.checks)
+            draft = await build_invoice_draft(
+                db,
+                settings,
+                bridge,
+                mailbox=mailbox,
+                message=message,
+                account_id=ctx.account.id,
+                person=person_row,
+                branch=branch,
+                evaluation=ev,
+                body=final,
+                language=payload.get("language"),
+            )
+        except BridgeUnavailable as exc:
+            raise fail(503, "money_unavailable", reason=exc.code) from None
+        except InvoiceDraftError as exc:
+            raise fail(409, exc.code, number=exc.number) from None
+    edited = final != proposed
+    row.status = "approved"
+    row.decided_by = person.id
+    row.decided_at = datetime.now(UTC)
+    row.checks = ev.checks
+    row.final_payload = {**payload, "body": final, "draft_id": str(draft.id)}
+    row.diff = {"edited": edited}
+    audit(
+        db,
+        "ai.suggestion_approved",
+        person_id=person.id,
+        object_type="ai_suggestion",
+        object_id=str(row.id),
+        details={
+            "actor": "user",
+            "type": row.suggestion_type,
+            "draft_id": str(draft.id),
+            "edited": edited,
+            "invoices": [i.number for i in ev.invoices],
+            "company_money_id": str(ev.company_money_id),
+        },
+    )
+    await db.commit()
+    await sync_draft_to_imap(db, settings, draft)  # level 2: waits in Koncepty; sending is the person's click
     await db.commit()
     return ApproveOut(suggestion_id=str(row.id), draft_id=str(draft.id), edited=edited)
 

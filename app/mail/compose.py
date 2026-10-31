@@ -333,7 +333,25 @@ async def attachment_send_block(
     for att in regular:
         if storage.get_bytes(settings, att.storage_key) is None:
             return AttachmentNotSendable("attachment_missing", att.filename)
+    # Phase 3d: a Money invoice PDF goes only to its own company — checked again here, at every send
+    from app.money.invoice_attach import marked_company, recipient_block
+
+    marked = [att for att in regular if marked_company(att.storage_key) is not None]
+    if marked:
+        recipients = [
+            str(a.get("email") or "")
+            for a in [*(draft.to_addrs or []), *(draft.cc_addrs or []), *(draft.bcc_addrs or [])]
+        ]
+        bad = await recipient_block(db, settings, recipients, [att.storage_key for att in marked])
+        if bad is not None:
+            return AttachmentNotSendable("recipient_not_document_owner", marked[0].filename)
     return None
+
+
+def text_to_html(body: str) -> str:
+    """Plain text (model or template) → escaped paragraphs for the editor; the text is never HTML."""
+    paragraphs = [p.strip() for p in body.replace("\r\n", "\n").split("\n\n") if p.strip()]
+    return "".join(f"<p>{html_lib.escape(p).replace(chr(10), '<br>')}</p>" for p in paragraphs) or "<p></p>"
 
 
 def _send_error_with_filename(code: str, filename: str) -> str:

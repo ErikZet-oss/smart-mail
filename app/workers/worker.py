@@ -47,6 +47,7 @@ async def process_mailbox_ai_job(ctx: dict[str, Any], mailbox_id: str) -> dict[s
     """AI pipeline: eligibility + Message-ID idempotency, classify (2b), then reply suggestions (2c)."""
     from app.ai.conformity_suggest import suggest_conformity
     from app.ai.service import daily_spend_usd, process_mailbox_ai, shadow_mode_enabled, suggest_replies_for_mailbox
+    from app.money.invoice_suggest import suggest_invoice_attach
 
     settings: Settings = ctx["settings"]
     async with ctx["sessionmaker"]() as db:
@@ -62,10 +63,14 @@ async def process_mailbox_ai_job(ctx: dict[str, Any], mailbox_id: str) -> dict[s
             db, mailbox, settings, spent_usd=await daily_spend_usd(db), shadow=await shadow_mode_enabled(db)
         )
         await db.commit()
+        # Phase 3d: a request for an invoice copy whose number belongs to the sender's company → invoice_attach
+        invoices = await suggest_invoice_attach(db, mailbox, settings, shadow=await shadow_mode_enabled(db))
+        await db.commit()
         return {
             **stats,
             **{f"reply_{k}": v for k, v in replies.items()},
             **{f"conformity_{k}": v for k, v in conformity.items()},
+            **{f"invoice_{k}": v for k, v in invoices.items()},
         }
 
 
