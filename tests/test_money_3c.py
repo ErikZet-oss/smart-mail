@@ -320,3 +320,23 @@ async def test_3c_viewer_cannot_link(
         "POST", "/api/money/links", {"email": "a@b.example", "company_money_id": str(company.money_id)}
     )
     assert r.status_code == 403
+
+
+async def test_3c_message_in_someone_elses_private_folder_is_404(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, money_on: None
+) -> None:
+    """Review #160: same rule as search / export (`visible_to`, ADR-009)."""
+    mailbox = await _signed_in(client, db, mail_server)
+    await _company(db, 1, ["info@firma1.example"])
+    message = await _mail_from(db, mailbox, "info@firma1.example")
+    folder = await db.get(FolderMeta, message.folder_id)
+    assert folder is not None
+    folder.private = True  # private with no owner (or another owner) → hidden from everybody else
+    await db.commit()
+    r = await client.get(f"/api/money/messages/{message.id}/customer")
+    assert r.status_code == 404 and r.json()["detail"]["code"] == "message_not_found"
+
+    me = await client.get("/api/auth/me")
+    folder.owner_person_id = uuid.UUID(me.json()["person"]["id"])  # my own private folder stays usable
+    await db.commit()
+    assert (await client.get(f"/api/money/messages/{message.id}/customer")).status_code == 200

@@ -23,6 +23,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
   - 380 px panel on desktop, full screen on mobile;
   - `CustomerCard`: header (IČO, IČ DPH, code, discount, splatnosť), KPIs „otvorené / po splatnosti“, invoices, last orders and delivery notes, activities, contacts;
   - not matched → search the cache and assign. „Založiť firmu v Money“ is disabled until Phase 4.
+- Review (#160): a message in someone else's private folder answers 404 `message_not_found` (same `visible_to` rule as search and export); `dump.rdb` removed and ignored.
 - **No data model change:** the company is evaluated on the fly instead of storing `threads.money_company_id` (not in the approved migration 0018).
 
 ## [Unreleased] — fix: duplicate key in sk.json

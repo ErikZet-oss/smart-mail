@@ -20,8 +20,9 @@ from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
 from app.auth.models import Role
 from app.core.audit import audit
 from app.core.config import Settings
+from app.mail.export import visible_to
 from app.mail.mailboxes import accessible_mailboxes
-from app.mail.models import Message
+from app.mail.models import FolderMeta, Message
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.matching import counterparty, match_sender
 from app.money.models import EmailCompanyLink, MoneyCompany, MoneyPerson
@@ -108,18 +109,21 @@ class CardOut(BaseModel):
     persons: list[PersonOut]
 
 
-async def _message(db: DB, account_id: uuid.UUID, message_id: uuid.UUID) -> Message:
+async def _message(db: DB, account_id: uuid.UUID, person_id: uuid.UUID | None, message_id: uuid.UUID) -> Message:
     message = await db.get(Message, message_id)
     allowed = {m.id for m in await accessible_mailboxes(db, account_id)}
     if message is None or message.mailbox_id not in allowed:
         raise fail(404, "message_not_found")
+    folder = await db.get(FolderMeta, message.folder_id)
+    if folder is None or not visible_to(folder, person_id):
+        raise fail(404, "message_not_found")  # someone else's private folder (ADR-009, same rule as search)
     return message
 
 
 @router.get("/messages/{message_id}/customer")
 async def message_customer(message_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep) -> CustomerMatchOut:
     _enabled(settings)
-    message = await _message(db, ctx.account.id, message_id)
+    message = await _message(db, ctx.account.id, ctx.person.id if ctx.person else None, message_id)
     email = counterparty(message, settings)
     if email is None:
         return CustomerMatchOut(
