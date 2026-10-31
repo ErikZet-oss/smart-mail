@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Fix: Windows bridge scripts on PowerShell 5.1
+
+- `deploy/**/*.ps1` are saved with a UTF-8 BOM; without it Windows PowerShell 5.1 read them as cp1250 and the en dash in Slovak messages broke parsing ("The string is missing the terminator").
+- `install-bridge.ps1` writes the bridge `.env` as UTF-8 without BOM.
+- The bridge virtualenv is built from uv's Python 3.12 in `C:\SmartMail\python` (LocalService can read it); a per-user Python in `C:\Users\…` made the service stop at once ("No Python at …", NSSM `SERVICE_PAUSED`). An old venv on another Python is recreated (install and update).
+- `install-bridge.ps1` installs cloudflared from the official MSI when winget is missing (Windows Server).
+- `deploy/update.sh` pulls `origin <branch>` explicitly; a `main` recreated by `checkout -B` had no upstream and the pull failed once a second remote branch existed ("Cannot fast-forward to multiple branches").
+- Regression tests `tests/test_windows_scripts_encoding.py`.
+
 ## [Unreleased] — Phase 3: changes after the Figma review (#167)
 
 From the reviewer's Figma notes on #158, #160, #163 and #164:

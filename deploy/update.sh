@@ -34,7 +34,9 @@ echo "Aktuálna verzia: $CURRENT (vetva $BRANCH)"
 
 echo "git pull…"
 if [[ -z "${SMARTMAIL_CI:-}" ]]; then
-  git pull --ff-only
+  # Explicit remote + branch: a branch recreated by `checkout -B` has no upstream, and with several remote
+  # branches a bare pull fails ("Cannot fast-forward to multiple branches", pilot 2026-10-31).
+  git pull --ff-only origin "$BRANCH"
 else
   echo "(CI: git pull vynechaný)"
 fi
