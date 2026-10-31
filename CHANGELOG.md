@@ -7,6 +7,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - The probe unwraps the Money envelope for every REST/GraphQL answer; before, the base run stopped at the REST smoke check (so filter syntax, PDF report, address book and articles were never probed).
 - The smoke check no longer prints a slice of the response body (it echoed real invoice fields) — only type and key names.
 - `--orders` / `--branches` no longer overwrite `report.md` of the base run.
+- The probe invoice is looked up by GraphQL `CisloDokladu~eq~` and read by ID; REST pages are oldest first, so a recent number was never found and the PDF report / REST filter checks were skipped.
 - Tests `tests/test_money_probe_envelope.py`.
 
 ## [Unreleased] — Fix: Money S4 response envelope (first real TEST agenda connection)
