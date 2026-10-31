@@ -297,6 +297,16 @@ async def money_sync(ctx: dict[str, Any], force: bool = False) -> int:
     return sum(r.changed for r in results)
 
 
+async def money_activity_job(ctx: dict[str, Any], draft_id: str) -> str:
+    """Phase 3f: one attempt to log the sent e-mail as an activity in Money; never retried automatically."""
+    from app.money.activities import write_activity
+
+    async with ctx["sessionmaker"]() as db:
+        outcome = await write_activity(db, ctx["settings"], uuid.UUID(draft_id))
+        await db.commit()
+    return outcome
+
+
 async def export_mail_job(ctx: dict[str, Any], export_id: str) -> str | None:
     """#127: back up folders to a ZIP of raw .eml in object storage (BODY.PEEK[], never changes \\Seen)."""
     from app.mail.export import run_export
@@ -331,6 +341,7 @@ class WorkerSettings:
         func(ai_catchup, keep_result=0),
         func(reclassify_messages_job, keep_result=0, timeout=30 * 60),
         func(money_sync, keep_result=0, timeout=15 * 60, max_tries=1),
+        func(money_activity_job, keep_result=0, timeout=120, max_tries=1),
     ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, minute=set(range(60)), run_at_startup=True),

@@ -42,9 +42,9 @@ class BridgeSettings(BaseSettings):
 
     @property
     def writes_enabled(self) -> bool:
-        """Writes are never enabled in Phase 0. From Phase 4 on they still require a single-use approval JWT,
-        and the PRODUCTION agenda additionally needs the admin switch in Settings › Money S4 (W12-13a)."""
-        return False
+        """Phase 3f: writes need the approval public key (every write carries a single-use JWT signed by the app) and
+        the TEST agenda. The main switch for people stays in Settings 13a of the app (default off)."""
+        return bool(self.approval_jwt_public_key) and self.money_agenda_label == "TEST"
 
 
 @lru_cache

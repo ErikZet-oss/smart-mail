@@ -20,6 +20,8 @@ from app.filters import all_, cond
 from app.gql_client import TIMEOUT, MoneyHttp, TokenProvider
 from app.models import (
     Activity,
+    ActivityIn,
+    ActivityOut,
     CodebookItem,
     CodebookName,
     CodebookPage,
@@ -37,7 +39,7 @@ from app.models import (
     PersonPage,
 )
 
-CODEBOOK_QUERIES: dict[CodebookName, tuple[str, str]] = {
+CODEBOOK_QUERIES: dict[str, tuple[str, str]] = {
     "warehouses": ("warehouses", "Warehouses"),
     "centres": ("centres", "Centres"),
     "numerical-series": ("numerical_series", "NumericalSeries"),
@@ -248,6 +250,8 @@ class ApiBackend:
         return PersonPage(items=items, next_from=start + len(rows) if len(rows) == count else None)
 
     async def codebook(self, name: CodebookName, start: int, count: int) -> CodebookPage:
+        if name == "activity-types":
+            return await self._activity_types(start, count)
         query, root = CODEBOOK_QUERIES[name]
         count = min(count, self._page)
         rows = await self._list(query, root, start=start, count=count)
@@ -316,6 +320,24 @@ class ApiBackend:
 
     async def activities(self, company_id: uuid.UUID) -> list[Activity]:
         raise WaitingForProbe("REST Activity filter by firma_ID")
+
+    async def _activity_types(self, start: int, count: int) -> CodebookPage:
+        """REST `TypeOfActivity/{from}/{count}` (no filter needed; swagger v1/v2)."""
+        count = min(count, self._page)
+        rows = await self._money.rest_json(f"TypeOfActivity/{start}/{count}") or []
+        if isinstance(rows, dict):
+            rows = rows.get("data") or rows.get("items") or []
+        items = [
+            CodebookItem(id=_required_uuid(r.get("id")), code=_s(r.get("kod")), name=_s(r.get("nazev")))
+            for r in rows
+            if isinstance(r, dict)
+        ]
+        return CodebookPage(items=items, next_from=start + len(rows) if len(rows) == count else None)
+
+    async def create_activity(self, activity: ActivityIn) -> ActivityOut:
+        """The required fields of `ActivityInputDto` and the REST filter for the SMID check are [PROBE] — never
+        guessed (CLAUDE.md §7); a mutation is never retried."""
+        raise WaitingForProbe("REST Activity create (required fields, SMID filter)")
 
     async def invoice_pdf(self, kind: InvoiceKind, invoice_id: uuid.UUID, report_id: str) -> bytes | None:
         """The original Money PDF (never rendered by Smart Mail, DOCUMENTS_SPEC §6). `report_id` comes from

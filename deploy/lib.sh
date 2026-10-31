@@ -55,6 +55,17 @@ fernet_key() {
   openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n'
 }
 
+# Phase 3f (#144): Ed25519 key pair for the single-use approval tokens of Money writes. The private key stays in
+# deploy/.env (chmod 600) as one base64 line; it is never printed. Only the public key is printed for the bridge.
+ed25519_private_b64() {
+  openssl genpkey -algorithm ed25519 2>/dev/null | base64 | tr -d '\n'
+}
+
+ed25519_public_b64() {
+  # stdin: base64 of the private PEM → base64 of the public PEM
+  base64 -d | openssl pkey -pubout 2>/dev/null | base64 | tr -d '\n'
+}
+
 prompt() {
   # prompt "Otázka" "default" → writes answer to REPLY
   local q="$1" def="${2:-}"

@@ -31,7 +31,7 @@ import { ExportDialog } from '../mail/ExportDialog';
 import { AutonomyMatrix, AutonomyOverview } from './AiAutonomy';
 import { AiLimitsPanel } from './AiLimitsPanel';
 import { AiCategoriesPanel } from './AiCategoriesPanel';
-import { MoneyConnectionPanel, MoneyReportsPanel, MoneySyncPanel } from './MoneyPanels';
+import { MoneyActivitiesPanel, MoneyConnectionPanel, MoneyReportsPanel, MoneySyncPanel } from './MoneyPanels';
 import { StyleProfileSection } from './StyleProfile';
 import { SECTION_TITLES, type SettingsField } from './schema';
 import {
@@ -315,6 +315,7 @@ function SectionBody({
     if (meRole !== 'admin') return <AdminOnly />;
     if (sub === 'sync') return <MoneySyncPanel />;
     if (sub === 'reports') return <MoneyReportsPanel />;
+    if (sub === 'activities') return <MoneyActivitiesPanel />;
     return <MoneyConnectionPanel />; // 13a is the first tab
   }
   if (section === 'ai-admin') {

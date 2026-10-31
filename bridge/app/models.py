@@ -12,10 +12,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 InvoiceKind = Literal["invoice", "proforma"]
-CodebookName = Literal["warehouses", "centres", "numerical-series", "currencies"]
+CodebookName = Literal["warehouses", "centres", "numerical-series", "currencies", "activity-types"]
 MatchedBy = Literal["number", "variable_symbol", "reference", "company_dates", "number_digits", "none"]
 
 
@@ -133,6 +133,22 @@ class OverduePage(_Model):
 class InvoiceSearch(_Model):
     matched_by: MatchedBy
     items: list[IssuedInvoice]
+
+
+class ActivityIn(_Model):
+    """Phase 3f: CRM activity after a person sent an e-mail to a Money company (REST `Activity`). Only the subject and
+    document numbers — never a mail body. `smid` = `SMID:<draft_id>` makes the write idempotent."""
+
+    company_id: uuid.UUID
+    type_id: uuid.UUID
+    subject: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=1000)
+    smid: str = Field(pattern=r"^SMID:[0-9a-f-]{36}$")
+
+
+class ActivityOut(_Model):
+    id: uuid.UUID
+    created: bool  # False = an activity with this SMID already existed (idempotent repeat)
 
 
 class Health(_Model):

@@ -448,3 +448,26 @@ export const testMoneyReport = (kind: string, lang: string, number: string) =>
     'GET',
     `/api/settings/money/reports/test?kind=${encodeURIComponent(kind)}&lang=${encodeURIComponent(lang)}&number=${encodeURIComponent(number)}`,
   );
+
+/** 13a „Zápisy do Money povolené“ ⚠ and 13d Aktivity (Phase 3f). */
+export type MoneyWrites = { enabled: boolean; key_configured: boolean };
+export type MoneyActivities = {
+  enabled: boolean;
+  type_email: string | null;
+  type_reminder: string | null;
+  writes_enabled: boolean;
+  types: { id: string; code: string | null; name: string | null }[];
+  failed: { draft_id: string; at: string; error: string | null; kind: string | null; invoices: string[] }[];
+};
+export const moneyWritesKey = ['settings', 'money', 'writes'] as const;
+export const moneyActivitiesKey = ['settings', 'money', 'activities'] as const;
+export const fetchMoneyWrites = () => api<MoneyWrites>('GET', '/api/settings/money/writes');
+export const saveMoneyWrites = (enabled: boolean) => api<MoneyWrites>('PUT', '/api/settings/money/writes', { enabled });
+export const fetchMoneyActivities = () => api<MoneyActivities>('GET', '/api/settings/money/activities');
+export const saveMoneyActivities = (body: {
+  enabled: boolean;
+  type_email: string | null;
+  type_reminder: string | null;
+}) => api<MoneyActivities>('PUT', '/api/settings/money/activities', body);
+export const retryMoneyActivity = (draftId: string) =>
+  api<{ queued: boolean }>('POST', `/api/settings/money/activities/${encodeURIComponent(draftId)}/retry`);

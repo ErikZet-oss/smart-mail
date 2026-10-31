@@ -23,6 +23,7 @@ from app.money.cache_sync import HISTORY_KEEP, company_emails, due, needs_nightl
 from app.money.jobs import LOCK_KEY, run_money_sync
 from app.money.models import MoneyCodebook, MoneyCompany, MoneyPerson, MoneySyncState
 from app.money.schemas import (
+    CODEBOOKS,
     CodebookItem,
     CodebookName,
     CodebookPage,
@@ -221,7 +222,7 @@ async def test_3b_history_keeps_the_last_20_runs(db: AsyncSession) -> None:
         await db.commit()
     state = await db.scalar(select(MoneySyncState).where(MoneySyncState.entity == "codebooks"))
     assert state is not None and len(state.history) == HISTORY_KEEP
-    assert len((await db.scalars(select(MoneyCodebook))).all()) == 4
+    assert len((await db.scalars(select(MoneyCodebook))).all()) == len(CODEBOOKS)  # one fake item per kind
 
 
 async def test_3b_persons_sync_lowercases_email(db: AsyncSession) -> None:
@@ -344,7 +345,7 @@ async def test_3b_nav_shows_money_only_with_the_feature(
     try:
         sections = (await client.get("/api/settings/nav")).json()["sections"]
         money = next(s for s in sections if s["path"] == "money")
-        assert [s["id"] for s in money["subs"]] == ["13a", "13b", "13e"]  # 13c / 13f hidden in Phase 3 (#150)
+        assert [s["id"] for s in money["subs"]] == ["13a", "13b", "13d", "13e"]  # 13c / 13f hidden in Phase 3 (#150)
     finally:
         app.state.settings.feature_money = False
 

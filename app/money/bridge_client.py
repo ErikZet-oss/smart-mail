@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import time
 import uuid
 from datetime import date, datetime
@@ -21,6 +22,7 @@ from pydantic import BaseModel, ValidationError
 from app.core.config import Settings
 from app.money.schemas import (
     Activity,
+    ActivityOut,
     CodebookName,
     CodebookPage,
     Company,
@@ -203,6 +205,41 @@ class BridgeClient:
         """MONEY_API §5.1 cascade in the bridge. A value with `~ # | ( )` answers 422 there → `bridge_422`."""
         params = {"number": number, "vs": vs, "company_id": str(company_id) if company_id else None}
         return await self._model(InvoiceSearch, "/invoices/issued/search", params)
+
+    async def create_activity(self, payload: dict[str, Any], approval_token: str) -> ActivityOut:
+        """Phase 3f write: HMAC over the exact body + the single-use approval JWT. Never retried (MONEY_API §2)."""
+        _circuit.check()
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        stamp = str(int(time.time()))
+        headers = {
+            "Content-Type": "application/json",
+            "X-Bridge-Key-Id": self._key_id,
+            "X-Bridge-Timestamp": stamp,
+            "X-Bridge-Signature": sign(self._secret, "POST", "/activities", stamp, body),
+            "X-Approval-Token": approval_token,
+        }
+        try:
+            resp = await self._http.post(self._base + "/activities", content=body, headers=headers)
+        except httpx.HTTPError as exc:
+            _circuit.failure()
+            raise BridgeUnavailable() from exc
+        code = f"bridge_{resp.status_code}"
+        try:
+            code = str(resp.json()["detail"]["code"])
+        except (ValueError, KeyError, TypeError):
+            pass
+        if resp.status_code == 501:
+            raise BridgeUnavailable("waiting_for_probe")
+        if resp.status_code >= 500:
+            _circuit.failure()
+            raise BridgeUnavailable(code)
+        _circuit.success()
+        if resp.status_code != 200:
+            raise BridgeUnavailable(code)
+        try:
+            return ActivityOut.model_validate(resp.json())
+        except ValidationError as exc:
+            raise BridgeUnavailable("bridge_contract") from exc
 
     async def invoice_pdf(self, kind: str, invoice_id: uuid.UUID, report_id: str) -> bytes | None:
         """The original Money PDF (never rendered by Smart Mail, DOCUMENTS_SPEC §6); None = not found."""

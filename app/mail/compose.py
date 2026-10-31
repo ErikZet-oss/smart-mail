@@ -842,6 +842,11 @@ async def execute_send(db: AsyncSession, settings: Settings, draft_id: uuid.UUID
     )
     await db.commit()
 
+    # Phase 3f: a sent Money invoice / reminder → CRM activity in Money (switches 13a + 13d, one attempt)
+    from app.money.activities import enqueue_after_send
+
+    await enqueue_after_send(db, settings, draft)
+
     await mark_reply_or_forward(db, settings, draft, mailbox, creds)
 
     if draft.save_sent and mime is not None:
