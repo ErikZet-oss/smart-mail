@@ -2,6 +2,22 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3e: W8b Upomienky (#144)
+
+- **Bridge** `GET /receivables/overdue?before=` (MONEY_API §5.2 for all customers: `UhradyZbyva~gt~0#DatumSplatnosti~lt~<date>`, paged); mock + contract test + contract fixture.
+- **W8b `/docs/reminders`** (accounting, sales, admin; only with FEATURE_MONEY):
+  - customers with overdue invoices, highest sum first, with the columns of SCREENS_SPEC (sum, count, oldest days, last reminder, contact);
+  - select → tone Zdvorilá / Dôrazná → „Pripraviť upomienky“ prepares **one draft per customer** in Koncepty with the E2 table (Faktúra · Splatnosť · Suma · Po splatnosti, bold total) and Money's original PDFs;
+  - the person opens, checks and sends each draft (level 2);
+  - tab „Odoslané upomienky“ shows each prepared reminder with its draft's state.
+- **Safety:**
+  - the recipient is the company's own e-mail from Money (strong match only) — no e-mail → the customer cannot be selected;
+  - the 3d send-time check also guards reminders;
+  - a missing report id stops the draft;
+  - Smart Mail never changes reminder dates in Money.
+- **Rail:** „Doklady“ (only with FEATURE_MONEY) → Upomienky. Money down → a banner with „Skúsiť znova“; mail keeps working.
+- Not in this step: bank details from Money in the E2 text (the invoice query does not read them yet) and the „Upomienka odoslaná“ activity in Money (3f).
+
 ## [Unreleased] — Phase 3d: invoice_attach — send the original Money invoice PDF (#144)
 
 - **Suggestion `invoice_attach`** for „Žiadosti o faktúru“ (deterministic, no model call):

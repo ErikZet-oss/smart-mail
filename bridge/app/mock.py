@@ -28,6 +28,7 @@ from app.models import (
     IssuedInvoice,
     MatchedBy,
     Order,
+    OverduePage,
     Person,
     PersonPage,
 )
@@ -285,6 +286,15 @@ class MockBackend:
 
     async def receivables(self, company_id: uuid.UUID) -> list[IssuedInvoice]:
         return _newest_first([i for i in self.data.invoices if i.company_id == company_id and i.remaining > 0])
+
+    async def overdue(self, before: date, start: int, count: int) -> OverduePage:
+        rows = [
+            i
+            for i in self.data.invoices
+            if i.kind == "invoice" and i.remaining > 0 and i.due_on is not None and i.due_on < before
+        ]
+        page = rows[start : start + count]
+        return OverduePage(items=page, next_from=start + count if start + count < len(rows) else None)
 
     async def orders(self, company_id: uuid.UUID, since: date) -> list[Order]:
         rows = [o for o in self.data.orders if o.company_id == company_id and o.issued_on and o.issued_on >= since]

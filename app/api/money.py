@@ -16,12 +16,13 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, select
 
 from app.ai.models import Classification
-from app.api.mail import fail
+from app.api.mail import _mailbox, fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
 from app.auth.models import Branch, Person, Role
-from app.core.audit import audit
+from app.core.audit import AuditLog, audit
 from app.core.config import Settings
 from app.mail.compose import sync_draft_to_imap
+from app.mail.compose_models import ComposeDraft
 from app.mail.export import visible_to
 from app.mail.mailboxes import accessible_mailboxes
 from app.mail.models import FolderMeta, Mailbox, Message
@@ -30,6 +31,7 @@ from app.money.invoice_attach import draft_body, evaluate
 from app.money.invoice_draft import InvoiceDraftError, build_invoice_draft
 from app.money.matching import counterparty, match_sender
 from app.money.models import EmailCompanyLink, MoneyCompany, MoneyPerson
+from app.money.reminders import AUDIT_ACTION, build_reminder_draft, overdue_debtors
 from app.money.schemas import Activity, Delivery, IssuedInvoice, Order
 
 router = APIRouter(prefix="/api/money", tags=["money"])
@@ -379,3 +381,170 @@ async def invoice_draft(
     await sync_draft_to_imap(db, settings, draft)
     await db.commit()
     return InvoiceDraftOut(draft_id=str(draft.id))
+
+
+# ----- W8b Upomienky (Phase 3e) -----
+
+REMINDER_ROLES = frozenset({Role.admin, Role.sales, Role.accounting})
+
+
+class DebtorOut(BaseModel):
+    company: CompanyBrief
+    contact: str | None
+    overdue_total: Decimal
+    invoice_count: int
+    oldest_days: int
+    last_reminder_at: datetime | None
+    invoices: list[IssuedInvoice]
+
+
+class RemindersIn(BaseModel):
+    mailbox: str = Field(default="default", max_length=320)
+    company_money_ids: list[uuid.UUID] = Field(min_length=1, max_length=50)
+    tone: Literal["polite", "firm"] = "polite"
+
+
+class ReminderResult(BaseModel):
+    company_money_id: uuid.UUID
+    draft_id: str | None
+    error: str | None
+    number: str | None = None
+
+
+class ReminderHistoryRow(BaseModel):
+    at: datetime
+    company_money_id: str
+    company_name: str | None
+    draft_id: str | None
+    draft_status: str | None
+    tone: str | None
+    invoices: list[str]
+
+
+def _reminder_role(person: Person) -> None:
+    if person.role not in REMINDER_ROLES:
+        raise fail(403, "role_not_allowed")
+
+
+@router.get("/reminders")
+async def list_debtors(ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep) -> list[DebtorOut]:
+    """Customers with overdue invoices, highest sum first (live from Money; cache for names and contacts)."""
+    _enabled(settings)
+    _reminder_role(person)
+    today = datetime.now(UTC).date()
+    async with BridgeClient(settings) as bridge:
+        try:
+            debtors = await overdue_debtors(db, bridge, today)
+        except BridgeUnavailable as exc:
+            raise fail(503, "money_unavailable", reason=exc.code) from None
+    return [
+        DebtorOut(
+            company=_brief(d.company),
+            contact=d.contact,
+            overdue_total=d.total,
+            invoice_count=len(d.invoices),
+            oldest_days=d.oldest_days(today),
+            last_reminder_at=d.last_reminder_at,
+            invoices=d.invoices,
+        )
+        for d in debtors
+    ]
+
+
+@router.post("/reminders/drafts")
+async def prepare_reminders(
+    body: RemindersIn, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
+) -> list[ReminderResult]:
+    """One draft per selected customer in Koncepty (E2 + PDFs). The person reviews and sends each — level 2."""
+    _enabled(settings)
+    _reminder_role(person)
+    mailbox = await _mailbox(db, ctx, body.mailbox)  # same `default` / id / address rule as the mail API
+    today = datetime.now(UTC).date()
+    person_row = await db.get(Person, person.id)
+    branch = await db.get(Branch, person.branch_id) if person.branch_id else None
+    results: list[ReminderResult] = []
+    drafts: list[ComposeDraft] = []
+    async with BridgeClient(settings) as bridge:
+        try:
+            debtors = {d.company.money_id: d for d in await overdue_debtors(db, bridge, today)}
+        except BridgeUnavailable as exc:
+            raise fail(503, "money_unavailable", reason=exc.code) from None
+        for company_id in dict.fromkeys(body.company_money_ids):
+            debtor = debtors.get(company_id)
+            if debtor is None:
+                results.append(ReminderResult(company_money_id=company_id, draft_id=None, error="nothing_overdue"))
+                continue
+            try:
+                draft = await build_reminder_draft(
+                    db,
+                    settings,
+                    bridge,
+                    mailbox=mailbox,
+                    account_id=ctx.account.id,
+                    person=person_row,
+                    branch=branch,
+                    debtor=debtor,
+                    tone=body.tone,
+                    today=today,
+                )
+            except InvoiceDraftError as exc:
+                results.append(
+                    ReminderResult(company_money_id=company_id, draft_id=None, error=exc.code, number=exc.number)
+                )
+                continue
+            except BridgeUnavailable:
+                results.append(ReminderResult(company_money_id=company_id, draft_id=None, error="money_unavailable"))
+                break
+            drafts.append(draft)
+            audit(
+                db,
+                AUDIT_ACTION,
+                account_id=ctx.account.id,
+                person_id=person.id,
+                object_type="money_company",
+                object_id=str(company_id),
+                details={
+                    "draft_id": str(draft.id),
+                    "tone": body.tone,
+                    "invoices": [i.number for i in debtor.invoices[:30]],
+                    "company_name": debtor.company.name,
+                },
+            )
+            results.append(ReminderResult(company_money_id=company_id, draft_id=str(draft.id), error=None))
+    await db.commit()
+    for draft in drafts:
+        await sync_draft_to_imap(db, settings, draft)
+    await db.commit()
+    return results
+
+
+@router.get("/reminders/history")
+async def reminder_history(ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep) -> list[ReminderHistoryRow]:
+    """„Odoslané upomienky“: prepared reminders (audit) with the current state of their draft."""
+    _enabled(settings)
+    _reminder_role(person)
+    rows = (
+        await db.scalars(
+            select(AuditLog).where(AuditLog.action == AUDIT_ACTION).order_by(AuditLog.created_at.desc()).limit(100)
+        )
+    ).all()
+    ids = [uuid.UUID(str(r.details.get("draft_id"))) for r in rows if (r.details or {}).get("draft_id")]
+    statuses = {
+        str(d.id): d.status for d in (await db.scalars(select(ComposeDraft).where(ComposeDraft.id.in_(ids)))).all()
+    }
+    out = []
+    for r in rows:
+        details = r.details or {}
+        draft_id = str(details.get("draft_id")) if details.get("draft_id") else None
+        out.append(
+            ReminderHistoryRow(
+                at=r.created_at,
+                company_money_id=str(r.object_id),
+                company_name=details.get("company_name"),
+                draft_id=draft_id,
+                draft_status=statuses.get(draft_id or "", "deleted" if draft_id else None),
+                tone=details.get("tone"),
+                invoices=[str(n) for n in details.get("invoices") or []],
+            )
+        )
+    return out

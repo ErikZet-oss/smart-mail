@@ -41,7 +41,7 @@ function useOnline(): boolean {
 function bottomOf(section: RailSection, moreOpen: boolean): BottomSection {
   if (moreOpen) return 'more';
   if (section === 'contacts') return 'contacts';
-  if (section === 'settings') return 'more';
+  if (section === 'settings' || section === 'documents') return 'more';
   return 'mail';
 }
 

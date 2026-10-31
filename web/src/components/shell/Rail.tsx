@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Bell, CircleHelp, Mail, Moon, Power, Settings, SquarePen, Sun, Users } from 'lucide-react';
+import { Bell, CircleHelp, FileText, Mail, Moon, Power, Settings, SquarePen, Sun, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -9,11 +9,12 @@ import { formatCount } from '../../features/mail/mailApi';
 import { PersonChip, type ChipExtra } from '../../features/persons/PersonChip';
 import { useTheme } from '../../features/prefs/ThemeProvider';
 import { fetchNotifications, NOTIFS_KEY } from '../../features/system/notificationsApi';
+import { useFeatures } from '../../features/system/features';
 import { useSystemUi } from '../../features/system/systemUi';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { Logo } from '../Logo';
 
-export type RailSection = 'mail' | 'contacts' | 'settings';
+export type RailSection = 'mail' | 'contacts' | 'documents' | 'settings';
 
 /** Below 820 px height Tmavý režim and O systéme move into the PersonChip menu (G1). */
 export const LOW_RAIL_QUERY = '(max-height: 819.98px)';
@@ -95,12 +96,13 @@ function RailItem({
 
 type Props = { section: RailSection; mailbox: string; unread: number; onLogout: () => void };
 
-/** G1 rail (72 px, dark). Phase-1: E-mail / Kontakty / Nastavenia + Notifikácie + O systéme (no Dnes/Doklady/Asistent). */
+/** G1 rail (72 px, dark). E-mail / Kontakty / Doklady (Phase 3e, only with FEATURE_MONEY) / Nastavenia + Notifikácie + O systéme. */
 export function Rail({ section, mailbox, unread, onLogout }: Props) {
   const { t } = useTranslation();
   const low = useMediaQuery(LOW_RAIL_QUERY);
   const { theme, toggleTheme, classic, setClassic } = useTheme();
   const { open } = useSystemUi();
+  const features = useFeatures();
   const notifs = useQuery({ queryKey: NOTIFS_KEY, queryFn: fetchNotifications, staleTime: 30_000 });
   const systemDark =
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -163,6 +165,14 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
         to="/contacts/personal"
         active={section === 'contacts'}
       />
+      {features.money ? (
+        <RailItem
+          icon={<FileText size={20} />}
+          label={t('rail.documents')}
+          to="/docs/reminders"
+          active={section === 'documents'}
+        />
+      ) : null}
       <RailItem
         icon={<Settings size={20} />}
         label={t('rail.settings')}

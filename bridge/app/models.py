@@ -123,6 +123,13 @@ class CodebookPage(_Model):
     next_from: int | None
 
 
+class OverduePage(_Model):
+    """Issued invoices with a balance and due before a date, all customers (W8b Upomienky)."""
+
+    items: list[IssuedInvoice]
+    next_from: int | None
+
+
 class InvoiceSearch(_Model):
     matched_by: MatchedBy
     items: list[IssuedInvoice]

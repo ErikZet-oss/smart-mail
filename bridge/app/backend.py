@@ -18,6 +18,7 @@ from app.models import (
     InvoiceSearch,
     IssuedInvoice,
     Order,
+    OverduePage,
     PersonPage,
 )
 
@@ -64,6 +65,8 @@ class MoneyBackend(Protocol):
     async def search_invoices(self, query: InvoiceQuery) -> InvoiceSearch: ...
 
     async def receivables(self, company_id: uuid.UUID) -> list[IssuedInvoice]: ...
+
+    async def overdue(self, before: date, start: int, count: int) -> OverduePage: ...
 
     async def orders(self, company_id: uuid.UUID, since: date) -> list[Order]: ...
 

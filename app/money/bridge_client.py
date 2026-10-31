@@ -30,6 +30,7 @@ from app.money.schemas import (
     InvoiceSearch,
     IssuedInvoice,
     Order,
+    OverduePage,
     PersonPage,
 )
 
@@ -181,6 +182,10 @@ class BridgeClient:
 
     async def activities(self, money_id: uuid.UUID) -> list[Activity]:
         return await self._list(Activity, f"/companies/{money_id}/activities")
+
+    async def overdue(self, before: date, start: int, count: int) -> OverduePage:
+        params = {"before": before.isoformat(), "from": start, "count": count}
+        return await self._model(OverduePage, "/receivables/overdue", params)
 
     async def search_invoices(
         self, *, number: str | None = None, vs: str | None = None, company_id: uuid.UUID | None = None

@@ -32,6 +32,7 @@ from app.models import (
     IssuedInvoice,
     MatchedBy,
     Order,
+    OverduePage,
     Person,
     PersonPage,
 )
@@ -293,6 +294,15 @@ class ApiBackend:
         filter_ = all_(cond("Firma_ID", "eq", company_id), cond("UhradyZbyva", "gt", Decimal("0")))
         rows = await self._list("issued_invoices", "IssuedInvoices", filter_=filter_, count=HISTORY_LIMIT)
         return _newest_first([invoice_from(r) for r in rows])
+
+    async def overdue(self, before: date, start: int, count: int) -> OverduePage:
+        """MONEY_API §5.2 for all customers: `UhradyZbyva~gt~0#DatumSplatnosti~lt~<date>`, paged."""
+        count = min(count, self._page)
+        filter_ = all_(cond("UhradyZbyva", "gt", Decimal("0")), cond("DatumSplatnosti", "lt", before))
+        rows = await self._list("issued_invoices", "IssuedInvoices", filter_=filter_, start=start, count=count)
+        return OverduePage(
+            items=[invoice_from(r) for r in rows], next_from=start + len(rows) if len(rows) == count else None
+        )
 
     async def orders(self, company_id: uuid.UUID, since: date) -> list[Order]:
         filter_ = all_(cond("Firma_ID", "eq", company_id), cond("DatumVystaveni", "gte", since))

@@ -17,3 +17,9 @@ export function useFeatures(): SystemFeatures {
   const q = useQuery({ queryKey: INFO_KEY, queryFn: fetchInfo, staleTime: 60_000 });
   return q.data?.features ?? { money: false };
 }
+
+/** Same flags plus whether they arrived — a screen that redirects without a flag must wait for them. */
+export function useFeaturesState(): SystemFeatures & { loaded: boolean } {
+  const q = useQuery({ queryKey: INFO_KEY, queryFn: fetchInfo, staleTime: 60_000 });
+  return { ...(q.data?.features ?? { money: false }), loaded: q.isSuccess };
+}

@@ -7,6 +7,7 @@ import { ScreenW9 } from '../features/contacts/ScreenW9';
 import { ScreenW2 } from '../features/mail/ScreenW2';
 import { ScreenW2m } from '../features/mail/ScreenW2m';
 import { ScreenW2n } from '../features/mail/ScreenW2n';
+import { ScreenW8b } from '../features/money/ScreenW8b';
 import { ScreenW1b } from '../features/persons/ScreenW1b';
 import { ScreenW10 } from '../features/search/ScreenW10';
 import { ScreenW12 } from '../features/settings/ScreenW12';
@@ -28,6 +29,7 @@ export const routeObjects: RouteObject[] = [
   { id: ROUTES.W2f.id, path: ROUTES.W2f.path, element: <ScreenW2 /> },
   { id: ROUTES.W2c.id, path: ROUTES.W2c.path, element: <ScreenW2 /> },
   { id: ROUTES.W2.id, path: ROUTES.W2.path, element: <ScreenW2 /> },
+  { id: ROUTES.W8b.id, path: ROUTES.W8b.path, element: <ScreenW8b /> },
   { id: ROUTES.W9.id, path: '/contacts/:book/:contactId?', element: <ScreenW9 /> },
   { id: ROUTES.W10.id, path: '/search', element: <ScreenW10 /> },
   // Optional section so `/settings` opens the M9 mobile index (SCREENS_SPEC W12 path still listed in ROUTES).
