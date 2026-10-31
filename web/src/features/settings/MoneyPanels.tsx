@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CircleAlert, CircleCheck, RefreshCw } from 'lucide-react';
+import { CircleAlert, CircleCheck, Database, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -54,52 +54,65 @@ export function MoneyConnectionPanel() {
           details={[t(`money.errors.${s.error ?? 'money_unavailable'}`, { defaultValue: s.error ?? '' })]}
         />
       ) : null}
+      <h2 className="type-label text-text-secondary">{t('money.connection.stateTitle')}</h2>
       <section
         aria-label={t('money.connection.card')}
-        className="flex flex-col gap-3 rounded-lg border border-border-default bg-bg-canvas p-4"
+        className="flex flex-wrap items-start gap-3 rounded-lg border border-border-default bg-bg-canvas p-4"
       >
-        <div className="flex items-center gap-2">
-          {s?.reachable ? (
-            <CircleCheck size={18} aria-hidden="true" className="text-success-700" />
-          ) : (
-            <CircleAlert size={18} aria-hidden="true" className="text-warning-700" />
-          )}
-          <span className="type-label text-text-primary" data-testid="money-reachable">
-            {status.isPending
-              ? t('money.connection.checking')
-              : s?.reachable
-                ? t('money.connection.ok')
-                : t('money.connection.down')}
-          </span>
+        <Database size={22} aria-hidden="true" className="mt-0.5 shrink-0 text-text-secondary" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {s?.reachable ? (
+              <CircleCheck size={16} aria-hidden="true" className="text-success-700" />
+            ) : (
+              <CircleAlert size={16} aria-hidden="true" className="text-warning-700" />
+            )}
+            <span className="type-label text-text-primary" data-testid="money-reachable">
+              {status.isPending
+                ? t('money.connection.checking')
+                : s?.reachable
+                  ? t('money.connection.ok')
+                  : t('money.connection.down')}
+            </span>
+            {s?.agenda ? (
+              <span
+                data-testid="money-agenda"
+                className={`type-small inline-flex h-6 items-center rounded-full border px-2 ${
+                  s.agenda === 'TEST'
+                    ? 'border-warning-600 bg-warning-50 text-warning-700'
+                    : 'border-danger-600 bg-danger-50 text-danger-600'
+                }`}
+              >
+                {t(`money.connection.agendaChip.${s.agenda}`, { defaultValue: s.agenda })}
+                {s.backend === 'mock' ? ` · ${t('money.connection.mock')}` : ''}
+              </span>
+            ) : null}
+          </div>
+          <p className="type-small text-text-secondary" data-testid="money-state-line">
+            {[
+              s?.money_version ? t('money.connection.apiLine', { version: s.money_version }) : null,
+              s?.latency_ms != null ? t('money.connection.latencyLine', { ms: s.latency_ms }) : null,
+              t('money.connection.lastSyncLine', {
+                when: when(s?.entities.find((e) => e.entity === 'companies')?.last_run_at ?? null, t),
+              }),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+          <p className="type-caption text-text-secondary">
+            {t('money.connection.bridgeVersion')} {s?.bridge_version ?? '–'} ·{' '}
+            {s?.writes_enabled ? t('money.connection.bridgeWritesOn') : t('money.connection.bridgeWritesOff')}
+          </p>
         </div>
-        <dl className="type-small grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-text-primary">
-          <dt className="text-text-secondary">{t('money.connection.agenda')}</dt>
-          <dd data-testid="money-agenda">
-            {s?.agenda ? t(`money.connection.agendas.${s.agenda}`, { defaultValue: s.agenda }) : '–'}
-            {s?.backend === 'mock' ? ` · ${t('money.connection.mock')}` : ''}
-          </dd>
-          <dt className="text-text-secondary">{t('money.connection.apiVersion')}</dt>
-          <dd>{s?.money_version ?? '–'}</dd>
-          <dt className="text-text-secondary">{t('money.connection.bridgeVersion')}</dt>
-          <dd>{s?.bridge_version ?? '–'}</dd>
-          <dt className="text-text-secondary">{t('money.connection.latency')}</dt>
-          <dd>{s?.latency_ms != null ? `${s.latency_ms} ms` : '–'}</dd>
-          <dt className="text-text-secondary">{t('money.connection.lastSync')}</dt>
-          <dd>{when(s?.entities.find((e) => e.entity === 'companies')?.last_run_at ?? null, t)}</dd>
-          <dt className="text-text-secondary">{t('money.connection.bridgeWrites')}</dt>
-          <dd>{s?.writes_enabled ? t('money.connection.bridgeWritesOn') : t('money.connection.bridgeWritesOff')}</dd>
-        </dl>
-        <div>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={status.isFetching}
-            onClick={() => void status.refetch()}
-            icon={<RefreshCw size={16} aria-hidden="true" />}
-          >
-            {t('money.connection.test')}
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={status.isFetching}
+          onClick={() => void status.refetch()}
+          icon={<RefreshCw size={16} aria-hidden="true" className={status.isFetching ? 'animate-spin' : ''} />}
+        >
+          {t('money.connection.test')}
+        </Button>
       </section>
       <WritesSwitch />
       {s ? <CacheTable entities={s.entities} /> : null}
@@ -198,7 +211,18 @@ export function MoneySyncPanel() {
         >
           {t('money.sync.now')}
         </Button>
-        {data?.running ? <span className="type-small text-text-secondary">{t('money.sync.running')}</span> : null}
+        {data?.running ? (
+          <div className="flex min-w-[200px] flex-1 flex-col gap-1" data-testid="money-sync-progress">
+            <span className="type-small text-text-secondary">{t('money.sync.running')}</span>
+            <div
+              role="progressbar"
+              aria-label={t('money.sync.running')}
+              className="h-1.5 overflow-hidden rounded-full bg-bg-muted"
+            >
+              <div className="h-full w-1/3 animate-pulse rounded-full bg-brand-primary-600" />
+            </div>
+          </div>
+        ) : null}
       </div>
       <table className="type-small w-full text-left text-text-primary" data-testid="money-sync-history">
         <caption className="type-label mb-1 text-left text-text-secondary">{t('money.sync.history')}</caption>
@@ -228,7 +252,18 @@ export function MoneySyncPanel() {
               </td>
               <td className="py-1">{(r.duration_ms / 1000).toLocaleString('sk-SK', { maximumFractionDigits: 1 })} s</td>
               <td className="py-1">{r.changed}</td>
-              <td className="py-1">{r.error ? t(`money.errors.${r.error}`, { defaultValue: r.error }) : '–'}</td>
+              <td className="py-1">
+                {r.error ? (
+                  <span
+                    title={t(`money.errors.${r.error}`, { defaultValue: r.error })}
+                    className="type-caption inline-flex h-6 items-center rounded-full border border-danger-600 bg-danger-50 px-2 text-danger-600"
+                  >
+                    {r.error}
+                  </span>
+                ) : (
+                  '–'
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -372,6 +407,7 @@ function WritesSwitch() {
   const on = writes.data?.enabled ?? false;
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border-default p-4" data-testid="money-writes">
+      <h2 className="type-label text-text-secondary">{t('money.writes.title')}</h2>
       <label className="flex items-center gap-3">
         <input
           type="checkbox"

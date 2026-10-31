@@ -86,6 +86,8 @@ export type Debtor = {
   invoice_count: number;
   oldest_days: number;
   last_reminder_at: string | null;
+  last_reminder_tone?: string | null;
+  contact_name?: string | null;
   invoices: Invoice[];
 };
 export type ReminderResult = {

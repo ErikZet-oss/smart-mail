@@ -51,8 +51,8 @@ test('3b 13a shows the mock agenda, read-only writes, and the bridge-down state'
   });
   await page.goto('/settings/money/connection');
   const panel = page.getByTestId('settings-money-connection');
-  await expect(panel.getByTestId('money-reachable')).toHaveText('Money S4 je pripojené');
-  await expect(panel.getByTestId('money-agenda')).toHaveText('TESTOVACIA · simulované Money (vymyslené údaje)');
+  await expect(panel.getByTestId('money-reachable')).toHaveText('Money Bridge pripojený');
+  await expect(panel.getByTestId('money-agenda')).toHaveText('TEST agenda · simulované Money (vymyslené údaje)');
   await expect(panel).toContainText('most zápisy neprijíma');
   await expect(panel.getByRole('switch', { name: 'Zápisy do Money povolené ⚠' })).not.toBeChecked();
   await expect(panel.getByRole('table')).toContainText('Firmy');
@@ -106,11 +106,11 @@ test('3b 13e interval, sync now and history', async ({ page }, info) => {
   const panel = page.getByTestId('settings-money-sync');
   const table = panel.getByTestId('money-sync-history');
   await expect(table).toContainText('Firmy · celá');
-  await expect(table).toContainText('Money alebo Money most neodpovedá.');
+  await expect(table).toContainText('money_unavailable'); // error code chip (Figma W12-13e)
   await shot(page, `phase3b-13e-${info.project.name}`);
   await panel.getByLabel('Interval synchronizácie').selectOption('30');
   await expect.poll(() => saved.at(-1)).toEqual({ interval_min: 30 });
   await panel.getByRole('button', { name: 'Synchronizovať teraz' }).click();
-  await expect(panel.getByText('Synchronizuje sa…')).toBeVisible();
+  await expect(panel.getByTestId('money-sync-progress')).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Synchronizovať teraz' })).toBeDisabled();
 });

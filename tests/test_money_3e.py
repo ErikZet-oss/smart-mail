@@ -20,7 +20,7 @@ from app.mail.compose import attachment_send_block
 from app.mail.compose_models import ComposeAttachment, ComposeDraft
 from app.money import bridge_client as bc
 from app.money.invoice_attach import SECTION_REPORTS, marked_company
-from app.money.models import MoneyCompany
+from app.money.models import MoneyCompany, MoneyPerson
 from app.money.reminders import reminder_html
 from app.money.schemas import InvoiceSearch, IssuedInvoice, OverduePage
 from tests.conftest import Client, FakeMailServer
@@ -123,6 +123,17 @@ def test_3e_reminder_html_is_escaped_and_totals() -> None:
 async def test_3e_debtors_list(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:
     await _signed_in(client, db, mail_server, role=Role.accounting)
     await _seed(db)
+    db.add(
+        MoneyPerson(
+            money_id=uuid.uuid4(),
+            company_money_id=ONE,
+            name="Eva Účtovná",
+            email="uctaren@dlznik1.example",
+            active=True,
+            synced_at=NOW,
+        )
+    )
+    await db.commit()
     with_time = NOW  # the bridge decides „overdue“ by date; FV2699999 is not
     r = await client.get("/api/money/reminders")
     assert r.status_code == 200, r.text
@@ -161,7 +172,7 @@ async def test_3e_prepare_drafts_one_per_customer(
     hist = (await client.get("/api/money/reminders/history")).json()
     assert hist[0]["company_name"] == "Fiktívny dlžník 1 s.r.o." and hist[0]["draft_status"] == "editing"
     again = (await client.get("/api/money/reminders")).json()
-    assert again[0]["last_reminder_at"] is not None
+    assert again[0]["last_reminder_at"] is not None and again[0]["last_reminder_tone"] == "firm"
 
 
 async def test_3e_missing_report_blocks_the_draft(

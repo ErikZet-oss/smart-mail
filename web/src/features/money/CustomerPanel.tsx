@@ -532,14 +532,9 @@ export function CustomerCard({
                 title={t('money.customer.receivables')}
                 error={r.error}
                 action={
-                  <button
-                    type="button"
-                    disabled
-                    title={t('money.customer.later3e')}
-                    className="type-small text-text-tertiary"
-                  >
+                  <Link to="/docs/reminders" className="type-small text-brand-primary-700 hover:underline">
                     {t('money.customer.statement')}
-                  </button>
+                  </Link>
                 }
               >
                 {r.items.length === 0 ? (
@@ -576,7 +571,18 @@ export function CustomerCard({
                   </ul>
                 )}
               </Section>
-              <Section title={t('money.customer.orders')} error={card.orders.error}>
+              <Section
+                title={t('money.customer.orders')}
+                error={card.orders.error}
+                action={
+                  <Link
+                    to={`/contacts/company/${company.money_id}?tab=documents`}
+                    className="type-small text-brand-primary-700 hover:underline"
+                  >
+                    {t('money.c360.all')}
+                  </Link>
+                }
+              >
                 <Rows
                   rows={card.orders.items.map((o) => ({
                     id: o.id,
@@ -648,8 +654,7 @@ export function CustomerCard({
           <Button
             type="button"
             variant="secondary"
-            disabled
-            title={t('money.customer.later3e')}
+            onClick={() => navigate('/docs/reminders')}
             icon={<FileText size={16} aria-hidden="true" />}
           >
             {t('money.customer.statementLong')}
