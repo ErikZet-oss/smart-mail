@@ -33,7 +33,8 @@ def test_bridge_virtualenv_uses_python_readable_by_local_service() -> None:
         text = ROOT.joinpath("deploy/bridge-windows", name).read_text(encoding="utf-8-sig")
         assert "C:\\SmartMail\\python" in text, name
         assert "uv python install 3.12" in text, name
-        assert "--managed-python" in text, name
+        assert "cpython-3.12*\\python.exe" in text, name
+        assert "uv python find" not in text, name
         assert "$env:UV_PYTHON = $bridgePython" in text, name
         assert "LOCAL SERVICE:(OI)(CI)RX" in text, name
 

@@ -73,7 +73,8 @@ Say "Inštalujem Python pre most do $PythonDir"
 $env:UV_PYTHON_INSTALL_DIR = $PythonDir
 & $python -m uv python install 3.12
 if ($LASTEXITCODE -ne 0) { Fail 'Inštalácia Pythonu pre most zlyhala (uv python install).' }
-$bridgePython = (& $python -m uv python find 3.12 --managed-python)
+# `uv python find` may still return the per-user Python (pilot 2026-10-31) – take the file from $PythonDir.
+$bridgePython = (Get-ChildItem (Join-Path $PythonDir 'cpython-3.12*\python.exe') -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1).FullName
 if (-not $bridgePython -or -not $bridgePython.StartsWith($PythonDir)) { Fail "Python pre most sa nenašiel v $PythonDir." }
 icacls $PythonDir /grant 'NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX' | Out-Null
 $venvCfg = Join-Path $InstallDir '.venv\pyvenv.cfg'
