@@ -2,6 +2,9 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3 close-out report
+
+- `docs/phase3-closeout.md`: milestones 3a–3h, acceptance status (real TEST run pending the office install + probe), gates, items waiting for the probe, what is needed from Erik, risks.
 ## [Unreleased] — Phase 3f: CRM activity in Money after send (ADR-017, #144)
 
 - **First Money write** (approved by Erik in #144): after a person sends an e-mail with a Money invoice (3d) or a reminder (3e), the app writes an **activity** (REST `Activity`) with the type chosen in **13d**.
