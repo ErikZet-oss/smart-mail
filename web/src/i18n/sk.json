@@ -1630,9 +1630,33 @@
       "attachment_infected": "príloha obsahuje vírus a nebola spracovaná"
     }
   },
+  "documents": {
+    "title": "Doklady",
+    "upload": "Nahrať doklad",
+    "uploadLater": "Nahrávanie dokladov príde vo fáze 4.",
+    "later": "Príde vo fáze {{phase}}.",
+    "tabs": {
+      "delivery-notes": "Dodacie listy",
+      "orders": "Objednávky",
+      "offers": "Ponuky",
+      "complaints": "Reklamácie",
+      "reminders": "Upomienky"
+    }
+  },
   "reminders": {
     "title": "Upomienky",
-    "tabs": { "open": "Po splatnosti", "history": "Odoslané upomienky" },
+    "tabs": { "open": "Po splatnosti", "openCount": "Po splatnosti ({{count}})", "history": "Odoslané upomienky" },
+    "tonesLower": { "polite": "zdvorilá", "firm": "dôrazná" },
+    "filters": {
+      "search": "Hľadať zákazníka…",
+      "overdueLabel": "Po splatnosti",
+      "overdue": "Po splatnosti: > {{count}} dní",
+      "sumLabel": "Suma",
+      "sumAll": "Suma: všetky",
+      "sumOver": "Suma: od {{sum}}",
+      "noReminder": "Bez upomienky",
+      "none": "Filtru nezodpovedá žiadny zákazník."
+    },
     "loading": "Načítavam faktúry po splatnosti z Money…",
     "retry": "Skúsiť znova",
     "roleOnly": "Upomienky pripravuje účtovníctvo, obchod alebo správca.",
@@ -1686,8 +1710,9 @@
   },
   "money": {
     "writes": {
+      "title": "Zápisy",
       "label": "Zápisy do Money povolené",
-      "help": "Hlavný vypínač všetkých zápisov do Money. Zatiaľ sa zapisuje len aktivita po odoslanej faktúre alebo upomienke.",
+      "help": "Hlavný vypínač všetkých zápisov (dodacie listy prijaté, objednávky, ponuky, reklamácie, firmy). Vo fáze 3 sa zapisuje len aktivita po odoslanej faktúre alebo upomienke.",
       "noKey": "Na serveri chýba kľúč pre zápisy (APPROVAL_JWT_PRIVATE_KEY) – postup je v README."
     },
     "activities": {
@@ -1720,7 +1745,19 @@
     "c360": {
       "title": "Zákazník 360",
       "dic": "DIČ {{dic}}",
-      "tabs": { "overview": "Prehľad", "emails": "E-maily", "documents": "Doklady", "contacts": "Kontakty a aktivity" },
+      "tabs": {
+        "overview": "Prehľad",
+        "emails": "E-maily",
+        "documents": "Doklady",
+        "contacts": "Kontakty",
+        "activities": "Aktivity"
+      },
+      "breadcrumb": "Umiestnenie",
+      "moneyBook": "Money – adresár",
+      "more": "Ďalšie akcie",
+      "orderFromMail": "Založiť objednávku z e-mailu",
+      "lastOrder": "Posledná objednávka",
+      "all": "Všetky",
       "noMail": "Žiadne e-maily s touto firmou v schránkach, ktoré vidíte.",
       "incoming": "prijatý",
       "outgoing": "odoslaný",
@@ -1817,7 +1854,12 @@
       "title": "Prepojenie",
       "card": "Stav prepojenia s Money S4",
       "checking": "Overujem…",
-      "ok": "Money S4 je pripojené",
+      "ok": "Money Bridge pripojený",
+      "stateTitle": "Stav",
+      "agendaChip": { "TEST": "TEST agenda", "PROD": "OSTRÁ agenda" },
+      "apiLine": "API {{version}}",
+      "latencyLine": "odozva {{ms}} ms",
+      "lastSyncLine": "posledná synchronizácia {{when}}",
       "down": "Money S4 je nedostupné",
       "unavailable": "Money S4 je teraz nedostupné. Pošta funguje ďalej, údaje z Money sa doplnia po obnovení spojenia.",
       "agenda": "Agenda",

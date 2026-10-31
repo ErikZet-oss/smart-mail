@@ -56,7 +56,7 @@ const PERSONAL_ORDER = [
 const ADMIN_SECTIONS = new Set(['users', 'branches', 'mailboxes', 'money']);
 
 /** Sections whose subsections are shown as tabs inside the content area instead of the middle list (Figma W12-11). */
-export const TABBED_SECTIONS = new Set(['branches']);
+export const TABBED_SECTIONS = new Set(['branches', 'money']);
 
 export type SettingsNavItem = {
   key: string;

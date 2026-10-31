@@ -28,7 +28,7 @@ from app.money.bridge_client import BridgeClient
 from app.money.invoice_attach import STRONG, load_reports, pick_report, storage_prefix
 from app.money.invoice_draft import InvoiceDraftError, pdf_filename
 from app.money.matching import match_sender
-from app.money.models import MoneyCompany
+from app.money.models import MoneyCompany, MoneyPerson
 from app.money.schemas import IssuedInvoice
 
 Tone = Literal["polite", "firm"]
@@ -59,6 +59,8 @@ class Debtor:
     company: MoneyCompany
     invoices: list[IssuedInvoice] = field(default_factory=list)
     last_reminder_at: datetime | None = None
+    last_reminder_tone: str | None = None
+    contact_name: str | None = None  # the Money person with the contact e-mail, if any
 
     @property
     def total(self) -> Decimal:
@@ -96,24 +98,39 @@ async def overdue_debtors(db: AsyncSession, bridge: BridgeClient, today: date) -
         await db.scalars(select(MoneyCompany).where(MoneyCompany.money_id.in_(list(by_company)), MoneyCompany.active))
     ).all()
     last = await last_reminders(db)
-    debtors = [
-        Debtor(
-            company=c,
-            invoices=sorted(by_company[c.money_id], key=lambda i: i.due_on or date.min),
-            last_reminder_at=last.get(str(c.money_id)),
+    debtors = []
+    for c in companies:
+        at, tone = last.get(str(c.money_id), (None, None))
+        debtors.append(
+            Debtor(
+                company=c,
+                invoices=sorted(by_company[c.money_id], key=lambda i: i.due_on or date.min),
+                last_reminder_at=at,
+                last_reminder_tone=tone,
+            )
         )
-        for c in companies
-    ]
+    emails = [d.contact for d in debtors if d.contact]
+    if emails:
+        names = {
+            p.email: p.name
+            for p in await db.scalars(
+                select(MoneyPerson).where(MoneyPerson.email.in_(emails), MoneyPerson.active.is_(True))
+            )
+            if p.email
+        }
+        for d in debtors:
+            d.contact_name = names.get(d.contact or "")
     return sorted(debtors, key=lambda d: d.total, reverse=True)
 
 
-async def last_reminders(db: AsyncSession) -> dict[str, datetime]:
+async def last_reminders(db: AsyncSession) -> dict[str, tuple[datetime, str | None]]:
+    """company money_id → (time, tone) of the last prepared reminder (W8b „Posledná upomienka“)."""
     rows = await db.execute(
-        select(AuditLog.object_id, AuditLog.created_at)
+        select(AuditLog.object_id, AuditLog.created_at, AuditLog.details)
         .where(AuditLog.action == AUDIT_ACTION)
         .order_by(AuditLog.created_at)
     )
-    return {str(obj): at for obj, at in rows.all()}
+    return {str(obj): (at, (details or {}).get("tone")) for obj, at, details in rows.all()}
 
 
 def _amount(value: Decimal) -> str:

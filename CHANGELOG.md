@@ -2,6 +2,26 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3: changes after the Figma review (#167)
+
+From the reviewer's Figma notes on #158, #160, #163 and #164:
+- **W8b** (57:47085):
+  - page „Doklady“ with „Nahrať doklad“ (disabled, Phase 4);
+  - module tabs Dodacie listy · Objednávky · Ponuky · Reklamácie (disabled with their phase) · **Upomienky** (count);
+  - sub-tabs „Po splatnosti (N) · Odoslané upomienky“;
+  - filters: search, „Po splatnosti: > N dní“, „Suma“, chip „Bez upomienky“; „Pripraviť upomienky (N)“ on the right;
+  - red overdue sum, „Posledná upomienka“ with its tone, „Kontakt“ as „meno · e-mail“ (the Money person with that e-mail), selected rows tinted.
+- **W9a** (60:48893):
+  - breadcrumb „Kontakty › Money – adresár“, avatar, „✓ V Money“, chips, „Ďalšie akcie ▾“ (Výpis neuhradených → W8b; ponuka and order disabled);
+  - tabs Prehľad · E-maily (count) · Doklady · Kontakty (count) · Aktivity;
+  - three KPIs (Otvorené, Po splatnosti, Posledná objednávka) and three cards (Neuhradené faktúry with „Výpis“, Posledné objednávky with „Všetky“, Aktivity).
+- **W12-13:**
+  - Money S4 sub-pages are **tabs**;
+  - 13a: status card „Money Bridge pripojený“ + chip „TEST agenda“, line „API · odozva · posledná synchronizácia“, sections Stav / Zápisy;
+  - 13e: progress bar while syncing, error code chips in the history.
+- **W3b:** „Výpis“ / „Výpis neuhradených“ now open W8b; „Všetky“ at the orders opens W9a › Doklady.
+- Not done (data or later phases): rail badge on „Doklady“ (would call Money on every page), probe report upload in 13a, address, price list, credit bar, 12-month turnover, VIP and the AI relationship summary.
+
 ## [Unreleased] — Phase 3 close-out report
 
 - `docs/phase3-closeout.md`: milestones 3a–3h, acceptance status (real TEST run pending the office install + probe), gates, items waiting for the probe, what is needed from Erik, risks.

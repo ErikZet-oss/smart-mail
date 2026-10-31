@@ -114,3 +114,36 @@ test('3e Doklady is in the rail only with FEATURE_MONEY', async ({ page }) => {
   await expect(page).toHaveURL(/\/404/);
   await expect(page.getByRole('link', { name: 'Doklady' })).toHaveCount(0);
 });
+
+test('3e W8b as in Figma: Doklady tabs, filters, last reminder with tone, contact name', async ({ page }, info) => {
+  const rows = [
+    {
+      ...DEBTORS[0],
+      last_reminder_at: '2026-10-02T08:00:00Z',
+      last_reminder_tone: 'polite',
+      contact_name: 'Eva Účtovná',
+    },
+    DEBTORS[1],
+  ];
+  await mockApi(page, { ...BASE, 'GET /api/money/reminders': { body: rows } });
+  await page.goto('/docs/reminders');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Doklady');
+  await expect(page.getByRole('button', { name: 'Nahrať doklad' })).toBeDisabled();
+  const tabs = page.getByRole('navigation', { name: 'Doklady' });
+  await expect(tabs.getByText('Dodacie listy')).toHaveAttribute('aria-disabled', 'true');
+  await expect(tabs.getByText('Upomienky')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('tab', { name: 'Po splatnosti (2)' })).toHaveAttribute('aria-selected', 'true');
+  const table = page.getByTestId('reminders-table');
+  await expect(table).toContainText('2. 10. 2026 (zdvorilá)');
+  await expect(table).toContainText('Eva Účtovná · uctaren@dlznik1.example');
+  await shot(page, `phase3e-w8b-figma-${info.project.name}`);
+  await page.getByRole('button', { name: 'Bez upomienky' }).click();
+  await expect(table).not.toContainText('Fiktívny dlžník 1 s.r.o.');
+  await expect(table).toContainText('Fiktívny dlžník 3 s.r.o.');
+  await page.getByRole('button', { name: 'Bez upomienky' }).click();
+  await page.getByLabel('Suma').selectOption('1000');
+  await expect(table).toContainText('Fiktívny dlžník 1 s.r.o.');
+  await expect(table).not.toContainText('Fiktívny dlžník 3 s.r.o.');
+  await page.getByPlaceholder('Hľadať zákazníka…').fill('nikto');
+  await expect(table).toContainText('Filtru nezodpovedá žiadny zákazník.');
+});

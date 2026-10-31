@@ -398,6 +398,8 @@ class DebtorOut(BaseModel):
     invoice_count: int
     oldest_days: int
     last_reminder_at: datetime | None
+    last_reminder_tone: str | None = None
+    contact_name: str | None = None
     invoices: list[IssuedInvoice]
 
 
@@ -448,6 +450,8 @@ async def list_debtors(ctx: Auth, person: ActivePerson, db: DB, settings: Settin
             invoice_count=len(d.invoices),
             oldest_days=d.oldest_days(today),
             last_reminder_at=d.last_reminder_at,
+            last_reminder_tone=d.last_reminder_tone,
+            contact_name=d.contact_name,
             invoices=d.invoices,
         )
         for d in debtors

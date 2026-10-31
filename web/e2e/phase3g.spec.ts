@@ -49,6 +49,7 @@ const BASE = {
   'GET /api/auth/persons': { body: ME_PICKER },
   'GET /api/system/info': { body: { admin_contact_email: null, features: { money: true } } },
   [`GET /api/money/companies/${ID}/card`]: { body: CARD },
+  [`GET /api/money/companies/${ID}/emails`]: { body: [] },
 };
 
 test('3g W9a Zákazník 360: tabs Prehľad, E-maily, Doklady, Kontakty @mobile', async ({ page }, info) => {
@@ -72,17 +73,19 @@ test('3g W9a Zákazník 360: tabs Prehľad, E-maily, Doklady, Kontakty @mobile',
   await page.goto(`/contacts/company/${ID}`);
   const screen = page.getByTestId('screen-w9a');
   await expect(screen.getByRole('heading', { level: 1 })).toHaveText('Fiktívna firma 360 s.r.o.');
-  await expect(screen).toContainText('IČO 36123459 · DIČ 2020000001 · IČ DPH SK2020000001 · F360');
+  await expect(screen).toContainText('IČO 36123459 · DIČ 2020000001 · IČ DPH SK2020000001');
   await expect(screen).toContainText('120,00 €');
   await shot(page, `phase3g-w9a-${info.project.name}`);
-  await screen.getByRole('tab', { name: 'E-maily' }).click();
+  await screen.getByRole('tab', { name: /^E-maily/ }).click();
   await expect(page).toHaveURL(/tab=emails/);
   await expect(screen.getByTestId('company-mail').getByRole('link')).toHaveAttribute('href', '/mail/mb1/inbox/m1');
   await screen.getByRole('tab', { name: 'Doklady' }).click();
   await expect(screen).toContainText('FV2600042');
   await expect(screen).toContainText('OP260001');
-  await screen.getByRole('tab', { name: 'Kontakty a aktivity' }).click();
+  await screen.getByRole('tab', { name: 'Kontakty (1)' }).click();
   await expect(screen).toContainText('Ján Fiktívny');
+  await screen.getByRole('tab', { name: 'Aktivity' }).click();
+  await expect(screen).toContainText('Zatiaľ nedostupné – čaká sa na test prepojenia s Money.');
   await expect(screen.getByRole('button', { name: 'Napísať' })).toBeEnabled();
 });
 
