@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Fix: reply drafted in the wrong language (pilot 2026-10-31)
+
+- The classifier LLM's language replaced the heuristic one. A plain Slovak e-mail came back as `pl` and the reply suggestion was written in Polish.
+- `final_language()`: a confident heuristic result (≥ 3 hits and at least twice the runner-up) wins. The LLM decides only when the heuristic is unsure or found nothing.
+- Tests in `tests/test_ai_language_final.py`.
+
 ## [Unreleased] — Fix: deleted Money records were shown (pilot 2026-10-31)
 
 - Money keeps deleted records and the API returns them (`Deleted: true`). On the TEST agenda 603 of 1104 unpaid issued invoices were deleted ones, and invoice 372100492 existed twice: deleted for customer A, live and paid for customer B. Customer A's card listed it as unpaid.
