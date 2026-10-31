@@ -315,9 +315,17 @@ Money" link; a value that disappeared from Money is shown red "už neexistuje v 
 | Stredisko (číslo pobočky) | select (`Centres`) | — | **povinné** pre zápisy do Money ⚠ | Všetky doklady z tejto pobočky sa zapíšu pod toto stredisko. | B |
 | Cenník pobočky | select (`PriceLists`; today pairs per branch `10-bez DPH`/`10-s DPH` … `40-…`, plus `13 PKT`, `99 Externý sklad`, `A1 - 100%`, `A2 - 70%`, `A3 - 30%`, `MPC` — D12) | — (admin picks; sample Senica = `20-bez DPH – Senica bez DPH`) | **povinné** ⚠ | Ceny v ponukách a objednávkach a cenník na položkách dokladov. Vyberte cenník pobočky, napr. „20-bez DPH – Senica bez DPH“. | B |
 | Sklad pobočky | select (`Warehouses` — today 10 Trnava, 20 Senica, 30 Nitra, 40 Trenčín, 99 Externý sklad; D4, D11, D18 — 99 is listed like every warehouse but is never preselected or suggested as a default; choosing it shows the info "99 Externý sklad nie je sklad pobočky") | predvolený sklad zvoleného cenníka (`PriceList.VychoziSklad_ID`) | **povinné**; upozornenie, ak sa líši od skladu cenníka | Sem sa prijíma tovar z dodacích listov; zapíše sa aj na položky objednávok. | B |
+| Tlačová zostava – faktúra vydaná (SK) | text „ID zostavy“ (#174, Phase 3) | prázdne | GUID alebo celé číslo (ako 13b) | Prázdne = firemná zostava z Nastavenia › Money S4 › Tlačové zostavy. | B |
+| Tlačová zostava – zálohová faktúra (SK) | text „ID zostavy“ (#174, Phase 3) | prázdne | GUID alebo celé číslo (ako 13b) | Prázdne = firemná zostava z Nastavenia › Money S4 › Tlačové zostavy. | B |
+| Vyskúšať PDF | button per row + field „Číslo faktúry tejto pobočky“ → PDF with the branch report; an invoice of another centre → „Faktúra patrí inej pobočke“ | — | — | — | — |
 | Číselné rady pobočky | table: Typ dokladu (Dodací list prijatý, Objednávka prijatá, Ponuka vydaná, Reklamácia) → Číselný rad (select) | prázdne = firemné z 13c | — | Vyplňte, ak má pobočka vlastné rady. | B |
 | Vzorový dodací list pobočky | read-only card + "Vybrať iný" (select from the last 20 received delivery notes of this centre in Money, shows Číslo · Dodávateľ · Dátum) | posledný DL prijatý tejto pobočky vytvorený v Money | **povinné** pre príjem tovaru ⚠ | Z neho sa preberú hodnoty, ktoré Money API nemá v číselníkoch: Druh pohybu („obstaranie“), Druh skl. pohybu („príjem“), Typ ceny („Iba základ“), Druh položky („tovar“), Registrácia k DPH. | B |
 | Overiť | button "Overiť nastavenie v Money" → checks that the centre, price list, warehouse and series exist and are active, that a template delivery note exists, and shows 3 sample prices from the price list | — | — | — | — |
+Report selection (#174, Erik 2026-10-31): the branch of an invoice = the branch whose centre is the invoice's
+`Stredisko_ID`. SK or empty language → branch report, else company SK (13b); EN/DE → company report of that language
+(13b), else branch report, else company SK; invoice without a centre or with a centre of no branch → 13b. Re-run at
+approval. Phase 3 builds only the centre select and the two report fields of 11e; the other 11e fields come with
+Phase 4.
 Change of any field ⚠ = confirm + audit; drafts already prepared keep their values (shown with a hint "pripravené
 pred zmenou nastavenia pobočky").
 
@@ -351,7 +359,8 @@ Middle: list (Adresa, Typ, stav pripojenia dot, Posledná synchronizácia, Kvót
 (only when the implementer adds an offer report, D5); columns SK / EN / DE: text field "ID zostavy" (GUID or integer config id) + button "Vyskúšať PDF" (opens
 PDF of the latest document). Validation: GUID/integer format; empty language falls back to SK. Info line: "Faktúry
 sa v Smart Mail nikdy nevytvárajú ani neprekresľujú – k e-mailu sa priloží vždy originálne PDF z Money. Dodacie
-listy a objednávky Money cez API ako PDF neposkytuje." (DOCUMENTS_SPEC §6, MONEY_API §5.9b).
+listy a objednávky Money cez API ako PDF neposkytuje." (DOCUMENTS_SPEC §6, MONEY_API §5.9b). Second info line
+(#174): "Pobočky môžu mať vlastnú zostavu (Nastavenia › Pobočky)." — branch reports (11e) win for SK, see 11e.
 
 **13c Predvolené hodnoty dokladov** (company defaults; **branch values from 11e — stredisko, cenník, sklad, číselné
 rady — always win**; extra row "Centrála" = branch profile used for central mailboxes such as info@) — table rows:

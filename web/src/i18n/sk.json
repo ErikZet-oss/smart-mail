@@ -1740,7 +1740,21 @@
       "tryTitle": "Vyskúšať PDF",
       "tryNumber": "Číslo faktúry na vyskúšanie",
       "try": "Vyskúšať {{kind}} {{lang}}",
-      "info": "Faktúry sa v Smart Mail nikdy nevytvárajú ani neprekresľujú – k e-mailu sa priloží vždy originálne PDF z Money. Dodacie listy a objednávky Money cez API ako PDF neposkytuje."
+      "info": "Faktúry sa v Smart Mail nikdy nevytvárajú ani neprekresľujú – k e-mailu sa priloží vždy originálne PDF z Money. Dodacie listy a objednávky Money cez API ako PDF neposkytuje.",
+      "branchInfo": "Pobočky môžu mať vlastnú zostavu (Nastavenia › Pobočky)."
+    },
+    "branch": {
+      "centre": "Stredisko (číslo pobočky)",
+      "centreNone": "— nevybrané —",
+      "centreHelp": "Všetky doklady z tejto pobočky sa zapíšu pod toto stredisko. Podľa strediska na faktúre sa vyberá aj tlačová zostava pobočky.",
+      "centreMissing": "už neexistuje v Money",
+      "report": {
+        "invoice": "Tlačová zostava – faktúra vydaná (SK)",
+        "proforma": "Tlačová zostava – zálohová faktúra (SK)"
+      },
+      "reportHelp": "Prázdne = firemná zostava z Nastavenia › Money S4 › Tlačové zostavy.",
+      "tryNumber": "Číslo faktúry tejto pobočky na vyskúšanie",
+      "later": "Cenník, sklad, číselné rady a vzorový dodací list pobočky pribudnú vo fáze 4."
     },
     "c360": {
       "title": "Zákazník 360",
@@ -1916,7 +1930,13 @@
       "hmac_invalid": "Podpis pre Money most nesedí (BRIDGE_HMAC_SECRET).",
       "hmac_expired": "Čas servera a Money mostu sa líši o viac ako 5 minút.",
       "money_disabled": "Prepojenie s Money je na tomto serveri vypnuté.",
-      "money_sync_running": "Synchronizácia už prebieha."
+      "money_sync_running": "Synchronizácia už prebieha.",
+      "report_id_invalid": "ID zostavy je GUID alebo číslo konfigurácie zostavy.",
+      "report_not_configured": "Tlačová zostava nie je nastavená.",
+      "invoice_not_found": "Faktúra sa v Money nenašla.",
+      "invoice_other_branch": "Faktúra patrí inej pobočke (iné stredisko).",
+      "centre_unknown": "Stredisko nie je v číselníku Money. Počkajte na synchronizáciu číselníkov.",
+      "pdf_missing": "Money nevrátilo PDF."
     }
   }
 }

@@ -60,6 +60,8 @@ class Branch(IdMixin, TimestampMixin, Base):
     money_centre_id: Mapped[str | None] = mapped_column(String(64))
     money_price_list_id: Mapped[str | None] = mapped_column(String(64))
     money_warehouse_id: Mapped[str | None] = mapped_column(String(64))
+    # #174: own print report per branch, SK only: {"invoice": "<id>", "proforma": "<id>"} (empty = company 13b)
+    money_report_ids: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict, server_default="{}")
     series_overrides: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
     dl_template_money_id: Mapped[str | None] = mapped_column(String(64))
     dl_template_values: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
