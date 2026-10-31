@@ -1,6 +1,6 @@
 {
-  "version": "3b",
-  "phase": "3b",
+  "version": "3d",
+  "phase": "3d",
   "sections": [
     {
       "id": "01",
@@ -821,6 +821,12 @@
           "id": "13a",
           "path": "connection",
           "title": "Prepojenie",
+          "fields": []
+        },
+        {
+          "id": "13b",
+          "path": "reports",
+          "title": "Tlačové zostavy",
           "fields": []
         },
         {

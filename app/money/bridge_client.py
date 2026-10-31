@@ -27,6 +27,7 @@ from app.money.schemas import (
     CompanyPage,
     Delivery,
     Health,
+    InvoiceSearch,
     IssuedInvoice,
     Order,
     PersonPage,
@@ -180,6 +181,38 @@ class BridgeClient:
 
     async def activities(self, money_id: uuid.UUID) -> list[Activity]:
         return await self._list(Activity, f"/companies/{money_id}/activities")
+
+    async def search_invoices(
+        self, *, number: str | None = None, vs: str | None = None, company_id: uuid.UUID | None = None
+    ) -> InvoiceSearch:
+        """MONEY_API §5.1 cascade in the bridge. A value with `~ # | ( )` answers 422 there → `bridge_422`."""
+        params = {"number": number, "vs": vs, "company_id": str(company_id) if company_id else None}
+        return await self._model(InvoiceSearch, "/invoices/issued/search", params)
+
+    async def invoice_pdf(self, kind: str, invoice_id: uuid.UUID, report_id: str) -> bytes | None:
+        """The original Money PDF (never rendered by Smart Mail, DOCUMENTS_SPEC §6); None = not found."""
+        _circuit.check()
+        path_qs = f"/invoices/issued/{kind}/{invoice_id}/pdf?{urlencode({'report_id': report_id})}"
+        stamp = str(int(time.time()))
+        headers = {
+            "X-Bridge-Key-Id": self._key_id,
+            "X-Bridge-Timestamp": stamp,
+            "X-Bridge-Signature": sign(self._secret, "GET", path_qs, stamp),
+        }
+        try:
+            resp = await self._http.get(self._base + path_qs, headers=headers)
+        except httpx.HTTPError as exc:
+            _circuit.failure()
+            raise BridgeUnavailable() from exc
+        if resp.status_code >= 500 or resp.status_code in (401, 403):
+            _circuit.failure()
+            raise BridgeUnavailable()
+        _circuit.success()
+        if resp.status_code == 404:
+            return None
+        if resp.status_code != 200 or not resp.content.startswith(b"%PDF"):
+            raise BridgeUnavailable(f"bridge_{resp.status_code}")
+        return resp.content
 
     async def codebook(self, name: CodebookName, start: int, count: int) -> CodebookPage:
         return await self._model(CodebookPage, f"/sync/codebooks/{name}", {"from": start, "count": count})

@@ -344,6 +344,6 @@ async def test_3b_nav_shows_money_only_with_the_feature(
     try:
         sections = (await client.get("/api/settings/nav")).json()["sections"]
         money = next(s for s in sections if s["path"] == "money")
-        assert [s["id"] for s in money["subs"]] == ["13a", "13e"]  # 13c / 13f hidden in Phase 3 (#150)
+        assert [s["id"] for s in money["subs"]] == ["13a", "13b", "13e"]  # 13c / 13f hidden in Phase 3 (#150)
     finally:
         app.state.settings.feature_money = False

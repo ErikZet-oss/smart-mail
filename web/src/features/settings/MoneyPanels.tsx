@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CircleAlert, CircleCheck, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Banner } from '../../components/Banner';
@@ -8,12 +9,17 @@ import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { INPUT } from './adminUi';
 import {
+  fetchMoneyReports,
   fetchMoneyStatus,
   fetchMoneySync,
+  moneyReportsKey,
   moneyStatusKey,
   moneySyncKey,
   saveMoneyInterval,
+  saveMoneyReports,
   startMoneySync,
+  testMoneyReport,
+  type MoneyReports,
   type MoneyEntityState,
 } from './settingsApi';
 
@@ -218,6 +224,120 @@ export function MoneySyncPanel() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+const REPORT_KINDS = ['invoice', 'proforma'] as const;
+const REPORT_LANGS = ['sk', 'en', 'de'] as const;
+const REPORT_ID = /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|\d{1,9})$/;
+
+/** W12-13b Tlačové zostavy (Phase 3d): Money report id per document and language + „Vyskúšať PDF“. */
+export function MoneyReportsPanel() {
+  const query = useQuery({ queryKey: moneyReportsKey, queryFn: fetchMoneyReports });
+  if (!query.data) return null;
+  return <ReportsForm key={query.dataUpdatedAt} initial={query.data} />;
+}
+
+function ReportsForm({ initial }: { initial: MoneyReports }) {
+  const { t } = useTranslation();
+  const toasts = useToasts();
+  const qc = useQueryClient();
+  const [form, setForm] = useState<MoneyReports>(initial);
+  const [number, setNumber] = useState('');
+  const invalid = REPORT_KINDS.some((k) => REPORT_LANGS.some((l) => form[k][l] && !REPORT_ID.test(form[k][l])));
+  const save = useMutation({
+    mutationFn: () => saveMoneyReports(form),
+    onSuccess: (out) => {
+      qc.setQueryData(moneyReportsKey, out);
+      toasts.success(t('settings.saved'));
+    },
+    onError: (e) => {
+      const code = e instanceof ApiError ? e.detail.code : 'generic';
+      toasts.error(t(`money.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
+    },
+  });
+  const tryPdf = useMutation({
+    mutationFn: ({ kind, lang }: { kind: string; lang: string }) => testMoneyReport(kind, lang, number.trim()),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    },
+    onError: (e) => {
+      const code = e instanceof ApiError ? e.detail.code : 'generic';
+      toasts.error(t(`money.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
+    },
+  });
+  return (
+    <div className="flex max-w-[var(--layout-settings-form-max)] flex-col gap-4" data-testid="settings-money-reports">
+      <table className="type-small w-full text-left text-text-primary">
+        <thead>
+          <tr className="text-text-secondary">
+            <th className="py-1 font-normal">{t('money.reports.document')}</th>
+            {REPORT_LANGS.map((l) => (
+              <th key={l} className="py-1 font-normal">
+                {l.toUpperCase()}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {REPORT_KINDS.map((k) => (
+            <tr key={k} className="border-t border-border-default">
+              <td className="py-2 pr-2">{t(`money.reports.kinds.${k}`)}</td>
+              {REPORT_LANGS.map((l) => {
+                const value = form[k][l];
+                const bad = Boolean(value) && !REPORT_ID.test(value);
+                return (
+                  <td key={l} className="py-2 pr-2">
+                    <input
+                      aria-label={t('money.reports.field', {
+                        kind: t(`money.reports.kinds.${k}`),
+                        lang: l.toUpperCase(),
+                      })}
+                      aria-invalid={bad}
+                      value={value}
+                      onChange={(e) => setForm({ ...form, [k]: { ...form[k], [l]: e.target.value.trim() } })}
+                      placeholder={l === 'sk' ? t('money.reports.placeholder') : t('money.reports.fallback')}
+                      className={`${INPUT} w-full ${bad ? 'border-danger-600' : ''}`}
+                    />
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {invalid ? <p className="type-small text-danger-600">{t('money.reports.invalid')}</p> : null}
+      <div>
+        <Button type="button" disabled={invalid || save.isPending} onClick={() => save.mutate()}>
+          {t('settings.save')}
+        </Button>
+      </div>
+      <section className="flex flex-col gap-2 rounded-lg border border-border-default p-3">
+        <h3 className="type-label text-text-primary">{t('money.reports.tryTitle')}</h3>
+        <label className="flex flex-col gap-1">
+          <span className="type-small text-text-secondary">{t('money.reports.tryNumber')}</span>
+          <input value={number} onChange={(e) => setNumber(e.target.value)} className={INPUT} />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {REPORT_KINDS.flatMap((k) =>
+            REPORT_LANGS.map((l) => (
+              <Button
+                key={`${k}-${l}`}
+                type="button"
+                variant="secondary"
+                disabled={number.trim().length < 3 || tryPdf.isPending}
+                onClick={() => tryPdf.mutate({ kind: k, lang: l })}
+              >
+                {t('money.reports.try', { kind: t(`money.reports.short.${k}`), lang: l.toUpperCase() })}
+              </Button>
+            )),
+          )}
+        </div>
+      </section>
+      <p className="type-small text-text-secondary">{t('money.reports.info')}</p>
     </div>
   );
 }

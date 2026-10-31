@@ -38,6 +38,7 @@ import { ApiError, formatRef } from '../../lib/api';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { AiSuggestionCard } from '../ai/AiSuggestionCard';
 import { ConformitySuggestionCard } from '../ai/ConformitySuggestionCard';
+import { InvoiceSuggestionCard } from '../ai/InvoiceSuggestionCard';
 import { fetchSuggestions, suggestionsKey } from '../ai/suggestionsApi';
 import { fetchMe } from '../auth/authApi';
 import { CompanyChip } from '../money/CompanyChip';
@@ -756,7 +757,13 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           />
         ) : null}
         {customerOpen && messageId && mobile ? (
-          <CustomerPanel messageId={messageId} readOnly={readOnly} mobile onClose={() => toggleCustomer(false)} />
+          <CustomerPanel
+            messageId={messageId}
+            mailbox={mailbox}
+            readOnly={readOnly}
+            mobile
+            onClose={() => toggleCustomer(false)}
+          />
         ) : null}
         {categoryOpen && msg ? (
           <CategoryDialog
@@ -807,7 +814,13 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
       </section>
       {/* W3b: right column next to the reading pane (Figma 36:31480) — the reading pane narrows */}
       {customerOpen && messageId && !mobile ? (
-        <CustomerPanel messageId={messageId} readOnly={readOnly} mobile={false} onClose={() => toggleCustomer(false)} />
+        <CustomerPanel
+          messageId={messageId}
+          mailbox={mailbox}
+          readOnly={readOnly}
+          mobile={false}
+          onClose={() => toggleCustomer(false)}
+        />
       ) : null}
     </div>
   );
@@ -840,7 +853,15 @@ function SuggestionCards({
   return (
     <div className="flex flex-col gap-2 py-3" data-testid="ai-suggestions">
       {shown.map((s) =>
-        s.type === 'conformity_declaration' ? (
+        s.type === 'invoice_attach' ? (
+          <InvoiceSuggestionCard
+            key={s.id}
+            suggestion={s}
+            mailbox={mailbox}
+            messageId={messageId}
+            readOnly={readOnly}
+          />
+        ) : s.type === 'conformity_declaration' ? (
           <ConformitySuggestionCard
             key={s.id}
             suggestion={s}

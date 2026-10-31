@@ -75,6 +75,8 @@ export const searchCompanies = (q: string) =>
   api<CompanyBrief[]>('GET', `/api/money/companies/search?q=${encodeURIComponent(q)}`);
 export const linkEmail = (email: string, companyMoneyId: string) =>
   api<CustomerMatch>('POST', '/api/money/links', { email, company_money_id: companyMoneyId });
+export const createInvoiceDraft = (messageId: string, number: string) =>
+  api<{ draft_id: string }>('POST', `/api/money/messages/${encodeURIComponent(messageId)}/invoice-draft`, { number });
 export const unlinkEmail = (email: string) =>
   api<{ deleted: boolean }>('DELETE', `/api/money/links?email=${encodeURIComponent(email)}`);
 

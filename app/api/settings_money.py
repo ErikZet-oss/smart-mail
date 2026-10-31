@@ -1,7 +1,7 @@
 """Settings 13a Prepojenie (status card) and 13e Synchronizácia (interval, sync now, history) — Phase 3b, admin only.
 
-13c and 13f (write features) stay hidden in Phase 3 (Erik, #150). The writes switch of 13a and the probe upload
-come with the milestones that need them.
+13b Tlačové zostavy (report ids per kind and language) comes with 3d. 13c and 13f (write features) stay hidden in
+Phase 3 (Erik, #150). The writes switch of 13a and the probe upload come with the milestones that need them.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from arq.connections import ArqRedis
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
@@ -23,6 +23,14 @@ from app.auth.models import Person
 from app.core.audit import audit
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.cache_sync import ENTITIES
+from app.money.invoice_attach import (
+    REPORT_KINDS,
+    REPORT_LANGS,
+    SECTION_REPORTS,
+    load_reports,
+    pick_report,
+    report_id_valid,
+)
 from app.money.jobs import LOCK_KEY, SECTION_SYNC, sync_interval
 from app.money.models import MoneyCodebook, MoneyCompany, MoneyPerson, MoneySyncState
 
@@ -181,3 +189,79 @@ async def sync_now(admin: Admin, ctx: Auth, db: DB, request: Request, settings: 
     )
     await db.commit()
     return {"queued": True}
+
+
+# ----- 13b Tlačové zostavy (Phase 3d) -----
+
+
+class ReportsIO(BaseModel):
+    invoice: dict[str, str]
+    proforma: dict[str, str]
+
+
+@router.get("/reports")
+async def get_reports(admin: Admin, db: DB) -> ReportsIO:
+    return ReportsIO(**await load_reports(db))
+
+
+@router.put("/reports")
+async def put_reports(body: ReportsIO, admin: Admin, ctx: Auth, db: DB) -> ReportsIO:
+    clean: dict[str, dict[str, str]] = {}
+    for kind in REPORT_KINDS:
+        values = getattr(body, kind)
+        clean[kind] = {}
+        for lang in REPORT_LANGS:
+            value = str(values.get(lang) or "").strip()
+            if value and not report_id_valid(value):
+                raise fail(422, "report_id_invalid", kind=kind, lang=lang)
+            clean[kind][lang] = value
+    row = await db.scalar(select(OrgSettings).where(OrgSettings.section == SECTION_REPORTS))
+    if row is None:
+        row = OrgSettings(section=SECTION_REPORTS, data={})
+        db.add(row)
+    before = dict(row.data or {})
+    row.data = clean
+    audit(
+        db,
+        "settings.money_reports",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="org_settings",
+        object_id=SECTION_REPORTS,
+        details={"before": before, "after": clean},
+    )
+    await db.commit()
+    return ReportsIO(**clean)
+
+
+@router.get("/reports/test")
+async def test_report(
+    admin: Admin,
+    db: DB,
+    settings: SettingsDep,
+    kind: Literal["invoice", "proforma"],
+    lang: Literal["sk", "en", "de"],
+    number: str = Query(min_length=3, max_length=40),
+) -> Response:
+    """„Vyskúšať PDF“: the saved report for this kind and language with one invoice the admin names."""
+    if not settings.feature_money:
+        raise fail(409, "money_disabled")
+    report = pick_report(await load_reports(db), kind, lang)
+    if report is None:
+        raise fail(409, "report_not_configured")
+    async with BridgeClient(settings) as bridge:
+        try:
+            found = await bridge.search_invoices(number=number.strip())
+            invoice = next((i for i in found.items if i.kind == kind), None)
+            if invoice is None:
+                raise fail(404, "invoice_not_found")
+            pdf = await bridge.invoice_pdf(kind, invoice.id, report)
+        except BridgeUnavailable as exc:
+            raise fail(503, "money_unavailable", reason=exc.code) from None
+    if not pdf:
+        raise fail(404, "pdf_missing")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Cache-Control": "no-store", "Content-Disposition": "inline; filename=test.pdf"},
+    )

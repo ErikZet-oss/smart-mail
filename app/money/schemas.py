@@ -88,6 +88,11 @@ class IssuedInvoice(_Model):
     doc_type: int | None
 
 
+class InvoiceSearch(_Model):
+    matched_by: Literal["number", "variable_symbol", "reference", "company_dates", "number_digits", "none"]
+    items: list[IssuedInvoice]
+
+
 class Order(_Model):
     id: uuid.UUID
     number: str

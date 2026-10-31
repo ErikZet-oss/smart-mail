@@ -287,6 +287,9 @@ class SuggestionOut(BaseModel):
     blocked: bool
     # #139 part C: the prefilled Prehlásenie o zhode form (type conformity_declaration); None for replies
     conformity: dict[str, Any] | None = None
+    # Phase 3d: invoice_attach — the invoices whose original Money PDF goes with the draft, and the company
+    invoices: list[dict[str, Any]] | None = None
+    company_name: str | None = None
 
 
 def suggestion_out(row: AiSuggestion) -> SuggestionOut:
@@ -313,6 +316,12 @@ def suggestion_out(row: AiSuggestion) -> SuggestionOut:
             if row.suggestion_type == "conformity_declaration"
             else None
         ),
+        invoices=(
+            [i for i in payload.get("invoices") or [] if isinstance(i, dict)]
+            if row.suggestion_type == "invoice_attach"
+            else None
+        ),
+        company_name=payload.get("company_name") if row.suggestion_type == "invoice_attach" else None,
     )
 
 

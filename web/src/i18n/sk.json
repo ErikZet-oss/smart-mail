@@ -1495,6 +1495,33 @@
         "generic": "AI teraz neodpovedá – skúste to znova."
       }
     },
+    "invoice": {
+      "title": "Návrh: poslať faktúru z Money",
+      "subline": "{{company}} · komu: {{to}}",
+      "invoice": "faktúra",
+      "proforma": "zálohová faktúra",
+      "approve": "Pripraviť koncept s faktúrou",
+      "drafted": "Koncept s faktúrou z Money je pripravený v Konceptoch. Skontrolujte ho a odošlite.",
+      "footer": "Priloží sa originálne PDF z Money. Pri schválení aj pri odoslaní sa znova overí, že faktúra patrí firme príjemcu.",
+      "checks": {
+        "invoice_owner_ok": "Faktúra patrí firme príjemcu",
+        "recipient_unconfirmed": "Príjemca {{email}} nie je overený pre firmu v Money – priraďte ho v paneli Zákazník",
+        "recipient_not_document_owner": "Faktúra {{number}} patrí inej firme – nepriloží sa",
+        "invoice_other_customer": "Faktúra {{number}} patrí inej firme – do konceptu sa nepridá",
+        "invoice_not_found": "Faktúra {{number}} sa v Money nenašla",
+        "report_not_configured": "Chýba tlačová zostava v Nastavenia › Money S4 › Tlačové zostavy",
+        "no_invoice": "Žiadna faktúra na poslanie"
+      },
+      "errors": {
+        "suggestion_blocked": "Kontrola v Money zastavila prípravu – faktúra nepatrí firme príjemcu alebo príjemca nie je overený.",
+        "money_unavailable": "Money je teraz nedostupné. Skúste to o chvíľu.",
+        "money_disabled": "Prepojenie s Money je vypnuté.",
+        "report_not_configured": "Chýba tlačová zostava pre tento doklad a jazyk (Nastavenia › Money S4).",
+        "pdf_missing": "Money pre túto faktúru PDF nevrátilo.",
+        "role_not_allowed": "Faktúry posiela obchod, účtovníctvo alebo správca.",
+        "no_recipient": "Správa nemá externého príjemcu."
+      }
+    },
     "card": {
       "replyTitle": "Návrh odpovede",
       "collapsed": {
@@ -1600,6 +1627,19 @@
     }
   },
   "money": {
+    "reports": {
+      "document": "Doklad",
+      "kinds": { "invoice": "Faktúra vydaná", "proforma": "Zálohová faktúra vydaná" },
+      "short": { "invoice": "faktúra", "proforma": "zálohová" },
+      "field": "ID zostavy – {{kind}} {{lang}}",
+      "placeholder": "ID zostavy z Money",
+      "fallback": "prázdne = SK",
+      "invalid": "ID zostavy je GUID alebo číslo konfigurácie zostavy.",
+      "tryTitle": "Vyskúšať PDF",
+      "tryNumber": "Číslo faktúry na vyskúšanie",
+      "try": "Vyskúšať {{kind}} {{lang}}",
+      "info": "Faktúry sa v Smart Mail nikdy nevytvárajú ani neprekresľujú – k e-mailu sa priloží vždy originálne PDF z Money. Dodacie listy a objednávky Money cez API ako PDF neposkytuje."
+    },
     "customer": {
       "title": "Zákazník",
       "panel": "Asistent a zákazník",
@@ -1617,6 +1657,7 @@
       "lateDays_few": "{{count}} dni po splatnosti",
       "lateDays_other": "{{count}} dní po splatnosti",
       "send": "Poslať",
+      "sendInvoice": "Poslať faktúru {{number}} zákazníkovi",
       "statement": "Výpis",
       "statementLong": "Výpis neuhradených",
       "offer": "Pripraviť ponuku",

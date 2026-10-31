@@ -470,7 +470,7 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
         "fields": [],
     },
     {
-        # SETTINGS_SPEC 13 Money S4 (G, admin) — Phase 3b: 13a status, 13e sync. 13b/13d come with 3d/3f;
+        # SETTINGS_SPEC 13 Money S4 (G, admin) — Phase 3b: 13a status, 13e sync; 3d: 13b reports; 13d comes with 3f;
         # 13c and 13f (writes) stay hidden in Phase 3 (Erik, #150). Shown only with FEATURE_MONEY.
         "id": "13",
         "path": "money",
@@ -479,6 +479,7 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
         "feature": "money",
         "subs": [
             {"id": "13a", "path": "connection", "title": "Prepojenie", "fields": []},
+            {"id": "13b", "path": "reports", "title": "Tlačové zostavy", "fields": []},
             {
                 "id": "13e",
                 "path": "sync",
@@ -609,8 +610,8 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
 
 def schema_document() -> dict[str, Any]:
     return {
-        "version": "3b",
-        "phase": "3b",
+        "version": "3d",
+        "phase": "3d",
         "sections": PHASE_1F_SECTIONS,
     }
 
