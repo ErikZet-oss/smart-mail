@@ -1,11 +1,15 @@
-import { FolderOpen, Mail, Settings, SquarePen, UserRound, Users } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Building2, FileText, FolderOpen, Mail, Settings, SquarePen, UserRound, Users } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { money as formatMoney, moneySearch } from '../money/moneyApi';
+import { useFeatures } from '../system/features';
+
 type Item = {
   id: string;
-  group: 'commands' | 'mail' | 'contacts';
+  group: 'commands' | 'mail' | 'contacts' | 'companies' | 'documents';
   label: string;
   hint?: string;
   icon: ReactNode;
@@ -15,8 +19,8 @@ type Item = {
 type Props = { onClose: () => void };
 
 /**
- * W11 Paleta príkazov (Ctrl+K) — Phase 1 basic groups only:
- * Príkazy, E-maily, Kontakty. Firmy / Doklady / Asistent are not rendered (phase 1g plan).
+ * W11 Paleta príkazov (Ctrl+K): Príkazy, E-maily, Kontakty; with FEATURE_MONEY also Firmy (read cache) and Doklady
+ * (invoice number, live — Phase 3g). Asistent comes in Phase 5.
  */
 export function CommandPalette({ onClose }: Props) {
   const { t } = useTranslation();
@@ -83,11 +87,44 @@ export function CommandPalette({ onClose }: Props) {
     [navigate, t],
   );
 
+  const features = useFeatures();
+  const term = q.trim();
+  const money = useQuery({
+    queryKey: ['money', 'palette', term],
+    queryFn: () => moneySearch(term),
+    enabled: features.money && term.length >= 2,
+    staleTime: 30_000,
+    retry: false,
+  });
+  const moneyItems: Item[] = useMemo(
+    () => [
+      ...(money.data?.companies ?? []).map((c) => ({
+        id: `company-${c.money_id}`,
+        group: 'companies' as const,
+        label: c.name,
+        hint: c.ico ?? undefined,
+        icon: <Building2 size={16} />,
+        run: () => navigate(`/contacts/company/${c.money_id}`),
+      })),
+      ...(money.data?.invoices ?? []).map((i) => ({
+        id: `invoice-${i.id}`,
+        group: 'documents' as const,
+        label: i.number,
+        hint: formatMoney(i.remaining),
+        icon: <FileText size={16} />,
+        run: () => {
+          if (i.company_id) navigate(`/contacts/company/${i.company_id}?tab=documents`);
+        },
+      })),
+    ],
+    [money.data, navigate],
+  );
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return items;
-    return items.filter((it) => it.label.toLowerCase().includes(needle));
-  }, [items, q]);
+    return [...items.filter((it) => it.label.toLowerCase().includes(needle)), ...moneyItems];
+  }, [items, moneyItems, q]);
 
   const safeActive = Math.min(active, Math.max(0, filtered.length - 1));
 
@@ -105,6 +142,8 @@ export function CommandPalette({ onClose }: Props) {
     { id: 'commands', label: t('palette.groups.commands') },
     { id: 'mail', label: t('palette.groups.mail') },
     { id: 'contacts', label: t('palette.groups.contacts') },
+    { id: 'companies', label: t('palette.groups.companies') },
+    { id: 'documents', label: t('palette.groups.documents') },
   ];
 
   return (

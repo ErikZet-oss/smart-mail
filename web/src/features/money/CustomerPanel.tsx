@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
@@ -38,7 +38,7 @@ import {
 } from './moneyApi';
 
 type Props = { messageId: string; mailbox: string; readOnly: boolean; mobile: boolean; onClose: () => void };
-type MobileTab = 'overview' | 'documents' | 'contacts';
+export type MobileTab = 'overview' | 'documents' | 'contacts';
 
 /**
  * W3b (desktop: right column 380 px next to the reading pane, tabs „Asistent | Zákazník“ — the assistant comes in
@@ -458,7 +458,19 @@ export function CustomerCard({
           <div className="flex items-start gap-3">
             <Initials name={company.name} size="size-11" />
             <div className="min-w-0 flex-1">
-              <h3 className="type-heading text-text-primary">{company.name}</h3>
+              <h3 className="type-heading flex items-center gap-1 text-text-primary">
+                <span className="min-w-0 truncate">{company.name}</span>
+                {messageId ? (
+                  <Link
+                    to={`/contacts/company/${company.money_id}`}
+                    aria-label={t('money.customer.open360')}
+                    title={t('money.customer.open360')}
+                    className="inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-text-secondary hover:bg-bg-subtle"
+                  >
+                    <ExternalLink size={14} aria-hidden="true" />
+                  </Link>
+                ) : null}
+              </h3>
               <p className="type-small text-text-secondary">
                 {[
                   company.ico ? t('money.customer.ico', { ico: company.ico }) : null,
@@ -551,7 +563,7 @@ export function CustomerCard({
                           <Button
                             type="button"
                             variant="secondary"
-                            disabled={readOnly || sendInvoice.isPending}
+                            disabled={readOnly || !messageId || sendInvoice.isPending}
                             onClick={() => sendInvoice.mutate(i.number)}
                             aria-label={t('money.customer.sendInvoice', { number: i.number })}
                             icon={<Send size={14} aria-hidden="true" />}

@@ -2,6 +2,21 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3g: Zákazník 360 + Money in search (#144)
+
+- **W9a `/contacts/company/:moneyId`** (viewer+, only with FEATURE_MONEY):
+  - header: name, IČO · DIČ · IČ DPH · code, „Napísať“;
+  - tab **Prehľad**: chips and KPIs;
+  - tab **E-maily**: mail from or to the company's addresses — Money e-mails, Money persons and confirmed links — in the mailboxes this login sees; someone else's private folders are hidden;
+  - tab **Doklady**: up to 50 open invoices, orders and delivery notes;
+  - tab **Kontakty a aktivity**.
+  - The Zákazník panel links to it.
+- **Search:** `GET /api/money/search` — companies from the read cache (name, IČO, code) and, for sales / accounting / admin, invoices by number (live; `~ # | ( )` never sent; Money down → only the companies, the rest of the search keeps working).
+  - **Ctrl+K** shows the groups **Firmy** and **Doklady**.
+  - **W10** shows „Firmy a doklady z Money“ above the e-mails.
+- The card endpoint takes `rows` (5 in the panel, up to 50 in W9a).
+- Not in this step: AI summary of the relationship, 12-month turnover, credit bar, W9b Objednávky (later phases).
+
 ## [Unreleased] — Phase 3e: W8b Upomienky (#144)
 
 - **Bridge** `GET /receivables/overdue?before=` (MONEY_API §5.2 for all customers: `UhradyZbyva~gt~0#DatumSplatnosti~lt~<date>`, paged); mock + contract test + contract fixture.
