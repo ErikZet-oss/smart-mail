@@ -8,14 +8,15 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
+from app.approval import JtiCache
 from app.auth import ReplayCache, verify_request
 from app.backend import MoneyBackend, MoneyError, MoneyUnavailable, WaitingForProbe
 from app.config import BridgeSettings, get_settings
 from app.filters import UnsafeFilterValue
 from app.models import Health
-from app.routers import read
+from app.routers import read, write
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 
 def make_backend(settings: BridgeSettings) -> MoneyBackend:
@@ -43,6 +44,8 @@ def create_app(settings: BridgeSettings | None = None, backend: MoneyBackend | N
         title="Smart Mail – Money bridge", version=__version__, lifespan=lifespan, docs_url=None, redoc_url=None
     )
     app.state.backend = backend or make_backend(settings)
+    app.state.settings = settings
+    app.state.jtis = JtiCache()
     replay = ReplayCache()
 
     async def hmac_guard(request: Request) -> None:
@@ -90,6 +93,7 @@ def create_app(settings: BridgeSettings | None = None, backend: MoneyBackend | N
         return {"status": "ready", "backend": settings.money_backend, "money_version": version}
 
     app.include_router(read.router, dependencies=[Depends(hmac_guard)])
+    app.include_router(write.router, dependencies=[Depends(hmac_guard)])
     return app
 
 

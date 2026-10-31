@@ -2,7 +2,7 @@
   "_comment": "FICTIONAL data from the bridge mock — the contract between bridge and app (Phase 3b)",
   "healthz": {
     "status": "ok",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "backend": "mock",
     "agenda": "TEST",
     "writes_enabled": false

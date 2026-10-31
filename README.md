@@ -385,6 +385,32 @@ FEATURE_MONEY=true
 V aplikácii potom **Nastavenia › Money S4 › Prepojenie › Otestovať** ukáže „Money S4 je pripojené“ a agendu
 TESTOVACIA.
 
+### 4. Zápisy do Money (aktivita po odoslaní, fáza 3f)
+Smart Mail vie po odoslaní faktúry alebo upomienky zapísať do Money **aktivitu** (len predmet a čísla faktúr, nikdy
+text e-mailu). Každý zápis je podpísaný jednorazovým kľúčom, ktorý vie overiť iba most.
+1. Na VPS spustite (vytvorí kľúč, ak ešte nie je, a vypíše **verejný** kľúč – súkromný nikdy neopustí VPS):
+
+```bash
+./deploy/approval-key.sh
+```
+
+```bash
+./deploy/update.sh
+```
+
+2. Na serveri Money otvorte ako správca Poznámkový blok, súbor `C:\SmartMail\bridge\.env`, a pridajte (alebo
+   prepíšte) riadok `APPROVAL_JWT_PUBLIC_KEY=…` presne tak, ako ho skript vypísal. Potom reštartujte službu:
+
+```powershell
+Restart-Service SmartMailBridge
+```
+
+3. V aplikácii: **Nastavenia › Money S4 › Aktivity** – vyberte typ aktivity pre „odoslaný e-mail“ a pre
+   „upomienku“ (zoznam ide z Money) a uložte. Potom **Prepojenie › Zápisy do Money povolené** zapnite (aplikácia sa
+   spýta na heslo). Kým je tento vypínač vypnutý, do Money sa nezapisuje nič.
+4. Ak zápis zlyhá, nikdy sa sám neopakuje – uvidíte ho v **Aktivity › Nezapísané** s tlačidlom „Skúsiť znova“.
+   Na skutočnom Money sa zápis zapne až po teste `money_probe.py` (dovtedy odpovie „čaká na test prepojenia“).
+
 ### Aktualizácia mostu
 Stiahnite nový ZIP, rozbaľte ho a ako správca spustite:
 

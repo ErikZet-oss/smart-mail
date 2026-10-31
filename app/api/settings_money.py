@@ -7,6 +7,7 @@ Phase 3 (Erik, #150). The writes switch of 13a and the probe upload come with th
 from __future__ import annotations
 
 import time
+import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -20,7 +21,16 @@ from app.api.mail import fail
 from app.api.settings import require_admin
 from app.auth.deps import DB, Auth, SettingsDep
 from app.auth.models import Person
+from app.auth.reauth import RecentReauth
 from app.core.audit import audit
+from app.core.config import Settings
+from app.money.activities import (
+    SECTION_ACTIVITIES,
+    SECTION_WRITES,
+    ActivitySettings,
+    failed_activities,
+    load_activity_settings,
+)
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.cache_sync import ENTITIES
 from app.money.invoice_attach import (
@@ -265,3 +275,176 @@ async def test_report(
         media_type="application/pdf",
         headers={"Cache-Control": "no-store", "Content-Disposition": "inline; filename=test.pdf"},
     )
+
+
+# ----- 13a Zápisy do Money povolené ⚠ + 13d Aktivity (Phase 3f) -----
+
+
+class WritesOut(BaseModel):
+    enabled: bool
+    key_configured: bool  # APPROVAL_JWT_PRIVATE_KEY on the VPS
+
+
+class WritesIn(BaseModel):
+    enabled: bool
+
+
+async def _org_row(db: DB, section: str) -> OrgSettings:
+    row = await db.scalar(select(OrgSettings).where(OrgSettings.section == section))
+    if row is None:
+        row = OrgSettings(section=section, data={})
+        db.add(row)
+    return row
+
+
+def _writes_out(conf: ActivitySettings, settings: Settings) -> WritesOut:
+    key = settings.approval_jwt_private_key
+    return WritesOut(enabled=conf.writes_enabled, key_configured=bool(key and key.get_secret_value().strip()))
+
+
+@router.get("/writes")
+async def get_writes(admin: Admin, db: DB, settings: SettingsDep) -> WritesOut:
+    return _writes_out(await load_activity_settings(db), settings)
+
+
+@router.put("/writes")
+async def put_writes(body: WritesIn, ctx: RecentReauth, db: DB, settings: SettingsDep) -> WritesOut:
+    """⚠ main switch of all Money writes — re-auth (#54) and audit. Phase 3 runs on the TEST agenda only (the bridge
+    refuses `MONEY_BACKEND=api` elsewhere), so the „type OSTRÁ“ confirmation of SETTINGS_SPEC 13a is not needed yet."""
+    admin = ctx.person
+    assert admin is not None
+    if body.enabled and not _writes_out(await load_activity_settings(db), settings).key_configured:
+        raise fail(409, "approval_key_missing")
+    row = await _org_row(db, SECTION_WRITES)
+    before = (row.data or {}).get("enabled") is True
+    row.data = {**(row.data or {}), "enabled": body.enabled}
+    audit(
+        db,
+        "settings.money_writes",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="org_settings",
+        object_id=SECTION_WRITES,
+        details={"before": before, "after": body.enabled},
+    )
+    await db.commit()
+    return _writes_out(await load_activity_settings(db), settings)
+
+
+class ActivityTypeOut(BaseModel):
+    id: str
+    code: str | None
+    name: str | None
+
+
+class FailedActivityOut(BaseModel):
+    draft_id: str
+    at: datetime
+    error: str | None
+    kind: str | None
+    invoices: list[str]
+
+
+class ActivitiesOut(BaseModel):
+    enabled: bool
+    type_email: str | None
+    type_reminder: str | None
+    writes_enabled: bool
+    types: list[ActivityTypeOut]
+    failed: list[FailedActivityOut]
+
+
+class ActivitiesIn(BaseModel):
+    enabled: bool
+    type_email: str | None = None
+    type_reminder: str | None = None
+
+
+async def _activities_out(db: DB) -> ActivitiesOut:
+    conf = await load_activity_settings(db)
+    types = (
+        await db.scalars(
+            select(MoneyCodebook)
+            .where(MoneyCodebook.kind == "activity-types", MoneyCodebook.active.is_(True))
+            .order_by(MoneyCodebook.name)
+        )
+    ).all()
+    failed = await failed_activities(db)
+    return ActivitiesOut(
+        enabled=conf.enabled,
+        type_email=conf.type_email,
+        type_reminder=conf.type_reminder,
+        writes_enabled=conf.writes_enabled,
+        types=[ActivityTypeOut(id=str(t.money_id), code=t.code, name=t.name) for t in types],
+        failed=[
+            FailedActivityOut(
+                draft_id=str(f.object_id),
+                at=f.created_at,
+                error=(f.details or {}).get("error"),
+                kind=(f.details or {}).get("kind"),
+                invoices=[str(n) for n in (f.details or {}).get("invoices") or []],
+            )
+            for f in failed
+        ],
+    )
+
+
+@router.get("/activities")
+async def get_activities(admin: Admin, db: DB) -> ActivitiesOut:
+    return await _activities_out(db)
+
+
+@router.put("/activities")
+async def put_activities(body: ActivitiesIn, admin: Admin, ctx: Auth, db: DB) -> ActivitiesOut:
+    known = {
+        str(t)
+        for t in await db.scalars(
+            select(MoneyCodebook.money_id).where(MoneyCodebook.kind == "activity-types", MoneyCodebook.active.is_(True))
+        )
+    }
+    for value in (body.type_email, body.type_reminder):
+        if value and value not in known:
+            raise fail(422, "activity_type_unknown")  # only types from Money's own codebook, never a guessed GUID
+    if body.enabled and not (body.type_email and body.type_reminder):
+        raise fail(422, "activity_type_required")
+    row = await _org_row(db, SECTION_ACTIVITIES)
+    before = dict(row.data or {})
+    row.data = {"enabled": body.enabled, "type_email": body.type_email, "type_reminder": body.type_reminder}
+    audit(
+        db,
+        "settings.money_activities",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="org_settings",
+        object_id=SECTION_ACTIVITIES,
+        details={"before": before, "after": row.data},
+    )
+    await db.commit()
+    return await _activities_out(db)
+
+
+@router.post("/activities/{draft_id}/retry", status_code=202)
+async def retry_activity(
+    draft_id: uuid.UUID, admin: Admin, ctx: Auth, db: DB, request: Request, settings: SettingsDep
+) -> dict[str, bool]:
+    """13d: the admin repeats a failed write by hand (never automatic). The SMID keeps it idempotent."""
+    if not settings.feature_money:
+        raise fail(409, "money_disabled")
+    conf = await load_activity_settings(db)
+    if not conf.writes_enabled or not conf.enabled:
+        raise fail(409, "writes_disabled")
+    redis = request.app.state.redis
+    await ArqRedis(connection_pool=redis.connection_pool).enqueue_job(
+        "money_activity_job", str(draft_id), _job_id=f"money-activity:{draft_id}:retry:{uuid.uuid4().hex[:8]}"
+    )
+    audit(
+        db,
+        "money.activity_retry",
+        account_id=ctx.account.id,
+        person_id=admin.id,
+        object_type="compose_draft",
+        object_id=str(draft_id),
+        details={},
+    )
+    await db.commit()
+    return {"queued": True}

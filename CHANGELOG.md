@@ -5,6 +5,23 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 ## [Unreleased] — Phase 3 close-out report
 
 - `docs/phase3-closeout.md`: milestones 3a–3h, acceptance status (real TEST run pending the office install + probe), gates, items waiting for the probe, what is needed from Erik, risks.
+## [Unreleased] — Phase 3f: CRM activity in Money after send (ADR-017, #144)
+
+- **First Money write** (approved by Erik in #144): after a person sends an e-mail with a Money invoice (3d) or a reminder (3e), the app writes an **activity** (REST `Activity`) with the type chosen in **13d**.
+  - It goes only when **13a „Zápisy do Money povolené“ ⚠** (default **off**, re-auth, audit) and 13d are on.
+  - Only the subject and the invoice numbers are written — never the body.
+  - Idempotent with `SMID:<draft_id>`; one attempt (`max_tries=1`), never retried automatically.
+  - Failures are listed in 13d „Nezapísané aktivity“ with a manual „Skúsiť znova“.
+- **Approval token** (ADR-017):
+  - an Ed25519 JWT (PyJWT[crypto], app + bridge), bound to the action, company, person and the sha256 of the exact body;
+  - `exp` ≤ 5 min, single-use `jti`, on top of HMAC;
+  - the bridge refuses writes without the public key (`writes_enabled` false in `/healthz`).
+- **Bridge:**
+  - `POST /activities`, with the mock idempotent by SMID;
+  - the real API answers 501 `waiting_for_probe` until `money_probe.py` confirms the required fields and the REST filter;
+  - new codebook `activity-types` (REST `TypeOfActivity`).
+- **Keys:** `install.sh` generates the private key into `deploy/.env`; `deploy/approval-key.sh` creates it on existing installs and prints only the public key for `C:\SmartMail\bridge\.env`. The Windows installer asks for it. README (SK) has the steps.
+- Settings 13d added to the schema (`version 3f`).
 
 ## [Unreleased] — Phase 3h: bridge on the office Windows Server (ADR-016, #144)
 

@@ -1,6 +1,6 @@
 {
-  "version": "3d",
-  "phase": "3d",
+  "version": "3f",
+  "phase": "3f",
   "sections": [
     {
       "id": "01",
@@ -827,6 +827,12 @@
           "id": "13b",
           "path": "reports",
           "title": "Tlačové zostavy",
+          "fields": []
+        },
+        {
+          "id": "13d",
+          "path": "activities",
+          "title": "Aktivity",
           "fields": []
         },
         {
