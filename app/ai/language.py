@@ -34,9 +34,31 @@ _HU = re.compile(
 
 def detect_language(text: str) -> str:
     """Return sk|cs|en|de|pl|hu|other from plain text (subject + body)."""
+    return _detect(text)[0]
+
+
+def is_confident(text: str) -> bool:
+    """The heuristic is clear: ≥ 3 hits and at least twice the runner-up."""
+    _, best_n, second_n = _detect(text)
+    return best_n >= 3 and best_n >= 2 * second_n
+
+
+def final_language(text: str, llm_language: str | None) -> str:
+    """Pilot 2026-10-31: a Slovak e-mail („Dobrý deň, potreboval by som poslať našu poslednú faktúru“) came back
+    from the classifier LLM as „pl“ and the reply was drafted in Polish. A clear heuristic result wins; the LLM
+    decides only when the heuristic is unsure or found nothing."""
+    heuristic = detect_language(text)
+    if heuristic != "other" and is_confident(text):
+        return heuristic
+    if llm_language and llm_language != "other":
+        return llm_language
+    return heuristic
+
+
+def _detect(text: str) -> tuple[str, int, int]:
     sample = (text or "")[:4000]
     if not sample.strip():
-        return "other"
+        return "other", 0, 0
     scores: list[tuple[int, str]] = [
         (len(_SK.findall(sample)), "sk"),
         (len(_CS.findall(sample)), "cs"),
@@ -47,12 +69,13 @@ def detect_language(text: str) -> str:
     ]
     scores.sort(key=lambda x: x[0], reverse=True)
     best_n, best = scores[0]
+    second_n = scores[1][0]
     if best_n == 0:
-        return "other"
+        return "other", 0, 0
     # Slovak vs Czech: prefer sk when tied-ish with Slovak-specific chars
     if best == "cs" and scores[1][1] == "sk" and scores[1][0] >= best_n - 1:
-        return "sk"
-    return best
+        return "sk", best_n, 0
+    return best, best_n, second_n
 
 
 # Drafts (pilot 2026-10-30): a bare code „sk“ in the prompt let the model drift into Czech mid-reply.

@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator
 
 from app.ai.categories import CATEGORIES, CATEGORY_IDS, LANGUAGE_IDS, PRIORITY_IDS, CategoryDef
-from app.ai.language import detect_language
+from app.ai.language import detect_language, final_language
 from app.ai.provider import LLMProvider, LLMRequest, LLMResponse, NullLLMProvider
 from app.ai.rules import RuleHit, apply_rules
 
@@ -465,8 +465,7 @@ async def classify_message(
             parsed = parse_classification_payload(dict(response.tool_input), allowed)
         else:
             parsed = parse_classification_json(response.text, allowed)
-        if not parsed.language or parsed.language == "other":
-            parsed.language = language
+        parsed.language = final_language(text_for_lang, parsed.language)
         return ClassifyOutcome(
             result=parsed,
             source="rules+llm" if rule else "llm",
