@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 3 close-out report
+
+- `docs/phase3-closeout.md`: milestones 3a–3h, acceptance status (real TEST run pending the office install + probe), gates, items waiting for the probe, what is needed from Erik, risks.
+
 ## [Unreleased] — Phase 3h: bridge on the office Windows Server (ADR-016, #144)
 
 - **ADR-016:**
