@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-settings>=2.6",
     "httpx>=0.28",
     "structlog>=24.4",
+    "pyjwt[crypto]>=2.9",
 ]
 
 [dependency-groups]

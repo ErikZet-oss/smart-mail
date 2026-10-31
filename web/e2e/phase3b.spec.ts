@@ -33,6 +33,7 @@ test('3b 13a shows the mock agenda, read-only writes, and the bridge-down state'
   let up = true;
   await mockApi(page, {
     ...BASE,
+    'GET /api/settings/money/writes': { body: { enabled: false, key_configured: true } },
     'GET /api/settings/money/status': () => ({
       body: {
         enabled: true,
@@ -52,7 +53,8 @@ test('3b 13a shows the mock agenda, read-only writes, and the bridge-down state'
   const panel = page.getByTestId('settings-money-connection');
   await expect(panel.getByTestId('money-reachable')).toHaveText('Money S4 je pripojené');
   await expect(panel.getByTestId('money-agenda')).toHaveText('TESTOVACIA · simulované Money (vymyslené údaje)');
-  await expect(panel).toContainText('vypnuté – vo fáze 3 Smart Mail z Money len číta');
+  await expect(panel).toContainText('most zápisy neprijíma');
+  await expect(panel.getByRole('switch', { name: 'Zápisy do Money povolené ⚠' })).not.toBeChecked();
   await expect(panel.getByRole('table')).toContainText('Firmy');
   await shot(page, `phase3b-13a-${info.project.name}`);
   up = false;

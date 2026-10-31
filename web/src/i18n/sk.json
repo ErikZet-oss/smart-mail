@@ -1685,6 +1685,25 @@
     }
   },
   "money": {
+    "writes": {
+      "label": "Zápisy do Money povolené",
+      "help": "Hlavný vypínač všetkých zápisov do Money. Zatiaľ sa zapisuje len aktivita po odoslanej faktúre alebo upomienke.",
+      "noKey": "Na serveri chýba kľúč pre zápisy (APPROVAL_JWT_PRIVATE_KEY) – postup je v README."
+    },
+    "activities": {
+      "enabled": "Zapisovať aktivitu po odoslaní e-mailu zákazníkovi",
+      "help": "Po odoslaní faktúry alebo upomienky sa do Money zapíše aktivita – len predmet a čísla faktúr, nikdy text e-mailu.",
+      "type_email": "Typ aktivity – odoslaný e-mail s faktúrou",
+      "type_reminder": "Typ aktivity – upomienka",
+      "choose": "– vyberte z Money –",
+      "noTypes": "Typy aktivít sa ešte nenačítali z Money – spustite Synchronizáciu.",
+      "typeRequired": "Vyberte oba typy aktivity.",
+      "writesOff": "Zápisy do Money sú vypnuté (Prepojenie › Zápisy do Money povolené). Kým sú vypnuté, nič sa nezapisuje.",
+      "failedTitle": "Nezapísané aktivity",
+      "failedEmpty": "Všetky aktivity sa zapísali.",
+      "retry": "Skúsiť znova",
+      "retried": "Zápis sa spustil znova."
+    },
     "reports": {
       "document": "Doklad",
       "kinds": { "invoice": "Faktúra vydaná", "proforma": "Zálohová faktúra vydaná" },
@@ -1811,8 +1830,9 @@
       "bridgeVersion": "Verzia Money mostu",
       "latency": "Odozva",
       "lastSync": "Posledná synchronizácia",
-      "writes": "Zápisy do Money",
-      "writesOff": "vypnuté – vo fáze 3 Smart Mail z Money len číta",
+      "bridgeWrites": "Zápisy cez most",
+      "bridgeWritesOn": "most prijíma podpísané zápisy",
+      "bridgeWritesOff": "most zápisy neprijíma (chýba verejný kľúč)",
       "test": "Otestovať"
     },
     "cache": {

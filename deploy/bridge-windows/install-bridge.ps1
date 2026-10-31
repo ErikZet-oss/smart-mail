@@ -93,6 +93,7 @@ if (Test-Path $envFile) {
     $keyId = Read-Host 'BRIDGE_HMAC_KEY_ID (rovnaký ako v .env na VPS)'
     $hmac = Read-Secret 'BRIDGE_HMAC_SECRET (rovnaký ako v .env na VPS)'
     if ($hmac.Length -lt 32) { Fail 'BRIDGE_HMAC_SECRET musí mať aspoň 32 znakov (skopírujte ho z VPS).' }
+    $publicKey = Read-Host 'APPROVAL_JWT_PUBLIC_KEY z VPS (./deploy/approval-key.sh; prázdne = zápisy do Money vypnuté)'
     $lines = @(
         '# Smart Mail – Money most (ADR-016). Neposielajte tento súbor nikomu.',
         'MONEY_BACKEND=api',
@@ -105,6 +106,7 @@ if (Test-Path $envFile) {
         'MONEY_PAGE_SIZE=200',
         "BRIDGE_HMAC_KEY_ID=$keyId",
         "BRIDGE_HMAC_SECRET=$hmac",
+        "APPROVAL_JWT_PUBLIC_KEY=$publicKey",
         'LOG_LEVEL=INFO'
     )
     Set-Content -Path $envFile -Value $lines -Encoding UTF8

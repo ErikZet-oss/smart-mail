@@ -13,8 +13,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-CodebookName = Literal["warehouses", "centres", "numerical-series", "currencies"]
-CODEBOOKS: tuple[CodebookName, ...] = ("warehouses", "centres", "numerical-series", "currencies")
+CodebookName = Literal["warehouses", "centres", "numerical-series", "currencies", "activity-types"]
+CODEBOOKS: tuple[CodebookName, ...] = ("warehouses", "centres", "numerical-series", "currencies", "activity-types")
 
 
 class _Model(BaseModel):
@@ -129,6 +129,11 @@ class Activity(_Model):
     description: str | None
     started_at: datetime | None
     done: bool | None
+
+
+class ActivityOut(_Model):
+    id: uuid.UUID
+    created: bool
 
 
 class Health(_Model):

@@ -9,6 +9,8 @@ from typing import Protocol
 
 from app.models import (
     Activity,
+    ActivityIn,
+    ActivityOut,
     CodebookName,
     CodebookPage,
     Company,
@@ -75,5 +77,7 @@ class MoneyBackend(Protocol):
     async def activities(self, company_id: uuid.UUID) -> list[Activity]: ...
 
     async def invoice_pdf(self, kind: InvoiceKind, invoice_id: uuid.UUID, report_id: str) -> bytes | None: ...
+
+    async def create_activity(self, activity: ActivityIn) -> ActivityOut: ...
 
     async def aclose(self) -> None: ...

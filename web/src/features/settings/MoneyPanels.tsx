@@ -9,16 +9,24 @@ import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { INPUT } from './adminUi';
 import {
+  fetchMoneyActivities,
   fetchMoneyReports,
+  fetchMoneyWrites,
   fetchMoneyStatus,
   fetchMoneySync,
+  moneyActivitiesKey,
   moneyReportsKey,
+  moneyWritesKey,
   moneyStatusKey,
   moneySyncKey,
   saveMoneyInterval,
+  saveMoneyActivities,
   saveMoneyReports,
+  saveMoneyWrites,
+  retryMoneyActivity,
   startMoneySync,
   testMoneyReport,
+  type MoneyActivities,
   type MoneyReports,
   type MoneyEntityState,
 } from './settingsApi';
@@ -78,8 +86,8 @@ export function MoneyConnectionPanel() {
           <dd>{s?.latency_ms != null ? `${s.latency_ms} ms` : '–'}</dd>
           <dt className="text-text-secondary">{t('money.connection.lastSync')}</dt>
           <dd>{when(s?.entities.find((e) => e.entity === 'companies')?.last_run_at ?? null, t)}</dd>
-          <dt className="text-text-secondary">{t('money.connection.writes')}</dt>
-          <dd>{t('money.connection.writesOff')}</dd>
+          <dt className="text-text-secondary">{t('money.connection.bridgeWrites')}</dt>
+          <dd>{s?.writes_enabled ? t('money.connection.bridgeWritesOn') : t('money.connection.bridgeWritesOff')}</dd>
         </dl>
         <div>
           <Button
@@ -93,6 +101,7 @@ export function MoneyConnectionPanel() {
           </Button>
         </div>
       </section>
+      <WritesSwitch />
       {s ? <CacheTable entities={s.entities} /> : null}
     </div>
   );
@@ -338,6 +347,162 @@ function ReportsForm({ initial }: { initial: MoneyReports }) {
         </div>
       </section>
       <p className="type-small text-text-secondary">{t('money.reports.info')}</p>
+    </div>
+  );
+}
+
+/** 13a „Zápisy do Money povolené“ ⚠ — the main switch of every Money write (Phase 3f), re-auth on change. */
+function WritesSwitch() {
+  const { t } = useTranslation();
+  const toasts = useToasts();
+  const qc = useQueryClient();
+  const writes = useQuery({ queryKey: moneyWritesKey, queryFn: fetchMoneyWrites });
+  const save = useMutation({
+    mutationFn: (enabled: boolean) => saveMoneyWrites(enabled),
+    onSuccess: (out) => {
+      qc.setQueryData(moneyWritesKey, out);
+      toasts.success(t('settings.saved'));
+    },
+    onError: (e) => {
+      const code = e instanceof ApiError ? e.detail.code : 'generic';
+      if (code !== 'reauth_required')
+        toasts.error(t(`money.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
+    },
+  });
+  const on = writes.data?.enabled ?? false;
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-border-default p-4" data-testid="money-writes">
+      <label className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          role="switch"
+          aria-checked={on}
+          checked={on}
+          disabled={!writes.data || save.isPending || (!on && !writes.data.key_configured)}
+          onChange={(e) => save.mutate(e.target.checked)}
+        />
+        <span className="type-label text-text-primary">{t('money.writes.label')} ⚠</span>
+      </label>
+      <p className="type-small text-text-secondary">{t('money.writes.help')}</p>
+      {writes.data && !writes.data.key_configured ? (
+        <p className="type-small text-warning-700">{t('money.writes.noKey')}</p>
+      ) : null}
+    </section>
+  );
+}
+
+/** W12-13d Aktivity (Phase 3f): switch, activity types from Money's codebook, writes that failed (manual retry). */
+export function MoneyActivitiesPanel() {
+  const query = useQuery({ queryKey: moneyActivitiesKey, queryFn: fetchMoneyActivities });
+  if (!query.data) return null;
+  // the form keeps unsaved choices when the list refreshes (e.g. after „Skúsiť znova“)
+  return <ActivitiesForm initial={query.data} data={query.data} />;
+}
+
+function ActivitiesForm({ initial, data }: { initial: MoneyActivities; data: MoneyActivities }) {
+  const { t } = useTranslation();
+  const toasts = useToasts();
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    enabled: initial.enabled,
+    type_email: initial.type_email,
+    type_reminder: initial.type_reminder,
+  });
+  const error = (e: unknown) => {
+    const code = e instanceof ApiError ? e.detail.code : 'generic';
+    toasts.error(t(`money.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
+  };
+  const save = useMutation({
+    mutationFn: () => saveMoneyActivities(form),
+    onSuccess: (out) => {
+      qc.setQueryData(moneyActivitiesKey, out);
+      toasts.success(t('settings.saved'));
+    },
+    onError: error,
+  });
+  const retry = useMutation({
+    mutationFn: (draftId: string) => retryMoneyActivity(draftId),
+    onSuccess: () => {
+      toasts.success(t('money.activities.retried'));
+      void qc.invalidateQueries({ queryKey: moneyActivitiesKey });
+    },
+    onError: error,
+  });
+  const missingType = form.enabled && !(form.type_email && form.type_reminder);
+  const select = (key: 'type_email' | 'type_reminder') => (
+    <label className="flex flex-col gap-1">
+      <span className="type-label text-text-secondary">{t(`money.activities.${key}`)}</span>
+      <select
+        className={INPUT}
+        value={form[key] ?? ''}
+        onChange={(e) => setForm({ ...form, [key]: e.target.value || null })}
+      >
+        <option value="">{t('money.activities.choose')}</option>
+        {initial.types.map((type) => (
+          <option key={type.id} value={type.id}>
+            {[type.code, type.name].filter(Boolean).join(' – ')}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  return (
+    <div
+      className="flex max-w-[var(--layout-settings-form-max)] flex-col gap-4"
+      data-testid="settings-money-activities"
+    >
+      {!data.writes_enabled ? <Banner kind="info" message={t('money.activities.writesOff')} /> : null}
+      <label className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          role="switch"
+          aria-checked={form.enabled}
+          checked={form.enabled}
+          onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
+        />
+        <span className="type-label text-text-primary">{t('money.activities.enabled')}</span>
+      </label>
+      <p className="type-small text-text-secondary">{t('money.activities.help')}</p>
+      {initial.types.length === 0 ? (
+        <p className="type-small text-warning-700">{t('money.activities.noTypes')}</p>
+      ) : null}
+      {select('type_email')}
+      {select('type_reminder')}
+      {missingType ? <p className="type-small text-danger-600">{t('money.activities.typeRequired')}</p> : null}
+      <div>
+        <Button type="button" disabled={missingType || save.isPending} onClick={() => save.mutate()}>
+          {t('settings.save')}
+        </Button>
+      </div>
+      <section className="flex flex-col gap-2" data-testid="money-activities-failed">
+        <h3 className="type-label text-text-primary">{t('money.activities.failedTitle')}</h3>
+        {data.failed.length === 0 ? (
+          <p className="type-small text-text-secondary">{t('money.activities.failedEmpty')}</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border-default rounded-md border border-border-default">
+            {data.failed.map((f) => (
+              <li key={f.draft_id} className="type-small flex items-center gap-2 px-3 py-2 text-text-primary">
+                <span className="min-w-0 flex-1">
+                  <span className="block">
+                    {new Date(f.at).toLocaleString('sk-SK')} · {f.invoices.join(', ') || '–'}
+                  </span>
+                  <span className="block text-warning-700">
+                    {t(`money.errors.${f.error ?? 'generic'}`, { defaultValue: f.error ?? '' })}
+                  </span>
+                </span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!data.writes_enabled || retry.isPending}
+                  onClick={() => retry.mutate(f.draft_id)}
+                >
+                  {t('money.activities.retry')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

@@ -16,6 +16,8 @@ from decimal import Decimal
 from app.backend import InvoiceQuery
 from app.models import (
     Activity,
+    ActivityIn,
+    ActivityOut,
     CodebookItem,
     CodebookName,
     CodebookPage,
@@ -110,6 +112,10 @@ def build(seed: int = 20261030) -> MockData:
         "numerical-series": [
             CodebookItem(id=mid("series", 1), code="FV", name="Faktúry vydané (fiktívne)"),
             CodebookItem(id=mid("series", 2), code="OP", name="Objednávky prijaté (fiktívne)"),
+        ],
+        "activity-types": [
+            CodebookItem(id=mid("activity-type", 1), code="EMAIL", name="E-mail odoslaný (fiktívny typ)"),
+            CodebookItem(id=mid("activity-type", 2), code="UPOM", name="Upomienka (fiktívny typ)"),
         ],
         "currencies": [
             CodebookItem(id=eur, code="EUR", name="Euro"),
@@ -228,6 +234,7 @@ def _newest_first[T: (IssuedInvoice, Order, Delivery)](items: list[T]) -> list[T
 class MockBackend:
     def __init__(self, data: MockData | None = None) -> None:
         self.data = data or build()
+        self.smids: dict[uuid.UUID, str] = {}
 
     async def aclose(self) -> None:
         return None
@@ -307,6 +314,24 @@ class MockBackend:
     async def activities(self, company_id: uuid.UUID) -> list[Activity]:
         rows = [a for a in self.data.activities if a.company_id == company_id]
         return sorted(rows, key=lambda a: a.started_at or SEEDED_AT, reverse=True)
+
+    async def create_activity(self, activity: ActivityIn) -> ActivityOut:
+        """Idempotent by SMID: a repeat returns the activity that already exists."""
+        for existing, smid in self.smids.items():
+            if smid == activity.smid:
+                return ActivityOut(id=existing, created=False)
+        new = Activity(
+            id=uuid.uuid4(),
+            company_id=activity.company_id,
+            person_id=None,
+            type_id=activity.type_id,
+            description=f"{activity.subject} {activity.description}".strip()[:300],
+            started_at=datetime.now(UTC),
+            done=True,
+        )
+        self.data.activities.append(new)
+        self.smids[new.id] = activity.smid
+        return ActivityOut(id=new.id, created=True)
 
     async def invoice_pdf(self, kind: InvoiceKind, invoice_id: uuid.UUID, report_id: str) -> bytes | None:
         inv = next((i for i in self.data.invoices if i.id == invoice_id and i.kind == kind), None)
