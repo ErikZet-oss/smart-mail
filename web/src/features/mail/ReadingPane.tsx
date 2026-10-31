@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Building2,
   AlarmClock,
   Archive,
   ArrowLeft,
@@ -41,6 +40,7 @@ import { AiSuggestionCard } from '../ai/AiSuggestionCard';
 import { ConformitySuggestionCard } from '../ai/ConformitySuggestionCard';
 import { fetchSuggestions, suggestionsKey } from '../ai/suggestionsApi';
 import { fetchMe } from '../auth/authApi';
+import { CompanyChip } from '../money/CompanyChip';
 import { CustomerPanel } from '../money/CustomerPanel';
 import { useFeatures } from '../system/features';
 import { booksKey, createContact, fetchBooks } from '../contacts/contactsApi';
@@ -474,335 +474,342 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   ];
 
   return (
-    <section aria-label={t('mail.readingPane')} className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg-canvas">
-      {mobile ? (
-        <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border-default px-1">
-          <button
-            type="button"
-            onClick={onCleared}
-            aria-label={t('system.back')}
-            className="flex size-11 items-center justify-center rounded-sm text-text-primary hover:bg-bg-subtle"
-          >
-            <ArrowLeft size={22} />
-          </button>
-          <p className="type-heading min-w-0 flex-1 truncate text-text-primary">
-            {/* no "(bez predmetu)" while the message is loading or failed to load (#41) */}
-            {msg ? msg.subject || t('search.noSubject') : ''}
-          </p>
-        </header>
-      ) : null}
-      <div
-        className={`flex h-14 shrink-0 items-center gap-0.5 overflow-x-auto border-border-default px-2 ${
-          mobile ? 'order-last border-t' : 'border-b'
-        }`}
-      >
-        <ToolBtn
-          icon={<Reply size={18} />}
-          label={t('mail.toolbar.reply')}
-          onClick={() =>
-            navigate(`/compose?mode=reply&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`)
-          }
-        />
-        <ToolBtn
-          icon={<ReplyAll size={18} />}
-          label={t('mail.toolbar.replyAll')}
-          onClick={() =>
-            navigate(
-              `/compose?mode=reply_all&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`,
-            )
-          }
-        />
-        <ToolBtn
-          icon={<Forward size={18} />}
-          label={t('mail.toolbar.forward')}
-          onClick={() =>
-            navigate(`/compose?mode=forward&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`)
-          }
-        />
-        <ToolBtn
-          icon={<Trash2 size={18} />}
-          label={t('mail.toolbar.delete')}
-          onClick={() => runBulk('delete')}
-          busy={bulk.isPending}
-        />
-        <ToolBtn
-          icon={<Flame size={18} />}
-          label={t('mail.toolbar.junk')}
-          onClick={() => runBulk('junk')}
-          busy={bulk.isPending}
-        />
-        <ToolBtn
-          icon={<Tag size={18} />}
-          label={t('mail.toolbar.mark')}
-          onClick={(event) => setMarkMenu(menuAt(event))}
-        />
-        <ToolBtn
-          icon={<Ellipsis size={18} />}
-          label={t('mail.toolbar.more')}
-          onClick={(event) => setMoreMenu(menuAt(event))}
-        />
-        <span aria-hidden="true" className="mx-1 h-8 w-px bg-border-default" />
-        <ToolBtn icon={<UserPlus size={18} />} label={t('mail.toolbar.assign')} disabled />
-        <ToolBtn icon={<CircleCheck size={18} />} label={t('mail.toolbar.done')} onClick={() => runBulk('done')} />
-        <ToolBtn
-          icon={<AlarmClock size={18} />}
-          label={t('mail.toolbar.snooze')}
-          onClick={(event) => setSnoozeMenu(menuAt(event))}
-          disabled={!threadId}
-        />
-        {features.money ? (
-          <ToolBtn
-            icon={<Building2 size={18} />}
-            label={t('money.customer.title')}
-            onClick={() => toggleCustomer(!customerOpen)}
-          />
+    <div className="flex min-h-0 min-w-0 flex-1">
+      <section aria-label={t('mail.readingPane')} className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg-canvas">
+        {mobile ? (
+          <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border-default px-1">
+            <button
+              type="button"
+              onClick={onCleared}
+              aria-label={t('system.back')}
+              className="flex size-11 items-center justify-center rounded-sm text-text-primary hover:bg-bg-subtle"
+            >
+              <ArrowLeft size={22} />
+            </button>
+            <p className="type-heading min-w-0 flex-1 truncate text-text-primary">
+              {/* no "(bez predmetu)" while the message is loading or failed to load (#41) */}
+              {msg ? msg.subject || t('search.noSubject') : ''}
+            </p>
+          </header>
         ) : null}
-      </div>
-
-      {detail.isError && !msg ? (
-        // G-state error instead of an endless skeleton (#41), with the support code of a 500.
-        <div className="p-4" data-testid="message-load-error">
-          <Banner
-            kind="danger"
-            message={
-              loadErrorRef
-                ? `${t('mail.loadMessageFailed')} ${t('system.error.code', { ref: loadErrorRef })}`
-                : t('mail.loadMessageFailed')
+        <div
+          className={`flex h-14 shrink-0 items-center gap-0.5 overflow-x-auto border-border-default px-2 ${
+            mobile ? 'order-last border-t' : 'border-b'
+          }`}
+        >
+          <ToolBtn
+            icon={<Reply size={18} />}
+            label={t('mail.toolbar.reply')}
+            onClick={() =>
+              navigate(`/compose?mode=reply&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`)
             }
-            action={{ label: t('system.retry'), onClick: () => void detail.refetch(), disabled: detail.isFetching }}
           />
+          <ToolBtn
+            icon={<ReplyAll size={18} />}
+            label={t('mail.toolbar.replyAll')}
+            onClick={() =>
+              navigate(
+                `/compose?mode=reply_all&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`,
+              )
+            }
+          />
+          <ToolBtn
+            icon={<Forward size={18} />}
+            label={t('mail.toolbar.forward')}
+            onClick={() =>
+              navigate(
+                `/compose?mode=forward&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`,
+              )
+            }
+          />
+          <ToolBtn
+            icon={<Trash2 size={18} />}
+            label={t('mail.toolbar.delete')}
+            onClick={() => runBulk('delete')}
+            busy={bulk.isPending}
+          />
+          <ToolBtn
+            icon={<Flame size={18} />}
+            label={t('mail.toolbar.junk')}
+            onClick={() => runBulk('junk')}
+            busy={bulk.isPending}
+          />
+          <ToolBtn
+            icon={<Tag size={18} />}
+            label={t('mail.toolbar.mark')}
+            onClick={(event) => setMarkMenu(menuAt(event))}
+          />
+          <ToolBtn
+            icon={<Ellipsis size={18} />}
+            label={t('mail.toolbar.more')}
+            onClick={(event) => setMoreMenu(menuAt(event))}
+          />
+          <span aria-hidden="true" className="mx-1 h-8 w-px bg-border-default" />
+          <ToolBtn icon={<UserPlus size={18} />} label={t('mail.toolbar.assign')} disabled />
+          <ToolBtn icon={<CircleCheck size={18} />} label={t('mail.toolbar.done')} onClick={() => runBulk('done')} />
+          <ToolBtn
+            icon={<AlarmClock size={18} />}
+            label={t('mail.toolbar.snooze')}
+            onClick={(event) => setSnoozeMenu(menuAt(event))}
+            disabled={!threadId}
+          />
+          {features.money ? (
+            <>
+              <span aria-hidden="true" className="mx-1 h-8 w-px bg-border-default" />
+              <ToolBtn
+                icon={<Sparkles size={18} className="text-ai-600" />}
+                label={t('money.customer.assistant')}
+                onClick={() => toggleCustomer(!customerOpen)}
+              />
+            </>
+          ) : null}
         </div>
-      ) : detail.isLoading || !msg ? (
-        <div aria-busy="true" className="flex flex-1 flex-col gap-3 p-7">
-          <div className="h-6 w-2/3 rounded-xs bg-bg-muted" />
-          <div className="h-4 w-1/2 rounded-xs bg-bg-muted" />
-          <div className="mt-6 h-40 rounded-xs bg-bg-muted" />
-        </div>
-      ) : (
-        <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${mobile ? 'px-4 py-3' : 'px-7 py-4'}`}>
-          <div className="mb-4 flex items-start gap-2">
-            <h2 className={`${mobile ? 'type-heading' : 'type-title'} min-w-0 flex-1 break-words text-text-primary`}>
-              {msg.subject || t('mail.noSubject')}
-            </h2>
-            <Link
-              to={`/mail/${encodeURIComponent(mailbox)}/${encodeURIComponent(folderRef)}/${encodeURIComponent(msg.thread_id ?? msg.id)}`}
-              className={`shrink-0 rounded-xs text-text-secondary hover:text-text-primary ${mobile ? 'hidden' : ''}`}
-              title={t('mail.openFull')}
-              aria-label={t('mail.openFull')}
-            >
-              <SquareArrowOutUpRight size={18} aria-hidden="true" />
-            </Link>
+
+        {detail.isError && !msg ? (
+          // G-state error instead of an endless skeleton (#41), with the support code of a 500.
+          <div className="p-4" data-testid="message-load-error">
+            <Banner
+              kind="danger"
+              message={
+                loadErrorRef
+                  ? `${t('mail.loadMessageFailed')} ${t('system.error.code', { ref: loadErrorRef })}`
+                  : t('mail.loadMessageFailed')
+              }
+              action={{ label: t('system.retry'), onClick: () => void detail.refetch(), disabled: detail.isFetching }}
+            />
           </div>
-          <div className="mb-6 flex gap-3">
-            <div
-              aria-hidden="true"
-              className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand-primary-100 type-label text-brand-primary-700"
-            >
-              {(msg.from_name || msg.from_email || '?').slice(0, 2).toUpperCase()}
+        ) : detail.isLoading || !msg ? (
+          <div aria-busy="true" className="flex flex-1 flex-col gap-3 p-7">
+            <div className="h-6 w-2/3 rounded-xs bg-bg-muted" />
+            <div className="h-4 w-1/2 rounded-xs bg-bg-muted" />
+            <div className="mt-6 h-40 rounded-xs bg-bg-muted" />
+          </div>
+        ) : (
+          <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${mobile ? 'px-4 py-3' : 'px-7 py-4'}`}>
+            <div className="mb-4 flex items-start gap-2">
+              <h2 className={`${mobile ? 'type-heading' : 'type-title'} min-w-0 flex-1 break-words text-text-primary`}>
+                {msg.subject || t('mail.noSubject')}
+              </h2>
+              <Link
+                to={`/mail/${encodeURIComponent(mailbox)}/${encodeURIComponent(folderRef)}/${encodeURIComponent(msg.thread_id ?? msg.id)}`}
+                className={`shrink-0 rounded-xs text-text-secondary hover:text-text-primary ${mobile ? 'hidden' : ''}`}
+                title={t('mail.openFull')}
+                aria-label={t('mail.openFull')}
+              >
+                <SquareArrowOutUpRight size={18} aria-hidden="true" />
+              </Link>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="type-body text-text-primary">
-                <span className="text-text-secondary">{t('mail.from')}</span>{' '}
-                <span className="font-semibold">{msg.from_name || msg.from_email}</span>
-                {msg.from_email ? <span className="text-text-secondary"> &lt;{msg.from_email}&gt;</span> : null}
-              </p>
-              <p className="type-small text-text-primary">
-                <span className="text-text-secondary">{t('mail.to')}</span>{' '}
-                {msg.to
-                  .map((a) => a.name || a.email)
-                  .filter(Boolean)
-                  .join(', ') || '—'}
-              </p>
-              <p className="type-small text-text-primary">
-                <span className="text-text-secondary">{t('mail.date')}</span>{' '}
-                {formatMailDate(msg.received_at || msg.sent_at)}
-              </p>
-              <div className="mt-1 flex gap-4">
-                <button
-                  type="button"
-                  onClick={() => setPlain((v) => !v)}
-                  className="type-caption inline-flex items-center gap-1 text-brand-primary-600 hover:underline"
-                >
-                  <Mail size={14} aria-hidden="true" />
-                  {plain ? t('mail.showHtml') : t('mail.plainText')}
-                </button>
+            <div className="mb-6 flex gap-3">
+              <div
+                aria-hidden="true"
+                className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand-primary-100 type-label text-brand-primary-700"
+              >
+                {(msg.from_name || msg.from_email || '?').slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="type-body text-text-primary">
+                  <span className="text-text-secondary">{t('mail.from')}</span>{' '}
+                  <span className="font-semibold">{msg.from_name || msg.from_email}</span>
+                  {msg.from_email ? <span className="text-text-secondary"> &lt;{msg.from_email}&gt;</span> : null}
+                  {features.money ? <CompanyChip messageId={msg.id} onOpen={() => toggleCustomer(true)} /> : null}
+                </p>
+                <p className="type-small text-text-primary">
+                  <span className="text-text-secondary">{t('mail.to')}</span>{' '}
+                  {msg.to
+                    .map((a) => a.name || a.email)
+                    .filter(Boolean)
+                    .join(', ') || '—'}
+                </p>
+                <p className="type-small text-text-primary">
+                  <span className="text-text-secondary">{t('mail.date')}</span>{' '}
+                  {formatMailDate(msg.received_at || msg.sent_at)}
+                </p>
+                <div className="mt-1 flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setPlain((v) => !v)}
+                    className="type-caption inline-flex items-center gap-1 text-brand-primary-600 hover:underline"
+                  >
+                    <Mail size={14} aria-hidden="true" />
+                    {plain ? t('mail.showHtml') : t('mail.plainText')}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          {hasRemote && !imagesVisible ? (
-            <div className="mb-4">
-              <Banner
-                kind="info"
-                message={t('mail.remoteImages')}
-                action={{ label: t('mail.showImages'), onClick: () => setShowImages(true) }}
-                secondaryAction={
-                  msg.from_email
-                    ? {
-                        label: t('mail.showImagesAlways'),
-                        onClick: () => allowSender.mutate(),
-                        disabled: allowSender.isPending,
-                      }
-                    : undefined
-                }
-              />
-            </div>
-          ) : null}
-
-          {classic ? null : <SecurityBanner notes={msg.security_notes ?? []} />}
-
-          {classic ? null : (
-            <SuggestionCards
-              mailbox={mailbox}
-              messageId={msg.id}
-              category={msg.ai_category ?? null}
-              readOnly={readOnly}
-            />
-          )}
-
-          {previewIndex !== null ? (
-            <AttachmentLightbox
-              mailbox={mailbox}
-              attachments={previewable}
-              index={previewIndex}
-              onIndex={setPreviewIndex}
-              onClose={() => setPreviewIndex(null)}
-              formatSize={formatSize}
-            />
-          ) : null}
-
-          {msg.attachments.filter((a) => !a.is_inline).length > 0 ? (
-            <ul className="mb-4 flex flex-wrap gap-2">
-              {msg.attachments
-                .filter((a) => !a.is_inline)
-                .map((a) => {
-                  const unscanned = a.av_status === 'skipped' || a.av_status === 'error';
-                  const infected = a.av_status === 'infected';
-                  return (
-                    <li key={a.id}>
-                      <a
-                        href={attachmentUrl(mailbox, a.id)}
-                        className={`type-small inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 ${
-                          infected
-                            ? 'cursor-not-allowed border-danger-600 text-danger-600'
-                            : 'border-border-default text-text-primary hover:bg-bg-subtle'
-                        }`}
-                        title={
-                          infected
-                            ? t('mail.attachmentInfected')
-                            : unscanned
-                              ? t('mail.attachmentUnscanned')
-                              : undefined
+            {hasRemote && !imagesVisible ? (
+              <div className="mb-4">
+                <Banner
+                  kind="info"
+                  message={t('mail.remoteImages')}
+                  action={{ label: t('mail.showImages'), onClick: () => setShowImages(true) }}
+                  secondaryAction={
+                    msg.from_email
+                      ? {
+                          label: t('mail.showImagesAlways'),
+                          onClick: () => allowSender.mutate(),
+                          disabled: allowSender.isPending,
                         }
-                        onClick={(event) => {
-                          if (infected) {
-                            event.preventDefault();
-                            return;
-                          }
-                          if (unscanned && !window.confirm(t('mail.attachmentUnscannedConfirm'))) {
-                            event.preventDefault();
-                            return;
-                          }
-                          // PDF, images and XML/ISDOC open in W2l first (#46); everything else downloads
-                          const at = previewable.findIndex((p) => p.id === a.id);
-                          if (at >= 0) {
-                            event.preventDefault();
-                            setPreviewIndex(at);
-                          }
-                        }}
-                        download={infected ? undefined : a.filename}
-                      >
-                        <Paperclip size={14} aria-hidden="true" />
-                        {a.filename} <span className="text-text-secondary">{formatSize(a.size)}</span>
-                        {unscanned ? (
-                          <span className="text-text-tertiary">({t('mail.attachmentUnscanned')})</span>
-                        ) : null}
-                      </a>
-                    </li>
-                  );
-                })}
-            </ul>
-          ) : null}
+                      : undefined
+                  }
+                />
+              </div>
+            ) : null}
 
-          {plain || !bodyHtml ? (
-            <pre className="type-body-lg whitespace-pre-wrap break-words font-ui text-text-primary">
-              {msg.body_text || ''}
-            </pre>
-          ) : (
-            <div
-              className="type-body-lg max-w-none overflow-x-auto text-text-primary [&_a]:text-brand-primary-600 [&_img]:h-auto [&_img]:max-w-full"
-              // sanitized on the server (nh3); remote images stay blocked until the user opts in
-              dangerouslySetInnerHTML={{ __html: bodyHtml }}
-              onClick={openExternalLinkInNewTab}
-            />
-          )}
-        </div>
-      )}
+            {classic ? null : <SecurityBanner notes={msg.security_notes ?? []} />}
 
-      {markMenu ? (
-        <Menu
-          label={t('mail.toolbar.mark')}
-          entries={markEntries}
-          at={markMenu}
-          width={220}
-          onClose={() => setMarkMenu(null)}
-        />
+            {classic ? null : (
+              <SuggestionCards
+                mailbox={mailbox}
+                messageId={msg.id}
+                category={msg.ai_category ?? null}
+                readOnly={readOnly}
+              />
+            )}
+
+            {previewIndex !== null ? (
+              <AttachmentLightbox
+                mailbox={mailbox}
+                attachments={previewable}
+                index={previewIndex}
+                onIndex={setPreviewIndex}
+                onClose={() => setPreviewIndex(null)}
+                formatSize={formatSize}
+              />
+            ) : null}
+
+            {msg.attachments.filter((a) => !a.is_inline).length > 0 ? (
+              <ul className="mb-4 flex flex-wrap gap-2">
+                {msg.attachments
+                  .filter((a) => !a.is_inline)
+                  .map((a) => {
+                    const unscanned = a.av_status === 'skipped' || a.av_status === 'error';
+                    const infected = a.av_status === 'infected';
+                    return (
+                      <li key={a.id}>
+                        <a
+                          href={attachmentUrl(mailbox, a.id)}
+                          className={`type-small inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 ${
+                            infected
+                              ? 'cursor-not-allowed border-danger-600 text-danger-600'
+                              : 'border-border-default text-text-primary hover:bg-bg-subtle'
+                          }`}
+                          title={
+                            infected
+                              ? t('mail.attachmentInfected')
+                              : unscanned
+                                ? t('mail.attachmentUnscanned')
+                                : undefined
+                          }
+                          onClick={(event) => {
+                            if (infected) {
+                              event.preventDefault();
+                              return;
+                            }
+                            if (unscanned && !window.confirm(t('mail.attachmentUnscannedConfirm'))) {
+                              event.preventDefault();
+                              return;
+                            }
+                            // PDF, images and XML/ISDOC open in W2l first (#46); everything else downloads
+                            const at = previewable.findIndex((p) => p.id === a.id);
+                            if (at >= 0) {
+                              event.preventDefault();
+                              setPreviewIndex(at);
+                            }
+                          }}
+                          download={infected ? undefined : a.filename}
+                        >
+                          <Paperclip size={14} aria-hidden="true" />
+                          {a.filename} <span className="text-text-secondary">{formatSize(a.size)}</span>
+                          {unscanned ? (
+                            <span className="text-text-tertiary">({t('mail.attachmentUnscanned')})</span>
+                          ) : null}
+                        </a>
+                      </li>
+                    );
+                  })}
+              </ul>
+            ) : null}
+
+            {plain || !bodyHtml ? (
+              <pre className="type-body-lg whitespace-pre-wrap break-words font-ui text-text-primary">
+                {msg.body_text || ''}
+              </pre>
+            ) : (
+              <div
+                className="type-body-lg max-w-none overflow-x-auto text-text-primary [&_a]:text-brand-primary-600 [&_img]:h-auto [&_img]:max-w-full"
+                // sanitized on the server (nh3); remote images stay blocked until the user opts in
+                dangerouslySetInnerHTML={{ __html: bodyHtml }}
+                onClick={openExternalLinkInNewTab}
+              />
+            )}
+          </div>
+        )}
+
+        {markMenu ? (
+          <Menu
+            label={t('mail.toolbar.mark')}
+            entries={markEntries}
+            at={markMenu}
+            width={220}
+            onClose={() => setMarkMenu(null)}
+          />
+        ) : null}
+        {customerOpen && messageId && mobile ? (
+          <CustomerPanel messageId={messageId} readOnly={readOnly} mobile onClose={() => toggleCustomer(false)} />
+        ) : null}
+        {categoryOpen && msg ? (
+          <CategoryDialog
+            mailbox={mailbox}
+            messageId={msg.id}
+            current={msg.ai_category ?? null}
+            onClose={() => setCategoryOpen(false)}
+          />
+        ) : null}
+        {conformity && msg ? (
+          <ConformityDialog
+            messageId={msg.id}
+            initialCustomer={[msg.from_name, msg.from_email].filter(Boolean).join(', ')}
+            onClose={() => setConformity(false)}
+          />
+        ) : null}
+        {moreMenu ? (
+          <Menu
+            label={t('mail.toolbar.more')}
+            entries={moreEntries}
+            at={moreMenu}
+            width={240}
+            onClose={() => setMoreMenu(null)}
+          />
+        ) : null}
+        {picker && msg ? (
+          <FolderPicker
+            mailbox={mailbox}
+            mode={picker.mode}
+            currentFolderId={msg.folder_id}
+            at={picker.at}
+            onPick={(folder) => {
+              setPicker(null);
+              runBulk(picker.mode, folder);
+            }}
+            onClose={() => setPicker(null)}
+          />
+        ) : null}
+        {snoozeMenu ? (
+          <Menu
+            label={t('mail.toolbar.snooze')}
+            entries={snoozeEntries}
+            at={snoozeMenu}
+            width={220}
+            onClose={() => setSnoozeMenu(null)}
+          />
+        ) : null}
+      </section>
+      {/* W3b: right column next to the reading pane (Figma 36:31480) — the reading pane narrows */}
+      {customerOpen && messageId && !mobile ? (
+        <CustomerPanel messageId={messageId} readOnly={readOnly} mobile={false} onClose={() => toggleCustomer(false)} />
       ) : null}
-      {customerOpen && messageId ? (
-        <CustomerPanel
-          messageId={messageId}
-          readOnly={readOnly}
-          mobile={mobile}
-          onClose={() => toggleCustomer(false)}
-        />
-      ) : null}
-      {categoryOpen && msg ? (
-        <CategoryDialog
-          mailbox={mailbox}
-          messageId={msg.id}
-          current={msg.ai_category ?? null}
-          onClose={() => setCategoryOpen(false)}
-        />
-      ) : null}
-      {conformity && msg ? (
-        <ConformityDialog
-          messageId={msg.id}
-          initialCustomer={[msg.from_name, msg.from_email].filter(Boolean).join(', ')}
-          onClose={() => setConformity(false)}
-        />
-      ) : null}
-      {moreMenu ? (
-        <Menu
-          label={t('mail.toolbar.more')}
-          entries={moreEntries}
-          at={moreMenu}
-          width={240}
-          onClose={() => setMoreMenu(null)}
-        />
-      ) : null}
-      {picker && msg ? (
-        <FolderPicker
-          mailbox={mailbox}
-          mode={picker.mode}
-          currentFolderId={msg.folder_id}
-          at={picker.at}
-          onPick={(folder) => {
-            setPicker(null);
-            runBulk(picker.mode, folder);
-          }}
-          onClose={() => setPicker(null)}
-        />
-      ) : null}
-      {snoozeMenu ? (
-        <Menu
-          label={t('mail.toolbar.snooze')}
-          entries={snoozeEntries}
-          at={snoozeMenu}
-          width={220}
-          onClose={() => setSnoozeMenu(null)}
-        />
-      ) : null}
-    </section>
+    </div>
   );
 }
 

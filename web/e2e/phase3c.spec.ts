@@ -95,7 +95,7 @@ async function setup(page: Page, extra: Parameters<typeof mockApi>[1]) {
   });
 }
 
-test('3c Zákazník: card with KPIs, one part down, contacts @mobile', async ({ page }, info) => {
+test('3c Zákazník: card with KPIs, one part down, contacts @mobile', async ({ page, isMobile }, info) => {
   await setup(page, {
     'GET /api/money/messages/m1/customer': {
       body: {
@@ -110,24 +110,45 @@ test('3c Zákazník: card with KPIs, one part down, contacts @mobile', async ({ 
     [`GET /api/money/companies/${COMPANY.money_id}/card`]: { body: CARD },
   });
   await page.goto('/mail/default/inbox/m1');
-  await page.getByRole('button', { name: 'Zákazník' }).click();
+  // W3b: chip with the company next to the sender opens the panel
+  await page.getByTestId('company-chip').click();
   await expect(page).toHaveURL(/panel=customer/);
   const panel = page.getByTestId('customer-panel');
-  await expect(panel.getByTestId('match-method')).toHaveText('jan@firma01.example – kontaktná osoba v Money');
   const card = panel.getByTestId('customer-card');
   await expect(card.getByRole('heading', { name: 'Fiktívna firma 01 s.r.o.' })).toBeVisible();
-  await expect(card).toContainText('IČO 36123459 · IČ DPH SK2020000001 · F0001');
-  await expect(card).toContainText('zľava 5 % · splatnosť 14 dní');
+  await expect(card.getByTestId('match-method')).toHaveText('jan@firma01.example – kontaktná osoba v Money');
+  await expect(card).toContainText('IČO 36123459 · IČ DPH SK2020000001');
+  await expect(card).toContainText('zľava 5 %');
+  await expect(card).toContainText('splatnosť 14 dní');
+  await expect(card).toContainText('V Money');
   await expect(card).toContainText('1 234,50 €');
-  await expect(card).toContainText('najstaršia 40 dní');
+  await expect(card).toContainText('40 dní');
+  if (isMobile) await panel.getByRole('tab', { name: 'Doklady' }).click();
   await expect(card).toContainText('FV2600042');
+  await expect(card.getByRole('button', { name: 'Poslať' })).toBeDisabled(); // invoice_attach comes in 3d
   await expect(card).toContainText('Money je teraz nedostupné.');
+  if (isMobile) await panel.getByRole('tab', { name: 'Kontakty' }).click();
   await expect(card).toContainText('Zatiaľ nedostupné – čaká sa na test prepojenia s Money.');
   await expect(card).toContainText('Ján Fiktívny');
+  if (isMobile) {
+    await expect(panel.getByRole('button', { name: 'Napísať' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Volať' })).toBeDisabled(); // no phone in the card
+  } else {
+    await expect(panel.getByRole('tab', { name: 'Asistent' })).toBeDisabled(); // Phase 5
+    await expect(panel.getByRole('tab', { name: 'Zákazník' })).toHaveAttribute('aria-selected', 'true');
+    // the panel is a column next to the reading pane, not over it
+    const pane = await page.getByRole('region', { name: 'Náhľad správy' }).boundingBox();
+    const aside = await panel.boundingBox();
+    expect((pane?.x ?? 0) + (pane?.width ?? 0)).toBeLessThanOrEqual((aside?.x ?? 0) + 1);
+  }
   await shot(page, `phase3c-customer-${info.project.name}`);
-  await panel.getByRole('button', { name: 'Zavrieť panel Zákazník' }).click();
+  await panel.getByRole('button', { name: 'Zavrieť panel' }).click();
   await expect(panel).toHaveCount(0);
   await expect(page).not.toHaveURL(/panel=customer/);
+  if (!isMobile) {
+    await page.getByRole('button', { name: 'Asistent' }).click(); // toolbar button opens the panel too
+    await expect(page.getByTestId('customer-panel')).toBeVisible();
+  }
 });
 
 test('3c not matched: search the cache and assign the address', async ({ page }, info) => {
@@ -187,6 +208,7 @@ test('3c Zákazník button is hidden without FEATURE_MONEY', async ({ page }) =>
   await setup(page, { 'GET /api/system/info': { body: { admin_contact_email: null, features: { money: false } } } });
   await page.goto('/mail/default/inbox/m1?panel=customer');
   await expect(page.getByRole('heading', { name: 'Kópia faktúry' }).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Zákazník' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Asistent' })).toHaveCount(0);
+  await expect(page.getByTestId('company-chip')).toHaveCount(0);
   await expect(page.getByTestId('customer-panel')).toHaveCount(0);
 });
