@@ -43,8 +43,8 @@ Cache the token until `expires_in − 60 s`, single-flight refresh, retry once o
   `"(Misto~eq~Brno#Nazev~eq~Seyfor)|(ICO~eq~60737691)"`.
   Operators: text `eq ne sw ct ew`; numbers/dates `eq ne lt lte gt gte`; bool `eq ne`.
   Only root fields can be filtered (not nested lists like `SeznamSpojeni`). Value escaping of `~ # | ( )` is
-  undocumented **[PROBE]** — reject or strip these characters in user-provided values. Date format **[PROBE]**
-  (use `YYYY-MM-DD`). Default page limit 1000 (server `config.json`) — always page with `From`/`Count` ≤ 500.
+  undocumented — reject these characters in user-provided values. Probe 2026-10-31: `eq ct sw ew` and `|` work;
+  dates work as `YYYY-MM-DD` (used), `DD.MM.YYYY` and ISO with time. Default page limit 1000 (server `config.json`) — always page with `From`/`Count` ≤ 500.
 - `ChangeFrom: DateTime` returns records changed since — use it for delta sync of the read cache.
 - Mutations: `Create<Entity>(<Entity>: <Entity>Input!)`, `Edit<Entity>(...)`, `Delete<Entity>(...)`, return the entity
   (request `ID CisloDokladu` back). Child records are arrays in the input (`Polozky: [...]`).
@@ -55,6 +55,12 @@ Cache the token until `expires_in − 60 s`, single-flight refresh, retry once o
   used). Keep query strings in `bridge/app/queries/*.graphql`.
 - Idempotency: put `SMID:<suggestion_id>` at the start of `Poznamka`; before any Create, query
   `<Entities>(Filter:"Poznamka~sw~SMID:<id>")`. Never auto-retry a mutation.
+
+---------------------------------------------------------------------------------------------------
+**Real API 1.15.11 (probe 2026-10-31, details `docs/probe-findings-2026-10-31.md`):** every answer is wrapped in
+`{"PageCount","RowCount","Data","Status","Message","StackTrace"}` (`Status` 1 = OK); REST DTOs use PascalCase keys
+although the swagger says camelCase; **REST list filters and `?text=` do not work** → search only through GraphQL,
+REST only for PDF reports, persons and activity types.
 
 ---------------------------------------------------------------------------------------------------
 ## 3. Entities used (GraphQL unless marked REST)
@@ -183,7 +189,9 @@ centre; `ObsahPolozky.Sklad_ID` = branch warehouse (unless the user changed the 
 price list; `CiselnaRada_ID` = branch series override or company default. Codebooks: `Centres { ID Kod Nazev }`,
 `PriceLists { ID Kod Nazev VychoziSklad_ID }`, `Warehouses { ID Kod Nazev }`. **[PROBE]** verify on TEST that a received
 delivery note created with these values shows the centre on the document and increases stock in the branch warehouse,
-and whether `Cenik_ID` on received items is required or ignored (implementer question 8).
+and whether `Cenik_ID` on received items is required or ignored (implementer question 8). Probe 2026-10-31: in
+300 existing notes no item has `Cenik_ID` and no item carries the header centre — open question to Erik in
+`docs/probe-findings-2026-10-31.md` (proposal: centre only on the header, no `Cenik_ID` on items, as in Money).
 
 ### 5.6 Customer order from e-mail → Objednávka prijatá (full spec: `docs/ORDERS_SPEC.md`)
 Calls in order (all via bridge):
@@ -312,5 +320,7 @@ open purchase orders, delivery notes with remaining quantities; PDF endpoint ret
    are not written — D14.)
 10. PDF reports for `IssuedDeliveryNote` (dodací list vydaný — customers ask for copies) and `ReceivedOrder`
     (order confirmation) — can REST report endpoints like `IssuedInvoice/{id}/Report/{reportId}` be enabled?
+12. `ProdejniCeny(FirmaID)` returns 0 rows on TEST without `SkladID` — which arguments / price-list assignments are
+    needed for customer prices? (`docs/probe-findings-2026-10-31.md` §5)
 11. Together with question 1: when `IssuedOffer` is enabled, also a report endpoint for offers (then Smart Mail can
     attach the original Money PDF and stop rendering its own).

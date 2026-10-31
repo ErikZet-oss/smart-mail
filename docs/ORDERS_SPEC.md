@@ -564,6 +564,10 @@ create one order for a test customer with discount → read back (double discoun
 text line without `ObsahPolozky`, long `Odkaz`, then `DeleteReceivedOrder`. Results go to `probe_output/orders.md`.
 
 ---------------------------------------------------------------------------------------------------
+Results on TEST (2026-10-31): `docs/probe-findings-2026-10-31.md` §5 and §8 — `ProdejniCeny` returned 0 rows (re-run
+with `SkladID` pending, `ORDER_PRICE_MODE` not decided yet), `Stav`/`Vyrizeno` always 0 → status uses
+`PriznakVyrizeno`, `Odkaz`/`Poznamka~sw~SMID:` filters work, 133/896 items without article, no packaging rounding.
+
 ## 20. Questions for the Money implementer (orders)
 1. Which field of Objednávka prijatá is "Požadovaný termín dodania" (header and item)? Is `DatumVyrizeni` that field?
 2. Does `CreateReceivedOrder` reserve stock automatically? (Smart Mail does not handle stock — D6; we only need to know

@@ -181,7 +181,7 @@ def test_endpoints_map_probe_and_outage_to_codes() -> None:
     r = client.get(f"/companies/{CID}/activities")
     assert r.status_code == 501 and r.json()["detail"] == {
         "code": "waiting_for_probe",
-        "what": "REST Activity filter by firma_ID",
+        "what": "REST Activity list: REST filters do not work (probe 2026-10-31)",
     }
     with respx.mock:
         respx.post(f"{BASE}/connect/token").mock(side_effect=httpx.ConnectError("down"))
@@ -250,3 +250,64 @@ async def test_persons_from_real_api_envelope_with_pascal_case_fields() -> None:
     assert person.email == "jana@example.test" and person.phone == "0900 000 000"
     assert person.last_name == "Testová" and page.next_from is None
     await backend.aclose()
+
+
+@respx.mock
+async def test_activity_types_from_real_api_envelope_with_pascal_case_fields() -> None:
+    """#176: REST DTOs are PascalCase inside the envelope on API 1.15.11 (swagger says camelCase)."""
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    tid = uuid.uuid4()
+    respx.get(f"{BASE}/v2.0/TypeOfActivity/0/2").mock(
+        return_value=_envelope([{"ID": str(tid), "Kod": "EMAIL", "Nazev": "E-mail"}])
+    )
+    backend = ApiBackend(settings())
+    page = await backend.codebook("activity-types", 0, 2)
+    assert [(i.id, i.code, i.name) for i in page.items] == [(tid, "EMAIL", "E-mail")]
+    assert page.next_from is None
+    await backend.aclose()
+
+
+@respx.mock
+async def test_activity_types_camel_case_still_read() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    tid = uuid.uuid4()
+    respx.get(f"{BASE}/v2.0/TypeOfActivity/0/2").mock(
+        return_value=_envelope([{"id": str(tid), "kod": "TEL", "nazev": "Telefonát"}])
+    )
+    backend = ApiBackend(settings())
+    page = await backend.codebook("activity-types", 0, 2)
+    assert page.items[0].code == "TEL"
+    await backend.aclose()
+
+
+@respx.mock
+async def test_rest_envelope_error_status_is_money_error() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    respx.get(f"{BASE}/v2.0/TypeOfActivity/0/2").mock(
+        return_value=httpx.Response(200, json={"Data": None, "Status": 0, "Message": "x", "StackTrace": None})
+    )
+    backend = ApiBackend(settings())
+    with pytest.raises(MoneyError):
+        await backend.codebook("activity-types", 0, 2)
+    await backend.aclose()
+
+
+@respx.mock
+async def test_invoice_pdf_from_real_api_octet_stream() -> None:
+    """#176 probe: `GET /v2.0/IssuedInvoice/{id}/Report/{reportId}` → 200 application/octet-stream (~5 s, bridge
+    timeout 20 s) — the bytes are passed through untouched."""
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    iid = uuid.uuid4()
+    pdf = b"%PDF-1.4 fictional"
+    respx.get(f"{BASE}/v2.0/IssuedInvoice/{iid}/Report/7").mock(
+        return_value=httpx.Response(200, content=pdf, headers={"content-type": "application/octet-stream"})
+    )
+    backend = ApiBackend(settings())
+    assert await backend.invoice_pdf("invoice", iid, "7") == pdf
+    await backend.aclose()
+
+
+def test_bridge_timeout_covers_slow_pdf_report() -> None:
+    from app.gql_client import TIMEOUT
+
+    assert TIMEOUT.read is not None and TIMEOUT.read >= 15

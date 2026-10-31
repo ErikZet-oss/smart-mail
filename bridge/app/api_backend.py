@@ -1,8 +1,10 @@
 """Money S4 backend over the official API (MONEY_BACKEND=api). Read-only.
 
 Only GraphQL list/detail queries from `queries/*.graphql` and the REST calls whose shape is in the swagger files.
-REST list filters (`Filters`, `PropertyName`, `Operation`, `ExpectedValue`) have no documented syntax in the swagger,
-so calls that need them raise `WaitingForProbe` until `probe_output/report.md` confirms it (plan phase-3 › [PROBE]).
+REST list filters (`Filters`, `PropertyName`, `Operation`, `ExpectedValue`) and `?text=` do NOT work on the customer's
+API 1.15.11 (probe on the TEST agenda 2026-10-31: no syntax returned only the searched invoice). Searching is GraphQL
+only; REST is used only for PDF reports, persons, activity types and (later) activities. Calls that would need a REST
+filter raise `WaitingForProbe`.
 """
 
 from __future__ import annotations
@@ -165,10 +167,29 @@ def delivery_from(raw: dict[str, Any]) -> Delivery:
     )
 
 
+def _ci(raw: dict[str, Any]) -> dict[str, Any]:
+    """REST DTOs: swagger documents camelCase, the real API 1.15.11 answers PascalCase (`ID`, `Parent_ID`, `Kod`,
+    `Tel1Cislo`, …; probe on the TEST agenda 2026-10-31). Every REST mapper reads keys case-insensitively."""
+    return {str(k).lower(): v for k, v in raw.items()}
+
+
+def _rest_rows(body: Any) -> list[dict[str, Any]]:
+    """A REST list after `unwrap`: a plain list, or (older versions) a dict wrapping it."""
+    if isinstance(body, dict):
+        body = body.get("Data") or body.get("data") or body.get("items") or []
+    if not isinstance(body, list):
+        raise MoneyError("REST list: not a list")
+    return [r for r in body if isinstance(r, dict)]
+
+
+def codebook_item_from_rest(raw: dict[str, Any]) -> CodebookItem:
+    raw = _ci(raw)
+    return CodebookItem(id=_required_uuid(raw.get("id")), code=_s(raw.get("kod")), name=_s(raw.get("nazev")))
+
+
 def person_from(raw: dict[str, Any]) -> Person:
-    """REST `PersonOutputDto`. Swagger documents camelCase, the real API 1.15.11 answers PascalCase (`ID`,
-    `Parent_ID`, `Jmeno`, `Tel1Cislo`, …; TEST agenda 2026-10-31) — keys are matched case-insensitively."""
-    raw = {str(k).lower(): v for k, v in raw.items()}
+    """REST `PersonOutputDto`, keys case-insensitive (`_ci`)."""
+    raw = _ci(raw)
     return Person(
         id=_required_uuid(raw.get("id")),
         company_id=_uuid(raw.get("parent_id")),
@@ -242,13 +263,11 @@ class ApiBackend:
         return company_from(raw) if isinstance(raw, dict) and raw.get("ID") else None
 
     async def persons(self, since: datetime | None, start: int, count: int) -> PersonPage:
-        """REST paging `/Person/{from}/{count}` needs no filter. `since` is ignored (full list) — the REST delta
-        syntax is [PROBE]; the cache sync treats persons as a full refresh."""
+        """REST paging `/Person/{from}/{count}` needs no filter. `since` is ignored (full list): REST filters do not
+        work (probe 2026-10-31), so the cache sync treats persons as a full refresh."""
         count = min(count, self._page)
-        rows = await self._money.rest_json(f"Person/{start}/{count}") or []
-        if isinstance(rows, dict):  # some versions wrap lists
-            rows = rows.get("Data") or rows.get("data") or rows.get("items") or []
-        items = [person_from(r) for r in rows if isinstance(r, dict)]
+        rows = _rest_rows(await self._money.rest_json(f"Person/{start}/{count}") or [])
+        items = [person_from(r) for r in rows]
         return PersonPage(items=items, next_from=start + len(rows) if len(rows) == count else None)
 
     async def codebook(self, name: CodebookName, start: int, count: int) -> CodebookPage:
@@ -267,8 +286,8 @@ class ApiBackend:
         return _newest_first([invoice_from(r) for r in rows])
 
     async def search_invoices(self, query: InvoiceQuery) -> InvoiceSearch:
-        """MONEY_API §5.1 cascade on GraphQL `IssuedInvoices`. Proformas (REST, filter syntax [PROBE]) are not
-        searched on the API backend yet."""
+        """MONEY_API §5.1 cascade on GraphQL `IssuedInvoices`. Proformas are REST-only and REST filters do not work
+        (probe 2026-10-31), so proformas are not searched on the API backend."""
         steps: list[tuple[MatchedBy, str]] = []
         if query.number:
             steps.append(("number", cond("CisloDokladu", "eq", query.number)))
@@ -321,24 +340,19 @@ class ApiBackend:
         return _newest_first([delivery_from(r) for r in rows])
 
     async def activities(self, company_id: uuid.UUID) -> list[Activity]:
-        raise WaitingForProbe("REST Activity filter by firma_ID")
+        raise WaitingForProbe("REST Activity list: REST filters do not work (probe 2026-10-31)")
 
     async def _activity_types(self, start: int, count: int) -> CodebookPage:
         """REST `TypeOfActivity/{from}/{count}` (no filter needed; swagger v1/v2)."""
         count = min(count, self._page)
-        rows = await self._money.rest_json(f"TypeOfActivity/{start}/{count}") or []
-        if isinstance(rows, dict):
-            rows = rows.get("Data") or rows.get("data") or rows.get("items") or []
-        items = [
-            CodebookItem(id=_required_uuid(r.get("id")), code=_s(r.get("kod")), name=_s(r.get("nazev")))
-            for r in rows
-            if isinstance(r, dict)
-        ]
+        rows = _rest_rows(await self._money.rest_json(f"TypeOfActivity/{start}/{count}") or [])
+        items = [codebook_item_from_rest(r) for r in rows]
         return CodebookPage(items=items, next_from=start + len(rows) if len(rows) == count else None)
 
     async def create_activity(self, activity: ActivityIn) -> ActivityOut:
-        """The required fields of `ActivityInputDto` and the REST filter for the SMID check are [PROBE] — never
-        guessed (CLAUDE.md §7); a mutation is never retried."""
+        """Not enabled: the required fields of `ActivityInputDto` are unconfirmed and the SMID duplicate check
+        cannot use a REST filter (filters do not work, probe 2026-10-31). Never guessed (CLAUDE.md §7); a mutation
+        is never retried. Erik approves a write test on the TEST agenda first (#176)."""
         raise WaitingForProbe("REST Activity create (required fields, SMID filter)")
 
     async def invoice_pdf(self, kind: InvoiceKind, invoice_id: uuid.UUID, report_id: str) -> bytes | None:

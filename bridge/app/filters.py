@@ -1,7 +1,8 @@
 """GraphQL filter builder for Money S4 (MONEY_API §2, §7): `Field~op~value`, AND = `#`, OR = `|`, parentheses group.
 
-Escaping of `~ # | ( )` inside a value is undocumented on the customer's server [PROBE], so a value that contains any of
-them is rejected — never escaped or stripped. Every value passes through `cond`, so no input can add a condition.
+Escaping of `~ # | ( )` inside a value is undocumented (the probe 2026-10-31 confirmed eq/ct/sw/ew, dates and OR,
+not escaping), so a value that contains any of them is rejected — never escaped or stripped. Every value passes
+through `cond`, so no input can add a condition.
 """
 
 from __future__ import annotations
@@ -27,7 +28,8 @@ class UnsafeFilterValue(ValueError):
 
 
 def fmt(value: Value) -> str:
-    """Dates YYYY-MM-DD [PROBE], bool true/false, decimals with a dot and no exponent, GUID as is."""
+    """Dates YYYY-MM-DD (ISO; SK and ISO with time also work, probe 2026-10-31),
+    bool true/false, decimals with a dot and no exponent, GUID as is."""
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, datetime):

@@ -650,6 +650,16 @@ def gql_stock_prices(http):
     rows = (data or {}).get("ProdejniCeny") or []
     step("ProdejniCeny (ceny zákazníka)", bool(rows) and not err, sample=len(rows), ms=ms,
          note=f"{len(rows)} prices in {ms} ms, errors: {str(err)[:120] if err else 'none'}")
+    # #176: 0 rows without SkladID on the TEST agenda. Every branch price list has a default warehouse
+    # (VychoziSklad_ID), so try once per warehouse (read-only, counts only).
+    per_wh = {}
+    whs = (gql(http, "{ Warehouses(Count:50){ ID Kod } }")[1] or {}).get("Warehouses") or []
+    for wh in whs:
+        _, d, e, _ = gql(http, 'query($id:Guid!,$s:Guid){ ProdejniCeny(FirmaID:$id, SkladID:$s, Count:5){ Artikl_ID } }',
+                         {"id": comp["ID"], "s": wh["ID"]})
+        per_wh[str(wh.get("Kod"))] = "error" if e else len((d or {}).get("ProdejniCeny") or [])
+    step("ProdejniCeny with SkladID (per warehouse)", any(isinstance(v, int) and v for v in per_wh.values()),
+         per_warehouse=per_wh, note=f"rows per warehouse code (max 5): {per_wh}")
 
 
 def gql_documents(http):
