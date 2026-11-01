@@ -6,6 +6,7 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 - `docs/phase4-plan.md` adds milestones 4a–4h, the order price mode, the first document write on TEST, shadow mode, the data model and questions for Erik.
 - Docs only. No code and no migration. Waiting for Erik's approval.
+
 ## [Unreleased] — Probe `--phase4` (read-only, #188 #189)
 
 - `money_probe.py --phase4` writes `probe_output/phase4.md`. It lists the fields that existing CRM activities fill, as names and counts only. The first test write of an activity (#189) copies this shape instead of guessing it.
