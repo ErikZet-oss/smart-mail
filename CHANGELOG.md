@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Fix: mobile header „Odoslať“ showed „Chýba príjemca“
+
+- The mobile header „Odoslať“ opened the pre-send dialog with the checks of the last saved draft, without saving. A forward whose Komu had just been typed always showed „Chýba príjemca“, so #184 did not help there.
+- Both buttons now use one handler (`startSend`). It saves the live fields when the stored draft has checks, then sends directly when the fresh checks are empty, and opens W4b only for real checks.
+- e2e test `mobile header Odoslať saves the typed recipient first @mobile`.
+
 ## [Unreleased] — Mobile layout fixes from Erik's Android test (#185)
 
 - M1 multi-select bar follows Figma `82:1534`: ✕ · „Vybraté: N“ · Vybavené · Vymazať · ⋯. Označiť ako prečítané, Archivovať, Presunúť and Znova zaradiť moved into the ⋯ menu. Nothing wraps or is cut off at 360 px; the same bar is used in the 360 px desktop list column.
