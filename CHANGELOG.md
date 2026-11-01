@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Fix: „Chýba príjemca“ although the address was typed (mobile)
+
+- On Android (Samsung keyboard) the typed address can still be an uncommitted IME composition when „Odoslať“ is tapped. The React state was empty, the draft was saved with no recipient, and the pre-send check blocked the send.
+- Save, send, schedule and the signature dialog now blur the focused field and read To, Cc and Subject from the inputs.
+- e2e test `e2e/pilot-ime-recipient.spec.ts`.
+
 ## [Unreleased] — „Pošlite poslednú faktúru“ (#182)
 
 - invoice_attach recognises „the last invoice“ (SK/CZ/EN/DE, deterministic regex) when the mail names no number. A sender matched strongly to a Money company gets a card with the newest issued invoice (by issue date, then number; no proforma, no credit note, deleted records dropped). The card carries the warning `invoice_guessed_latest` „Faktúra určená odhadom…“ and is never `batch_safe`. Written numbers always win. Without a strong match nothing changes (no attachment).

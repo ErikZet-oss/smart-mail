@@ -148,6 +148,21 @@ export function ScreenW4() {
   const [mdn, setMdn] = useState(false);
   const [showCc, setShowCc] = useState(false);
   const [preSendOpen, setPreSendOpen] = useState(false);
+  // Pilot 2026-11-01 (Android, Samsung keyboard): a typed address can still be an uncommitted IME composition when
+  // „Odoslať“ is tapped, so the React state was empty and the server answered „Chýba príjemca“ although the field
+  // showed the address. Blur commits the composition; the fields are then read from the DOM, not from the state.
+  const toInputRef = useRef<HTMLInputElement>(null);
+  const ccInputRef = useRef<HTMLInputElement>(null);
+  const subjectInputRef = useRef<HTMLInputElement>(null);
+  const liveFields = () => {
+    const active = document.activeElement;
+    if (active instanceof HTMLInputElement) active.blur();
+    return {
+      to_addrs: parseAddrs(toInputRef.current?.value ?? to),
+      cc_addrs: parseAddrs(ccInputRef.current?.value ?? cc),
+      subject: subjectInputRef.current?.value ?? subject,
+    };
+  };
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [sendMenuOpen, setSendMenuOpen] = useState(false);
   const [responsesOpen, setResponsesOpen] = useState(false);
@@ -248,9 +263,7 @@ export function ScreenW4() {
     mutationFn: async () => {
       if (!localId) return null;
       return patchDraft(localId, {
-        to_addrs: parseAddrs(to),
-        cc_addrs: parseAddrs(cc),
-        subject,
+        ...liveFields(),
         body_html: editor?.getHTML() ?? '',
         priority,
         request_mdn: mdn,
@@ -317,9 +330,7 @@ export function ScreenW4() {
       if (!localId) throw new Error('no draft');
       setSendFailMeta(null);
       await patchDraft(localId, {
-        to_addrs: parseAddrs(to),
-        cc_addrs: parseAddrs(cc),
-        subject,
+        ...liveFields(),
         body_html: editor?.getHTML() ?? '',
         priority,
         request_mdn: mdn,
@@ -438,9 +449,7 @@ export function ScreenW4() {
     mutationFn: async (when: Date) => {
       if (!localId) throw new Error('no draft');
       await patchDraft(localId, {
-        to_addrs: parseAddrs(to),
-        cc_addrs: parseAddrs(cc),
-        subject,
+        ...liveFields(),
         body_html: editor?.getHTML() ?? '',
         priority,
         request_mdn: mdn,
@@ -752,6 +761,7 @@ export function ScreenW4() {
               <span className="type-body text-text-primary">{t('compose.to')}</span>
               <div className="flex gap-2">
                 <input
+                  ref={toInputRef}
                   value={to}
                   onChange={(event) => {
                     setTo(event.target.value);
@@ -777,6 +787,7 @@ export function ScreenW4() {
                 <>
                   <span className="type-body text-text-primary">{t('compose.cc')}</span>
                   <input
+                    ref={ccInputRef}
                     value={cc}
                     onChange={(event) => {
                       setCc(event.target.value);
@@ -794,6 +805,7 @@ export function ScreenW4() {
               ) : null}
               <span className="type-body text-text-primary">{t('compose.subject')}</span>
               <input
+                ref={subjectInputRef}
                 value={subject}
                 onChange={(event) => {
                   setSubject(event.target.value);
@@ -1167,9 +1179,7 @@ export function ScreenW4() {
               signature_html_override: html,
               include_signature: true,
               body_html: editor?.getHTML() ?? '',
-              to_addrs: parseAddrs(to),
-              cc_addrs: parseAddrs(cc),
-              subject,
+              ...liveFields(),
             }).then((d) => {
               void qc.setQueryData(['compose', localId], d);
               editor?.commands.setContent(d.body_html || '<p></p>', { emitUpdate: false });
