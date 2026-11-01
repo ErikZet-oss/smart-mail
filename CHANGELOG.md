@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Probe `--phase4` (read-only, #188 #189)
+
+- `money_probe.py --phase4` writes `probe_output/phase4.md`. It lists the fields that existing CRM activities fill, as names and counts only. The first test write of an activity (#189) copies this shape instead of guessing it.
+- The same run checks the branch price lists „bez DPH“ through `PriceListItems`, the company discount and price-list assignment, and `ProdejniCeny` for an article that is in a branch price list. This decides `ORDER_PRICE_MODE` (#188).
+- Nothing is written to Money.
+
 ## [Unreleased] — Fix: mobile header „Odoslať“ showed „Chýba príjemca“
 
 - The mobile header „Odoslať“ opened the pre-send dialog with the checks of the last saved draft, without saving. A forward whose Komu had just been typed always showed „Chýba príjemca“, so #184 did not help there.
