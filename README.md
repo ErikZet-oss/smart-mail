@@ -20,7 +20,7 @@ s Money S4 cez API modul – GraphQL podľa schémy vášho servera, REST na PDF
 | `docs/FIGMA_MAP.md` | **mapa obrazoviek → rámce vo Figme** (odkazy na každú obrazovku a stav, komponenty, toky) | agent + dizajnér |
 | `FIGMA.md` | **čo je pripravené na grafiku (§0)**, poradie práce, postup návrhu vo Figme + hotový prompt pre Figma Make / AI | dizajnér / Figma |
 | `design/` | farby, písmo, rozmery ako súbor na import do Figmy (`tokens.json`) a do kódu (`tokens.css`), kontrola kontrastu (`CONTRAST.md`), logo SVG/PNG a ikony aplikácie (`brand/`), anonymizované snímky vášho Roundcube ako predloha (`reference/roundcube/`) | Figma + agent |
-| `tools/money_probe.py` | bezpečný testovací skript (len čítanie; `--orders` pre objednávky, `--branches` pre pobočky a dodacie listy) na overenie API Money | vy (spustiť na serveri) |
+| `tools/money_probe.py` | bezpečný testovací skript (len čítanie; `--orders` pre objednávky, `--branches` pre pobočky a dodacie listy, `--phase4` pre aktivity a ceny objednávok) na overenie API Money | vy (spustiť na serveri) |
 | `tools/validate_graphql.py` | kontrola všetkých GraphQL dopytov voči schéme vášho Money (beží v CI, chráni pred chybami v názvoch polí) | agent / CI |
 | `app/`, `bridge/`, `web/`, `migrations/`, `tests/` | kód aplikácie (od fázy 0), Money most, webová aplikácia, migrácie databázy, testy | agent |
 | `docker-compose.yml`, `.env.example`, `Makefile`, `.github/workflows/ci.yml` | spustenie celej aplikácie, popis nastavení, bežné príkazy, automatické kontroly na GitHube | agent / správca |
@@ -446,5 +446,9 @@ py -3.12 money_probe.py --env probe.env --orders
 py -3.12 money_probe.py --env probe.env --branches
 ```
 
-3. Výsledky sú v `tools\probe_output\` (`report.md`, `orders.md`, `branches.md`). Pošlite ich (alebo ich pridajte do
+```powershell
+py -3.12 money_probe.py --env probe.env --phase4
+```
+
+3. Výsledky sú v `tools\probe_output\` (`report.md`, `orders.md`, `branches.md`, `phase4.md`). Pošlite ich (alebo ich pridajte do
    repozitára do `probe_output/`) a súbor `probe.env` po použití zmažte.

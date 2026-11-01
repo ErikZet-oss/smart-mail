@@ -19,6 +19,10 @@ Purpose
   per centre, warehouse per centre, Cenik_ID on items, stock-movement times, vratky, side costs, and - with
   PROBE_DL_NUMBER + PROBE_DL_DOKLAD_PRIJATY - whether "Doklad prijatý" is stored in Odkaz. -> probe_output/branches.md
 
+  With --phase4 (read-only) it lists which fields existing CRM activities fill (#189: the first test write copies
+  them) and checks the branch price lists "bez DPH" via PriceListItems, the company discount / price-list
+  assignment and ProdejniCeny for an article of a branch price list (#188, PROBE_COMPANY_ICO). -> probe_output/phase4.md
+
 Safety
   - Only GET requests and read-only GraphQL queries (plus the token POST). By default it never creates, changes or
     deletes anything.
@@ -914,6 +918,120 @@ def write_orders_report():
     print(f"Written {OUT_DIR}/orders.md and {OUT_DIR}/orders.json")
 
 
+# ----------------------------------------------------------------------------- phase 4 (#188, #189) - READ-ONLY
+# Activities (#189): which fields real activities fill, so the input DTO of the first test write is copied, never
+# guessed. Order prices (#188): ProdejniCeny returns 0 rows on TEST, so check the branch price lists ("bez DPH")
+# through PriceListItems and the company price-list assignments / discount. Counts and field names only.
+phase4_report = {"generated_at": None, "activities": {}, "prices": {}}
+
+ACTIVITY_KEYS = ("Typ_ID", "Firma_ID", "Osoba_ID", "Popis", "Poznamka", "DatumACasZahajeni", "DatumACasUkonceni",
+                 "DatumPripadu", "Termin", "Splneno", "Uzivatel_ID", "Prideleno_ID", "Stredisko_ID", "Zakazka_ID",
+                 "Cinnost_ID", "Parent_ID", "ParentObject_ID")
+
+
+def _filled(rows, key):
+    return sum(1 for r in rows if get_ci(r, key) not in (None, "", "00000000-0000-0000-0000-000000000000", False))
+
+
+def phase4_activities(http):
+    status, _, body, ms = http.request("GET", f"{API}/Activity/0/5", raw=True)
+    env_ = _json(body) if isinstance(body, (bytes, bytearray)) else body
+    rows = as_list(_unwrap(env_)) if status == 200 else []
+    rows = [r for r in rows if isinstance(r, dict)]
+    out = {
+        "status": status, "ms": ms,
+        "total_rows_in_money": env_.get("RowCount") if isinstance(env_, dict) else None,
+        "sample": len(rows),
+        "field_names": sorted({k for r in rows for k in r})[:120],
+        "filled_of_sample": {k: _filled(rows, k) for k in ACTIVITY_KEYS},
+        "deleted_in_sample": sum(1 for r in rows if get_ci(r, "Deleted") is True),
+    }
+    # how long a full client-side scan for "SMID:" would take (REST filters do not work, no GraphQL Activities)
+    st2, _, page, ms2 = http.get(f"{API}/Activity/0/200")
+    out["page_200_ms"] = ms2 if st2 == 200 else None
+    out["page_200_rows"] = len(as_list(page)) if st2 == 200 else None
+    st3, _, types, _ = http.get(f"{API}/TypeOfActivity/0/50")
+    out["activity_types"] = len(as_list(types)) if st3 == 200 else None
+    phase4_report["activities"] = out
+    step("Activities (fields filled in existing records)", status == 200 and bool(rows), sample=len(rows), ms=ms,
+         note=f"{len(rows)} sample rows, {out['total_rows_in_money']} in Money, page of 200 in {out['page_200_ms']} ms")
+
+
+def phase4_prices(http):
+    out = {}
+    lists = (gql(http, "{ PriceLists(Count:50){ ID Kod Nazev Neaktivni } }")[1] or {}).get("PriceLists") or []
+    branch = [x for x in lists if "bez DPH" in str(x.get("Nazev") or "") and not x.get("Neaktivni")]
+    per_list = {}
+    sample_article = None
+    for pl in branch:
+        _, d, e, ms = gql(http, 'query($f:String){ PriceListItems(Filter:$f, Count:20){ Artikl_ID Cena TypCeny '
+                                'Sklad_ID MnozstevniSleva_ID NepodlehatSleveDokladu Deleted } }',
+                          {"f": f"Cenik_ID~eq~{pl['ID']}"})
+        items = [i for i in ((d or {}).get("PriceListItems") or []) if not i.get("Deleted")]
+        per_list[str(pl.get("Kod"))] = "error" if e else {
+            "items_first_20": len(items),
+            "with_Cena": sum(1 for i in items if i.get("Cena") not in (None, 0)),
+            "TypCeny": distinct(i.get("TypCeny") for i in items),
+            "with_Sklad": sum(1 for i in items if i.get("Sklad_ID")),
+            "with_quantity_discount": sum(1 for i in items if i.get("MnozstevniSleva_ID")),
+            "ms": ms,
+        }
+        if sample_article is None and items:
+            sample_article = (pl, items[0].get("Artikl_ID"))
+    out["branch_price_lists_bez_DPH"] = per_list
+    ico = env("PROBE_COMPANY_ICO")
+    if ico:
+        _, d, e, _ = gql(http, 'query($f:String){ Companies(Filter:$f, Count:1){ ID HodnotaSlevy VlastniSleva '
+                               'SeznamCeniku{ Cenik_ID Poradi } } }', {"f": f"ICO~eq~{ico}"})
+        comp = ((d or {}).get("Companies") or [None])[0]
+        if comp:
+            out["company_has_discount_value"] = comp.get("HodnotaSlevy") not in (None, 0)
+            out["company_own_discount_flag"] = comp.get("VlastniSleva")
+            out["company_price_lists_assigned"] = len(comp.get("SeznamCeniku") or [])
+            # ProdejniCeny once more for an article that is surely in a branch price list, with that warehouse
+            if sample_article and sample_article[1]:
+                whs = (gql(http, "{ Warehouses(Count:50){ ID Kod } }")[1] or {}).get("Warehouses") or []
+                code = str(sample_article[0].get("Kod") or "")[:2]
+                wh = next((w for w in whs if str(w.get("Kod")) == code), None)
+                _, d2, e2, _ = gql(http, 'query($id:Guid!,$s:Guid,$f:String){ ProdejniCeny(FirmaID:$id, SkladID:$s, '
+                                         'Filter:$f, Count:5){ Artikl_ID CenaBezDane CenaBezDanePoSleve Sleva '
+                                         'CenikKod TypCeny } }',
+                                   {"id": comp["ID"], "s": wh["ID"] if wh else None,
+                                    "f": f"Artikl_ID~eq~{sample_article[1]}"})
+                rows = (d2 or {}).get("ProdejniCeny") or []
+                out["prodejni_ceny_for_price_list_article"] = "error" if e2 else {
+                    "rows": len(rows), "warehouse": code if wh else None,
+                    "with_price": sum(1 for r in rows if r.get("CenaBezDane") not in (None, 0)),
+                    "price_list_codes": distinct(r.get("CenikKod") for r in rows),
+                }
+        else:
+            out["company"] = "PROBE_COMPANY_ICO not found"
+    else:
+        out["company"] = "skipped - set PROBE_COMPANY_ICO"
+    phase4_report["prices"] = out
+    ok = any(isinstance(v, dict) and v.get("with_Cena") for v in per_list.values())
+    step("Branch price lists bez DPH (PriceListItems)", ok, note=f"{len(per_list)} lists, items with Cena: "
+         + ", ".join(f"{k}={v['with_Cena'] if isinstance(v, dict) else v}" for k, v in per_list.items()))
+
+
+def write_phase4_report():
+    phase4_report["generated_at"] = report["generated_at"]
+    os.makedirs(OUT_DIR, exist_ok=True)
+    with open(os.path.join(OUT_DIR, "phase4.json"), "w", encoding="utf-8") as fh:
+        json.dump(phase4_report, fh, ensure_ascii=False, indent=2, default=str)
+    lines = ["# Money S4 probe – phase 4 (activities #189, order prices #188), read-only", "",
+             f"Generated: {report['generated_at']}", "", "## Activities (REST /Activity)", ""]
+    for k, v in phase4_report["activities"].items():
+        lines.append(f"- **{k}**: {json.dumps(v, ensure_ascii=False, default=str)}")
+    lines += ["", "## Order prices", ""]
+    for k, v in phase4_report["prices"].items():
+        lines.append(f"- **{k}**: {json.dumps(v, ensure_ascii=False, default=str)}")
+    lines += ["", "Counts and field names only - no business values. Give this file to Claude Code.", ""]
+    with open(os.path.join(OUT_DIR, "phase4.md"), "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    print(f"Written {OUT_DIR}/phase4.md and {OUT_DIR}/phase4.json")
+
+
 # ----------------------------------------------------------------------------- branches + received delivery notes
 # Read-only. Answers DOCUMENTS_SPEC §8 / MONEY_API §9 questions 8-12 from existing documents:
 # own numerical series per branch?  stredisko code == warehouse code?  Cenik_ID on received items?  time of stock
@@ -1046,6 +1164,9 @@ def main():
     ap.add_argument("--orders", action="store_true", help="probe customer orders (ORDERS_SPEC §19) -> probe_output/orders.md")
     ap.add_argument("--allow-write-test", action="store_true",
                     help="with --orders: create, read back and delete test orders (TEST agenda only, asks for confirmation)")
+    ap.add_argument("--phase4", action="store_true",
+                    help="read-only: fields of existing activities (#189) and branch price lists / customer prices "
+                         "(#188) -> probe_output/phase4.md")
     ap.add_argument("--branches", action="store_true",
                     help="read-only: centres, warehouses, price lists, series and received delivery notes -> probe_output/branches.md")
     args = ap.parse_args()
@@ -1065,6 +1186,12 @@ def main():
         sys.exit(1)
 
     gql_schema(http)
+    if args.phase4:
+        if gql_basic(http):
+            phase4_activities(http)
+            phase4_prices(http)
+        write_phase4_report()  # report.md of the base run is kept
+        return
     if args.branches:
         if gql_basic(http):
             branches_probe(http)
