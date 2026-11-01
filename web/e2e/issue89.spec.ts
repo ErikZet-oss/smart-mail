@@ -74,13 +74,23 @@ async function setup(page: import('@playwright/test').Page, bulk: { status?: num
 const subject = (page: import('@playwright/test').Page) =>
   page.getByRole('option').filter({ hasText: 'Kópia faktúry 2026123' });
 
+/** Desktop: the toolbar button; mobile (#185, M3 `83:2434`): Vymazať is in „Viac“. */
+async function deleteOpen(page: import('@playwright/test').Page, mobile: boolean) {
+  if (!mobile) {
+    await page.getByRole('button', { name: 'Vymazať', exact: true }).first().click();
+    return;
+  }
+  await page.getByTestId('m3-action-bar').getByRole('button', { name: 'Viac' }).click();
+  await page.getByRole('menuitem', { name: 'Vymazať' }).click();
+}
+
 test.describe('#89 fast delete @mobile', () => {
   test('#89 delete removes the row before the server answers', async ({ page }, info) => {
     await setup(page, { delayMs: 3000 });
     await page.goto('/mail/default/inbox/t-m1');
     await expect(page.getByText('Text správy')).toBeVisible();
     const started = Date.now();
-    await page.getByRole('button', { name: 'Vymazať', exact: true }).first().click();
+    await deleteOpen(page, info.project.name === 'mobile');
     if (info.project.name === 'mobile') await expect(page.getByText('Cenová ponuka M10×30 A2')).toBeVisible();
     await expect(subject(page)).toHaveCount(0, { timeout: 1000 });
     expect(Date.now() - started).toBeLessThan(1000); // the mocked server needs 3 s
@@ -93,7 +103,7 @@ test.describe('#89 fast delete @mobile', () => {
     await setup(page, { status: 503, delayMs: 800 });
     await page.goto('/mail/default/inbox/t-m1');
     await expect(page.getByText('Text správy')).toBeVisible();
-    await page.getByRole('button', { name: 'Vymazať', exact: true }).first().click();
+    await deleteOpen(page, info.project.name === 'mobile');
     await expect(subject(page)).toHaveCount(0, { timeout: 500 });
     await expect(page.getByText('Akcia sa nepodarila – skúste to znova.')).toBeVisible({ timeout: 5000 });
     await expect(subject(page)).toHaveCount(1);

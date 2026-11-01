@@ -196,8 +196,13 @@ test.describe('W2 list & reading (1d)', () => {
     await page.getByRole('button', { name: 'Výber' }).click();
     await page.getByRole('menuitem', { name: 'Aktuálna strana' }).click();
     await expect(page.getByText('Vybraté: 2')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Označiť ako prečítané' })).toBeVisible();
+    // #185: icon actions + ⋯ (Figma M1 multi-select `82:1534`); the rest lives in the menu
+    const bar = page.getByTestId('bulk-toolbar');
+    await expect(bar.getByRole('button', { name: 'Vybavené' })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Vymazať' })).toBeVisible();
     await shot(page, 'phase1d-W2e-bulk');
+    await bar.getByRole('button', { name: 'Viac' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Označiť ako prečítané' })).toBeVisible();
   });
 
   test('W2o Nastavenia zoznamu', async ({ page }) => {

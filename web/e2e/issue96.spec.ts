@@ -152,7 +152,9 @@ test.describe('#96 move from the list', () => {
     await expect(option(page, 'Reklamácia')).toBeVisible();
     await page.locator('body').click({ position: { x: 5, y: 5 } });
     await page.keyboard.press('Control+a');
-    await page.getByRole('button', { name: 'Presunúť', exact: true }).click();
+    // #185: Presunúť lives in the ⋯ menu of the bulk bar (Figma M1 multi-select)
+    await page.getByTestId('bulk-toolbar').getByRole('button', { name: 'Viac' }).click();
+    await page.getByRole('menuitem', { name: 'Presunúť' }).click();
     await page.getByRole('menu', { name: 'Presunúť do…' }).getByRole('menuitem', { name: 'Faktúry' }).click();
     await expect(page.getByRole('option')).toHaveCount(0);
     await expect

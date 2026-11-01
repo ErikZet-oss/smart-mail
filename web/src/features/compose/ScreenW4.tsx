@@ -712,7 +712,7 @@ export function ScreenW4() {
             <div
               className={
                 mobile
-                  ? 'grid grid-cols-[72px_1fr] items-stretch px-4 [&>*]:flex [&>*]:min-h-11 [&>*]:items-center [&>*]:border-b [&>*]:border-border-default'
+                  ? 'grid grid-cols-[72px_minmax(0,1fr)] items-stretch px-4 [&>*]:flex [&>*]:min-h-11 [&>*]:items-center [&>*]:border-b [&>*]:border-border-default'
                   : 'grid grid-cols-[minmax(72px,172px)_1fr] items-center gap-y-2.5 px-6 pb-3 pt-4'
               }
             >
@@ -759,7 +759,7 @@ export function ScreenW4() {
                 </>
               ) : null}
               <span className="type-body text-text-primary">{t('compose.to')}</span>
-              <div className="flex gap-2">
+              <div className="flex min-w-0 gap-2">
                 <input
                   ref={toInputRef}
                   value={to}

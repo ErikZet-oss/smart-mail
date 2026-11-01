@@ -82,12 +82,17 @@ function ToolBtn({
   onClick,
   disabled,
   busy,
+  wide,
+  ariaLabel,
 }: {
   icon: ReactNode;
   label: string;
   onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   busy?: boolean;
+  /** #185 mobile bar: equal columns that share the width (no horizontal overflow). */
+  wide?: boolean;
+  ariaLabel?: string;
 }) {
   const { t } = useTranslation();
   const off = disabled || !onClick;
@@ -97,12 +102,13 @@ function ToolBtn({
       onClick={onClick}
       disabled={off || busy}
       title={off ? t('common.comingSoon') : undefined}
-      className={`flex h-14 min-w-[64px] flex-col items-center justify-center gap-1 rounded-sm px-1 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary-500 ${
+      aria-label={ariaLabel}
+      className={`flex h-14 ${wide ? 'min-w-0 flex-1' : 'min-w-[64px]'} flex-col items-center justify-center gap-1 rounded-sm px-1 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary-500 ${
         off ? 'cursor-not-allowed text-text-tertiary' : 'text-text-primary hover:bg-bg-subtle'
       }`}
     >
       <span aria-hidden="true">{icon}</span>
-      <span className="type-micro max-w-[72px] truncate">{label}</span>
+      <span className={`type-micro truncate ${wide ? 'max-w-full' : 'max-w-[72px]'}`}>{label}</span>
     </button>
   );
 }
@@ -474,6 +480,67 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
     },
   ];
 
+  /** #185 M3 (`83:2434`): the mobile bar shows Odpovedať · Všetkým · Poslať ďalej · Viac; everything else is here. */
+  const closeMore = (run: () => void) => () => {
+    setMoreMenu(null);
+    run();
+  };
+  const mobileMoreEntries: MenuEntry[] = msg
+    ? [
+        {
+          kind: 'item',
+          id: 'm-delete',
+          label: t('mail.toolbar.delete'),
+          icon: <Trash2 size={16} />,
+          danger: true,
+          disabled: bulk.isPending,
+          onSelect: closeMore(() => runBulk('delete')),
+        },
+        {
+          kind: 'item',
+          id: 'm-junk',
+          label: t('mail.toolbar.junk'),
+          icon: <Flame size={16} />,
+          disabled: bulk.isPending,
+          onSelect: closeMore(() => runBulk('junk')),
+        },
+        {
+          kind: 'item',
+          id: 'm-done',
+          label: t('mail.toolbar.done'),
+          icon: <CircleCheck size={16} />,
+          onSelect: closeMore(() => runBulk('done')),
+        },
+        {
+          kind: 'item',
+          id: 'm-snooze',
+          label: t('mail.toolbar.snooze'),
+          icon: <AlarmClock size={16} />,
+          disabled: !threadId,
+          onSelect: () => {
+            const at = moreMenu ?? { x: 0, y: 0 };
+            setMoreMenu(null);
+            setSnoozeMenu(at);
+          },
+        },
+        { kind: 'divider', id: 'm-d1' },
+        ...markEntries.map((e) => (e.kind === 'item' ? { ...e, onSelect: closeMore(e.onSelect) } : e)),
+        ...(features.money
+          ? [
+              {
+                kind: 'item' as const,
+                id: 'm-assistant',
+                label: t('money.customer.assistant'),
+                icon: <Sparkles size={16} className="text-ai-600" />,
+                onSelect: closeMore(() => toggleCustomer(!customerOpen)),
+              },
+            ]
+          : []),
+        { kind: 'divider', id: 'm-d2' },
+        ...moreEntries,
+      ]
+    : [];
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <section aria-label={t('mail.readingPane')} className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg-canvas">
@@ -493,9 +560,58 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
             </p>
           </header>
         ) : null}
+        {mobile ? (
+          <div
+            className="order-last flex h-14 shrink-0 items-stretch border-t border-border-default"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+            data-testid="m3-action-bar"
+          >
+            <ToolBtn
+              wide
+              icon={<Reply size={18} />}
+              label={t('mail.toolbar.reply')}
+              onClick={() =>
+                navigate(
+                  `/compose?mode=reply&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`,
+                )
+              }
+            />
+            <ToolBtn
+              wide
+              icon={<ReplyAll size={18} />}
+              label={t('mail.toolbar.replyAllShort')}
+              ariaLabel={t('mail.toolbar.replyAll')}
+              onClick={() =>
+                navigate(
+                  `/compose?mode=reply_all&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`,
+                )
+              }
+            />
+            <ToolBtn
+              wide
+              icon={<Forward size={18} />}
+              label={t('mail.toolbar.forward')}
+              onClick={() =>
+                navigate(
+                  `/compose?mode=forward&mailbox=${encodeURIComponent(mailbox)}&m=${encodeURIComponent(messageId)}`,
+                )
+              }
+            />
+            <ToolBtn
+              wide
+              icon={<Ellipsis size={18} />}
+              label={t('mail.toolbar.more')}
+              onClick={(event) => {
+                const r = event.currentTarget.getBoundingClientRect();
+                // open upwards from the bottom bar, aligned to the right edge (Menu clamps to the viewport)
+                setMoreMenu({ x: r.right - 240, y: r.top - 8 });
+              }}
+            />
+          </div>
+        ) : null}
         <div
-          className={`flex h-14 shrink-0 items-center gap-0.5 overflow-x-auto border-border-default px-2 ${
-            mobile ? 'order-last border-t' : 'border-b'
+          className={`flex h-14 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border-default px-2 ${
+            mobile ? 'hidden' : ''
           }`}
         >
           <ToolBtn
@@ -783,7 +899,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
         {moreMenu ? (
           <Menu
             label={t('mail.toolbar.more')}
-            entries={moreEntries}
+            entries={mobile ? mobileMoreEntries : moreEntries}
             at={moreMenu}
             width={240}
             onClose={() => setMoreMenu(null)}
