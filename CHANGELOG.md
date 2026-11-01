@@ -2,6 +2,11 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 4 plan (#188)
+
+- `docs/phase4-plan.md` adds milestones 4a–4h, the order price mode, the first document write on TEST, shadow mode, the data model and questions for Erik.
+- Docs only. No code and no migration. Waiting for Erik's approval.
+
 ## [Unreleased] — Fix: mobile header „Odoslať“ showed „Chýba príjemca“
 
 - The mobile header „Odoslať“ opened the pre-send dialog with the checks of the last saved draft, without saving. A forward whose Komu had just been typed always showed „Chýba príjemca“, so #184 did not help there.
