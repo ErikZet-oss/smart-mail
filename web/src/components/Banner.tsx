@@ -54,11 +54,11 @@ export function Banner({ kind, message, details, action, secondaryAction, onClos
   return (
     <div
       role={kind === 'danger' || kind === 'warning' ? 'alert' : 'status'}
-      className={`flex items-center gap-2.5 border-l-[3px] px-4 py-2.5 ${style.box}`}
+      className={`flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-l-[3px] px-4 py-2.5 ${style.box}`}
     >
       {style.icon}
       {details?.length ? (
-        <div className={`type-small min-w-0 flex-1 ${style.text}`}>
+        <div className={`type-small min-w-[12rem] flex-1 ${style.text}`}>
           <p>{message}</p>
           {details.map((line) => (
             <p key={line} className="break-words text-text-secondary">
@@ -67,27 +67,32 @@ export function Banner({ kind, message, details, action, secondaryAction, onClos
           ))}
         </div>
       ) : (
-        <p className={`type-small min-w-0 flex-1 ${style.text}`}>{message}</p>
+        // #185: at 360 px the actions wrap below the text instead of squeezing it into a narrow column
+        <p className={`type-small min-w-[12rem] flex-1 ${style.text}`}>{message}</p>
       )}
-      {action ? (
-        <button
-          type="button"
-          onClick={action.onClick}
-          disabled={action.disabled}
-          className={`type-label shrink-0 rounded-xs hover:underline disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary-500 ${style.action}`}
-        >
-          {action.label}
-        </button>
-      ) : null}
-      {secondaryAction ? (
-        <button
-          type="button"
-          onClick={secondaryAction.onClick}
-          disabled={secondaryAction.disabled}
-          className={`type-label shrink-0 rounded-xs hover:underline disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary-500 ${style.action}`}
-        >
-          {secondaryAction.label}
-        </button>
+      {action || secondaryAction ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {action ? (
+            <button
+              type="button"
+              onClick={action.onClick}
+              disabled={action.disabled}
+              className={`type-label shrink-0 rounded-xs hover:underline disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary-500 ${style.action}`}
+            >
+              {action.label}
+            </button>
+          ) : null}
+          {secondaryAction ? (
+            <button
+              type="button"
+              onClick={secondaryAction.onClick}
+              disabled={secondaryAction.disabled}
+              className={`type-label shrink-0 rounded-xs hover:underline disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary-500 ${style.action}`}
+            >
+              {secondaryAction.label}
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {onClose ? (
         <button

@@ -456,3 +456,118 @@ test.describe('pilot: paste a screenshot into compose', () => {
     await expect(img).toHaveAttribute('src', '/api/mail/compose/d-1/inline/snimka-1%40smartmail');
   });
 });
+
+function must<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error('missing value');
+  return value;
+}
+
+// #185 Erik's Android test (360–412 px): nothing outside the viewport, nothing under the FAB. Figma M1 `83:2974`,
+// M1 multi-select `82:1534`, M3 `83:3117` / `83:2434`.
+for (const size of [
+  { width: 360, height: 780 },
+  { width: 412, height: 915 },
+]) {
+  test.describe(`#185 mobile ${size.width}×${size.height} @mobile`, () => {
+    test.use({ viewport: size });
+
+    test(`#185 M1 bulk bar fits ${size.width} px; FAB never covers the last row`, async ({ page }, info) => {
+      test.skip(info.project.name !== 'mobile', 'mobile frame');
+      // a long folder: 30 rows on the first page of 380, so the end of the list really meets the FAB and the pager
+      const inboxId = must(foldersView().folders.find((f) => f.special_use === 'inbox')).id;
+      const base = inboxList(inboxId);
+      const many = Array.from({ length: 30 }, (_, i) => ({
+        ...must(base.messages[i % 2]),
+        id: `m-${i + 1}`,
+        thread_id: `t-${i + 1}`,
+        subject: i === 29 ? 'Posledný riadok zoznamu' : `${must(base.messages[i % 2]).subject} ${i + 1}`,
+      }));
+      await mockMail(page, {
+        [`GET /api/mail/mailboxes/default/folders/${inboxId}/messages`]: {
+          body: { ...base, total: 380, page: 2, page_size: 30, messages: many },
+        },
+      });
+      await page.goto('/mail/default/inbox');
+      const last = page.getByRole('option').filter({ hasText: 'Posledný riadok zoznamu' });
+      await expect(last).toBeVisible();
+      // scroll to the end of the list: the last row ends above the FAB
+      const list = page.getByTestId('folder-message-list');
+      await list.evaluate((n) => n.scrollTo(0, n.scrollHeight));
+      await page.waitForTimeout(300); // the end of the list may load more rows (#185)
+      await list.evaluate((n) => n.scrollTo(0, n.scrollHeight));
+      const fab = await page.getByTestId('compose-fab').boundingBox();
+      const row = await last.boundingBox();
+      expect(fab && row).toBeTruthy();
+      expect(must(row).y + must(row).height).toBeLessThanOrEqual(must(fab).y);
+      const pager = await page.getByRole('button', { name: 'Ďalšia strana' }).boundingBox();
+      if (pager) expect(pager.y + pager.height).toBeLessThanOrEqual(must(fab).y);
+      await shot(page, `issue185-M1-${size.width}`);
+
+      const first = page.getByRole('option').filter({ hasText: 'Kópia faktúry 2026123 1' }).first();
+      await first.scrollIntoViewIfNeeded();
+      await first.dispatchEvent('touchstart');
+      await page.waitForTimeout(500);
+      await first.dispatchEvent('touchend');
+      const bar = page.getByTestId('bulk-toolbar');
+      await expect(bar.getByText('Vybraté: 1')).toBeVisible();
+      for (const el of await bar.locator('button, span').all()) {
+        const box = await el.boundingBox();
+        expect(box).toBeTruthy();
+        expect(must(box).x).toBeGreaterThanOrEqual(0);
+        expect(must(box).x + must(box).width).toBeLessThanOrEqual(size.width);
+        expect(must(box).height).toBeLessThanOrEqual(56); // no wrapped labels
+      }
+      await shot(page, `issue185-M1-select-${size.width}`);
+      await bar.getByRole('button', { name: 'Viac' }).click();
+      for (const name of ['Označiť ako prečítané', 'Archivovať', 'Presunúť']) {
+        await expect(page.getByRole('menuitem', { name })).toBeInViewport();
+      }
+    });
+
+    test(`#185 M3 action bar and images banner fit ${size.width} px`, async ({ page }, info) => {
+      test.skip(info.project.name !== 'mobile', 'mobile frame');
+      await mockMail(page, {
+        'GET /api/mail/mailboxes/default/messages/m-1': {
+          body: {
+            ...detail(),
+            body_html_sanitized:
+              '<p>Akcia</p><img alt="banner" src="about:blank#smartmail-remote" data-remote-src="x">',
+            remote_images_offered: true,
+            remote_images_auto: false,
+            remote_images_mode: 'known',
+          },
+        },
+      });
+      await page.goto('/mail/default/inbox/t-1');
+      const bar = page.getByTestId('m3-action-bar');
+      await expect(bar).toBeVisible();
+      const labels = ['Odpovedať', 'Všetkým', 'Poslať ďalej', 'Viac'];
+      for (const name of labels) await expect(bar.getByText(name, { exact: true })).toBeVisible();
+      for (const el of await bar.getByRole('button').all()) {
+        const box = await el.boundingBox();
+        expect(must(box).x).toBeGreaterThanOrEqual(0);
+        expect(must(box).x + must(box).width).toBeLessThanOrEqual(size.width);
+      }
+      // labels are not cut: each label's text fits its button
+      for (const el of await bar.locator('span.type-micro').all()) {
+        expect(await el.evaluate((n) => n.scrollWidth <= n.clientWidth)).toBe(true);
+      }
+      // the images banner: text and actions do not overlap
+      const text = page.getByText('Vzdialené obrázky sú zablokované.');
+      const show = page.getByRole('button', { name: 'Zobraziť obrázky' });
+      const always = page.getByRole('button', { name: 'Vždy od tohto odosielateľa' });
+      const [t, s, a] = [await text.boundingBox(), await show.boundingBox(), await always.boundingBox()];
+      const overlap = (p: typeof t, q: typeof t) =>
+        !!p && !!q && p.x < q.x + q.width && q.x < p.x + p.width && p.y < q.y + q.height && q.y < p.y + p.height;
+      expect(overlap(t, s) || overlap(t, a) || overlap(s, a)).toBe(false);
+      expect(must(a).x + must(a).width).toBeLessThanOrEqual(size.width);
+      await shot(page, `issue185-M3-${size.width}`);
+      await bar.getByRole('button', { name: 'Viac' }).click();
+      for (const name of ['Vymazať', 'Nevyžiadané', 'Vybavené']) {
+        await expect(page.getByRole('menuitem', { name })).toBeInViewport();
+      }
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+  });
+}

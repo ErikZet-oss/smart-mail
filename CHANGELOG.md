@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Mobile layout fixes from Erik's Android test (#185)
+
+- M1 multi-select bar follows Figma `82:1534`: ✕ · „Vybraté: N“ · Vybavené · Vymazať · ⋯. Označiť ako prečítané, Archivovať, Presunúť and Znova zaradiť moved into the ⋯ menu. Nothing wraps or is cut off at 360 px; the same bar is used in the 360 px desktop list column.
+- M1 list on mobile has no desktop pager. The list grows by 50 rows when its end scrolls into view (up to 200). Past that, a compact pager follows the last row. The end of the list leaves room under the „Vytvoriť“ FAB.
+- M3 bottom bar follows Figma `83:2434`: Odpovedať · Všetkým · Poslať ďalej · Viac. Vymazať, Nevyžiadané, Vybavené, Odložiť, Označiť, Asistent, Archivovať, Presunúť and the other actions are in „Viac“.
+- Banners (e.g. „Vzdialené obrázky sú zablokované.“) wrap their actions below the text on narrow screens instead of overlapping it.
+- M4: the header rows of the compose form no longer overflow at 360 px („+ Kópia“, Predmet).
+- Playwright at 360×780 and 412×915 fails when a button of the bulk bar or the M3 bar leaves the viewport, a label is cut, the FAB covers the last row or the pager, or the images banner overlaps.
+
 ## [Unreleased] — Fix: „Chýba príjemca“ although the address was typed (mobile)
 
 - On Android (Samsung keyboard) the typed address can still be an uncommitted IME composition when „Odoslať“ is tapped. The React state was empty, the draft was saved with no recipient, and the pre-send check blocked the send.

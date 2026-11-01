@@ -11,7 +11,7 @@ import {
   Search,
   Sparkles,
   Trash2,
-  UserPlus,
+  Ellipsis,
   X,
 } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -165,6 +165,15 @@ function ScreenW2Body({
   const [folderDrawer, setFolderDrawer] = useState(false);
   const showOptions = search.get('dialog') === 'list-options';
   const mobile = useMediaQuery(MOBILE_QUERY);
+  // #185 M1 has no pager: on mobile the first page grows by 50 rows when the end of the list scrolls into view
+  // (up to the server maximum of 200); past that a compact pager follows the last row inside the scroll area.
+  // size per list scope (folder / view / filter / search): another scope starts again at 50 rows
+  const scope = `${folderParam}|${category ?? ''}|${filter}|${q}`;
+  const [grown, setGrown] = useState<{ scope: string; size: number }>({ scope: '', size: MOBILE_STEP });
+  const mobileSize = grown.scope === scope ? grown.size : MOBILE_STEP;
+  const setMobileSize = (next: (size: number) => number) => setGrown({ scope, size: next(mobileSize) });
+  const [bulkMenu, setBulkMenu] = useState<{ x: number; y: number } | null>(null);
+  const requestSize = mobile ? mobileSize : undefined;
 
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const folders = useQuery({
@@ -196,15 +205,19 @@ function ScreenW2Body({
     enabled: !classic && aiOn,
     refetchInterval: FOLDERS_REFETCH_MS,
   });
+  const listKey: readonly unknown[] = aiView
+    ? ['mail', 'ai-view', mailboxRef, category, page, filter, q, requestSize]
+    : [...messagesKey(mailboxRef, folderId ?? '', page, filter), q, requestSize];
   const list = useQuery({
-    queryKey: aiView
-      ? ['mail', 'ai-view', mailboxRef, category, page, filter, q]
-      : [...messagesKey(mailboxRef, folderId ?? '', page, filter), q],
+    queryKey: listKey,
+    // growing on mobile keeps the rows already shown — only when nothing but the size changed (never another folder)
+    placeholderData: (previous, previousQuery) =>
+      previous && previousQuery && sameButLast(previousQuery.queryKey, listKey) ? previous : undefined,
     queryFn: async () => {
       if (aiView && category) {
         const data = await fetchCategoryMessages(mailboxRef, category, {
           page,
-          pageSize: listPrefs?.page_size,
+          pageSize: requestSize ?? listPrefs?.page_size,
           filter,
           q: q.trim() || undefined,
         });
@@ -231,7 +244,7 @@ function ScreenW2Body({
       if (!folderId) throw new Error('folder missing');
       return fetchMessages(mailboxRef, folderId, {
         page,
-        pageSize: listPrefs?.page_size,
+        pageSize: requestSize ?? listPrefs?.page_size,
         filter,
         q: q.trim() || undefined,
       });
@@ -465,6 +478,51 @@ function ScreenW2Body({
   const to = Math.min(page * pageSize, total);
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
+  const closeBulk = (run: () => void) => () => {
+    setBulkMenu(null);
+    run();
+  };
+  const bulkMenuEntries: MenuEntry[] = [
+    {
+      kind: 'item',
+      id: 'mark-read',
+      label: t('mail.bulk.markRead'),
+      onSelect: closeBulk(() => bulk.mutate({ action: 'mark_seen', ids: [...selectedIds] })),
+    },
+    {
+      kind: 'item',
+      id: 'archive',
+      label: t('mail.toolbar.archive'),
+      icon: <Archive size={16} />,
+      onSelect: closeBulk(() => bulk.mutate({ action: 'archive', ids: [...selectedIds] })),
+    },
+    {
+      kind: 'item',
+      id: 'move',
+      label: t('mail.moveTo.bulkMove'),
+      icon: <FolderInput size={16} />,
+      disabled: !canMarkSeen,
+      onSelect: () => {
+        const at = bulkMenu ?? { x: 8, y: 64 };
+        setBulkMenu(null);
+        setMovePicker({ ids: [...selectedIds], at });
+      },
+    },
+    ...(category
+      ? [
+          {
+            kind: 'item' as const,
+            id: 'reclassify',
+            label: t('mail.category.bulk'),
+            icon: <Sparkles size={16} />,
+            disabled: !canReclassify || reclassifyAll.isPending || selectedIds.size > 50,
+            hint: selectedIds.size > 50 ? t('mail.category.bulkMax') : undefined,
+            onSelect: closeBulk(() => reclassifyAll.mutate([...selectedIds])),
+          },
+        ]
+      : []),
+  ];
+
   const selectMenuEntries: MenuEntry[] = [
     {
       kind: 'item',
@@ -577,78 +635,47 @@ function ScreenW2Body({
           </p>
         ) : null}
         {selectedIds.size > 0 ? (
-          <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-2">
-            <span className="type-small mr-2 text-text-primary">
-              {t('mail.bulk.selected', { count: selectedIds.size })}
-            </span>
+          // #185 / Figma M1 multi-select `82:1534`: ✕ · Vybraté: N · icon actions · ⋯ — fits 360 px, no wrap
+          <div
+            className="flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-1"
+            data-testid="bulk-toolbar"
+          >
             <button
               type="button"
-              className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate({ action: 'mark_seen', ids: [...selectedIds] })}
-            >
-              {t('mail.bulk.markRead')}
-            </button>
-            <button
-              type="button"
-              className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate({ action: 'done', ids: [...selectedIds] })}
-            >
-              <CircleCheck size={14} className="mr-1 inline" aria-hidden="true" />
-              {t('mail.toolbar.done')}
-            </button>
-            <button
-              type="button"
-              className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate({ action: 'archive', ids: [...selectedIds] })}
-            >
-              <Archive size={14} className="mr-1 inline" aria-hidden="true" />
-              {t('mail.toolbar.archive')}
-            </button>
-            <button
-              type="button"
-              className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle"
-              disabled={!canMarkSeen}
-              onClick={(event) => {
-                const box = event.currentTarget.getBoundingClientRect();
-                setMovePicker({ ids: [...selectedIds], at: { x: box.left, y: box.bottom + 4 } });
-              }}
-            >
-              <FolderInput size={14} className="mr-1 inline" aria-hidden="true" />
-              {t('mail.moveTo.bulkMove')}
-            </button>
-            {category ? (
-              <button
-                type="button"
-                className="type-caption rounded-sm px-2 py-1 hover:bg-bg-subtle disabled:opacity-50"
-                disabled={!canReclassify || reclassifyAll.isPending || selectedIds.size > 50}
-                title={selectedIds.size > 50 ? t('mail.category.bulkMax') : undefined}
-                onClick={() => reclassifyAll.mutate([...selectedIds])}
-              >
-                <Sparkles size={14} className="mr-1 inline" aria-hidden="true" />
-                {t('mail.category.bulk')}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="type-caption rounded-sm px-2 py-1 text-danger-600 hover:bg-bg-subtle"
-              onClick={() => bulk.mutate({ action: 'delete', ids: [...selectedIds] })}
-            >
-              <Trash2 size={14} className="mr-1 inline" aria-hidden="true" />
-              {t('mail.toolbar.delete')}
-            </button>
-            <button
-              type="button"
-              className="ml-auto rounded-sm p-1 text-text-secondary hover:bg-bg-subtle"
+              className="flex size-11 shrink-0 items-center justify-center rounded-sm text-text-secondary hover:bg-bg-subtle"
               aria-label={t('mail.bulk.clear')}
+              title={t('mail.bulk.clear')}
               onClick={() => {
                 setSelectedIds(new Set());
                 setSelectMode(false);
               }}
             >
-              <X size={16} />
+              <X size={20} />
             </button>
-            <span className="sr-only">{t('mail.bulk.assignSoon')}</span>
-            <UserPlus size={14} className="text-text-tertiary" aria-hidden="true" />
+            <span className="type-label min-w-0 flex-1 truncate whitespace-nowrap text-text-primary">
+              {t('mail.bulk.selected', { count: selectedIds.size })}
+            </span>
+            <BulkIcon
+              label={t('mail.toolbar.done')}
+              onClick={() => bulk.mutate({ action: 'done', ids: [...selectedIds] })}
+            >
+              <CircleCheck size={20} />
+            </BulkIcon>
+            <BulkIcon
+              label={t('mail.toolbar.delete')}
+              onClick={() => bulk.mutate({ action: 'delete', ids: [...selectedIds] })}
+            >
+              <Trash2 size={20} />
+            </BulkIcon>
+            <BulkIcon
+              label={t('mail.toolbar.more')}
+              onClick={(event) => {
+                const r = event.currentTarget.getBoundingClientRect();
+                setBulkMenu({ x: r.right - 240, y: r.bottom + 4 });
+              }}
+            >
+              <Ellipsis size={20} />
+            </BulkIcon>
           </div>
         ) : mobile ? null : (
           <div className="flex h-14 shrink-0 items-center justify-center gap-1 px-2">
@@ -856,40 +883,80 @@ function ScreenW2Body({
               );
             })
           )}
+          {mobile && rows.length > 0 ? (
+            <MobileListEnd
+              canGrow={mobileSize < MOBILE_MAX && to < total}
+              loading={list.isFetching}
+              onGrow={() => setMobileSize((size) => Math.min(MOBILE_MAX, size + MOBILE_STEP))}
+              pager={
+                page > 1 || (mobileSize >= MOBILE_MAX && to < total) ? (
+                  <div className="type-caption flex h-10 items-center justify-center gap-3 text-text-secondary">
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      className="flex size-10 items-center justify-center disabled:opacity-40"
+                      aria-label={t('mail.pager.prev')}
+                    >
+                      ‹
+                    </button>
+                    <span className="whitespace-nowrap">
+                      {t('mail.pager.range', {
+                        from: formatCount(from),
+                        to: formatCount(to),
+                        total: formatCount(total),
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={page >= pages}
+                      onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                      className="flex size-10 items-center justify-center disabled:opacity-40"
+                      aria-label={t('mail.pager.next')}
+                    >
+                      ›
+                    </button>
+                  </div>
+                ) : null
+              }
+            />
+          ) : null}
         </div>
 
-        <div className="type-caption flex h-10 shrink-0 items-center justify-center gap-2 border-t border-border-default text-text-secondary">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="px-1 disabled:opacity-40"
-            aria-label={t('mail.pager.prev')}
-          >
-            ‹
-          </button>
-          <span>
-            {t('mail.pager.range', { from: formatCount(from), to: formatCount(to), total: formatCount(total) })}
-          </span>
-          <input
-            type="number"
-            min={1}
-            max={pages}
-            value={page}
-            onChange={(event) => setPage(Math.min(pages, Math.max(1, Number(event.target.value) || 1)))}
-            className="h-6 w-10 rounded-xs border border-border-default bg-bg-canvas text-center"
-            aria-label={t('mail.pager.page')}
-          />
-          <button
-            type="button"
-            disabled={page >= pages}
-            onClick={() => setPage((p) => Math.min(pages, p + 1))}
-            className="px-1 disabled:opacity-40"
-            aria-label={t('mail.pager.next')}
-          >
-            ›
-          </button>
-        </div>
+        {mobile ? null : (
+          <div className="type-caption flex h-10 shrink-0 items-center justify-center gap-2 border-t border-border-default text-text-secondary">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-1 disabled:opacity-40"
+              aria-label={t('mail.pager.prev')}
+            >
+              ‹
+            </button>
+            <span>
+              {t('mail.pager.range', { from: formatCount(from), to: formatCount(to), total: formatCount(total) })}
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={pages}
+              value={page}
+              onChange={(event) => setPage(Math.min(pages, Math.max(1, Number(event.target.value) || 1)))}
+              className="h-6 w-10 rounded-xs border border-border-default bg-bg-canvas text-center"
+              aria-label={t('mail.pager.page')}
+            />
+            <button
+              type="button"
+              disabled={page >= pages}
+              onClick={() => setPage((p) => Math.min(pages, p + 1))}
+              className="px-1 disabled:opacity-40"
+              aria-label={t('mail.pager.next')}
+            >
+              ›
+            </button>
+          </div>
+        )}
       </section>
 
       {mobile || mobileThread ? null : (
@@ -935,6 +1002,16 @@ function ScreenW2Body({
         />
       ) : null}
 
+      {bulkMenu ? (
+        <Menu
+          label={t('mail.toolbar.more')}
+          entries={bulkMenuEntries}
+          at={bulkMenu}
+          width={240}
+          onClose={() => setBulkMenu(null)}
+        />
+      ) : null}
+
       {selectMenu ? (
         <Menu
           label={t('mail.toolbar.select')}
@@ -956,6 +1033,66 @@ function ScreenW2Body({
     </AppShell>
   );
 }
+
+/** #185 end of the mobile list: grows the list when it scrolls into view; leaves room under the „Vytvoriť“ FAB
+ * (48 px + 16 px gap) so the last row and the pager are never covered. */
+function MobileListEnd({
+  canGrow,
+  loading,
+  onGrow,
+  pager,
+}: {
+  canGrow: boolean;
+  loading: boolean;
+  onGrow: () => void;
+  pager: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || !canGrow || loading || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) onGrow();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [canGrow, loading, onGrow]);
+  return (
+    <div ref={ref} data-testid="mobile-list-end" className="pb-20">
+      {loading && canGrow ? <div aria-busy="true" className="mx-auto my-3 h-1 w-16 rounded-xs bg-bg-muted" /> : null}
+      {pager}
+    </div>
+  );
+}
+
+function BulkIcon({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="flex size-11 shrink-0 items-center justify-center rounded-sm text-text-primary hover:bg-bg-subtle focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary-500"
+    >
+      {children}
+    </button>
+  );
+}
+
+function sameButLast(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.slice(0, -1).every((v, i) => v === b[i]);
+}
+
+const MOBILE_STEP = 50;
+const MOBILE_MAX = 200; // server limit of `page_size`
 
 function FolderSkeleton() {
   return (
