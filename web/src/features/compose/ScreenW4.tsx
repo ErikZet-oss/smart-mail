@@ -392,6 +392,24 @@ export function ScreenW4() {
     },
   });
 
+  // One entry point for both „Odoslať“ buttons (pilot 2026-11-01: the mobile header button opened W4b with the checks
+  // of the last saved draft — „Chýba príjemca“ for a forward whose Komu had just been typed).
+  const startSend = () => {
+    const infected = (draft?.attachments ?? []).find((item) => !item.is_inline && item.av_status === 'infected');
+    if (infected) {
+      toasts.error(t('compose.attachmentInfectedSend', { name: infected.filename }));
+      return;
+    }
+    if ((draft?.checks ?? []).length === 0) {
+      send.mutate(false); // send saves the live fields first; a server-side block re-opens W4b (onError)
+      return;
+    }
+    void save.mutateAsync().then((saved) => {
+      if ((saved?.checks ?? []).length > 0) setPreSendOpen(true);
+      else send.mutate(false);
+    });
+  };
+
   const attach = useMutation({
     mutationFn: async (file: File) => {
       if (!localId) throw new Error('no draft');
@@ -580,8 +598,8 @@ export function ScreenW4() {
             <h1 className="type-heading min-w-0 flex-1 truncate text-text-primary">{t('compose.title')}</h1>
             <Button
               type="button"
-              onClick={() => setPreSendOpen(true)}
-              disabled={!localId || send.isPending}
+              onClick={startSend}
+              disabled={!localId || send.isPending || me.data?.read_only}
               className="min-h-[44px]"
             >
               <Send size={16} /> {t('compose.send')}
@@ -841,21 +859,7 @@ export function ScreenW4() {
                   ref={sendButton}
                   type="button"
                   className="rounded-r-none"
-                  onClick={() => {
-                    const infected = (draft?.attachments ?? []).find(
-                      (item) => !item.is_inline && item.av_status === 'infected',
-                    );
-                    if (infected) {
-                      toasts.error(t('compose.attachmentInfectedSend', { name: infected.filename }));
-                      return;
-                    }
-                    const checks = draft?.checks ?? [];
-                    if (checks.some((c) => c.blocking) || checks.length > 0) {
-                      void save.mutateAsync().then(() => setPreSendOpen(true));
-                    } else {
-                      send.mutate(false);
-                    }
-                  }}
+                  onClick={startSend}
                   disabled={send.isPending || me.data?.read_only}
                 >
                   <Send size={16} className="mr-2 inline" />
