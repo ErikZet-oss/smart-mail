@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Query, Response, UploadFile
@@ -25,7 +25,7 @@ from app.core.content_disposition import content_disposition_attachment
 from app.mail import storage
 from app.mail.clamav import scan_bytes
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
-from app.money.models import MoneyCodebook
+from app.money.models import MoneyCodebook, MoneyCompany
 from app.money.schemas import Article
 from app.purchasing.item_matching import confirm_article, load_lines, mark_non_stock, match_document, needs_matching
 from app.purchasing.models import DocumentLine, SupplierDocument
@@ -84,6 +84,10 @@ class LineOut(BaseModel):
     unit_factor: str | None = None
     warehouse_id: str | None = None
     candidates: list[dict[str, Any]] = []
+    article: dict[str, Any] | None = None  # Money article snapshot: name, catalog, ean, unit, code
+    qty_our: str | None = None  # quantity in the article unit = qty × unit factor (never rounded to packaging)
+    price_our: str | None = None  # net unit price per article unit = unit price / factor, 4 dp
+    warehouse_code: str | None = None
 
 
 class DocumentDetail(DocumentOut):
@@ -97,6 +101,10 @@ class DocumentDetail(DocumentOut):
     message_id: str | None
     version: int
     money_available: bool = True
+    supplier: dict[str, Any] | None  # from the Money cache (read-only): name, ico, dic, icdph
+    series: str | None  # branch series for received delivery notes (SETTINGS 11e)
+    template: dict[str, Any]  # cached values of the branch template document (4c fills them)
+    warehouses: list[dict[str, str]]  # Money warehouses for the line select (D18)
     items: list[LineOut]
 
 
@@ -258,7 +266,13 @@ async def _get(db: DB, doc_id: uuid.UUID) -> SupplierDocument:
     return doc
 
 
-def _line(ln: DocumentLine) -> LineOut:
+Q4 = Decimal("0.0001")
+
+
+def _line(ln: DocumentLine, wh_codes: dict[str, str]) -> LineOut:
+    factor = ln.unit_factor
+    qty_our = ln.qty * factor if ln.qty is not None and factor else None
+    price_our = (ln.unit_price / factor).quantize(Q4, ROUND_HALF_UP) if ln.unit_price is not None and factor else None
     return LineOut(
         line_no=ln.line_no,
         supplier_code=ln.supplier_code,
@@ -276,11 +290,29 @@ def _line(ln: DocumentLine) -> LineOut:
         unit_factor=_s(ln.unit_factor),
         warehouse_id=_s(ln.warehouse_id),
         candidates=ln.candidates or [],
+        article=(ln.raw or {}).get("_article"),
+        qty_our=_s(qty_our.quantize(Q4) if qty_our is not None else None),
+        price_our=_s(price_our),
+        warehouse_code=wh_codes.get(str(ln.warehouse_id).lower()) if ln.warehouse_id else None,
     )
 
 
 async def _detail(db: DB, doc: SupplierDocument, *, money_available: bool = True) -> DocumentDetail:
     lines = await load_lines(db, doc)
+    warehouses = [
+        {"id": str(w.money_id), "code": w.code or "", "name": w.name or ""}
+        for w in await db.scalars(
+            select(MoneyCodebook).where(MoneyCodebook.kind == "warehouses").order_by(MoneyCodebook.code)
+        )
+    ]
+    wh_codes = {w["id"].lower(): w["code"] for w in warehouses}
+    company = (
+        await db.scalar(select(MoneyCompany).where(MoneyCompany.money_id == doc.supplier_money_id))
+        if doc.supplier_money_id
+        else None
+    )
+    branch = await db.get(Branch, doc.branch_id) if doc.branch_id else None
+    series = (branch.series_overrides or {}).get("received_delivery_note") if branch else None
     return DocumentDetail(
         **_out(doc, len(lines), await _branches(db)),
         delivery_note_number=doc.delivery_note_number,
@@ -293,7 +325,13 @@ async def _detail(db: DB, doc: SupplierDocument, *, money_available: bool = True
         message_id=_s(doc.message_id),
         version=doc.version,
         money_available=money_available,
-        items=[_line(ln) for ln in lines],
+        supplier=(
+            {"name": company.name, "ico": company.ico, "dic": company.dic, "icdph": company.icdph} if company else None
+        ),
+        series=str(series) if series else None,
+        template=(branch.dl_template_values or {}) if branch else {},
+        warehouses=warehouses,
+        items=[_line(ln, wh_codes) for ln in lines],
     )
 
 
@@ -330,6 +368,7 @@ class ConfirmArticleIn(BaseModel):
     article_id: uuid.UUID
     unit_factor: Decimal = Field(default=Decimal("1"), gt=0, max_digits=18, decimal_places=6)
     learn: bool = True  # remember supplier code → article for this supplier
+    warehouse_id: uuid.UUID | None = None  # another Money warehouse than the branch one (DL-W8, D18)
     version: int
 
 
@@ -372,7 +411,13 @@ async def confirm_line_article(
         raise fail(503, exc.code) from None
     if article is None or article.inactive:
         raise fail(422, "article_not_found")
-    await confirm_article(db, doc, line, article, body.unit_factor, person.id, learn=body.learn)
+    if body.warehouse_id is not None and not await db.scalar(
+        select(MoneyCodebook.id).where(MoneyCodebook.kind == "warehouses", MoneyCodebook.money_id == body.warehouse_id)
+    ):
+        raise fail(422, "warehouse_not_found")
+    await confirm_article(
+        db, doc, line, article, body.unit_factor, person.id, learn=body.learn, warehouse_id=body.warehouse_id
+    )
     audit(
         db,
         "purchasing.line_article_confirmed",

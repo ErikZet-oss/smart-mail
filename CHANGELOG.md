@@ -2,6 +2,19 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 4b UI: W6h Dodací list prijatý – karta (read-only)
+
+- **W6h** `/docs/delivery-notes/:id` (Figma `43:38227`, drawer `44:37979`), a copy of the Money card (DOCUMENTS_SPEC §2):
+  - Header grid in Money order. Číslo dokladu shows „bude pridelené“, the branch series is shown next to it, and Sklad. pohybu / Účt. prípadu show „pri zápise“ (D13).
+  - Supplier from the Money cache, VAT recap with all four rates.
+  - Items grid in Money column order with a status icon, Money article name / Katalóg / EAN, quantity and price converted to the article unit, Money number formats and a Σ row.
+  - Poplatky tab (D14). Kontrola panel with rule texts, Originál panel with the supplier file.
+- **Line drawer „Riadok {n}“**: candidates, article search in Money, unit conversion, warehouse (D18), „Zapamätať kód dodávateľa“ and „Neskladová položka“. A stale version shows the conflict message.
+- **M13b mobile** (`85:3565`, `85:3615`): stacked groups, item cards, sticky bar with the counts, bottom sheet for a line.
+- W6e rows open W6h.
+- „Vytvoriť v Money“ is disabled until 4c — nothing is written to Money.
+- API detail: Money article snapshot per line, `qty_our` / `price_our` (half-up, never packaging rounding), supplier, branch series, template values, warehouses. Confirm takes an optional `warehouse_id`.
+
 ## [Unreleased] — Phase 4b backend: item matching (read-only)
 
 - Bridge (read-only GraphQL): `GET /articles/search` (code / EAN / text; `~ # | ( )` → 422), `GET /articles/{id}`, `GET /suppliers/{id}/article-codes` (`ArticleSuppliers`, paged). Mock has 6 fictional articles. Contract fixture updated.

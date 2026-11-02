@@ -280,3 +280,38 @@ async def test_4b_article_search_rejects_filter_characters_and_roles(
     assert [a["id"] for a in found] == [str(A_BOLT)]
     found = (await client.get("/api/purchasing/articles", params={"q": "Matica"})).json()
     assert [a["id"] for a in found] == [str(A_NUT)]
+
+
+async def test_4b_w6h_detail_shows_money_article_converted_qty_price_and_warehouse_choice(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, money_on: None
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.money.models import MoneyCodebook
+
+    await _signed_in(client, db, mail_server, role=Role.warehouse)
+    await _supplier(db)
+    wh = uuid.uuid5(uuid.NAMESPACE_URL, "wh-99")
+    db.add(MoneyCodebook(kind="warehouses", money_id=wh, code="99", name="Externý sklad", synced_at=datetime.now(UTC)))
+    await db.commit()
+    ArticleBridge.codes = [_sc("934-10-A2", A_NUT, last="8.05", unit="bal", qty="200")]
+    doc_id = await _doc(client)
+    detail = (await client.get(f"/api/purchasing/documents/{doc_id}")).json()
+    assert detail["supplier"]["ico"] == "12345678"
+    assert detail["warehouses"] == [{"id": str(wh), "code": "99", "name": "Externý sklad"}]
+    nut = detail["items"][1]
+    assert nut["article"]["name"] == "Matica DIN 934 M10 A2" and nut["article"]["code"] == "M934-10"
+    # 12 bal á 8,05 → 2 400 ks á 0,0403 (D17: never rounded to packaging)
+    assert nut["qty_our"] == "2400.0000" and nut["price_our"] == "0.0403"
+    bad = await client.send_json(
+        "POST",
+        f"/api/purchasing/documents/{doc_id}/lines/2/article",
+        {"article_id": str(A_NUT), "warehouse_id": str(uuid.uuid4()), "version": detail["version"]},
+    )
+    assert bad.status_code == 422 and bad.json()["detail"]["code"] == "warehouse_not_found"
+    r = await client.send_json(
+        "POST",
+        f"/api/purchasing/documents/{doc_id}/lines/2/article",
+        {"article_id": str(A_NUT), "unit_factor": "200", "warehouse_id": str(wh), "version": detail["version"]},
+    )
+    assert r.status_code == 200 and r.json()["items"][1]["warehouse_code"] == "99"
