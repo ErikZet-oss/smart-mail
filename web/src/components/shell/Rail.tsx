@@ -161,7 +161,7 @@ export function Rail({ section, mailbox, unread, onLogout, showDocs = false }: P
         <RailItem
           icon={<FileText size={20} />}
           label={t('rail.documents')}
-          to="/docs/reminders"
+          to="/docs"
           active={section === 'documents'}
         />
       ) : null}

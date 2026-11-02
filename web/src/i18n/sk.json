@@ -1636,6 +1636,7 @@
     "title": "Doklady",
     "upload": "Nahrať doklad",
     "uploadLater": "Nahrávanie dokladov príde vo fáze 4.",
+    "uploadRole": "Doklady nahráva sklad, účtovníctvo alebo správca.",
     "later": "Príde vo fáze {{phase}}.",
     "tabs": {
       "delivery-notes": "Dodacie listy",
@@ -1939,6 +1940,66 @@
       "invoice_other_branch": "Faktúra patrí inej pobočke (iné stredisko).",
       "centre_unknown": "Stredisko nie je v číselníku Money. Počkajte na synchronizáciu číselníkov.",
       "pdf_missing": "Money nevrátilo PDF."
+    }
+  },
+  "purchasing": {
+    "roleOnly": "Dodacie listy prijaté vidí sklad, účtovníctvo a správca.",
+    "search": "Hľadať číslo, dodávateľa, IČO…",
+    "filter": "Stav",
+    "filters": {
+      "open": "Na kontrolu",
+      "all": "Všetky",
+      "duplicate": "Duplicitné",
+      "ignored": "Skryté"
+    },
+    "empty": "Žiadne dodacie listy na kontrolu",
+    "newDraft": "nový – návrh",
+    "onWrite": "pri zápise",
+    "linesCount_one": "{{count}} položka",
+    "linesCount_few": "{{count}} položky",
+    "linesCount_other": "{{count}} položiek",
+    "range": "Doklady: {{count}} z {{total}}",
+    "cols": {
+      "number": "Číslo dokladu",
+      "received": "Doklad prijatý",
+      "supplier": "Dodávateľ",
+      "issued": "Vystavenie",
+      "moved": "Sklad. pohybu",
+      "centre": "Stredisko",
+      "warehouse": "Kód skladu",
+      "lines": "Položky",
+      "total": "Celkom",
+      "status": "Stav",
+      "branch": "Pobočka"
+    },
+    "status": {
+      "extracting": "Číta sa…",
+      "needs_review": "Návrh",
+      "missing_data": "Chýbajú údaje",
+      "duplicate": "Duplicitný",
+      "unreadable": "Nečitateľný",
+      "failed": "Chyba",
+      "ignored": "Skrytý"
+    },
+    "upload": {
+      "title": "Nahrať doklad",
+      "drop": "Presuňte súbor sem alebo",
+      "pick": "Vybrať súbor",
+      "types": "PDF, XML, ISDOC · max 15 MB",
+      "kind": "Typ dokladu",
+      "kindSupplier": "Doklad dodávateľa",
+      "kindSupplierHint": "faktúra alebo dodací list → Dodací list prijatý",
+      "kindOrder": "Objednávka zákazníka",
+      "submit": "Nahrať",
+      "reading": "AI číta doklad…",
+      "done": "Doklad je nahratý – nájdete ho v zozname Dodacie listy."
+    },
+    "errors": {
+      "document_too_large": "Súbor je väčší ako 15 MB.",
+      "document_infected": "Antivírus v súbore našiel hrozbu – súbor sa nenahral.",
+      "unsupported_type": "Tento typ súboru zatiaľ nevieme prečítať (PDF, XML, ISDOC).",
+      "role_not_allowed": "Doklady nahráva sklad, účtovníctvo alebo správca.",
+      "money_disabled": "Prepojenie s Money je na tomto serveri vypnuté."
     }
   }
 }

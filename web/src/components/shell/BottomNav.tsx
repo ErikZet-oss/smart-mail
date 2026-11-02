@@ -87,7 +87,7 @@ export function BottomNav({ section, mailbox = 'default', unread = 0, onMore, on
       />
       {showDocs ? (
         <NavItem
-          to="/docs/reminders"
+          to="/docs"
           onClick={onLeaveMore}
           active={section === 'documents'}
           icon={<FileText size={22} />}

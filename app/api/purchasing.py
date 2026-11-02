@@ -6,22 +6,24 @@ Roles: warehouse, accounting, admin (SCREENS_SPEC W6e/W6h). Only with FEATURE_MO
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Query, Response, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.ai.provider import get_llm_provider
 from app.api.mail import fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
-from app.auth.models import Role
+from app.auth.models import Branch, Role
 from app.core.audit import audit
 from app.core.config import Settings
 from app.core.content_disposition import content_disposition_attachment
 from app.mail import storage
 from app.mail.clamav import scan_bytes
+from app.money.models import MoneyCodebook
 from app.purchasing.models import DocumentLine, SupplierDocument
 from app.purchasing.service import MAX_BYTES, DocumentRejected, Source, ingest
 
@@ -44,6 +46,9 @@ class DocumentOut(BaseModel):
     status: str
     filename: str
     branch_id: str | None
+    branch_name: str | None
+    centre_code: str | None  # Money centre of the branch (W6e column „Stredisko“)
+    warehouse_code: str | None  # branch warehouse (W6e column „Kód skladu“)
     supplier_name: str | None
     supplier_ico: str | None
     supplier_money_id: str | None
@@ -93,8 +98,31 @@ def _s(v: Any) -> str | None:
     return None if v is None else str(v)
 
 
-def _out(doc: SupplierDocument, lines: int) -> dict[str, Any]:
+@dataclass(frozen=True, slots=True)
+class BranchInfo:
+    name: str
+    centre: str | None
+    warehouse: str | None
+
+
+async def _branches(db: DB) -> dict[uuid.UUID, BranchInfo]:
+    codes = {
+        (row.kind, str(row.money_id)): row.code
+        for row in await db.scalars(select(MoneyCodebook).where(MoneyCodebook.kind.in_(("centres", "warehouses"))))
+    }
+    return {
+        b.id: BranchInfo(
+            name=b.name,
+            centre=codes.get(("centres", (b.money_centre_id or "").lower())),
+            warehouse=codes.get(("warehouses", (b.money_warehouse_id or "").lower())),
+        )
+        for b in await db.scalars(select(Branch))
+    }
+
+
+def _out(doc: SupplierDocument, lines: int, branches: dict[uuid.UUID, BranchInfo] | None = None) -> dict[str, Any]:
     checks = doc.validation or []
+    info = (branches or {}).get(doc.branch_id) if doc.branch_id else None
     return {
         "id": str(doc.id),
         "source": doc.source,
@@ -102,6 +130,9 @@ def _out(doc: SupplierDocument, lines: int) -> dict[str, Any]:
         "status": doc.status,
         "filename": doc.filename,
         "branch_id": _s(doc.branch_id),
+        "branch_name": info.name if info else None,
+        "centre_code": info.centre if info else None,
+        "warehouse_code": info.warehouse if info else None,
         "supplier_name": doc.supplier_name,
         "supplier_ico": doc.supplier_ico,
         "supplier_money_id": _s(doc.supplier_money_id),
@@ -168,6 +199,7 @@ async def list_documents(
     settings: SettingsDep,
     status: Annotated[Literal["open", "all", "duplicate", "ignored"], Query()] = "open",
     page: Annotated[int, Query(ge=1)] = 1,
+    q_text: Annotated[str, Query(alias="q", max_length=80)] = "",
 ) -> DocumentPage:
     """W6e: newest first. „open“ = still to review (not ignored, not duplicate)."""
     _guard(settings, person)
@@ -176,6 +208,17 @@ async def list_documents(
         q = q.where(SupplierDocument.status.notin_(("ignored", "duplicate")))
     elif status in ("duplicate", "ignored"):
         q = q.where(SupplierDocument.status == status)
+    term = q_text.strip()
+    if term:
+        like = f"%{term.replace('%', '').replace('_', '')}%"
+        q = q.where(
+            or_(
+                SupplierDocument.doc_number.ilike(like),
+                SupplierDocument.supplier_name.ilike(like),
+                SupplierDocument.supplier_ico.ilike(like),
+                SupplierDocument.filename.ilike(like),
+            )
+        )
     total = await db.scalar(select(func.count()).select_from(q.subquery()))
     docs = list(await db.scalars(q.order_by(SupplierDocument.created_at.desc()).limit(PAGE).offset((page - 1) * PAGE)))
     counts = (
@@ -191,7 +234,10 @@ async def list_documents(
         if docs
         else {}
     )
-    return DocumentPage(items=[DocumentOut(**_out(d, int(counts.get(d.id, 0)))) for d in docs], total=int(total or 0))
+    branches = await _branches(db)
+    return DocumentPage(
+        items=[DocumentOut(**_out(d, int(counts.get(d.id, 0)), branches)) for d in docs], total=int(total or 0)
+    )
 
 
 async def _get(db: DB, doc_id: uuid.UUID) -> SupplierDocument:
@@ -209,7 +255,7 @@ async def get_document(doc_id: uuid.UUID, person: ActivePerson, db: DB, settings
         await db.scalars(select(DocumentLine).where(DocumentLine.document_id == doc.id).order_by(DocumentLine.line_no))
     )
     return DocumentDetail(
-        **_out(doc, len(lines)),
+        **_out(doc, len(lines), await _branches(db)),
         delivery_note_number=doc.delivery_note_number,
         order_reference=doc.order_reference,
         vat_recap=doc.vat_recap or [],

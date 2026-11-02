@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BellRing, CircleAlert, FileText, Search, Upload } from 'lucide-react';
+import { BellRing, CircleAlert, FileText, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate } from 'react-router-dom';
@@ -23,16 +23,10 @@ import {
   type ReminderResult,
   type ReminderTone,
 } from './moneyApi';
+import { DocsHeader } from './DocsHeader';
 import { DOCS_ROLES } from './docsAccess';
 
 const ROLES = DOCS_ROLES;
-/** Doklady module tabs (SCREENS_SPEC §8); Phase 3 has Upomienky only, the rest come with Phases 4 and 6. */
-const MODULE_TABS = [
-  { id: 'delivery-notes', phase: 4 },
-  { id: 'orders', phase: 4 },
-  { id: 'offers', phase: 6 },
-  { id: 'complaints', phase: 4 },
-] as const;
 const OVERDUE_MIN = [0, 14, 30, 60] as const;
 const SUM_MIN = [0, 100, 1000] as const;
 
@@ -44,7 +38,6 @@ const SUM_MIN = [0, 100, 1000] as const;
 export function ScreenW8b() {
   const { t } = useTranslation();
   const features = useFeaturesState();
-  const mobile = useMediaQuery(MOBILE_QUERY);
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const [tab, setTab] = useState<'open' | 'history'>('open');
   const allowed = ROLES.has(me.data?.person?.role ?? '');
@@ -59,62 +52,7 @@ export function ScreenW8b() {
   return (
     <AppShell section="documents">
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-bg-canvas" data-testid="screen-w8b">
-        <header className="flex flex-col gap-3 border-b border-border-default px-4 pt-4 md:px-6">
-          <div className="flex items-center gap-3">
-            <h1 className="type-title min-w-0 flex-1 text-text-primary">{t('documents.title')}</h1>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled
-              title={t('documents.uploadLater')}
-              icon={<Upload size={16} aria-hidden="true" />}
-            >
-              {t('documents.upload')}
-            </Button>
-          </div>
-          <nav
-            aria-label={t('documents.title')}
-            data-scroll-x
-            className={
-              mobile
-                ? 'mb-3 flex gap-1 overflow-x-auto rounded-md bg-bg-subtle p-1' // Figma M13: segmented chip row
-                : 'flex gap-4 overflow-x-auto'
-            }
-          >
-            {MODULE_TABS.map((m) => (
-              <span
-                key={m.id}
-                aria-disabled="true"
-                title={t('documents.later', { phase: m.phase })}
-                className={
-                  mobile
-                    ? 'type-label inline-flex h-8 shrink-0 cursor-not-allowed items-center rounded-sm px-3 text-text-tertiary'
-                    : 'type-label inline-flex h-10 shrink-0 cursor-not-allowed items-center border-b-2 border-transparent text-text-tertiary'
-                }
-              >
-                {t(`documents.tabs.${m.id}`)}
-              </span>
-            ))}
-            <span
-              aria-current="page"
-              ref={(node) => {
-                if (mobile && node) node.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-              }}
-              className={
-                mobile
-                  ? 'type-label inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm bg-bg-canvas px-3 text-text-primary shadow-e1'
-                  : 'type-label inline-flex h-10 shrink-0 items-center gap-1.5 border-b-2 border-brand-primary-600 text-brand-primary-700'
-              }
-            >
-              {t('documents.tabs.reminders')}
-              {count ? (
-                <span className="type-micro rounded-full bg-brand-primary-50 px-1.5 text-brand-primary-700">
-                  {count}
-                </span>
-              ) : null}
-            </span>
-          </nav>
-        </header>
+        <DocsHeader active="reminders" counts={{ reminders: count }} />
         <div className="flex flex-col gap-4 p-4 md:p-6">
           <div role="tablist" aria-label={t('reminders.title')} className="flex gap-2">
             {(['open', 'history'] as const).map((id) => (

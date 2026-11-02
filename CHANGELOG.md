@@ -2,6 +2,22 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 4a UI: W6e Dodacie listy + W6u Nahrať doklad
+
+- **W6e** `/docs/delivery-notes` (Figma `46:41526`, M13 `85:3245`):
+  - Supplier documents read from mail or uploaded, newest first, with search (number, supplier, IČO) and a status filter.
+  - Columns as in Figma. Before matching (4b) and any Money write (4c), „Číslo dokladu“ shows „nový – návrh“ and „Sklad. pohybu“ shows „pri zápise“ (D13).
+  - On mobile, documents are cards.
+- **W6u** „Nahrať doklad“ (Figma `46:42624`, `?upload=1`):
+  - PDF, XML or ISDOC up to 15 MB, by drag and drop or file picker.
+  - „Doklad dodávateľa“ is the only active type; „Objednávka zákazníka“ comes with 4d.
+- **W6** `/docs` redirects to the first Doklady tab the person's role may open.
+- One shared Doklady header (W6e, W8b) shows only the tabs of that role:
+  - Dodacie listy for warehouse, accounting and admin;
+  - Upomienky for accounting, sales and admin.
+  - The rail and bottom-nav „Doklady“ now also show for the warehouse role.
+- API: `branch_name`, `centre_code` and `warehouse_code` in the list, plus the `q` search.
+
 ## [Unreleased] — Phase 4a backend: supplier documents in (read-only)
 
 - New tables `documents` + `document_lines` (migration 0020, plan §5 approved in #191).
