@@ -2,6 +2,13 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 4 plan (#188), approved in #191
+
+- `docs/phase4-plan.md`: milestones 4a–4h, order prices, the first document write on TEST, shadow mode, the data model and Erik's answers.
+- Order prices come from **the price list set on the branch** (11e), not a hard-coded „bez DPH“ list. A branch without a price list is blocking (B15). The offer price comes in Phase 6. The company discount is only shown. ORDERS_SPEC §8.2 and the help text in SETTINGS_SPEC 11e are updated to match.
+- `money_probe.py --phase4` reads the branch price lists: `PROBE_PRICE_LISTS` = the codes set in 11e, else every active list with a default warehouse. ProdejniCeny is checked with that list's default warehouse.
+- Docs and the read-only probe only. No migration, no write to Money.
+
 ## [Unreleased] — AI elements violet exactly as Figma (#192)
 
 - `Button` gets the Figma kind `ai`: `ai-600` fill and white text in every state, 45 % opacity when disabled. It is used only for AI actions: „Napísať“ (W4a / M17), „Previesť“ (Settings › AI pravidlá) and „Vytvoriť profil“ (štýl).
