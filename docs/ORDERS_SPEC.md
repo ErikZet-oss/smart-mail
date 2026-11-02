@@ -238,14 +238,16 @@ Hard safety rules (unit-tested):
   is blocking B4 (e.g. "2,5 ks" after a wrong price/qty column swap).
 
 ### 8.2 Prices
-Source priority (Settings, default shown):
-1. **Price from our accepted offer** (if within validity) — `price_source = offer`.
-2. **Customer price from Money** `ProdejniCeny(FirmaID:<C>, SkladID:<branch warehouse>, MenaID:<M>, Filter:"Artikl_ID~eq~<A>")`
-   (branch price list from SETTINGS_SPEC 11e goes to `ObsahPolozky.Cenik_ID`) →
-   `CenaBezDanePoSleve` (unit price after customer discount), plus `Cenik_ID`, `Hladina_ID`, `Sleva`, `TypCeny`,
-   `MnozstevniSleva`, `Zaokrouhleni` for audit — `price_source = price_list`.
-3. Manual price by the user (role sales/admin, reason required) — `price_source = manual`.
-The last price sold to this customer (history) is shown as information only.
+Source priority (Erik, #191, 2026-11-02):
+1. **The price list set on the order's branch** (SETTINGS_SPEC 11e `money_price_list_id`, whichever list the admin
+   chose — not a hard-coded „bez DPH“ list): the article's price from that list (`PriceListItems`
+   `Cenik_ID~eq~<branch list>#Artikl_ID~eq~<A>` → `Cena`, or `ProdejniCeny(FirmaID, SkladID: <branch warehouse>)`
+   if the probe `--phase4` shows it returns that list's price) — `price_source = price_list`, `price_meta` keeps
+   `Cenik_ID`, `TypCeny`, `MnozstevniSleva` for audit. **No price list on the branch → blocking B15.**
+2. Manual price by the user (role sales/admin, reason required) — `price_source = manual`.
+3. **Price from our accepted offer** (`price_source = offer`) comes with Phase 6 (offers, D5); not used before.
+The company discount (`HodnotaSlevy` / `VlastniSleva`) is **shown, not applied**, until it is verified how Money
+applies it (§8.2 double discount guard). The last price sold to this customer (history) is shown as information only.
 
 Rules:
 - Unit price stored with 4 decimals (fasteners cost fractions of a cent per piece); line totals computed for display
