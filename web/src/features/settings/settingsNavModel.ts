@@ -14,6 +14,7 @@ import {
   User,
   Users,
   type LucideIcon,
+  Package,
 } from 'lucide-react';
 
 import type { NavSection } from './settingsApi';
@@ -35,6 +36,7 @@ const SECTION_ICONS: Record<string, LucideIcon> = {
   branches: Building2,
   mailboxes: Mails,
   money: Database,
+  purchasing: Package,
 };
 
 /** Figma order of the personal group (Identity and Môj profil are separate rows around Odpovede). */
@@ -53,7 +55,7 @@ const PERSONAL_ORDER = [
 ];
 
 /** Sections listed under the „SPRÁVA 🔒“ group header (SETTINGS_SPEC 10–20; Phase 1 has 10–12). */
-const ADMIN_SECTIONS = new Set(['users', 'branches', 'mailboxes', 'money']);
+const ADMIN_SECTIONS = new Set(['users', 'branches', 'mailboxes', 'money', 'purchasing']);
 
 /** Sections whose subsections are shown as tabs inside the content area instead of the middle list (Figma W12-11). */
 export const TABBED_SECTIONS = new Set(['branches', 'money']);

@@ -34,6 +34,7 @@ from app.api import (
     settings_ai,
     settings_autonomy,
     settings_money,
+    settings_purchasing,
     suggestions,
     system,
 )
@@ -132,6 +133,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(settings_ai.router)
     app.include_router(settings_autonomy.router)
     app.include_router(settings_money.router)
+    app.include_router(settings_purchasing.router)
     app.include_router(money.router)
     app.include_router(purchasing.router)
     app.include_router(mail_export.router)

@@ -27,6 +27,7 @@ from app.mail.clamav import scan_bytes
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.models import MoneyCodebook, MoneyCompany
 from app.money.schemas import Article
+from app.purchasing import org_settings
 from app.purchasing.item_matching import confirm_article, load_lines, mark_non_stock, match_document, needs_matching
 from app.purchasing.models import DocumentLine, SupplierDocument
 from app.purchasing.service import MAX_BYTES, DocumentRejected, Source, ingest
@@ -376,7 +377,9 @@ class NonStockIn(BaseModel):
     version: int
 
 
-async def _line_for(db: DB, doc: SupplierDocument, line_no: int, version: int) -> DocumentLine:
+async def _line_for(db: DB, doc: SupplierDocument, line_no: int, version: int, person: Any) -> DocumentLine:
+    if str(person.role) not in (await org_settings.load(db)).confirm_roles:
+        raise fail(403, "confirm_role_not_allowed")  # Settings 14 „Kto potvrdzuje párovanie položiek“
     if doc.status not in MATCHABLE:
         raise fail(409, "document_not_reviewable")
     if doc.version != version:
@@ -403,7 +406,7 @@ async def confirm_line_article(
     in the Money article card)."""
     _guard(settings, person)
     doc = await _get(db, doc_id)
-    line = await _line_for(db, doc, line_no, body.version)
+    line = await _line_for(db, doc, line_no, body.version, person)
     try:
         async with BridgeClient(settings) as bridge:
             article = await bridge.article(body.article_id)
@@ -444,7 +447,7 @@ async def line_non_stock(
     """„Neskladová položka“ (DL-B4): the line is written without an article in 4c."""
     _guard(settings, person)
     doc = await _get(db, doc_id)
-    line = await _line_for(db, doc, line_no, body.version)
+    line = await _line_for(db, doc, line_no, body.version, person)
     await mark_non_stock(db, doc, line)
     audit(
         db,
