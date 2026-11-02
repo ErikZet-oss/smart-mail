@@ -2,6 +2,28 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 4a backend: supplier documents in (read-only)
+
+- New tables `documents` + `document_lines` (migration 0020, plan §5 approved in #191).
+- Intake from mail: messages classified `supplier_document` with a PDF / ISDOC / UBL attachment, in the mailbox AI job. Only mail eligible for AI is read (private folders, Koncepty, Kôš … never, D21), never an attachment flagged by ClamAV, and only with FEATURE_MONEY. Idempotent per message + file hash.
+- Upload: `POST /api/purchasing/documents` (W6u). ClamAV scan, max 15 MB, PDF or XML only. List `GET /api/purchasing/documents` (W6e), detail, original file, „ignore“. Roles: warehouse, accounting, admin.
+- Extraction:
+  - ISDOC and UBL (Invoice, DespatchAdvice) are parsed deterministically. XML with a DOCTYPE or ENTITY is refused.
+  - A PDF goes through its text layer and tables (pdfplumber), then ONE LLM call with a JSON schema (D3). The document is wrapped as untrusted data and its wrapper tag is neutralised.
+  - Numbers come back as printed strings and are parsed in Decimal; a price per 100 / 1000 is divided here, not by the model. ALL lines are kept, and fees (doprava, balné …) are flagged (D14).
+  - A scan without a text layer is `unreadable` (OCR comes later).
+- Rules (DOCUMENTS_SPEC §2.7) that need no matching:
+  - DL-B2 supplier in Money / IČO;
+  - DL-B3 duplicate (Smart Mail side; the Money side comes in 4c);
+  - DL-B4 no goods lines;
+  - DL-B7 Σ lines per VAT rate;
+  - DL-B8 quantity > 0 and present;
+  - DL-W4 date;
+  - DL-W5 fees.
+- `parse_decimal` / `normalize_code` with property-based tests. Golden ISDOC fixture (`fixtures/purchasing/`, fictional).
+- New dependency `pdfplumber` (listed in CLAUDE.md §2); pip-audit clean.
+- Nothing is written to Money.
+
 ## [Unreleased] — AI elements violet exactly as Figma (#192)
 
 - `Button` gets the Figma kind `ai`: `ai-600` fill and white text in every state, 45 % opacity when disabled. It is used only for AI actions: „Napísať“ (W4a / M17), „Previesť“ (Settings › AI pravidlá) and „Vytvoriť profil“ (štýl).
