@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
 import { DEFAULT_PREFS, expect, foldersView, ME, ME_PICKER, mockApi, shot, test } from './fixtures';
+import { cssOf, tokenRgb } from './aiColors';
 
 // #94 Phase 2c: AiSuggestionCard in the reading pane — approve prepares a draft (never sends), reject with chips.
 
@@ -195,3 +196,20 @@ test.describe('#94 AiSuggestionCard @mobile', () => {
     await expect(card(page)).toHaveAttribute('data-collapsed', 'true');
   });
 });
+
+// #192: AI surfaces are violet exactly as Figma AiSuggestionCard `16:1438` — border ai-200, fill ai-50, icon ai-600,
+// in light and dark; the approve button stays brand blue.
+for (const scheme of ['light', 'dark'] as const) {
+  test(`#192 AiSuggestionCard colours = AI tokens (${scheme})`, async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop', 'one viewport is enough for colours');
+    await page.emulateMedia({ colorScheme: scheme });
+    await setup(page);
+    await page.goto('/mail/default/inbox/t-m1');
+    await expand(page);
+    const c = card(page);
+    expect(await cssOf(c, 'border-top-color')).toBe(await tokenRgb(page, '--ai-200'));
+    expect(await cssOf(c, 'background-color')).toBe(await tokenRgb(page, '--ai-50'));
+    expect(await cssOf(c.locator('svg.lucide-sparkles').first(), 'color')).toBe(await tokenRgb(page, '--ai-600'));
+    await shot(page, `issue192-card-${scheme}`);
+  });
+}

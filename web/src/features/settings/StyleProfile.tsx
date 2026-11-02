@@ -56,7 +56,7 @@ export function StyleProfileSection({ disabled }: { disabled: boolean }) {
         <>
           <Button
             type="button"
-            variant="secondary"
+            variant="ai"
             className="self-start"
             icon={<Sparkles size={16} aria-hidden="true" />}
             disabled={busy}

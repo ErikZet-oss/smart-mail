@@ -50,7 +50,7 @@ export function CollapsedSuggestion({
         type="button"
         aria-expanded={false}
         onClick={onExpand}
-        className="flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-lg px-3 text-left hover:bg-ai-100 focus-visible:outline-2"
+        className="flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-lg px-3 text-left hover:bg-ai-200 focus-visible:outline-2"
       >
         <Sparkles size={16} aria-hidden="true" className="shrink-0 text-ai-600" />
         <span className="type-label shrink-0 text-text-primary">{title}</span>

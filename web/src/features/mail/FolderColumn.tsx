@@ -344,7 +344,7 @@ export function FolderColumn({
         {!classic && aiCategories.length > 0 ? (
           <div className="mt-3 border-t border-border-default pt-3" data-testid="ai-triage">
             <div className="mb-1 flex items-center gap-1.5 px-2 text-text-tertiary">
-              <Sparkles size={14} aria-hidden="true" className="text-brand-primary-500" />
+              <Sparkles size={14} aria-hidden="true" className="text-ai-600" />
               <span className="type-caption uppercase tracking-wide">{t('ai.triage.title')}</span>
             </div>
             <ul className="flex flex-col">

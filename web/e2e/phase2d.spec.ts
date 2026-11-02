@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import { DEFAULT_PREFS, expect, foldersView, ME, ME_PICKER, mockApi, shot, test } from './fixtures';
+import { cssOf, tokenRgb } from './aiColors';
 
 // Phase 2d — W4a compose AI panel / M17 sheet: proposals are a diff, „Použiť“ replaces only the person's text.
 
@@ -121,3 +122,23 @@ test.describe('Phase 2d W4a / M17 @mobile', () => {
     await expect(page.getByRole('button', { name: 'AI pri písaní' })).toHaveCount(0);
   });
 });
+
+// #192: compose AI tool and „Napísať“ are violet (Figma W4a `30:26116`, Button kind=ai), light and dark.
+for (const scheme of ['light', 'dark'] as const) {
+  test(`#192 compose AI button and Napísať use the AI tokens (${scheme})`, async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop', 'one viewport is enough for colours');
+    await page.emulateMedia({ colorScheme: scheme });
+    await setup(page);
+    await page.goto('/compose/d-1?mailbox=default');
+    const tool = page.getByTestId('compose-ai-button');
+    await tool.click();
+    await expect(tool).toHaveAttribute('aria-pressed', 'true');
+    expect(await cssOf(tool, 'color')).toBe(await tokenRgb(page, '--ai-600'));
+    expect(await cssOf(tool, 'border-top-color')).toBe(await tokenRgb(page, '--ai-200'));
+    const write = page.getByTestId('compose-ai-panel').last().getByRole('button', { name: 'Napísať' });
+    expect(await cssOf(write, 'background-color')).toBe(await tokenRgb(page, '--ai-600'));
+    const send = page.getByRole('button', { name: 'Odoslať', exact: true }).first();
+    expect(await cssOf(send, 'background-color')).toBe(await tokenRgb(page, '--brand-primary-600')); // non-AI stays blue
+    await shot(page, `issue192-compose-${scheme}`);
+  });
+}
