@@ -115,6 +115,23 @@ test('3e Doklady is in the rail only with FEATURE_MONEY', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Doklady' })).toHaveCount(0);
 });
 
+test('#193 desktop rail order: E-mail, Doklady, Kontakty, Nastavenia', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'desktop rail');
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/money/reminders': { body: DEBTORS },
+    'GET /api/money/reminders/history': { body: [] },
+  });
+  await page.goto('/docs/reminders');
+  const rail = page.getByRole('navigation', { name: 'Hlavná navigácia' });
+  await expect(rail.getByRole('link', { name: 'Doklady' })).toBeVisible();
+  const names = await rail
+    .locator('a')
+    .evaluateAll((els) => els.map((e) => (e.getAttribute('aria-label') ?? '').split(' (')[0] ?? ''));
+  const order = names.filter((n) => ['E-mail', 'Doklady', 'Kontakty', 'Nastavenia'].includes(n));
+  expect(order).toEqual(['E-mail', 'Doklady', 'Kontakty', 'Nastavenia']);
+});
+
 test('3e W8b as in Figma: Doklady tabs, filters, last reminder with tone, contact name', async ({ page }, info) => {
   const rows = [
     {
@@ -146,4 +163,52 @@ test('3e W8b as in Figma: Doklady tabs, filters, last reminder with tone, contac
   await expect(table).not.toContainText('Fiktívny dlžník 3 s.r.o.');
   await page.getByPlaceholder('Hľadať zákazníka…').fill('nikto');
   await expect(table).toContainText('Filtru nezodpovedá žiadny zákazník.');
+});
+
+// #193 Doklady on mobile (Figma M13 `85:3245`): bottom nav E-mail · Doklady · Kontakty · Viac, 360 px without overflow.
+test.describe('#193 Doklady on mobile @mobile', () => {
+  test.use({ viewport: { width: 360, height: 780 } });
+
+  test('#193 bottom nav order, Doklady active on /docs/reminders, nothing outside 360 px', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame');
+    await mockApi(page, {
+      ...BASE,
+      'GET /api/money/reminders': { body: DEBTORS },
+      'GET /api/money/reminders/history': { body: [] },
+    });
+    await page.goto('/docs/reminders');
+    const nav = page.getByTestId('bottom-nav');
+    await expect(nav.getByRole('link', { name: 'Doklady' })).toHaveAttribute('aria-current', 'page');
+    const labels = await nav.locator('a, button').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
+    expect(labels).toEqual(['E-mail', 'Doklady', 'Kontakty', 'Viac']);
+    await expect(page.getByTestId('screen-w8b')).toContainText('Fiktívny dlžník 1 s.r.o.');
+    const outside = await page.evaluate(() => {
+      const out: string[] = [];
+      document.querySelectorAll('[data-testid=screen-w8b] *').forEach((el) => {
+        const r = (el as HTMLElement).getBoundingClientRect();
+        const scroller = (el as HTMLElement).closest('nav, [data-scroll-x]');
+        if (!scroller && r.width > 0 && r.right > window.innerWidth + 0.5)
+          out.push(el.tagName + ':' + (el.textContent ?? '').slice(0, 30));
+      });
+      return { out: out.slice(0, 10), overflow: document.documentElement.scrollWidth - window.innerWidth };
+    });
+    expect(outside.overflow).toBeLessThanOrEqual(0);
+    expect(outside.out).toEqual([]);
+    await shot(page, 'issue193-M13-reminders-360');
+  });
+
+  test('#193 no Doklady in the bottom nav without a role or without FEATURE_MONEY', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'mobile frame');
+    const WAREHOUSE = { ...ME, person: { ...ME.person, role: 'warehouse' } };
+    await mockApi(page, {
+      ...BASE,
+      'GET /api/auth/me': { body: WAREHOUSE },
+      'GET /api/auth/persons': { body: { ...ME_PICKER, persons: [WAREHOUSE.person] } },
+    });
+    await page.goto('/docs/reminders'); // a warehouse person only gets the role banner here
+    await expect(page.getByText('Upomienky pripravuje účtovníctvo, obchod alebo správca.')).toBeVisible();
+    const nav = page.getByTestId('bottom-nav');
+    await expect(nav.getByRole('link', { name: 'Kontakty' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Doklady' })).toHaveCount(0);
+  });
 });
