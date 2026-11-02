@@ -2129,7 +2129,12 @@
       "catalogShort": "Katalóg",
       "supplierCodeShort": "Kód dod."
     },
-    "vatRows": { "zero": "Nulová 0 %", "reduced5": "Znížená 5 %", "reduced19": "Znížená 19 %", "base23": "Základná 23 %" },
+    "vatRows": {
+      "zero": "Nulová 0 %",
+      "reduced5": "Znížená 5 %",
+      "reduced19": "Znížená 19 %",
+      "base23": "Základná 23 %"
+    },
     "cols": {
       "status": "Stav",
       "order": "Poradie",
