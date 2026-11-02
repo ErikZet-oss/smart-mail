@@ -76,6 +76,11 @@ def _candidate(a: Article) -> dict[str, Any]:
     return {"article_id": str(a.id), "code": a.code, "catalog": a.catalog, "name": a.name, "unit": a.unit}
 
 
+def article_snapshot(a: Article) -> dict[str, Any]:
+    """What W6h shows of the Money article (name / catalog / EAN / main unit) — read at matching time."""
+    return {"code": a.code, "catalog": a.catalog, "name": a.name, "ean": a.ean, "unit": a.unit}
+
+
 @dataclass(slots=True)
 class Result:
     article_id: uuid.UUID | None
@@ -191,6 +196,10 @@ async def match_document(db: AsyncSession, bridge: BridgeClient, doc: SupplierDo
             for ln in lines
             if not ln.is_fee and ln.match_method not in USER_METHODS
         }
+        articles: dict[uuid.UUID, Article | None] = {}
+        for r in results.values():
+            if r.article_id and r.article_id not in articles:
+                articles[r.article_id] = await bridge.article(r.article_id)
     except BridgeUnavailable as exc:
         log.warning("purchasing.matching_unavailable", document_id=str(doc.id), code=exc.code)
         return False
@@ -209,6 +218,8 @@ async def match_document(db: AsyncSession, bridge: BridgeClient, doc: SupplierDo
         ln.warehouse_id = _uuid(warehouse) if res.article_id else None
         raw = dict(ln.raw or {})
         raw["_last_price"] = None if res.last_price is None else str(res.last_price)
+        found = articles.get(res.article_id) if res.article_id else None
+        raw["_article"] = article_snapshot(found) if found else None
         ln.raw = raw
         if res.method == "learned":
             m = learned[normalize_code(ln.supplier_code) or ""]
@@ -241,11 +252,15 @@ async def confirm_article(
     person_id: uuid.UUID,
     *,
     learn: bool,
+    warehouse_id: uuid.UUID | None = None,
 ) -> None:
     """A person picks the article → the line is decided and (optionally) the mapping is learned for this supplier."""
     line.article_id, line.match_method, line.unit_factor, line.line_status = article.id, "user", factor, "matched"
     line.warehouse_id = _uuid(await _branch_warehouse(db, doc))
     line.candidates = []
+    line.raw = {**(line.raw or {}), "_article": article_snapshot(article), "_last_price": None}
+    if warehouse_id is not None:
+        line.warehouse_id = warehouse_id
     norm = normalize_code(line.supplier_code)
     if learn and norm and doc.supplier_money_id:
         now = datetime.now(UTC)
@@ -266,5 +281,6 @@ async def confirm_article(
 async def mark_non_stock(db: AsyncSession, doc: SupplierDocument, line: DocumentLine) -> None:
     line.article_id, line.match_method, line.unit_factor, line.line_status = None, "non_stock", None, "non_stock"
     line.warehouse_id, line.candidates = None, []
+    line.raw = {**(line.raw or {}), "_article": None, "_last_price": None}
     await refresh_checks(db, doc, await load_lines(db, doc))
     doc.version += 1

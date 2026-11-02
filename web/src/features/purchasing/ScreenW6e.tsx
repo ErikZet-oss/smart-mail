@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FileText, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 
 import { Banner } from '../../components/Banner';
 import { AppShell } from '../../components/shell/AppShell';
@@ -34,6 +34,7 @@ export function ScreenW6e() {
   const { t } = useTranslation();
   const features = useFeaturesState();
   const mobile = useMediaQuery(MOBILE_QUERY);
+  const navigate = useNavigate();
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const allowed = UPLOAD_ROLES.has(me.data?.person?.role ?? '');
   const [status, setStatus] = useState<DocumentFilter>('open');
@@ -98,24 +99,26 @@ export function ScreenW6e() {
               ) : mobile ? (
                 <ul className="flex flex-col gap-2" data-testid="documents-list">
                   {items.map((d) => (
-                    <li
-                      key={d.id}
-                      className="type-small flex flex-col gap-1 rounded-md border border-border-default p-3"
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className="type-label min-w-0 flex-1 break-words text-text-primary">
-                          {d.supplier_name ?? d.filename}
+                    <li key={d.id}>
+                      <Link
+                        to={`/docs/delivery-notes/${d.id}`}
+                        className="type-small flex flex-col gap-1 rounded-md border border-border-default p-3"
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="type-label min-w-0 flex-1 break-words text-text-primary">
+                            {d.supplier_name ?? d.filename}
+                          </span>
+                          <StatusChip tone={STATUS_TONE[d.status]} label={statusLabel(d)} />
+                        </div>
+                        <span className="break-all text-text-secondary">
+                          {d.doc_number ?? '–'} · {day(d.doc_date)}
                         </span>
-                        <StatusChip tone={STATUS_TONE[d.status]} label={statusLabel(d)} />
-                      </div>
-                      <span className="break-all text-text-secondary">
-                        {d.doc_number ?? '–'} · {day(d.doc_date)}
-                      </span>
-                      <span className="text-text-secondary">
-                        {t('purchasing.linesCount', { count: d.lines })}
-                        {d.total ? ` · ${money(d.total)}` : ''}
-                        {d.branch_name ? ` · ${d.branch_name}` : ''}
-                      </span>
+                        <span className="text-text-secondary">
+                          {t('purchasing.linesCount', { count: d.lines })}
+                          {d.total ? ` · ${money(d.total)}` : ''}
+                          {d.branch_name ? ` · ${d.branch_name}` : ''}
+                        </span>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -153,7 +156,16 @@ export function ScreenW6e() {
                     </thead>
                     <tbody>
                       {items.map((d) => (
-                        <tr key={d.id} className="border-t border-border-default">
+                        <tr
+                          key={d.id}
+                          tabIndex={0}
+                          data-testid={`document-row-${d.id}`}
+                          onClick={() => navigate(`/docs/delivery-notes/${d.id}`)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') navigate(`/docs/delivery-notes/${d.id}`);
+                          }}
+                          className="cursor-pointer border-t border-border-default hover:bg-bg-subtle"
+                        >
                           <td className="px-3 py-2 text-text-tertiary">{t('purchasing.newDraft')}</td>
                           <td className="px-3 py-2">{d.doc_number ?? '–'}</td>
                           <td className="px-3 py-2">{d.supplier_name ?? d.filename}</td>
