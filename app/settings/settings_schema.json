@@ -1,6 +1,6 @@
 {
-  "version": "3f",
-  "phase": "3f",
+  "version": "4b",
+  "phase": "4b",
   "sections": [
     {
       "id": "01",
@@ -872,6 +872,178 @@
         }
       ],
       "fields": []
+    },
+    {
+      "id": "14",
+      "path": "purchasing",
+      "title": "Nákup a sklad",
+      "admin_only": true,
+      "feature": "money",
+      "fields": [
+        {
+          "id": "purchasing.writes",
+          "label": "Čo sa zapisuje do Money",
+          "control": "info",
+          "default": "Len dodací list prijatý – faktúru prijatú Smart Mail nerieši (D7).",
+          "help": null,
+          "scope": "G",
+          "options": [],
+          "validation": {},
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.default_warehouse",
+          "label": "Predvolený sklad príjmu",
+          "control": "info",
+          "default": "Sklad pobočky z Pobočky › Money (11e).",
+          "help": null,
+          "scope": "G",
+          "options": [],
+          "validation": {},
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.warehouse_rules",
+          "label": "Sklad podľa dodávateľa / kategórie",
+          "control": "table",
+          "default": [],
+          "help": null,
+          "scope": "G",
+          "options": [],
+          "validation": {},
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.price_diff_pct",
+          "label": "Upozorniť na odchýlku ceny nad",
+          "control": "number",
+          "default": 10,
+          "help": "Porovnáva sa s poslednou nákupnou cenou od dodávateľa.",
+          "scope": "G",
+          "options": [],
+          "validation": {
+            "min": 0,
+            "max": 100,
+            "unit": "%"
+          },
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.qty_diff_pct",
+          "label": "Upozorniť na odchýlku množstva oproti objednávke",
+          "control": "number",
+          "default": 0,
+          "help": null,
+          "scope": "G",
+          "options": [],
+          "validation": {
+            "min": 0,
+            "max": 100,
+            "unit": "%"
+          },
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.confirm_roles",
+          "label": "Kto potvrdzuje párovanie položiek",
+          "control": "select",
+          "default": [
+            "warehouse",
+            "admin"
+          ],
+          "help": null,
+          "scope": "G",
+          "options": [
+            {
+              "value": "warehouse",
+              "label": "Sklad"
+            },
+            {
+              "value": "admin",
+              "label": "Správca"
+            },
+            {
+              "value": "accounting",
+              "label": "Účtovníctvo"
+            },
+            {
+              "value": "sales",
+              "label": "Obchod"
+            }
+          ],
+          "validation": {
+            "min_items": 1,
+            "multiple": true
+          },
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.issue_date",
+          "label": "Dátum vystavenia dodacieho listu",
+          "control": "segmented",
+          "default": "supplier",
+          "help": "Pole „Vystavenie“ na dodacom liste prijatom.",
+          "scope": "G",
+          "options": [
+            {
+              "value": "supplier",
+              "label": "Dátum dokladu dodávateľa"
+            },
+            {
+              "value": "approval",
+              "label": "Dátum schválenia"
+            }
+          ],
+          "validation": {},
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.movement_time",
+          "label": "Dátum a čas skladového pohybu",
+          "control": "info",
+          "default": "Okamih zápisu do Money (schválenie) – D13.",
+          "help": "Dátum a čas „Sklad. pohybu“ a „Účt. prípadu“ = kedy Smart Mail doklad zapísal do Money (DECISIONS D13).",
+          "scope": "G",
+          "options": [],
+          "validation": {},
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.fees",
+          "label": "Poplatky na dokladoch dodávateľa (doprava, balné)",
+          "control": "info",
+          "default": "Nezapisujú sa – zobrazia sa v záložke Poplatky.",
+          "help": "Ak treba, doplňte ich v Money (DECISIONS D14).",
+          "scope": "G",
+          "options": [],
+          "validation": {},
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.returns",
+          "label": "Vratky",
+          "control": "info",
+          "default": "Vratky sa robia len v Money.",
+          "help": "DECISIONS D15.",
+          "scope": "G",
+          "options": [],
+          "validation": {},
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.mappings",
+          "label": "Kódy dodávateľov (naučené)",
+          "control": "table",
+          "default": [],
+          "help": "Potvrdené párovania z faktúr. Export môžete nahrať do kariet artiklov v Money.",
+          "scope": "G",
+          "options": [],
+          "validation": {
+            "unique": "kód v rámci dodávateľa"
+          },
+          "admin_only": true
+        }
+      ]
     },
     {
       "id": "17",

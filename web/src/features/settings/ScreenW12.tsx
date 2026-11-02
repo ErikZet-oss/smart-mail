@@ -19,6 +19,7 @@ import { BranchIdentityForm } from './BranchIdentityForm';
 import { SettingsFieldControl } from './Field';
 import { TwoFactorRow } from './TwoFactor';
 import { UsersPanel } from './UsersPanel';
+import { PurchasingPanel } from './PurchasingPanel';
 import { HtmlSignatureEditor, SanitizedHtml } from './HtmlSignatureEditor';
 import { fillSignature, type SignatureLang } from './signatureHtml';
 import { MobileSettingsIndex } from './MobileSettingsIndex';
@@ -325,6 +326,7 @@ function SectionBody({
     if (sub === 'activities') return <MoneyActivitiesPanel />;
     return <MoneyConnectionPanel />; // 13a is the first tab
   }
+  if (section === 'purchasing') return meRole === 'admin' ? <PurchasingPanel /> : <AdminOnly />;
   if (section === 'ai-admin') {
     if (meRole !== 'admin') return <AdminOnly />;
     if (sub === 'rules') return <AiRulesPanel />;

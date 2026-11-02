@@ -2,6 +2,25 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 4b-3: Nastavenia › Nákup a sklad (SETTINGS_SPEC 14)
+
+- **W12-14** `/settings/purchasing` (Figma `75:68205`, admin, only with FEATURE_MONEY):
+  - read-only info rows (D7, D13, D14, D15, branch warehouses from 11e);
+  - warehouse per supplier;
+  - price and quantity deviation thresholds (0–100 %);
+  - who confirms item matching (≥ 1 role, default Sklad + Správca);
+  - issue date of the received delivery note.
+- **Kódy dodávateľov (naučené)**:
+  - search, supplier filter, edit of the unit conversion, delete with confirmation;
+  - **Export CSV** (UTF-8 BOM, `;`, guarded against Excel formulas) for adding the codes to the Money article cards. Nothing is written to Money.
+- Values are stored in `org_settings` (section `purchasing`) — no new table. Every change is audited.
+- **Effect on W6h:**
+  - DL-W1 uses the configured threshold;
+  - the supplier warehouse rule wins over the branch warehouse (DL-W8 still warns, D18);
+  - confirming a line or marking it „Neskladová položka“ needs one of the configured roles (otherwise 403 `confirm_role_not_allowed`).
+- The quantity threshold and the issue date are only stored for now. They take effect with purchase orders (DL-W2) and with the write in 4c.
+- Settings schema version 4b (section 14).
+
 ## [Unreleased] — Phase 4b UI: W6h Dodací list prijatý – karta (read-only)
 
 - **W6h** `/docs/delivery-notes/:id` (Figma `43:38227`, drawer `44:37979`), a copy of the Money card (DOCUMENTS_SPEC §2):

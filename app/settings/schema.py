@@ -503,6 +503,127 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
         "fields": [],
     },
     {
+        # SETTINGS_SPEC 14 Nákup a sklad (G, admin) — Phase 4b. Stored in org_settings `purchasing`. FEATURE_MONEY only.
+        "id": "14",
+        "path": "purchasing",
+        "title": "Nákup a sklad",
+        "admin_only": True,
+        "feature": "money",
+        "fields": [
+            field(
+                "purchasing.writes",
+                label="Čo sa zapisuje do Money",
+                control="info",
+                scope="G",
+                admin_only=True,
+                default="Len dodací list prijatý – faktúru prijatú Smart Mail nerieši (D7).",
+            ),
+            field(
+                "purchasing.default_warehouse",
+                label="Predvolený sklad príjmu",
+                control="info",
+                scope="G",
+                admin_only=True,
+                default="Sklad pobočky z Pobočky › Money (11e).",
+            ),
+            field(
+                "purchasing.warehouse_rules",
+                label="Sklad podľa dodávateľa / kategórie",
+                control="table",
+                default=[],
+                scope="G",
+                admin_only=True,
+            ),
+            field(
+                "purchasing.price_diff_pct",
+                label="Upozorniť na odchýlku ceny nad",
+                control="number",
+                default=10,
+                validation={"min": 0, "max": 100, "unit": "%"},
+                help="Porovnáva sa s poslednou nákupnou cenou od dodávateľa.",
+                scope="G",
+                admin_only=True,
+            ),
+            field(
+                "purchasing.qty_diff_pct",
+                label="Upozorniť na odchýlku množstva oproti objednávke",
+                control="number",
+                default=0,
+                validation={"min": 0, "max": 100, "unit": "%"},
+                scope="G",
+                admin_only=True,
+            ),
+            field(
+                "purchasing.confirm_roles",
+                label="Kto potvrdzuje párovanie položiek",
+                control="select",
+                default=["warehouse", "admin"],
+                validation={"min_items": 1, "multiple": True},
+                options=[
+                    {"value": "warehouse", "label": "Sklad"},
+                    {"value": "admin", "label": "Správca"},
+                    {"value": "accounting", "label": "Účtovníctvo"},
+                    {"value": "sales", "label": "Obchod"},
+                ],
+                scope="G",
+                admin_only=True,
+            ),
+            field(
+                "purchasing.issue_date",
+                label="Dátum vystavenia dodacieho listu",
+                control="segmented",
+                default="supplier",
+                options=[
+                    {"value": "supplier", "label": "Dátum dokladu dodávateľa"},
+                    {"value": "approval", "label": "Dátum schválenia"},
+                ],
+                help="Pole „Vystavenie“ na dodacom liste prijatom.",
+                scope="G",
+                admin_only=True,
+            ),
+            field(
+                "purchasing.movement_time",
+                label="Dátum a čas skladového pohybu",
+                control="info",
+                scope="G",
+                admin_only=True,
+                default="Okamih zápisu do Money (schválenie) – D13.",
+                help=(
+                    "Dátum a čas „Sklad. pohybu“ a „Účt. prípadu“ = kedy Smart Mail doklad zapísal do Money"
+                    " (DECISIONS D13)."
+                ),
+            ),
+            field(
+                "purchasing.fees",
+                label="Poplatky na dokladoch dodávateľa (doprava, balné)",
+                control="info",
+                scope="G",
+                admin_only=True,
+                default="Nezapisujú sa – zobrazia sa v záložke Poplatky.",
+                help="Ak treba, doplňte ich v Money (DECISIONS D14).",
+            ),
+            field(
+                "purchasing.returns",
+                label="Vratky",
+                control="info",
+                scope="G",
+                admin_only=True,
+                default="Vratky sa robia len v Money.",
+                help="DECISIONS D15.",
+            ),
+            field(
+                "purchasing.mappings",
+                label="Kódy dodávateľov (naučené)",
+                control="table",
+                default=[],
+                validation={"unique": "kód v rámci dodávateľa"},
+                help="Potvrdené párovania z faktúr. Export môžete nahrať do kariet artiklov v Money.",
+                scope="G",
+                admin_only=True,
+            ),
+        ],
+    },
+    {
         # SETTINGS_SPEC 17 AI – správa (G, admin); Phase 2e brings 17d, the other tabs follow in 2e/2f.
         "id": "17",
         "path": "ai-admin",
@@ -612,8 +733,8 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
 
 def schema_document() -> dict[str, Any]:
     return {
-        "version": "3f",
-        "phase": "3f",
+        "version": "4b",
+        "phase": "4b",
         "sections": PHASE_1F_SECTIONS,
     }
 
@@ -632,5 +753,6 @@ SECTION_PATHS = {
     "branches": "11",
     "mailboxes": "12",
     "money": "13",
+    "purchasing": "14",
     "ai-admin": "17",
 }

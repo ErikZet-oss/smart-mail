@@ -28,12 +28,13 @@ from app.ai.guards import check
 from app.auth.models import Branch
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.schemas import Article, SupplierCode
+from app.purchasing import org_settings
 from app.purchasing.models import DocumentLine, SupplierDocument, SupplierItemMapping
 from app.purchasing.numbers import normalize_code
 
 log = structlog.get_logger()
 
-PRICE_DIFF_PCT = Decimal("10")  # SETTINGS 14 default; the setting itself comes with 4b-3
+PRICE_DIFF_PCT = Decimal("10")  # SETTINGS 14 default (org setting `purchasing.price_diff_pct`)
 USER_METHODS = ("user", "non_stock")
 MATCH_CHECKS = ("DL-B4", "DL-W1", "DL-W6", "DL-W8")
 UNSAFE = set("~#|()")
@@ -118,7 +119,12 @@ async def _match_line(
     return Result(None, "none", None, [_candidate(a) for a in found[:5]])
 
 
-def line_checks(doc: SupplierDocument, lines: list[DocumentLine], branch_warehouse: str | None) -> list[dict[str, Any]]:
+def line_checks(
+    doc: SupplierDocument,
+    lines: list[DocumentLine],
+    branch_warehouse: str | None,
+    price_pct: Decimal = PRICE_DIFF_PCT,
+) -> list[dict[str, Any]]:
     """DL-B4 / DL-W1 / DL-W6 / DL-W8 from the stored matching state (also re-run after every user decision)."""
     out: list[dict[str, Any]] = []
     goods = [ln for ln in lines if not ln.is_fee]
@@ -129,7 +135,7 @@ def line_checks(doc: SupplierDocument, lines: list[DocumentLine], branch_warehou
         last = (ln.raw or {}).get("_last_price")
         if ln.match_method == "supplier_code" and last is not None and ln.unit_price is not None:
             pct = price_diff_pct(ln.unit_price, Decimal(str(last)))
-            if pct is not None and abs(pct) > PRICE_DIFF_PCT:
+            if pct is not None and abs(pct) > price_pct:
                 out.append(check("DL-W1", "warning", line=ln.line_no, x=str(pct), last=str(last)))
         if ln.match_method == "learned":
             out.append(check("DL-W6", "warning", line=ln.line_no, code=ln.supplier_code))
@@ -150,6 +156,16 @@ async def _branch_warehouse(db: AsyncSession, doc: SupplierDocument) -> str | No
     return branch.money_warehouse_id if branch else None
 
 
+async def target_warehouse(db: AsyncSession, doc: SupplierDocument) -> str | None:
+    """Settings 14 „Sklad podľa dodávateľa“ wins over the branch warehouse (11e); DL-W8 then warns (D18)."""
+    conf = await org_settings.load(db)
+    if doc.supplier_money_id:
+        for rule in conf.warehouse_rules:
+            if rule.supplier_money_id == doc.supplier_money_id:
+                return str(rule.warehouse_id)
+    return await _branch_warehouse(db, doc)
+
+
 async def refresh_checks(db: AsyncSession, doc: SupplierDocument, lines: list[DocumentLine]) -> None:
     """Replace the matching checks in `doc.validation` and recompute the review status."""
     keep = [
@@ -157,7 +173,8 @@ async def refresh_checks(db: AsyncSession, doc: SupplierDocument, lines: list[Do
         for c in (doc.validation or [])
         if c["id"] not in MATCH_CHECKS or (c["id"] == "DL-B4" and c["params"].get("reason") == "no_lines")
     ]
-    checks = keep + line_checks(doc, lines, await _branch_warehouse(db, doc))
+    conf = await org_settings.load(db)
+    checks = keep + line_checks(doc, lines, await _branch_warehouse(db, doc), conf.price_diff_pct)
     doc.validation = checks
     if doc.status in ("needs_review", "missing_data"):
         doc.status = "missing_data" if any(c["level"] == "blocking" for c in checks) else "needs_review"
@@ -176,7 +193,7 @@ def needs_matching(lines: list[DocumentLine]) -> bool:
 async def match_document(db: AsyncSession, bridge: BridgeClient, doc: SupplierDocument) -> bool:
     """Run the cascade for every goods line not decided by a person. False = Money unavailable (nothing changed)."""
     lines = await load_lines(db, doc)
-    warehouse = await _branch_warehouse(db, doc)
+    warehouse = await target_warehouse(db, doc)
     learned: dict[str, SupplierItemMapping] = {}
     try:
         codes: dict[str, SupplierCode] = {}
@@ -256,7 +273,7 @@ async def confirm_article(
 ) -> None:
     """A person picks the article → the line is decided and (optionally) the mapping is learned for this supplier."""
     line.article_id, line.match_method, line.unit_factor, line.line_status = article.id, "user", factor, "matched"
-    line.warehouse_id = _uuid(await _branch_warehouse(db, doc))
+    line.warehouse_id = _uuid(await target_warehouse(db, doc))
     line.candidates = []
     line.raw = {**(line.raw or {}), "_article": article_snapshot(article), "_last_price": None}
     if warehouse_id is not None:
