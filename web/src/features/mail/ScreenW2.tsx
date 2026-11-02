@@ -514,7 +514,7 @@ function ScreenW2Body({
             kind: 'item' as const,
             id: 'reclassify',
             label: t('mail.category.bulk'),
-            icon: <Sparkles size={16} />,
+            icon: <Sparkles size={16} className="text-ai-600" />,
             disabled: !canReclassify || reclassifyAll.isPending || selectedIds.size > 50,
             hint: selectedIds.size > 50 ? t('mail.category.bulkMax') : undefined,
             onSelect: closeBulk(() => reclassifyAll.mutate([...selectedIds])),
@@ -801,7 +801,7 @@ function ScreenW2Body({
         >
           {aiView && !list.isLoading && total === 0 && !q.trim() && filter === 'all' ? (
             <EmptyState
-              icon={<Sparkles size={20} />}
+              icon={<Sparkles size={20} className="text-ai-600" />}
               title={t('ai.triage.emptyTitle', { name: label })}
               text={t('ai.triage.emptyText')}
             />

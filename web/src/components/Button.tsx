@@ -1,6 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
-type Variant = 'primary' | 'secondary';
+/** Figma `Button` kinds; `ai` is violet and only for AI actions (UX_SPEC §3.1, #192). */
+type Variant = 'primary' | 'secondary' | 'ai';
 type Size = 'md' | 'lg';
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -13,6 +14,8 @@ const VARIANT: Record<Variant, string> = {
   primary:
     'bg-brand-primary-600 text-text-on-primary hover:bg-brand-primary-700 disabled:bg-brand-primary-400 disabled:hover:bg-brand-primary-400',
   secondary: 'border border-border-strong bg-bg-canvas text-text-primary hover:bg-bg-muted disabled:opacity-60',
+  // Figma kind=ai (8:595…): ai-600 fill in every state, disabled = 45 % opacity
+  ai: 'bg-ai-600 text-text-on-primary disabled:opacity-45',
 };
 
 const SIZE: Record<Size, string> = {

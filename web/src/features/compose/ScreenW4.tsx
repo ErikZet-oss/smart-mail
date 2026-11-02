@@ -652,7 +652,12 @@ export function ScreenW4() {
           {aiAvailable ? (
             <button
               type="button"
-              className="flex h-14 w-[72px] flex-col items-center justify-center gap-1 rounded-sm text-ai-600 hover:bg-bg-subtle"
+              // Figma W4a: the AI tool is violet; active (panel open) = ai-50 fill + ai-200 border
+              className={`flex h-14 w-[72px] flex-col items-center justify-center gap-1 rounded-sm border text-ai-600 ${
+                (mobile ? aiSheet : sideTab === 'ai') ? 'border-ai-200 bg-ai-50' : 'border-transparent hover:bg-ai-50'
+              }`}
+              aria-pressed={mobile ? aiSheet : sideTab === 'ai'}
+              data-testid="compose-ai-button"
               onClick={() => (mobile ? setAiSheet(true) : setSideTab('ai'))}
               aria-label={t('ai.compose.title')}
             >

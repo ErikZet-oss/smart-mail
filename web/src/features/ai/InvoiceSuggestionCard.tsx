@@ -83,9 +83,7 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
       aria-label={t('ai.invoice.title')}
       data-testid="ai-invoice-card"
       data-collapsed="false"
-      className={`flex max-w-[760px] flex-col gap-3 rounded-lg border bg-ai-50 p-4 ${
-        blocked ? 'border-danger-600' : warnings.length ? 'border-warning-600' : 'border-success-600'
-      }`}
+      className="flex max-w-[760px] flex-col gap-3 rounded-lg border border-ai-200 bg-ai-50 p-4"
     >
       <header className="flex items-start gap-2">
         <Sparkles size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-ai-600" />

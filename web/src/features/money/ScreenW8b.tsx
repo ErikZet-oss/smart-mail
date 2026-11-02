@@ -7,6 +7,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { AppShell } from '../../components/shell/AppShell';
+import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { ApiError } from '../../lib/api';
 import { fetchMe } from '../auth/authApi';
 import { useFeaturesState } from '../system/features';
@@ -22,8 +23,9 @@ import {
   type ReminderResult,
   type ReminderTone,
 } from './moneyApi';
+import { DOCS_ROLES } from './docsAccess';
 
-const ROLES = new Set(['admin', 'sales', 'accounting']);
+const ROLES = DOCS_ROLES;
 /** Doklady module tabs (SCREENS_SPEC §8); Phase 3 has Upomienky only, the rest come with Phases 4 and 6. */
 const MODULE_TABS = [
   { id: 'delivery-notes', phase: 4 },
@@ -42,6 +44,7 @@ const SUM_MIN = [0, 100, 1000] as const;
 export function ScreenW8b() {
   const { t } = useTranslation();
   const features = useFeaturesState();
+  const mobile = useMediaQuery(MOBILE_QUERY);
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
   const [tab, setTab] = useState<'open' | 'history'>('open');
   const allowed = ROLES.has(me.data?.person?.role ?? '');
@@ -69,20 +72,39 @@ export function ScreenW8b() {
               {t('documents.upload')}
             </Button>
           </div>
-          <nav aria-label={t('documents.title')} className="flex gap-4 overflow-x-auto">
+          <nav
+            aria-label={t('documents.title')}
+            data-scroll-x
+            className={
+              mobile
+                ? 'mb-3 flex gap-1 overflow-x-auto rounded-md bg-bg-subtle p-1' // Figma M13: segmented chip row
+                : 'flex gap-4 overflow-x-auto'
+            }
+          >
             {MODULE_TABS.map((m) => (
               <span
                 key={m.id}
                 aria-disabled="true"
                 title={t('documents.later', { phase: m.phase })}
-                className="type-label inline-flex h-10 shrink-0 cursor-not-allowed items-center border-b-2 border-transparent text-text-tertiary"
+                className={
+                  mobile
+                    ? 'type-label inline-flex h-8 shrink-0 cursor-not-allowed items-center rounded-sm px-3 text-text-tertiary'
+                    : 'type-label inline-flex h-10 shrink-0 cursor-not-allowed items-center border-b-2 border-transparent text-text-tertiary'
+                }
               >
                 {t(`documents.tabs.${m.id}`)}
               </span>
             ))}
             <span
               aria-current="page"
-              className="type-label inline-flex h-10 shrink-0 items-center gap-1.5 border-b-2 border-brand-primary-600 text-brand-primary-700"
+              ref={(node) => {
+                if (mobile && node) node.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+              }}
+              className={
+                mobile
+                  ? 'type-label inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm bg-bg-canvas px-3 text-text-primary shadow-e1'
+                  : 'type-label inline-flex h-10 shrink-0 items-center gap-1.5 border-b-2 border-brand-primary-600 text-brand-primary-700'
+              }
             >
               {t('documents.tabs.reminders')}
               {count ? (
@@ -135,6 +157,7 @@ function lastReminder(d: Debtor, t: (key: string, o?: Record<string, unknown>) =
 
 function OpenTab({ debtors }: { debtors: DebtorsQuery }) {
   const { t } = useTranslation();
+  const mobile = useMediaQuery(MOBILE_QUERY);
   const qc = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tone, setTone] = useState<ReminderTone>('polite');
@@ -287,74 +310,130 @@ function OpenTab({ debtors }: { debtors: DebtorsQuery }) {
       </div>
       <p className="type-small text-text-secondary">{t('reminders.hint')}</p>
       {prepare.isError ? <Banner kind="warning" message={t('reminders.errors.money_unavailable')} /> : null}
-      <div className="overflow-x-auto rounded-md border border-border-default">
-        <table className="type-small w-full min-w-[760px] text-left text-text-primary" data-testid="reminders-table">
-          <thead className="bg-bg-subtle">
-            <tr className="text-text-secondary">
-              <th className="w-10 px-3 py-2" aria-label={t('reminders.select')} />
-              <th className="px-2 py-2 font-normal">{t('reminders.cols.customer')}</th>
-              <th className="px-2 py-2 text-right font-normal">{t('reminders.cols.sum')}</th>
-              <th className="px-2 py-2 text-right font-normal">{t('reminders.cols.count')}</th>
-              <th className="px-2 py-2 text-right font-normal">{t('reminders.cols.oldest')}</th>
-              <th className="px-2 py-2 font-normal">{t('reminders.cols.last')}</th>
-              <th className="px-2 py-2 font-normal">{t('reminders.cols.contact')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-text-secondary">
-                  {t('reminders.filters.none')}
-                </td>
-              </tr>
-            ) : null}
-            {rows.map((d) => {
-              const on = selected.has(d.company.money_id);
-              return (
-                <tr
-                  key={d.company.money_id}
-                  className={`border-t border-border-default ${on ? 'bg-brand-primary-50' : ''}`}
-                >
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      aria-label={t('reminders.selectOne', { name: d.company.name })}
-                      checked={on}
-                      onChange={() => toggle(d.company.money_id)}
-                      disabled={!d.contact}
-                    />
-                  </td>
-                  <td className="px-2 py-2">
+      {mobile ? (
+        // #193 / Figma M13 `85:3245`: one card per customer instead of the wide table at 360 px
+        <ul className="flex flex-col gap-2" data-testid="reminders-table">
+          {rows.length === 0 ? (
+            <li className="type-small px-3 py-6 text-center text-text-secondary">{t('reminders.filters.none')}</li>
+          ) : null}
+          {rows.map((d) => {
+            const on = selected.has(d.company.money_id);
+            return (
+              <li
+                key={d.company.money_id}
+                className={`type-small flex gap-3 rounded-md border border-border-default p-3 text-text-primary ${
+                  on ? 'bg-brand-primary-50' : 'bg-bg-canvas'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1 shrink-0"
+                  aria-label={t('reminders.selectOne', { name: d.company.name })}
+                  checked={on}
+                  onChange={() => toggle(d.company.money_id)}
+                  disabled={!d.contact}
+                />
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <div className="flex items-start gap-2">
                     <Link
                       to={`/contacts/company/${d.company.money_id}?tab=documents`}
-                      className="type-label block text-text-primary hover:underline"
+                      className="type-label min-w-0 flex-1 break-words text-text-primary hover:underline"
                     >
                       {d.company.name}
                     </Link>
-                    <span className="text-text-secondary">{d.invoices.map((i) => i.number).join(', ')}</span>
-                  </td>
-                  <td className="px-2 py-2 text-right font-medium text-danger-600 tabular-nums">
-                    {money(d.overdue_total)}
-                  </td>
-                  <td className="px-2 py-2 text-right">{d.invoice_count}</td>
-                  <td className="px-2 py-2 text-right">{t('reminders.days', { count: d.oldest_days })}</td>
-                  <td className="px-2 py-2">{lastReminder(d, t)}</td>
-                  <td className="px-2 py-2">
-                    {d.contact ? (
-                      [d.contact_name, d.contact].filter(Boolean).join(' · ')
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-warning-700">
-                        <CircleAlert size={14} aria-hidden="true" />
-                        {t('reminders.noContact')}
-                      </span>
-                    )}
+                    <span className="shrink-0 font-medium text-danger-600 tabular-nums">{money(d.overdue_total)}</span>
+                  </div>
+                  <span className="break-words text-text-secondary">{d.invoices.map((i) => i.number).join(', ')}</span>
+                  <span className="text-text-secondary">
+                    {t('reminders.cols.count')}: {d.invoice_count} · {t('reminders.days', { count: d.oldest_days })}
+                    {' · '}
+                    {t('reminders.cols.last')}: {lastReminder(d, t)}
+                  </span>
+                  {d.contact ? (
+                    <span className="break-all text-text-secondary">
+                      {[d.contact_name, d.contact].filter(Boolean).join(' · ')}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-warning-700">
+                      <CircleAlert size={14} aria-hidden="true" />
+                      {t('reminders.noContact')}
+                    </span>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="overflow-x-auto rounded-md border border-border-default">
+          <table className="type-small w-full min-w-[760px] text-left text-text-primary" data-testid="reminders-table">
+            <thead className="bg-bg-subtle">
+              <tr className="text-text-secondary">
+                <th className="w-10 px-3 py-2" aria-label={t('reminders.select')} />
+                <th className="px-2 py-2 font-normal">{t('reminders.cols.customer')}</th>
+                <th className="px-2 py-2 text-right font-normal">{t('reminders.cols.sum')}</th>
+                <th className="px-2 py-2 text-right font-normal">{t('reminders.cols.count')}</th>
+                <th className="px-2 py-2 text-right font-normal">{t('reminders.cols.oldest')}</th>
+                <th className="px-2 py-2 font-normal">{t('reminders.cols.last')}</th>
+                <th className="px-2 py-2 font-normal">{t('reminders.cols.contact')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-3 py-6 text-center text-text-secondary">
+                    {t('reminders.filters.none')}
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              ) : null}
+              {rows.map((d) => {
+                const on = selected.has(d.company.money_id);
+                return (
+                  <tr
+                    key={d.company.money_id}
+                    className={`border-t border-border-default ${on ? 'bg-brand-primary-50' : ''}`}
+                  >
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        aria-label={t('reminders.selectOne', { name: d.company.name })}
+                        checked={on}
+                        onChange={() => toggle(d.company.money_id)}
+                        disabled={!d.contact}
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <Link
+                        to={`/contacts/company/${d.company.money_id}?tab=documents`}
+                        className="type-label block text-text-primary hover:underline"
+                      >
+                        {d.company.name}
+                      </Link>
+                      <span className="text-text-secondary">{d.invoices.map((i) => i.number).join(', ')}</span>
+                    </td>
+                    <td className="px-2 py-2 text-right font-medium text-danger-600 tabular-nums">
+                      {money(d.overdue_total)}
+                    </td>
+                    <td className="px-2 py-2 text-right">{d.invoice_count}</td>
+                    <td className="px-2 py-2 text-right">{t('reminders.days', { count: d.oldest_days })}</td>
+                    <td className="px-2 py-2">{lastReminder(d, t)}</td>
+                    <td className="px-2 py-2">
+                      {d.contact ? (
+                        [d.contact_name, d.contact].filter(Boolean).join(' · ')
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-warning-700">
+                          <CircleAlert size={14} aria-hidden="true" />
+                          {t('reminders.noContact')}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }

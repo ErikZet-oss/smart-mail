@@ -8,7 +8,7 @@ import { Button } from '../../components/Button';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { CollapsedSuggestion } from './CollapsedSuggestion';
-import { cardChecks, cardState, type CardCheck, type CardState } from './cardChecks';
+import { cardChecks, cardState, type CardCheck } from './cardChecks';
 import {
   approveSuggestion,
   REJECT_REASONS,
@@ -19,13 +19,6 @@ import {
 } from './suggestionsApi';
 
 const VISIBLE_CHECKS = 4;
-
-const BORDER: Record<CardState, string> = {
-  blocked: 'border-danger-600',
-  attention: 'border-warning-600',
-  lowconf: 'border-border-strong',
-  ready: 'border-success-600',
-};
 
 const ICON = {
   ok: <CircleCheck size={16} aria-hidden="true" className="shrink-0 text-success-700" />,
@@ -128,7 +121,8 @@ export function AiSuggestionCard({ suggestion, mailbox, messageId, category, rea
       data-testid="ai-suggestion-card"
       data-state={state}
       data-collapsed="false"
-      className={`flex max-w-[760px] flex-col gap-3 rounded-lg border bg-ai-50 p-4 ${BORDER[state]}`}
+      // Figma AiSuggestionCard `16:1438`: every open state is ai-50 + ai-200 border; the state shows in the checks
+      className="flex max-w-[760px] flex-col gap-3 rounded-lg border border-ai-200 bg-ai-50 p-4"
     >
       <header className="flex items-start gap-2">
         <Sparkles size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-ai-600" />

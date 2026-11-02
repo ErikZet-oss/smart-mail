@@ -168,7 +168,7 @@ export function MessageRow({
           {flagged ? <Flag size={14} aria-hidden="true" className="shrink-0 fill-danger-600 text-danger-600" /> : null}
           {hasAttachments ? <Paperclip size={14} aria-hidden="true" className="shrink-0 text-text-tertiary" /> : null}
           {!classic && aiCategory ? (
-            <Sparkles size={14} aria-hidden="true" className="shrink-0 text-brand-primary-500" data-testid="ai-badge" />
+            <Sparkles size={14} aria-hidden="true" className="shrink-0 text-ai-600" data-testid="ai-badge" />
           ) : null}
         </div>
         {summaryOrPreview ? (
