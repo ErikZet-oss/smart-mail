@@ -1,6 +1,6 @@
 # Phase 4 plan — Money write: received delivery notes, customer orders, complaints (#188)
 
-**Status:** **draft, waiting for Erik's approval.**
+**Status:** **approved by Erik on 2026-11-02 (#191)**, with the change to order prices in §2.
 - No Phase 4 code, no migration and no write to Money until Erik approves this plan in #188.
 - After approval, work goes milestone by milestone. Each milestone is one PR and stops for review.
 
@@ -16,7 +16,7 @@
 - `probe_output/*.md` and `docs/probe-findings-2026-10-31.md`.
 - Erik's decisions in #176:
   - centre only in the header of a received delivery note (DLP); items without `Cenik_ID`;
-  - customer orders use the branch price list „bez DPH“.
+  - customer orders use the price list set on the branch (11e), decided in #191 (§2).
 
 **Priority rule (as in Phases 2–3):** pilot bugs and Phase 1–3 acceptance blockers always come first.
 
@@ -50,7 +50,7 @@ Order: everything around the received delivery note first, because it is the cor
 | **4a** | Supplier documents in — read only | Supplier invoice or delivery note from mail (supplier folders, D21) or from upload. Extraction: ISDOC/UBL → PDF tables (pdfplumber) + LLM → OCR + vision (D3), **all lines**. Validation and duplicates (DL-B1–B3 …). No write. | W6u `46:42624` (upload), W6e `46:41526` (list, state „Na kontrolu“), M13 `85:3245` | — | extraction golden fixtures (`expected.json`, fictional supplier PDFs); `test_DL_B*` for validation and duplicates; ISDOC/UBL parsers; property tests `parse_decimal` / `normalize_code` |
 | **4b** | Item matching and W6h review — read only | Cascade: supplier code (`ArticleSuppliers`) → learned mapping → EAN → our code → open purchase order → fastener attributes → user. Unit conversion (no packaging rounding). Price and quantity checks. Branch warehouse. W6h as a copy of the Money card (DOCUMENTS_SPEC §2 field mapping). Learned mappings are confirmed by a person. | W6h `43:38227` (+ states), M13b `85:3565` | **14** Nákup a sklad (all fields, incl. Kódy dodávateľov) | `test_DL_W*`; matching cascade with fixtures of real supplier invoice shapes (fictional values); unit conversion; DL-W6 learned mapping; W6h e2e + Figma screenshot |
 | **4c** | **First write: `CreateReceivedDeliveryNote` on TEST** | 11e completed: price list, warehouse, series, branch template document (`dl_template_money_id` + cached values). Bridge `POST /delivery-notes/received` (approval JWT, SMID, no retry). Read-back and comparison. Reconciliation after a timeout. **Undo** = `DeleteReceivedDeliveryNote` within 15 min (accounting, not invoiced). Shadow mode first (§4). | W6h states „V Money“ / „Vrátiť“, W6e | 11e (rest of the fields), 13a switch | idempotency: double approve, timeout after the mutation → reconcile, two users on one draft (409); `test_DL_B*` re-run at approval; bridge mock ↔ client contract; branch values (§5.5.9) on the payload: header centre, warehouse, series, no item `Cenik_ID`, no item centre (#176) |
-| **4d** | Customer orders — read only and shadow | Detection, deterministic table parser + LLM extraction, customer identification and duplicates D1–D5 (`Odkaz` = customer PO, SMID), matching cascade with the critical-attribute guard, units, **prices (§2)**, W6f / M12 review. Per-customer templates. | W6f `48:42586` (+ states), M12 `85:3819` | **15** Objednávky (ORDERS_SPEC §16) | the whole ORDERS_SPEC §18 suite: B1–B14 / W1–W20, number formats, price-per units, code normalisation, no packaging rounding, critical attributes, duplicates D1–D5 |
+| **4d** | Customer orders — read only and shadow | Detection, deterministic table parser + LLM extraction, customer identification and duplicates D1–D5 (`Odkaz` = customer PO, SMID), matching cascade with the critical-attribute guard, units, **prices (§2)**, W6f / M12 review. Per-customer templates. | W6f `48:42586` (+ states), M12 `85:3819` | **15** Objednávky (ORDERS_SPEC §16) | the whole ORDERS_SPEC §18 suite: B1–B15 / W1–W20, number formats, price-per units, code normalisation, no packaging rounding, critical attributes, duplicates D1–D5 |
 | **4e** | Orders write | `CreateReceivedOrder` (items: branch warehouse) → read-back → W6g. Undo. Confirmation and clarification e-mails (snapshot tests). Changes and cancellations as a diff card + task + reply (W8d), **never `EditReceivedOrder`**. W8 list. | W6g, W8 `56:46543`, W8d `56:47238` | 15 (confirmation templates) | state machine and idempotency (ORDERS_SPEC §9), read-back equal, confirmation diff, e-mail snapshots |
 | **4f** | Complaints | `CreateReceivedComplaint` from an e-mail; same write pattern (JWT, SMID, read-back, undo). | W8c `57:47788` | — | write pattern tests, extraction fixtures |
 | **4g** | New company / contact | `CreateCompany` / person from a confirmed suggestion. IČO/DIČ/IČ DPH checks, duplicates by IČO and e-mail. | Zákazník panel W3b („Založiť v Money“), W9a | — | validation of IČO/IBAN/VAT, duplicates, write pattern |
@@ -66,23 +66,22 @@ Notes:
   - 20 real orders from 10 customers: 0 wrong quantities or prices, 0 duplicates, read-back equal in 100 %, ≥ 90 % auto-matched for returning customers, median time from opening the card to the order created in Money < 60 s.
 - **Mobile, Figma screenshots and axe:** every screen milestone includes the mobile counterpart, Playwright screenshots next to the Figma frames, and axe checks.
 
-## 2. Customer order prices (`ORDER_PRICE_MODE`)
+## 2. Customer order prices (Erik, #191)
 
-**Fact:**
-- `ProdejniCeny(FirmaID)` returns 0 rows on TEST, also with `SkladID` (#176).
-- Erik's decision: customer orders use the branch price list **„bez DPH“** (`10-bez DPH`, `20-…`, `30-…`, `40-…`).
+**Decision:** the price comes from **the price list set on the order's branch** (Settings 11e
+`money_price_list_id`). It is whatever list the admin picked, not a hard-coded „bez DPH“ list. Details: ORDERS_SPEC §8.2.
 
-**Proposal** (`ORDER_PRICE_MODE = branch_price_list`), in this order per line:
-1. **An accepted offer exists** for the customer and article → the offer price (`price_source = offer`).
-2. **Otherwise the branch price list „bez DPH“.** Read `PriceListItems(Filter:"Cenik_ID~eq~<branch list>#Artikl_ID~eq~<article>")` and take `Cena` (`price_source = price_list`, `price_meta = {Cenik_ID, TypCeny, MnozstevniSleva_ID}`).
-   - If `ProdejniCeny` turns out to work with other arguments (probe `--phase4`), it is preferred, because it already applies Money's own discount logic.
-3. **Company discount.** `HodnotaSlevy` applies only when Money applies it on its own documents.
-   - The probe shows whether companies have it and whether price lists are assigned (`SeznamCeniku`).
-   - Until that is confirmed, the discount is **shown, not applied**, and `price_reason` explains it.
-4. **No rounding to packaging. No stock.** The quantity stays as the customer wrote it, after unit conversion (D6, D17).
-5. **Customer price vs our price.** If the customer wrote a price and it differs beyond the tolerance (Settings 15), the line gets a warning (W-rule), never an automatic change.
+1. **Branch price list.**
+   - `PriceListItems(Filter:"Cenik_ID~eq~<branch list>#Artikl_ID~eq~<article>")` → `Cena` (`price_source = price_list`, `price_meta = {Cenik_ID, TypCeny, MnozstevniSleva_ID}`).
+   - If `ProdejniCeny(FirmaID, SkladID = branch warehouse)` returns the price of that list, it is used instead (probe `--phase4`).
+2. **No price list on the branch → blocking B15.** The order cannot be created; the card links to Settings 11e.
+3. **Manual price** (sales/admin, with a reason) stays possible.
+4. **Offer price** (`price_source = offer`) comes with **Phase 6**, not now.
+5. **Company discount** (`HodnotaSlevy`, `VlastniSleva`) is **shown, not applied**, until it is verified how Money applies it (ORDERS_SPEC §8.2 double discount guard).
+6. **No packaging rounding. No stock** (D6, D17).
+7. `ORDER_PRICE_MODE` keeps its ORDERS_SPEC meaning: how the price is **written** (`explicit_net` / `base_plus_discount`). The double discount test on TEST decides it in 4e.
 
-**Read-only check on TEST:** `money_probe.py --phase4` (PR #190), steps „Branch price lists bez DPH“ and `ProdejniCeny` for an article from a branch price list. 4d starts only when the result confirms which field holds the price (`Cena`) and what `TypCeny` 0/1 mean for it. Meanings are copied from existing orders (`orders.md`: `TypCeny` 0 = 861, 1 = 35), never guessed.
+**Read-only check:** `money_probe.py --phase4` reads the branch price lists. These are all price lists with a default warehouse; `PROBE_PRICE_LISTS` can name the codes set in 11e. The probe reports which field holds the price.
 
 ## 3. The first Money write on TEST
 
@@ -151,7 +150,16 @@ later is asked again (CLAUDE.md §0).
 - **Credit notes and other `TypDokladu` values** are unknown. Phase 4 does not depend on them (only the „posledná faktúra“ feature #182 does).
 - **OCR quality** on scanned supplier documents. Golden fixtures cover text PDFs first; scans are measured in shadow mode.
 
-## Otázka pre Erika
+## Odpovede Erika (#191, 2026-11-02)
+- 1 Poradie 4a–4h: **áno**.
+- 2 Ceny: **cenník nastavený na pobočke** (§2), ponuka až vo fáze 6, zľava firmy len zobrazená, pobočka bez cenníka = blokujúca kontrola (B15).
+- 5 Tieňový režim a prahy: **áno**.
+- 7 Dátový model: **áno**. Každá tabuľka príde vo svojom míľniku s vlastnou migráciou. Stĺpce alebo tabuľky mimo §5 ešte pôjdu na schválenie.
+- 3, 4, 6, 8: ešte bez odpovede. Sú potrebné až pri 4c/4e a neblokujú 4a–4b.
+  - Pri 6 dočasne platí návrh: zákazník + dátum + suma ±10 %.
+- Do Money sa nezapisuje, kým nie je hotový test zápisu aktivity (#189) a kým Erik nedá súhlas na prvý zápis dokladu na TEST.
+
+## Otázky z pôvodného plánu (pre záznam)
 
 1. **Poradie míľnikov.** Navrhujem 4a–4c (dodací list prijatý až po prvý zápis), potom 4d–4e (objednávky), potom 4f reklamácie, 4g nová firma/kontakt a 4h Doklady a zapnutie. Súhlasíš?
 2. **Ceny objednávok.**

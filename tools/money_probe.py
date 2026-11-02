@@ -20,7 +20,8 @@ Purpose
   PROBE_DL_NUMBER + PROBE_DL_DOKLAD_PRIJATY - whether "Doklad prijatý" is stored in Odkaz. -> probe_output/branches.md
 
   With --phase4 (read-only) it lists which fields existing CRM activities fill (#189: the first test write copies
-  them) and checks the branch price lists "bez DPH" via PriceListItems, the company discount / price-list
+  them) and checks the branch price lists (PROBE_PRICE_LISTS = codes set in Settings 11e, else every active list with
+  a default warehouse) via PriceListItems, the company discount / price-list
   assignment and ProdejniCeny for an article of a branch price list (#188, PROBE_COMPANY_ICO). -> probe_output/phase4.md
 
 Safety
@@ -48,6 +49,7 @@ Usage
      PROBE_INVOICE_NUMBER=FV2026/0123               # an existing issued invoice number (cisloDokladu)
      # PROBE_DL_NUMBER=302600123                     # --branches: an existing received delivery note number
      # PROBE_DL_DOKLAD_PRIJATY=FA-2026-00456       # --branches: its "Doklad prijatý" exactly as shown in Money
+     # PROBE_PRICE_LISTS=10-bez DPH,20-bez DPH        # --phase4: price-list codes set on the branches (Settings 11e)
      PROBE_EMAIL=novak@abcstav.sk                    # e-mail of a contact person that exists in the address book
      PROBE_ARTICLE=DIN 933                           # a code or name fragment of an existing article
      PROBE_COMPANY_ICO=12345678                      # IČO of an existing customer (for customer prices)
@@ -959,8 +961,15 @@ def phase4_activities(http):
 
 def phase4_prices(http):
     out = {}
-    lists = (gql(http, "{ PriceLists(Count:50){ ID Kod Nazev Neaktivni } }")[1] or {}).get("PriceLists") or []
-    branch = [x for x in lists if "bez DPH" in str(x.get("Nazev") or "") and not x.get("Neaktivni")]
+    lists = (gql(http, "{ PriceLists(Count:50){ ID Kod Nazev Neaktivni VychoziSklad_ID } }")[1] or {}).get("PriceLists") or []
+    # #191: the order price comes from the price list SET ON THE BRANCH (Settings 11e). PROBE_PRICE_LISTS names those
+    # codes (comma separated, e.g. "10-bez DPH,20-bez DPH"); without it every active list with a default warehouse
+    # (= a branch list) is checked.
+    wanted = [c.strip() for c in (env("PROBE_PRICE_LISTS") or "").split(",") if c.strip()]
+    if wanted:
+        branch = [x for x in lists if str(x.get("Kod")) in wanted]
+    else:
+        branch = [x for x in lists if x.get("VychoziSklad_ID") and not x.get("Neaktivni")]
     per_list = {}
     sample_article = None
     for pl in branch:
@@ -978,7 +987,8 @@ def phase4_prices(http):
         }
         if sample_article is None and items:
             sample_article = (pl, items[0].get("Artikl_ID"))
-    out["branch_price_lists_bez_DPH"] = per_list
+    out["price_lists_checked"] = "PROBE_PRICE_LISTS" if wanted else "all active lists with a default warehouse"
+    out["branch_price_lists"] = per_list
     ico = env("PROBE_COMPANY_ICO")
     if ico:
         _, d, e, _ = gql(http, 'query($f:String){ Companies(Filter:$f, Count:1){ ID HodnotaSlevy VlastniSleva '
@@ -991,8 +1001,9 @@ def phase4_prices(http):
             # ProdejniCeny once more for an article that is surely in a branch price list, with that warehouse
             if sample_article and sample_article[1]:
                 whs = (gql(http, "{ Warehouses(Count:50){ ID Kod } }")[1] or {}).get("Warehouses") or []
-                code = str(sample_article[0].get("Kod") or "")[:2]
-                wh = next((w for w in whs if str(w.get("Kod")) == code), None)
+                default_wh = sample_article[0].get("VychoziSklad_ID")
+                wh = next((w for w in whs if w.get("ID") == default_wh), None)
+                code = str(wh.get("Kod")) if wh else None
                 _, d2, e2, _ = gql(http, 'query($id:Guid!,$s:Guid,$f:String){ ProdejniCeny(FirmaID:$id, SkladID:$s, '
                                          'Filter:$f, Count:5){ Artikl_ID CenaBezDane CenaBezDanePoSleve Sleva '
                                          'CenikKod TypCeny } }',
@@ -1010,7 +1021,7 @@ def phase4_prices(http):
         out["company"] = "skipped - set PROBE_COMPANY_ICO"
     phase4_report["prices"] = out
     ok = any(isinstance(v, dict) and v.get("with_Cena") for v in per_list.values())
-    step("Branch price lists bez DPH (PriceListItems)", ok, note=f"{len(per_list)} lists, items with Cena: "
+    step("Branch price lists (PriceListItems)", ok, note=f"{len(per_list)} lists, items with Cena: "
          + ", ".join(f"{k}={v['with_Cena'] if isinstance(v, dict) else v}" for k, v in per_list.items()))
 
 
