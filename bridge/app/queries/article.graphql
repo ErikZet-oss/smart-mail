@@ -1,0 +1,7 @@
+query Article($id: ID!) {
+  Article(ID: $id) {
+    ID Deleted Hidden Kod Katalog Nazev CarovyKod
+    HlavniJednotka { Kod }
+    SeznamJednotek { Kod Mnozstvi DesetinnaMista }
+  }
+}

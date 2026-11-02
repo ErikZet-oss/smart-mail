@@ -357,3 +357,74 @@ async def test_deleted_company_and_persons_are_dropped() -> None:
     page = await backend.persons(None, 0, 2)
     assert [p.id for p in page.items] == [pid] and page.next_from == 2
     await backend.aclose()
+
+
+@respx.mock
+async def test_4b_articles_and_supplier_codes_from_the_api_shape() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    art_id, sup_id = uuid.uuid4(), uuid.uuid4()
+    seen: list[dict[str, Any]] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen.append(body["variables"])
+        if "ArticleSuppliers" in body["query"]:
+            return _envelope(
+                {
+                    "ArticleSuppliers": [
+                        {
+                            "ID": str(uuid.uuid4()),
+                            "Deleted": False,
+                            "Parent_ID": str(art_id),
+                            "Firma_ID": str(sup_id),
+                            "DodavatelskyKod": "934-10-A2",
+                            "DodavatelskyNazev": "Matica M10",
+                            "PosledniCena": 8.05,
+                            "Jednotka": {"Kod": "bal"},
+                            "ArtiklJednotka": {"Kod": "bal", "Mnozstvi": 200},
+                        },
+                        {
+                            "ID": str(uuid.uuid4()),
+                            "Deleted": True,
+                            "Parent_ID": str(art_id),
+                            "Firma_ID": str(sup_id),
+                            "DodavatelskyKod": "OLD",
+                        },
+                    ]
+                }
+            )
+        return _envelope(
+            {
+                "Articles": [
+                    {
+                        "ID": str(art_id),
+                        "Deleted": False,
+                        "Hidden": False,
+                        "Kod": "ART-3",
+                        "Katalog": "934-10-A2",
+                        "Nazev": "Matica DIN 934 M10 A2",
+                        "CarovyKod": None,
+                        "HlavniJednotka": {"Kod": "ks"},
+                        "SeznamJednotek": [
+                            {"Kod": "ks", "Mnozstvi": 1, "DesetinnaMista": 0},
+                            {"Kod": "bal", "Mnozstvi": 200, "DesetinnaMista": 0},
+                        ],
+                    },
+                ]
+            }
+        )
+
+    respx.post(f"{BASE}/graphql").mock(side_effect=answer)
+    backend = ApiBackend(settings())
+    from app.backend import ArticleQuery
+
+    arts = await backend.articles(ArticleQuery(code="934-10-A2"))
+    assert arts[0].catalog == "934-10-A2" and arts[0].units[1].qty == Decimal("200")
+    assert (
+        seen[0]["filter"] == "(Kod~eq~934-10-A2)|(Katalog~eq~934-10-A2)" or "Katalog~eq~934-10-A2" in seen[0]["filter"]
+    )
+    page = await backend.supplier_codes(sup_id, 0, 50)
+    assert [c.code for c in page.items] == ["934-10-A2"]  # the deleted row is dropped
+    assert page.items[0].last_price == Decimal("8.05") and isinstance(page.items[0].last_price, Decimal)
+    assert seen[1]["filter"] == f"Firma_ID~eq~{sup_id}"
+    await backend.aclose()

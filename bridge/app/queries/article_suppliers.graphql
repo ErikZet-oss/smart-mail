@@ -1,0 +1,7 @@
+query ArticleSuppliers($filter: String, $from: Int, $count: Int, $changeFrom: DateTime) {
+  ArticleSuppliers(Filter: $filter, From: $from, Count: $count, ChangeFrom: $changeFrom) {
+    ID Deleted Parent_ID Firma_ID DodavatelskyKod DodavatelskyNazev PosledniCena
+    Jednotka { Kod }
+    ArtiklJednotka { Kod Mnozstvi }
+  }
+}

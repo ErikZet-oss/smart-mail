@@ -143,3 +143,39 @@ class Health(_Model):
     backend: str
     agenda: str
     writes_enabled: bool
+
+
+# ----- Phase 4b: articles and supplier codes (read-only; mirrors bridge/app/models.py) -----
+
+
+class ArticleUnit(_Model):
+    code: str | None
+    qty: Decimal | None
+    decimals: int | None = None
+
+
+class Article(_Model):
+    id: uuid.UUID
+    code: str | None
+    catalog: str | None
+    name: str
+    ean: str | None
+    unit: str | None
+    units: list[ArticleUnit] = []
+    inactive: bool = False
+
+
+class SupplierCode(_Model):
+    article_id: uuid.UUID
+    supplier_id: uuid.UUID
+    code: str
+    name: str | None
+    last_price: Decimal | None
+    unit: str | None
+    article_unit: str | None
+    article_unit_qty: Decimal | None
+
+
+class SupplierCodePage(_Model):
+    items: list[SupplierCode]
+    next_from: int | None

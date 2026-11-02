@@ -8,10 +8,11 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Query, Response, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from app.ai.provider import get_llm_provider
@@ -23,7 +24,10 @@ from app.core.config import Settings
 from app.core.content_disposition import content_disposition_attachment
 from app.mail import storage
 from app.mail.clamav import scan_bytes
+from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.models import MoneyCodebook
+from app.money.schemas import Article
+from app.purchasing.item_matching import confirm_article, load_lines, mark_non_stock, match_document, needs_matching
 from app.purchasing.models import DocumentLine, SupplierDocument
 from app.purchasing.service import MAX_BYTES, DocumentRejected, Source, ingest
 
@@ -75,6 +79,11 @@ class LineOut(BaseModel):
     line_total: str | None
     is_fee: bool
     line_status: str
+    article_id: str | None = None
+    match_method: str | None = None
+    unit_factor: str | None = None
+    warehouse_id: str | None = None
+    candidates: list[dict[str, Any]] = []
 
 
 class DocumentDetail(DocumentOut):
@@ -86,6 +95,8 @@ class DocumentDetail(DocumentOut):
     field_confidence: dict[str, Any]
     checks: list[dict[str, Any]]
     message_id: str | None
+    version: int
+    money_available: bool = True
     items: list[LineOut]
 
 
@@ -247,13 +258,29 @@ async def _get(db: DB, doc_id: uuid.UUID) -> SupplierDocument:
     return doc
 
 
-@router.get("/documents/{doc_id}")
-async def get_document(doc_id: uuid.UUID, person: ActivePerson, db: DB, settings: SettingsDep) -> DocumentDetail:
-    _guard(settings, person)
-    doc = await _get(db, doc_id)
-    lines = list(
-        await db.scalars(select(DocumentLine).where(DocumentLine.document_id == doc.id).order_by(DocumentLine.line_no))
+def _line(ln: DocumentLine) -> LineOut:
+    return LineOut(
+        line_no=ln.line_no,
+        supplier_code=ln.supplier_code,
+        ean=ln.ean,
+        name=ln.name,
+        qty=_s(ln.qty),
+        unit=ln.unit,
+        unit_price=_s(ln.unit_price),
+        vat_rate=_s(ln.vat_rate),
+        line_total=_s(ln.line_total),
+        is_fee=ln.is_fee,
+        line_status=ln.line_status,
+        article_id=_s(ln.article_id),
+        match_method=ln.match_method,
+        unit_factor=_s(ln.unit_factor),
+        warehouse_id=_s(ln.warehouse_id),
+        candidates=ln.candidates or [],
     )
+
+
+async def _detail(db: DB, doc: SupplierDocument, *, money_available: bool = True) -> DocumentDetail:
+    lines = await load_lines(db, doc)
     return DocumentDetail(
         **_out(doc, len(lines), await _branches(db)),
         delivery_note_number=doc.delivery_note_number,
@@ -264,23 +291,150 @@ async def get_document(doc_id: uuid.UUID, person: ActivePerson, db: DB, settings
         field_confidence=doc.field_confidence or {},
         checks=doc.validation or [],
         message_id=_s(doc.message_id),
-        items=[
-            LineOut(
-                line_no=ln.line_no,
-                supplier_code=ln.supplier_code,
-                ean=ln.ean,
-                name=ln.name,
-                qty=_s(ln.qty),
-                unit=ln.unit,
-                unit_price=_s(ln.unit_price),
-                vat_rate=_s(ln.vat_rate),
-                line_total=_s(ln.line_total),
-                is_fee=ln.is_fee,
-                line_status=ln.line_status,
-            )
-            for ln in lines
-        ],
+        version=doc.version,
+        money_available=money_available,
+        items=[_line(ln) for ln in lines],
     )
+
+
+MATCHABLE = ("needs_review", "missing_data")
+
+
+@router.get("/documents/{doc_id}")
+async def get_document(doc_id: uuid.UUID, person: ActivePerson, db: DB, settings: SettingsDep) -> DocumentDetail:
+    """W6h. The first open runs the item matching (read-only bridge calls); Money down → lines stay as they are."""
+    _guard(settings, person)
+    doc = await _get(db, doc_id)
+    available = True
+    if doc.status in MATCHABLE and needs_matching(await load_lines(db, doc)):
+        async with BridgeClient(settings) as bridge:
+            available = await match_document(db, bridge, doc)
+        await db.commit()
+    return await _detail(db, doc, money_available=available)
+
+
+@router.post("/documents/{doc_id}/match")
+async def rematch_document(doc_id: uuid.UUID, person: ActivePerson, db: DB, settings: SettingsDep) -> DocumentDetail:
+    """„Znova spárovať“: re-runs the cascade for lines not decided by a person."""
+    _guard(settings, person)
+    doc = await _get(db, doc_id)
+    if doc.status not in MATCHABLE:
+        raise fail(409, "document_not_reviewable")
+    async with BridgeClient(settings) as bridge:
+        available = await match_document(db, bridge, doc)
+    await db.commit()
+    return await _detail(db, doc, money_available=available)
+
+
+class ConfirmArticleIn(BaseModel):
+    article_id: uuid.UUID
+    unit_factor: Decimal = Field(default=Decimal("1"), gt=0, max_digits=18, decimal_places=6)
+    learn: bool = True  # remember supplier code → article for this supplier
+    version: int
+
+
+class NonStockIn(BaseModel):
+    version: int
+
+
+async def _line_for(db: DB, doc: SupplierDocument, line_no: int, version: int) -> DocumentLine:
+    if doc.status not in MATCHABLE:
+        raise fail(409, "document_not_reviewable")
+    if doc.version != version:
+        raise fail(409, "version_conflict")
+    line = await db.scalar(
+        select(DocumentLine).where(DocumentLine.document_id == doc.id, DocumentLine.line_no == line_no)
+    )
+    if line is None or line.is_fee:
+        raise fail(404, "line_not_found")
+    return line
+
+
+@router.post("/documents/{doc_id}/lines/{line_no}/article")
+async def confirm_line_article(
+    doc_id: uuid.UUID,
+    line_no: int,
+    body: ConfirmArticleIn,
+    ctx: Auth,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+) -> DocumentDetail:
+    """The person picks the Money article of a line; with `learn` the supplier code is remembered (DL-W6 until it is
+    in the Money article card)."""
+    _guard(settings, person)
+    doc = await _get(db, doc_id)
+    line = await _line_for(db, doc, line_no, body.version)
+    try:
+        async with BridgeClient(settings) as bridge:
+            article = await bridge.article(body.article_id)
+    except BridgeUnavailable as exc:
+        raise fail(503, exc.code) from None
+    if article is None or article.inactive:
+        raise fail(422, "article_not_found")
+    await confirm_article(db, doc, line, article, body.unit_factor, person.id, learn=body.learn)
+    audit(
+        db,
+        "purchasing.line_article_confirmed",
+        account_id=ctx.account.id,
+        person_id=person.id,
+        object_type="document",
+        object_id=str(doc.id),
+        details={"line_no": line_no, "article_id": str(article.id), "learn": body.learn},
+    )
+    await db.commit()
+    return await _detail(db, doc)
+
+
+@router.post("/documents/{doc_id}/lines/{line_no}/non-stock")
+async def line_non_stock(
+    doc_id: uuid.UUID,
+    line_no: int,
+    body: NonStockIn,
+    ctx: Auth,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+) -> DocumentDetail:
+    """„Neskladová položka“ (DL-B4): the line is written without an article in 4c."""
+    _guard(settings, person)
+    doc = await _get(db, doc_id)
+    line = await _line_for(db, doc, line_no, body.version)
+    await mark_non_stock(db, doc, line)
+    audit(
+        db,
+        "purchasing.line_non_stock",
+        account_id=ctx.account.id,
+        person_id=person.id,
+        object_type="document",
+        object_id=str(doc.id),
+        details={"line_no": line_no},
+    )
+    await db.commit()
+    return await _detail(db, doc)
+
+
+@router.get("/articles")
+async def search_articles(
+    person: ActivePerson,
+    settings: SettingsDep,
+    q: Annotated[str, Query(min_length=2, max_length=80)],
+) -> list[Article]:
+    """Article picker of W6h: by EAN (digits only), else by code / catalog, else by name."""
+    _guard(settings, person)
+    term = q.strip()
+    if set(term) & set("~#|()"):
+        raise fail(422, "unsafe_query")
+    try:
+        async with BridgeClient(settings) as bridge:
+            if term.isdigit() and len(term) >= 8:
+                found = await bridge.search_articles(ean=term)
+                if found:
+                    return found
+            found = await bridge.search_articles(code=term)
+            return found or await bridge.search_articles(q=term)
+    except BridgeUnavailable as exc:
+        raise fail(503, exc.code) from None
 
 
 @router.get("/documents/{doc_id}/file")

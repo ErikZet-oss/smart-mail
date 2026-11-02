@@ -13,11 +13,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from app.backend import InvoiceQuery
+from app.backend import ArticleQuery, InvoiceQuery
 from app.models import (
     Activity,
     ActivityIn,
     ActivityOut,
+    Article,
+    ArticleUnit,
     CodebookItem,
     CodebookName,
     CodebookPage,
@@ -33,6 +35,8 @@ from app.models import (
     OverduePage,
     Person,
     PersonPage,
+    SupplierCode,
+    SupplierCodePage,
 )
 
 NS = uuid.UUID("5a1d0b5e-0000-4000-8000-000000000000")
@@ -91,6 +95,8 @@ class MockData:
     deliveries: list[Delivery] = field(default_factory=list)
     activities: list[Activity] = field(default_factory=list)
     codebooks: dict[str, list[CodebookItem]] = field(default_factory=dict)
+    articles: list[Article] = field(default_factory=list)
+    supplier_codes: list[SupplierCode] = field(default_factory=list)
 
 
 def _money(rng: random.Random, low: int, high: int) -> Decimal:
@@ -225,7 +231,44 @@ def build(seed: int = 20261030) -> MockData:
                 done=True,
             )
         )
+    _articles(data)
     return data
+
+
+# (our code, catalog, name, EAN, supplier code of company 1, unit of supplier code + its size in pieces)
+_ARTICLES = [
+    ("ART-0001", "933-8-30-ZN", "Skrutka DIN 933 M8x30 8.8 Zn (fiktívna)", "8590000000017", "D933-830", ("ks", 1)),
+    ("ART-0002", "933-10-30-A2", "Skrutka DIN 933 M10x30 A2 (fiktívna)", "8590000000024", "933-10-30-A2", ("ks", 1)),
+    ("ART-0003", "934-10-A2", "Matica DIN 934 M10 A2 (fiktívna)", "8590000000031", "934-10-A2", ("bal", 200)),
+    ("ART-0004", "125-8-ZN", "Podložka DIN 125 M8 Zn (fiktívna)", "8590000000048", "125-8-ZN", ("bal", 500)),
+    ("ART-0005", "912-6-20-ZN", "Skrutka DIN 912 M6x20 Zn (fiktívna)", "8590000000055", None, None),
+    ("ART-0006", "1481-6-40", "Kolík DIN 1481 6x40 (fiktívny)", None, "K1481-640", ("ks", 1)),
+]
+
+
+def _articles(data: MockData) -> None:
+    supplier = data.companies[0].id  # a fictional company is also a supplier in the mock
+    for n, (code, catalog, name, ean, sup_code, sup_unit) in enumerate(_ARTICLES, start=1):
+        units = [ArticleUnit(code="ks", qty=Decimal("1"), decimals=0)]
+        if sup_unit and sup_unit[0] == "bal":
+            units.append(ArticleUnit(code="bal", qty=Decimal(sup_unit[1]), decimals=0))
+        article = Article(
+            id=mid("article", n), code=code, catalog=catalog, name=name, ean=ean, unit="ks", units=units, inactive=False
+        )
+        data.articles.append(article)
+        if sup_code and sup_unit:
+            data.supplier_codes.append(
+                SupplierCode(
+                    article_id=article.id,
+                    supplier_id=supplier,
+                    code=sup_code,
+                    name=name.replace(" (fiktívna)", "").replace(" (fiktívny)", ""),
+                    last_price=Decimal("0.0840") if sup_unit[0] == "ks" else Decimal("8.0500"),
+                    unit=sup_unit[0],
+                    article_unit=sup_unit[0],
+                    article_unit_qty=Decimal(sup_unit[1]),
+                )
+            )
 
 
 def _newest_first[T: (IssuedInvoice, Order, Delivery)](items: list[T]) -> list[T]:
@@ -340,3 +383,26 @@ class MockBackend:
         if inv is None:
             return None
         return minimal_pdf(f"FIKTIVNY DOKLAD {inv.number} - Smart Mail mock")
+
+    # ----- Phase 4b (read-only) -----
+
+    async def articles(self, query: ArticleQuery) -> list[Article]:
+        rows = self.data.articles
+        if query.ean:
+            found = [a for a in rows if a.ean == query.ean]
+        elif query.code:
+            found = [a for a in rows if query.code in (a.code, a.catalog)]
+        elif query.text:
+            t = query.text.lower()
+            found = [a for a in rows if t in a.name.lower() or t in (a.catalog or "").lower()]
+        else:
+            found = []
+        return found[:20]
+
+    async def article(self, article_id: uuid.UUID) -> Article | None:
+        return next((a for a in self.data.articles if a.id == article_id), None)
+
+    async def supplier_codes(self, supplier_id: uuid.UUID, start: int, count: int) -> SupplierCodePage:
+        rows = [c for c in self.data.supplier_codes if c.supplier_id == supplier_id]
+        page = rows[start : start + count]
+        return SupplierCodePage(items=page, next_from=start + count if start + count < len(rows) else None)

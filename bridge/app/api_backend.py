@@ -16,14 +16,16 @@ from typing import Any
 
 import httpx
 
-from app.backend import InvoiceQuery, MoneyError, WaitingForProbe
+from app.backend import ArticleQuery, InvoiceQuery, MoneyError, WaitingForProbe
 from app.config import BridgeSettings
-from app.filters import all_, cond
+from app.filters import all_, any_, cond
 from app.gql_client import TIMEOUT, MoneyHttp, TokenProvider
 from app.models import (
     Activity,
     ActivityIn,
     ActivityOut,
+    Article,
+    ArticleUnit,
     CodebookItem,
     CodebookName,
     CodebookPage,
@@ -39,6 +41,8 @@ from app.models import (
     OverduePage,
     Person,
     PersonPage,
+    SupplierCode,
+    SupplierCodePage,
 )
 
 CODEBOOK_QUERIES: dict[str, tuple[str, str]] = {
@@ -49,6 +53,7 @@ CODEBOOK_QUERIES: dict[str, tuple[str, str]] = {
 }
 REPORT_PATHS: dict[InvoiceKind, str] = {"invoice": "IssuedInvoice", "proforma": "PrepaymentIssuedInvoice"}
 SEARCH_LIMIT = 20
+ARTICLE_LIMIT = 20
 HISTORY_LIMIT = 200
 
 
@@ -200,6 +205,54 @@ def person_from(raw: dict[str, Any]) -> Person:
         function=_s(raw.get("funkce")),
         email=_s(raw.get("email")),
         phone=_s(raw.get("tel1cislo")),
+    )
+
+
+def _unit(raw: Any) -> ArticleUnit | None:
+    if not isinstance(raw, dict):
+        return None
+    dec = raw.get("DesetinnaMista")
+    return ArticleUnit(
+        code=_s(raw.get("Kod")),
+        qty=None if raw.get("Mnozstvi") is None else _dec(raw.get("Mnozstvi")),
+        decimals=None if dec is None else int(_dec(dec)),
+    )
+
+
+def article_from(raw: dict[str, Any]) -> Article:
+    main: dict[str, Any] = raw["HlavniJednotka"] if isinstance(raw.get("HlavniJednotka"), dict) else {}
+    units = [u for u in (_unit(x) for x in raw.get("SeznamJednotek") or []) if u is not None]
+    return Article(
+        id=_required_uuid(raw.get("ID")),
+        code=_s(raw.get("Kod")),
+        catalog=_s(raw.get("Katalog")),
+        name=_s(raw.get("Nazev")) or "",
+        ean=_s(raw.get("CarovyKod")),
+        unit=_s(main.get("Kod")),
+        units=units,
+        inactive=raw.get("Hidden") is True,
+    )
+
+
+def supplier_code_from(raw: dict[str, Any]) -> SupplierCode | None:
+    article_id, supplier_id, code = (
+        _uuid(raw.get("Parent_ID")),
+        _uuid(raw.get("Firma_ID")),
+        _s(raw.get("DodavatelskyKod")),
+    )
+    if article_id is None or supplier_id is None or code is None:
+        return None
+    unit: dict[str, Any] = raw["Jednotka"] if isinstance(raw.get("Jednotka"), dict) else {}
+    art_unit: dict[str, Any] = raw["ArtiklJednotka"] if isinstance(raw.get("ArtiklJednotka"), dict) else {}
+    return SupplierCode(
+        article_id=article_id,
+        supplier_id=supplier_id,
+        code=code,
+        name=_s(raw.get("DodavatelskyNazev")),
+        last_price=None if raw.get("PosledniCena") is None else _dec(raw.get("PosledniCena")),
+        unit=_s(unit.get("Kod")),
+        article_unit=_s(art_unit.get("Kod")),
+        article_unit_qty=None if art_unit.get("Mnozstvi") is None else _dec(art_unit.get("Mnozstvi")),
     )
 
 
@@ -390,3 +443,33 @@ class ApiBackend:
         """The original Money PDF (never rendered by Smart Mail, DOCUMENTS_SPEC §6). `report_id` comes from
         Settings 13b in the main app."""
         return await self._money.rest_bytes(f"{REPORT_PATHS[kind]}/{invoice_id}/Report/{report_id}")
+
+    # ----- Phase 4b (read-only): item matching (MONEY_API §5.5.3) -----
+
+    async def articles(self, query: ArticleQuery) -> list[Article]:
+        if query.ean:
+            filter_ = cond("CarovyKod", "eq", query.ean)
+        elif query.code:
+            filter_ = any_(cond("Kod", "eq", query.code), cond("Katalog", "eq", query.code))
+        elif query.text:
+            filter_ = any_(cond("Nazev", "ct", query.text), cond("Katalog", "ct", query.text))
+        else:
+            return []
+        rows = await self._list("articles", "Articles", filter_=filter_, count=ARTICLE_LIMIT)
+        return [article_from(r) for r in rows]
+
+    async def article(self, article_id: uuid.UUID) -> Article | None:
+        raw = (await self._money.graphql("article", {"id": str(article_id)})).get("Article")
+        return article_from(raw) if isinstance(raw, dict) and raw.get("ID") and _alive([raw]) else None
+
+    async def supplier_codes(self, supplier_id: uuid.UUID, start: int, count: int) -> SupplierCodePage:
+        count = min(count, self._page)
+        rows, next_from = await self._page_rows(
+            "article_suppliers",
+            "ArticleSuppliers",
+            filter_=cond("Firma_ID", "eq", supplier_id),
+            start=start,
+            count=count,
+        )
+        items = [c for c in (supplier_code_from(r) for r in rows) if c is not None]
+        return SupplierCodePage(items=items, next_from=next_from)

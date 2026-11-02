@@ -2,6 +2,16 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Phase 4b backend: item matching (read-only)
+
+- Bridge (read-only GraphQL): `GET /articles/search` (code / EAN / text; `~ # | ( )` → 422), `GET /articles/{id}`, `GET /suppliers/{id}/article-codes` (`ArticleSuppliers`, paged). Mock has 6 fictional articles. Contract fixture updated.
+- New table `supplier_item_mappings` (migration 0021, plan §5 approved in #191): supplier + normalized code → article, unit factor, confirmed by / at, uses.
+- Matching cascade per goods line (`app/purchasing/item_matching.py`): supplier code in Money → learned mapping → EAN → our code / catalog → up to 5 text candidates for the user. Runs on the first open of the document (W6h) and on `POST …/match`. Lines decided by a person are never overwritten. Money down → lines stay as they were and the detail says `money_available: false`.
+- Unit conversion with the supplier code's `article_unit_qty` (1 bal = 200 ks). The document quantity is never changed or rounded (D6/D17).
+- Line APIs: confirm article (+ learn the mapping), „Neskladová položka“, article picker search. Optimistic lock: a stale `version` → 409.
+- Rules DL-B4 (unmatched lines), DL-W1 (price differs from the last supplier price by more than 10 %), DL-W6 (learned mapping not yet in the Money card), DL-W8 (line warehouse is not the branch warehouse). The 10 % threshold becomes a Settings 14 field in 4b-3.
+- Not yet: cascade steps „open purchase order“ and „fastener attributes“ (follow-up), DL-W2 (needs purchase orders).
+
 ## [Unreleased] — Phase 4a UI: W6e Dodacie listy + W6u Nahrať doklad
 
 - **W6e** `/docs/delivery-notes` (Figma `46:41526`, M13 `85:3245`):

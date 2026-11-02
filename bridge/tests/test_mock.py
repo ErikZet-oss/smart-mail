@@ -76,3 +76,19 @@ def test_182_company_window_returns_the_whole_window_not_20() -> None:
             best = out
     assert best is not None and best["matched_by"] == "company_dates"
     assert len(best["items"]) > 20  # fictional seed: some customer has more than one page of 20
+
+
+def test_4b_articles_and_supplier_codes_mock() -> None:
+    client = make_client()
+    data = build()
+    supplier = data.companies[0].id
+    assert client.get("/articles/search?code=933-10-30-A2").json()[0]["code"] == "ART-0002"
+    assert client.get("/articles/search?ean=8590000000031").json()[0]["catalog"] == "934-10-A2"
+    assert [a["code"] for a in client.get("/articles/search?q=din%20933").json()] == ["ART-0001", "ART-0002"]
+    assert client.get("/articles/search").status_code == 422
+    assert client.get("/articles/search?code=a%7Cb").status_code == 422  # `|` never reaches a filter
+    codes = client.get(f"/suppliers/{supplier}/article-codes").json()["items"]
+    nut = next(c for c in codes if c["code"] == "934-10-A2")
+    assert nut["unit"] == "bal" and nut["article_unit_qty"] == "200"
+    art = client.get(f"/articles/{nut['article_id']}").json()
+    assert [u["code"] for u in art["units"]] == ["ks", "bal"]
