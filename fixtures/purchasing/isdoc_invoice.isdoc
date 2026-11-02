@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FICTIONAL supplier invoice for tests (Phase 4a). No real company, person or document. -->
+<Invoice xmlns="http://isdoc.cz/namespace/2013" version="6.0.2">
+  <DocumentType>1</DocumentType>
+  <ID>FA-2026-00456</ID>
+  <IssueDate>2026-10-28</IssueDate>
+  <LocalCurrencyCode>EUR</LocalCurrencyCode>
+  <AccountingSupplierParty>
+    <Party>
+      <PartyIdentification><ID>12345678</ID></PartyIdentification>
+      <PartyName><Name>Fiktívny dodávateľ s.r.o.</Name></PartyName>
+    </Party>
+  </AccountingSupplierParty>
+  <OrderReferences><OrderReference><SalesOrderID>OV2600123</SalesOrderID></OrderReference></OrderReferences>
+  <DeliveryNoteReferences><DeliveryNoteReference><ID>DL-77812</ID></DeliveryNoteReference></DeliveryNoteReferences>
+  <InvoiceLines>
+    <InvoiceLine>
+      <ID>1</ID>
+      <InvoicedQuantity unitCode="ks">5000</InvoicedQuantity>
+      <LineExtensionAmount>420.00</LineExtensionAmount>
+      <UnitPrice>0.084</UnitPrice>
+      <ClassifiedTaxCategory><Percent>23</Percent></ClassifiedTaxCategory>
+      <Item>
+        <Description>Skrutka DIN 933 M10x30 A2</Description>
+        <SellersItemIdentification><ID>933-10-30-A2</ID></SellersItemIdentification>
+        <CatalogueItemIdentification><ID>8590000000017</ID></CatalogueItemIdentification>
+      </Item>
+    </InvoiceLine>
+    <InvoiceLine>
+      <ID>2</ID>
+      <InvoicedQuantity unitCode="bal">12</InvoicedQuantity>
+      <LineExtensionAmount>96.60</LineExtensionAmount>
+      <UnitPrice>8.05</UnitPrice>
+      <ClassifiedTaxCategory><Percent>23</Percent></ClassifiedTaxCategory>
+      <Item>
+        <Description>Matica DIN 934 M10 A2 (bal. 200 ks)</Description>
+        <SellersItemIdentification><ID>934-10-A2</ID></SellersItemIdentification>
+      </Item>
+    </InvoiceLine>
+    <InvoiceLine>
+      <ID>3</ID>
+      <InvoicedQuantity unitCode="ks">1</InvoicedQuantity>
+      <LineExtensionAmount>12.50</LineExtensionAmount>
+      <UnitPrice>12.50</UnitPrice>
+      <ClassifiedTaxCategory><Percent>23</Percent></ClassifiedTaxCategory>
+      <Item><Description>Doprava</Description></Item>
+    </InvoiceLine>
+  </InvoiceLines>
+  <TaxTotal>
+    <TaxSubTotal>
+      <TaxableAmount>529.10</TaxableAmount>
+      <TaxAmount>121.69</TaxAmount>
+      <TaxCategory><Percent>23</Percent></TaxCategory>
+    </TaxSubTotal>
+  </TaxTotal>
+  <LegalMonetaryTotal><TaxInclusiveAmount>650.79</TaxInclusiveAmount></LegalMonetaryTotal>
+</Invoice>

@@ -11,4 +11,5 @@ import app.core.audit
 import app.documents.models
 import app.mail.compose_models
 import app.mail.models
-import app.money.models  # noqa: F401
+import app.money.models
+import app.purchasing.models  # noqa: F401

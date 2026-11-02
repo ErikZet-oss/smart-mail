@@ -1,0 +1,20 @@
+{
+  "_comment": "FICTIONAL golden output of app/purchasing/xmlparse.py for isdoc_invoice.isdoc (Phase 4a)",
+  "kind": "invoice",
+  "method": "isdoc",
+  "supplier_name": "Fiktívny dodávateľ s.r.o.",
+  "supplier_ico": "12345678",
+  "number": "FA-2026-00456",
+  "delivery_note_number": "DL-77812",
+  "order_reference": "OV2600123",
+  "issued_on": "2026-10-28",
+  "currency": "EUR",
+  "total": "650.79",
+  "vat_recap": [{"rate": "23", "base": "529.10", "vat": "121.69"}],
+  "lines": [
+    {"supplier_code": "933-10-30-A2", "ean": "8590000000017", "name": "Skrutka DIN 933 M10x30 A2", "qty": "5000", "unit": "ks", "unit_price": "0.084", "vat_rate": "23", "line_total": "420.00", "is_fee": false},
+    {"supplier_code": "934-10-A2", "ean": null, "name": "Matica DIN 934 M10 A2 (bal. 200 ks)", "qty": "12", "unit": "bal", "unit_price": "8.05", "vat_rate": "23", "line_total": "96.60", "is_fee": false},
+    {"supplier_code": null, "ean": null, "name": "Doprava", "qty": "1", "unit": "ks", "unit_price": "12.50", "vat_rate": "23", "line_total": "12.50", "is_fee": true}
+  ],
+  "confidence": {"*": 1.0}
+}
