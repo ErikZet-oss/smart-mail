@@ -1,9 +1,9 @@
-import { Mail, Menu, Users } from 'lucide-react';
+import { FileText, Mail, Menu, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-export type BottomSection = 'mail' | 'contacts' | 'more';
+export type BottomSection = 'mail' | 'documents' | 'contacts' | 'more';
 
 type ItemProps = {
   to?: string;
@@ -50,13 +50,15 @@ type Props = {
   onMore: () => void;
   /** Close M18 when leaving via E-mail / Kontakty. */
   onLeaveMore?: () => void;
+  /** Doklady entry (#193), decided by AppShell. */
+  showDocs?: boolean;
 };
 
 /**
- * M1 bottom nav — Phase 1 items only: E-mail, Kontakty, Viac.
- * Dnes / Doklady are not rendered (phases 5 / 4), same rule as W11.
+ * M1 bottom nav = rail order (SCREENS_SPEC §1): E-mail, (Dnes — Phase 5), Doklady, Kontakty, Viac.
+ * Doklady only with FEATURE_MONEY and a role with an allowed tab (#193), same rule as the rail.
  */
-export function BottomNav({ section, mailbox = 'default', unread = 0, onMore, onLeaveMore }: Props) {
+export function BottomNav({ section, mailbox = 'default', unread = 0, onMore, onLeaveMore, showDocs = false }: Props) {
   const { t } = useTranslation();
   const mailIcon =
     unread > 0 ? (
@@ -83,6 +85,15 @@ export function BottomNav({ section, mailbox = 'default', unread = 0, onMore, on
         icon={mailIcon}
         label={t('rail.mail')}
       />
+      {showDocs ? (
+        <NavItem
+          to="/docs/reminders"
+          onClick={onLeaveMore}
+          active={section === 'documents'}
+          icon={<FileText size={22} />}
+          label={t('rail.documents')}
+        />
+      ) : null}
       <NavItem
         to="/contacts/personal"
         onClick={onLeaveMore}

@@ -9,7 +9,6 @@ import { formatCount } from '../../features/mail/mailApi';
 import { PersonChip, type ChipExtra } from '../../features/persons/PersonChip';
 import { useTheme } from '../../features/prefs/ThemeProvider';
 import { fetchNotifications, NOTIFS_KEY } from '../../features/system/notificationsApi';
-import { useFeatures } from '../../features/system/features';
 import { useSystemUi } from '../../features/system/systemUi';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { Logo } from '../Logo';
@@ -94,15 +93,14 @@ function RailItem({
   );
 }
 
-type Props = { section: RailSection; mailbox: string; unread: number; onLogout: () => void };
+type Props = { section: RailSection; mailbox: string; unread: number; onLogout: () => void; showDocs?: boolean };
 
-/** G1 rail (72 px, dark). E-mail / Kontakty / Doklady (Phase 3e, only with FEATURE_MONEY) / Nastavenia + Notifikácie + O systéme. */
-export function Rail({ section, mailbox, unread, onLogout }: Props) {
+/** G1 rail (72 px, dark). E-mail / Doklady (FEATURE_MONEY + a role with a Doklady tab, #193) / Kontakty / Nastavenia + Notifikácie + O systéme. */
+export function Rail({ section, mailbox, unread, onLogout, showDocs = false }: Props) {
   const { t } = useTranslation();
   const low = useMediaQuery(LOW_RAIL_QUERY);
   const { theme, toggleTheme, classic, setClassic } = useTheme();
   const { open } = useSystemUi();
-  const features = useFeatures();
   const notifs = useQuery({ queryKey: NOTIFS_KEY, queryFn: fetchNotifications, staleTime: 30_000 });
   const systemDark =
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -159,13 +157,7 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
         active={section === 'mail'}
         badge={unread}
       />
-      <RailItem
-        icon={<Users size={20} />}
-        label={t('rail.contacts')}
-        to="/contacts/personal"
-        active={section === 'contacts'}
-      />
-      {features.money ? (
+      {showDocs ? (
         <RailItem
           icon={<FileText size={20} />}
           label={t('rail.documents')}
@@ -173,6 +165,12 @@ export function Rail({ section, mailbox, unread, onLogout }: Props) {
           active={section === 'documents'}
         />
       ) : null}
+      <RailItem
+        icon={<Users size={20} />}
+        label={t('rail.contacts')}
+        to="/contacts/personal"
+        active={section === 'contacts'}
+      />
       <RailItem
         icon={<Settings size={20} />}
         label={t('rail.settings')}

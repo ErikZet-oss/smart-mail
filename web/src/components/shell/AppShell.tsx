@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router-dom';
 
 import { fetchMe, logout } from '../../features/auth/authApi';
 import { ScreenM18 } from '../../features/more/ScreenM18';
+import { docsVisible } from '../../features/money/docsAccess';
+import { useFeatures } from '../../features/system/features';
 import { fetchPicker, PICKER_KEY } from '../../features/persons/personsApi';
 import { useIdleAsk } from '../../features/persons/useIdleAsk';
 import { CommandPaletteHost } from '../../features/search/CommandPalette';
@@ -41,7 +43,8 @@ function useOnline(): boolean {
 function bottomOf(section: RailSection, moreOpen: boolean): BottomSection {
   if (moreOpen) return 'more';
   if (section === 'contacts') return 'contacts';
-  if (section === 'settings' || section === 'documents') return 'more';
+  if (section === 'documents') return 'documents';
+  if (section === 'settings') return 'more';
   return 'mail';
 }
 
@@ -63,6 +66,8 @@ export function AppShell({ section, mailbox = 'default', unread = 0, children, h
   const mobile = useMediaQuery(MOBILE_QUERY);
   const [moreOpen, setMoreOpen] = useState(false);
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false });
+  const features = useFeatures();
+  const showDocs = docsVisible(features.money, me.data?.person?.role);
   const picker = useQuery({ queryKey: PICKER_KEY, queryFn: fetchPicker, enabled: me.data?.kind === 'branch' });
   useIdleAsk(picker.data?.idle_ask_minutes, (picker.data?.persons.length ?? 0) > 1);
   useGlobalShortcuts();
@@ -151,6 +156,7 @@ export function AppShell({ section, mailbox = 'default', unread = 0, children, h
             unread={unread}
             onMore={() => setMoreOpen(true)}
             onLeaveMore={() => setMoreOpen(false)}
+            showDocs={showDocs}
           />
         )}
         <DropZone />
@@ -161,7 +167,7 @@ export function AppShell({ section, mailbox = 'default', unread = 0, children, h
 
   return (
     <div className="flex h-full min-h-0">
-      <Rail section={section} mailbox={mailbox} unread={unread} onLogout={() => void signOut()} />
+      <Rail section={section} mailbox={mailbox} unread={unread} onLogout={() => void signOut()} showDocs={showDocs} />
       <div className="flex min-w-0 flex-1 flex-col">
         {online ? null : <Banner kind="offline" message={t('shell.offline')} />}
         <div className="flex min-h-0 flex-1">{children}</div>

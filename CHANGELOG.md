@@ -11,6 +11,13 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - The collapsed suggestion's hover used a non-existent token (`ai-100`); it now uses `ai-200`.
 - Shared helper `e2e/aiColors.ts`. e2e tests compare the computed colours with `--ai-600` / `--ai-200` / `--ai-50` in light and dark, and check that „Odoslať“ stays `--brand-primary-600`.
 
+## [Unreleased] — Doklady on mobile (#193)
+
+- Bottom nav: E-mail · Doklady · Kontakty · Viac, the same order as the rail (SCREENS_SPEC §1). Doklady appears only with FEATURE_MONEY and a role that has a Doklady tab (`docsVisible`, decided once in AppShell). On `/docs/*` Doklady is the active item.
+- Desktop rail: Doklady now comes before Kontakty.
+- W8b at 360 px follows Figma M13 `85:3245`. The module tabs are a scrollable segmented row, the active tab is scrolled into view, and debtors are cards instead of the wide table.
+- e2e tests check the bottom nav order and the role rule, the deep link `/docs/reminders` → Doklady active, nothing outside 360 px, and the desktop rail order.
+
 ## [Unreleased] — Probe `--phase4` (read-only, #188 #189)
 
 - `money_probe.py --phase4` writes `probe_output/phase4.md`. It lists the fields that existing CRM activities fill, as names and counts only. The first test write of an activity (#189) copies this shape instead of guessing it.
