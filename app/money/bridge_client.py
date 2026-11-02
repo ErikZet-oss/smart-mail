@@ -23,6 +23,7 @@ from app.core.config import Settings
 from app.money.schemas import (
     Activity,
     ActivityOut,
+    Article,
     CodebookName,
     CodebookPage,
     Company,
@@ -34,6 +35,8 @@ from app.money.schemas import (
     Order,
     OverduePage,
     PersonPage,
+    SupplierCode,
+    SupplierCodePage,
 )
 
 TIMEOUT = httpx.Timeout(15.0, connect=3.0)
@@ -194,6 +197,35 @@ class BridgeClient:
 
     async def activities(self, money_id: uuid.UUID) -> list[Activity]:
         return await self._list(Activity, f"/companies/{money_id}/activities")
+
+    # ----- Phase 4b (read-only): item matching -----
+
+    async def search_articles(
+        self, *, code: str | None = None, ean: str | None = None, q: str | None = None
+    ) -> list[Article]:
+        """A value with `~ # | ( )` answers 422 in the bridge → `bridge_422` (never a broken filter)."""
+        return await self._list(Article, "/articles/search", {"code": code, "ean": ean, "q": q})
+
+    async def article(self, article_id: uuid.UUID) -> Article | None:
+        data = await self._get(f"/articles/{article_id}", allow_404=True)
+        if data is None:
+            return None
+        try:
+            return Article.model_validate(data)
+        except ValidationError as exc:
+            raise BridgeUnavailable("bridge_contract") from exc
+
+    async def supplier_codes(self, supplier_id: uuid.UUID) -> list[SupplierCode]:
+        """All supplier codes of one supplier (paged by the bridge, at most 5 000 rows)."""
+        out: list[SupplierCode] = []
+        start: int | None = 0
+        while start is not None and len(out) < 5000:
+            page = await self._model(
+                SupplierCodePage, f"/suppliers/{supplier_id}/article-codes", {"from": start, "count": 500}
+            )
+            out.extend(page.items)
+            start = page.next_from
+        return out
 
     async def overdue(self, before: date, start: int, count: int) -> OverduePage:
         params = {"before": before.isoformat(), "from": start, "count": count}

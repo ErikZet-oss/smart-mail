@@ -9,10 +9,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
-from app.backend import InvoiceQuery, MoneyBackend
+from app.backend import ArticleQuery, InvoiceQuery, MoneyBackend
 from app.filters import UNSAFE, UnsafeFilterValue
 from app.models import (
     Activity,
+    Article,
     CodebookName,
     CodebookPage,
     Company,
@@ -24,6 +25,7 @@ from app.models import (
     Order,
     OverduePage,
     PersonPage,
+    SupplierCodePage,
 )
 
 router = APIRouter()
@@ -134,3 +136,35 @@ async def invoice_pdf(request: Request, kind: InvoiceKind, invoice_id: uuid.UUID
     if not pdf:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     return Response(content=pdf, media_type="application/pdf", headers={"Cache-Control": "no-store"})
+
+
+# ----- Phase 4b (read-only): item matching of supplier documents (MONEY_API §5.5.3) -----
+
+
+@router.get("/articles/search")
+async def search_articles(request: Request, code: _TEXT = None, ean: _TEXT = None, q: _TEXT = None) -> list[Article]:
+    """Exactly one of: `code` (Kod or Katalog, exact), `ean` (CarovyKod), `q` (name / catalog contains)."""
+    for name, value in (("code", code), ("ean", ean), ("q", q)):
+        if value and any(c in UNSAFE for c in value):
+            raise UnsafeFilterValue(name)
+    query = ArticleQuery(
+        code=(code or "").strip() or None, ean=(ean or "").strip() or None, text=(q or "").strip() or None
+    )
+    if not (query.code or query.ean or (query.text and len(query.text) >= 2)):
+        raise HTTPException(status_code=422, detail={"code": "search_criteria_required"})
+    return await _backend(request).articles(query)
+
+
+@router.get("/articles/{article_id}")
+async def get_article(request: Request, article_id: uuid.UUID) -> Article:
+    article = await _backend(request).article(article_id)
+    if article is None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return article
+
+
+@router.get("/suppliers/{supplier_id}/article-codes")
+async def supplier_article_codes(
+    request: Request, supplier_id: uuid.UUID, start: Start = 0, count: Count = 500
+) -> SupplierCodePage:
+    return await _backend(request).supplier_codes(supplier_id, start, count)

@@ -223,5 +223,53 @@
       }
     ],
     "next_from": 2
+  },
+  "articles": [
+    {
+      "id": "c5e46915-93c1-5335-ac44-0c87ef90e0c0",
+      "code": "ART-0003",
+      "catalog": "934-10-A2",
+      "name": "Matica DIN 934 M10 A2 (fiktívna)",
+      "ean": "8590000000031",
+      "unit": "ks",
+      "units": [
+        {
+          "code": "ks",
+          "qty": "1",
+          "decimals": 0
+        },
+        {
+          "code": "bal",
+          "qty": "200",
+          "decimals": 0
+        }
+      ],
+      "inactive": false
+    }
+  ],
+  "supplier_codes": {
+    "items": [
+      {
+        "article_id": "c96b114d-38fe-59af-b482-c168ac5b7f17",
+        "supplier_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+        "code": "D933-830",
+        "name": "Skrutka DIN 933 M8x30 8.8 Zn",
+        "last_price": "0.0840",
+        "unit": "ks",
+        "article_unit": "ks",
+        "article_unit_qty": "1"
+      },
+      {
+        "article_id": "e1d8a64c-333f-5e59-a57d-df87154b735e",
+        "supplier_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+        "code": "933-10-30-A2",
+        "name": "Skrutka DIN 933 M10x30 A2",
+        "last_price": "0.0840",
+        "unit": "ks",
+        "article_unit": "ks",
+        "article_unit_qty": "1"
+      }
+    ],
+    "next_from": 2
   }
 }

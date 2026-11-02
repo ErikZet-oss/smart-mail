@@ -1,0 +1,7 @@
+query Articles($filter: String, $from: Int, $count: Int, $changeFrom: DateTime) {
+  Articles(Filter: $filter, From: $from, Count: $count, ChangeFrom: $changeFrom) {
+    ID Deleted Hidden Kod Katalog Nazev CarovyKod
+    HlavniJednotka { Kod }
+    SeznamJednotek { Kod Mnozstvi DesetinnaMista }
+  }
+}

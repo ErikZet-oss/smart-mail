@@ -11,6 +11,7 @@ from app.models import (
     Activity,
     ActivityIn,
     ActivityOut,
+    Article,
     CodebookName,
     CodebookPage,
     Company,
@@ -22,6 +23,7 @@ from app.models import (
     Order,
     OverduePage,
     PersonPage,
+    SupplierCodePage,
 )
 
 
@@ -53,6 +55,15 @@ class InvoiceQuery:
     date_to: date | None = None
 
 
+@dataclass(frozen=True)
+class ArticleQuery:
+    """Exact code / catalog / EAN, or a name fragment — one of them (MONEY_API §5.5.3 steps 3, 4, 7)."""
+
+    code: str | None = None  # Kod or Katalog, exact
+    ean: str | None = None  # CarovyKod, exact
+    text: str | None = None  # Nazev / Katalog contains (manual search)
+
+
 class MoneyBackend(Protocol):
     async def version(self) -> str: ...
 
@@ -81,3 +92,10 @@ class MoneyBackend(Protocol):
     async def create_activity(self, activity: ActivityIn) -> ActivityOut: ...
 
     async def aclose(self) -> None: ...
+
+    # Phase 4b (read-only): item matching of supplier documents (MONEY_API §5.5.3)
+    async def articles(self, query: ArticleQuery) -> list[Article]: ...
+
+    async def article(self, article_id: uuid.UUID) -> Article | None: ...
+
+    async def supplier_codes(self, supplier_id: uuid.UUID, start: int, count: int) -> SupplierCodePage: ...

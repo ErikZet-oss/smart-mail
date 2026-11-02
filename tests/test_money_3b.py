@@ -61,6 +61,11 @@ def test_3b_contract_fixture_parses_with_the_app_models() -> None:
     CodebookPage.model_validate(data["sync_codebook_currencies"])
     for row in data["receivables"]:
         IssuedInvoice.model_validate(row)
+    # Phase 4b: articles and supplier codes (item matching)
+    from app.money.schemas import Article, SupplierCodePage
+
+    assert [Article.model_validate(a).catalog for a in data["articles"]] == ["934-10-A2"]
+    assert SupplierCodePage.model_validate(data["supplier_codes"]).items
 
 
 # ----- bridge client -----

@@ -158,3 +158,41 @@ class Health(_Model):
     backend: str
     agenda: str
     writes_enabled: bool
+
+
+# ----- Phase 4b: articles and supplier codes (read-only, MONEY_API §5.5.3–§5.5.4) -----
+
+
+class ArticleUnit(_Model):
+    code: str | None  # e.g. ks, bal
+    qty: Decimal | None  # how many main units (`Mnozstvi`), e.g. bal = 200 ks
+    decimals: int | None = None  # `DesetinnaMista`
+
+
+class Article(_Model):
+    id: uuid.UUID
+    code: str | None  # Kod
+    catalog: str | None  # Katalog
+    name: str
+    ean: str | None  # CarovyKod
+    unit: str | None  # main unit (HlavniJednotka.Kod)
+    units: list[ArticleUnit] = []
+    inactive: bool = False
+
+
+class SupplierCode(_Model):
+    """`ArticleSuppliers` row: the supplier's code for one of our articles."""
+
+    article_id: uuid.UUID
+    supplier_id: uuid.UUID
+    code: str
+    name: str | None
+    last_price: Decimal | None
+    unit: str | None  # unit the supplier sells in (`Jednotka.Kod`)
+    article_unit: str | None  # our unit that corresponds to it (`ArtiklJednotka.Kod`)
+    article_unit_qty: Decimal | None  # `ArtiklJednotka.Mnozstvi` (main units per supplier unit)
+
+
+class SupplierCodePage(_Model):
+    items: list[SupplierCode]
+    next_from: int | None

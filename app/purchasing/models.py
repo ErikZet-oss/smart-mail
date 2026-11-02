@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -84,3 +84,19 @@ class DocumentLine(IdMixin, TimestampMixin, Base):
     unit_factor: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))  # 4b
     warehouse_id: Mapped[uuid.UUID | None] = mapped_column()  # 4b
     line_status: Mapped[str] = mapped_column(String(16), default="unmatched")  # 4b
+
+
+class SupplierItemMapping(IdMixin, TimestampMixin, Base):
+    """Learned mapping supplier + normalized supplier code → Money article, confirmed by a person (MONEY_API §5.5.3)."""
+
+    __tablename__ = "supplier_item_mappings"
+    __table_args__ = (UniqueConstraint("supplier_money_id", "code_norm", name="uq_supplier_item_mappings"),)
+
+    supplier_money_id: Mapped[uuid.UUID] = mapped_column()
+    code_norm: Mapped[str] = mapped_column(String(64))
+    article_id: Mapped[uuid.UUID] = mapped_column()
+    unit_factor: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("1"), server_default="1")
+    confirmed_by_person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    uses_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
