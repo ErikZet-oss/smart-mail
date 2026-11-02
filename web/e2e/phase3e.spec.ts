@@ -145,9 +145,11 @@ test('3e W8b as in Figma: Doklady tabs, filters, last reminder with tone, contac
   await mockApi(page, { ...BASE, 'GET /api/money/reminders': { body: rows } });
   await page.goto('/docs/reminders');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Doklady');
-  await expect(page.getByRole('button', { name: 'Nahrať doklad' })).toBeDisabled();
+  // Phase 4a: accounting may upload supplier documents and open Dodacie listy (W6e)
+  await expect(page.getByRole('button', { name: 'Nahrať doklad' })).toBeEnabled();
   const tabs = page.getByRole('navigation', { name: 'Doklady' });
-  await expect(tabs.getByText('Dodacie listy')).toHaveAttribute('aria-disabled', 'true');
+  await expect(tabs.getByRole('link', { name: 'Dodacie listy' })).toHaveAttribute('href', '/docs/delivery-notes');
+  await expect(tabs.getByText('Objednávky')).toHaveAttribute('aria-disabled', 'true');
   await expect(tabs.getByText('Upomienky')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('tab', { name: 'Po splatnosti (2)' })).toHaveAttribute('aria-selected', 'true');
   const table = page.getByTestId('reminders-table');
@@ -199,13 +201,13 @@ test.describe('#193 Doklady on mobile @mobile', () => {
 
   test('#193 no Doklady in the bottom nav without a role or without FEATURE_MONEY', async ({ page }, info) => {
     test.skip(info.project.name !== 'mobile', 'mobile frame');
-    const WAREHOUSE = { ...ME, person: { ...ME.person, role: 'warehouse' } };
+    const WAREHOUSE = { ...ME, person: { ...ME.person, role: 'viewer' } }; // no Doklady tab for viewer
     await mockApi(page, {
       ...BASE,
       'GET /api/auth/me': { body: WAREHOUSE },
       'GET /api/auth/persons': { body: { ...ME_PICKER, persons: [WAREHOUSE.person] } },
     });
-    await page.goto('/docs/reminders'); // a warehouse person only gets the role banner here
+    await page.goto('/docs/reminders'); // a viewer only gets the role banner here
     await expect(page.getByText('Upomienky pripravuje účtovníctvo, obchod alebo správca.')).toBeVisible();
     const nav = page.getByTestId('bottom-nav');
     await expect(nav.getByRole('link', { name: 'Kontakty' })).toBeVisible();

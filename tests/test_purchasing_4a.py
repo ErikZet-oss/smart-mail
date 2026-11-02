@@ -428,3 +428,32 @@ async def test_4a_mail_intake_once_per_message_and_never_from_private_folders(
     other = await _mail_with_attachment(db, settings, mailbox, "Nitra")
     await intake_supplier_documents(db, mailbox, on)
     assert await db.scalar(select(SupplierDocument).where(SupplierDocument.message_id == other.id)) is None
+
+
+async def test_4a_list_shows_branch_codes_and_searches(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, money_on: None
+) -> None:
+    from app.auth.models import Branch, Person
+    from app.money.models import MoneyCodebook
+
+    await _signed_in(client, db, mail_server, role=Role.admin)
+    centre, wh = uuid.uuid4(), uuid.uuid4()
+    db.add_all(
+        [
+            MoneyCodebook(kind="centres", money_id=centre, code="20", name="Senica", active=True, synced_at=NOW),
+            MoneyCodebook(kind="warehouses", money_id=wh, code="20", name="Senica", active=True, synced_at=NOW),
+        ]
+    )
+    branch = Branch(name="Senica", money_centre_id=str(centre), money_warehouse_id=str(wh))
+    db.add(branch)
+    await db.flush()
+    person = await db.scalar(select(Person).where(Person.role == Role.admin))
+    assert person is not None
+    person.branch_id = branch.id
+    await db.commit()
+    assert (await _upload(client, "FA.isdoc", ISDOC, "application/xml")).status_code == 200
+    item = (await client.get("/api/purchasing/documents")).json()["items"][0]
+    assert (item["branch_name"], item["centre_code"], item["warehouse_code"]) == ("Senica", "20", "20")
+    assert (await client.get("/api/purchasing/documents?q=fiktívny")).json()["total"] == 1
+    assert (await client.get("/api/purchasing/documents?q=FA-2026-00456")).json()["total"] == 1
+    assert (await client.get("/api/purchasing/documents?q=nic-take")).json()["total"] == 0
