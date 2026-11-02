@@ -396,7 +396,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
           kind: 'item',
           id: 'reclassify',
           label: t('mail.category.reclassify'),
-          icon: <Sparkles size={16} />,
+          icon: <Sparkles size={16} className="text-ai-600" />,
           disabled: readOnly || !['sales', 'admin'].includes(me.data?.person?.role ?? ''),
           onSelect: () => {
             setMoreMenu(null);

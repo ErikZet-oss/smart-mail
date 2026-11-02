@@ -88,6 +88,7 @@ export function ComposeAiPanel({ draftId, editor, disabled, checks = [], onAppli
       </label>
       <Button
         type="button"
+        variant="ai"
         className="self-start"
         disabled={busy || !instruction.trim()}
         onClick={() => start('write', { instruction: instruction.trim() })}
@@ -105,7 +106,7 @@ export function ComposeAiPanel({ draftId, editor, disabled, checks = [], onAppli
               type="button"
               disabled={busy}
               onClick={() => start(action)}
-              className="type-small h-7 rounded-full border border-border-default bg-bg-canvas px-3 text-text-primary hover:bg-bg-muted disabled:opacity-60"
+              className="type-small h-7 rounded-full border border-ai-200 bg-ai-50 px-3 text-ai-600 hover:border-ai-600 disabled:opacity-60"
             >
               {t(`ai.compose.actions.${action}`)}
             </button>

@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — AI elements violet exactly as Figma (#192)
+
+- `Button` gets the Figma kind `ai`: `ai-600` fill and white text in every state, 45 % opacity when disabled. It is used only for AI actions: „Napísať“ (W4a / M17), „Previesť“ (Settings › AI pravidlá) and „Vytvoriť profil“ (štýl).
+- AiSuggestionCard and the invoice card follow Figma `16:1438`. Every open state is `ai-50` + `ai-200` border, and the state shows in the checks; before, the border was green, amber or red. The approve button stays brand blue.
+- Compose: the „Upraviť text“ chips are `ai-50` / `ai-200` / `ai-600`, as in W4a. The AI tool in the toolbar is violet, with `ai-50` + `ai-200` when the panel is open.
+- Mail list ✦ badge, the AI triedenie header icon, „Znova zaradiť (AI)“ menu icons and the AI empty state are `ai-600` instead of brand blue.
+- The collapsed suggestion's hover used a non-existent token (`ai-100`); it now uses `ai-200`.
+- Shared helper `e2e/aiColors.ts`. e2e tests compare the computed colours with `--ai-600` / `--ai-200` / `--ai-50` in light and dark, and check that „Odoslať“ stays `--brand-primary-600`.
+
 ## [Unreleased] — Doklady on mobile (#193)
 
 - Bottom nav: E-mail · Doklady · Kontakty · Viac, the same order as the rail (SCREENS_SPEC §1). Doklady appears only with FEATURE_MONEY and a role that has a Doklady tab (`docsVisible`, decided once in AppShell). On `/docs/*` Doklady is the active item.

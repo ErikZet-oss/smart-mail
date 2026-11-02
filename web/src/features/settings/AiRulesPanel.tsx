@@ -135,6 +135,7 @@ export function AiRulesPanel() {
           <div className="flex gap-2">
             <Button
               type="button"
+              variant="ai"
               icon={<Sparkles size={16} aria-hidden="true" />}
               disabled={nl.trim().length < 3 || convert.isPending}
               onClick={() => convert.mutate()}
