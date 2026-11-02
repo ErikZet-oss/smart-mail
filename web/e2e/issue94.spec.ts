@@ -207,9 +207,11 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.goto('/mail/default/inbox/t-m1');
     await expand(page);
     const c = card(page);
-    expect(await cssOf(c, 'border-top-color')).toBe(await tokenRgb(page, '--ai-200'));
-    expect(await cssOf(c, 'background-color')).toBe(await tokenRgb(page, '--ai-50'));
-    expect(await cssOf(c.locator('svg.lucide-sparkles').first(), 'color')).toBe(await tokenRgb(page, '--ai-600'));
+    await expect.poll(() => cssOf(c, 'border-top-color')).toBe(await tokenRgb(page, '--ai-200'));
+    await expect.poll(() => cssOf(c, 'background-color')).toBe(await tokenRgb(page, '--ai-50'));
+    await expect
+      .poll(() => cssOf(c.locator('svg.lucide-sparkles').first(), 'color'))
+      .toBe(await tokenRgb(page, '--ai-600'));
     await shot(page, `issue192-card-${scheme}`);
   });
 }
