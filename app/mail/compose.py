@@ -21,7 +21,7 @@ from app.core.audit import audit
 from app.core.config import Settings
 from app.mail import storage
 from app.mail.actions import add_flag_async
-from app.mail.compose_html import assemble_outgoing_html
+from app.mail.compose_html import assemble_outgoing_html, forward_header_html
 from app.mail.compose_models import ComposeAttachment, ComposeDraft, Identity
 from app.mail.flags import ANSWERED_FLAG, FORWARDED_FLAG, apply_local_flag
 from app.mail.imap_append import append_to_sent_async, delete_draft_uid_async, save_draft_replace_async
@@ -123,6 +123,7 @@ async def create_draft(
         signature_html=signature or None,
         mode=mode,
         settings=settings,
+        forward_header=_forward_header_for(source) if source and mode == "forward" else None,
     )
 
     draft = ComposeDraft(
@@ -470,6 +471,17 @@ async def rendered_signature(db: AsyncSession, draft: ComposeDraft) -> str:
     )
 
 
+def _forward_header_for(source: Message) -> str:
+    return forward_header_html(
+        subject=source.subject,
+        date=source.sent_at or source.received_at,
+        from_name=source.from_name,
+        from_email=source.from_email,
+        to=list(source.to_addrs or []),
+        cc=list(source.cc_addrs or []),
+    )
+
+
 def quote_html_for_message(settings: Settings, source: Message) -> str | None:
     """Original HTML from stored raw, sanitized without rewriting remote images.
 
@@ -530,10 +542,13 @@ def quoted_image_parts(
 async def rehydrate_draft_html(db: AsyncSession, settings: Settings, draft: ComposeDraft) -> None:
     """Replace editor signature and quote with the server copies (issue #28)."""
     quote: str | None = None
+    header: str | None = None
     if draft.mode in {"reply", "reply_all", "forward"} and draft.in_reply_to_message_id is not None:
         source = await db.get(Message, draft.in_reply_to_message_id)
         if source is not None:
             quote = quote_html_for_message(settings, source)
+            if draft.mode == "forward":
+                header = _forward_header_for(source)
     signature = await rendered_signature(db, draft)
     draft.body_html = assemble_outgoing_html(
         user_html=draft.body_html or "",
@@ -541,6 +556,7 @@ async def rehydrate_draft_html(db: AsyncSession, settings: Settings, draft: Comp
         signature_html=signature or None,
         mode=draft.mode,
         settings=settings,
+        forward_header=header,
     )
     draft.body_text = html_to_text(draft.body_html)
 

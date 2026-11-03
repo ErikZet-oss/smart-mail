@@ -89,7 +89,7 @@ def test_issue28_forward_note_is_inside_the_quote() -> None:
         mode="forward",
         settings=_sig_settings(),
     )
-    assert out.count("Preposlaná správa") == 1
+    assert out.count("Pôvodná správa") == 1
     assert "Cenník" in out
     again = assemble_outgoing_html(
         user_html=out,
@@ -98,7 +98,7 @@ def test_issue28_forward_note_is_inside_the_quote() -> None:
         mode="forward",
         settings=_sig_settings(),
     )
-    assert again.count("Preposlaná správa") == 1
+    assert again.count("Pôvodná správa") == 1
 
 
 def _html_part(message: EmailMessage) -> str:
@@ -437,6 +437,6 @@ async def test_issue28_reply_and_forward_mime_keeps_https_and_cid_logo(
         if mode == "forward":
             pdf = next(part for part in mime.walk() if part.get_filename() == "cennik-fiktivny.pdf")
             assert pdf.get_payload(decode=True) == b"%PDF-1.4 fictional"
-            assert "Preposlaná správa" in html
+            assert "Pôvodná správa" in html
         else:
             assert "cennik-fiktivny.pdf" not in visible
