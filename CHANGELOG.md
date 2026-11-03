@@ -2,6 +2,26 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #208 AI karta „Príjem tovaru“ vo vlákne (W2c → W6h)
+
+- **W2c / M3** (Figma `22:6603`): under the attachments of a message, an AI card for every supplier invoice or delivery note Smart Mail read from it. The card shows:
+  - supplier, number and line count;
+  - checks: supplier in Money (IČO), matched X / Y with how many need confirming, total vs. document;
+  - a progress bar with legend: matched / to confirm / unmatched;
+  - the source file with its FileTypeIcon;
+  - „istota“ (the lowest extraction confidence).
+- **Actions:**
+  - **Pripraviť dodací list** opens W6h;
+  - **Zamietnuť**, after confirmation, hides the document (the existing `ignore`; it stays in W6e under the hidden ones).
+  - Nothing is written to Money.
+- **States:**
+  - „AI číta doklad…“ — the card refreshes every 4 s until the worker has read the document;
+  - unreadable document → „Otvoriť doklad“;
+  - Money unavailable → „Money nedostupné“, the rest works;
+  - after the 4c write → „V Money: …“.
+- **API:** `GET /api/purchasing/mailboxes/{ref}/messages/{id}/documents`. Read-only; the mailbox must be accessible (404 otherwise). It returns an empty list for roles without W6h, with FEATURE_MONEY off, or for ignored documents. The first open runs the item matching, the same as W6h. No new table.
+- **Accessibility:** „Zamietnuť“ uses `brand/primary-700` on the AI background; `primary-600` was 4.38:1, found by axe.
+
 ## [Unreleased] — #205 Ikona typu súboru pri prílohách
 
 - **FileTypeIcon** (Figma `199:94925`): a sheet with a folded corner and a coloured band PDF / XLS / DOC / IMG / ZIP / XML, or a plain sheet for other types. Sizes sm 16×20, md 26×32, lg 32×40. SVG, no new dependency.

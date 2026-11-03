@@ -2223,5 +2223,29 @@
       "search": "Hľadanie v Money sa nepodarilo.",
       "money_unavailable": "Money je nedostupné."
     }
+  },
+  "goods": {
+    "label": "Návrh AI",
+    "title": "Príjem tovaru",
+    "confidence": "istota {{value}}",
+    "reading": "AI číta doklad…",
+    "failed": "Doklad sa nepodarilo prečítať. Otvorte ho a doplňte údaje.",
+    "supplierOk": "Dodávateľ v Money (IČO {{ico}} sedí)",
+    "supplierMissing": "Dodávateľ nie je v Money (IČO {{ico}})",
+    "moneyOffline": "Money nedostupné – dodávateľa a položky overíme neskôr",
+    "matched": "Spárované {{done}} / {{total}} – {{rest}} na potvrdenie",
+    "sumOk": "Súčet sedí s dokladom ({{total}})",
+    "sumBad": "Súčet riadkov nesedí s dokladom",
+    "legend": "{{matched}} spárovaných, {{confirm}} na potvrdenie, {{unmatched}} nespárovaných",
+    "legendMatched": "{{count}} spárovaných",
+    "legendConfirm": "{{count}} na potvrdenie",
+    "legendUnmatched": "{{count}} nespárovaných",
+    "prepare": "Pripraviť dodací list",
+    "openDoc": "Otvoriť doklad",
+    "reject": "Zamietnuť",
+    "rejectTitle": "Zamietnuť návrh príjmu?",
+    "rejectText": "Doklad sa skryje a nájdete ho v Dodacích listoch medzi skrytými. Do Money sa nič nezapíše.",
+    "rejected": "Návrh príjmu je zamietnutý.",
+    "inMoney": "V Money: {{number}}"
   }
 }
