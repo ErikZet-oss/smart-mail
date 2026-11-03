@@ -2,6 +2,17 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #203 W4g / M4b Adresár – výber príjemcov
+
+- **W4g** (Figma `192:89654`) and **M4b** (`195:3`): an `icon/users` button next to Komu, Kópia and Skrytá kópia opens the address book.
+  - Sources: Naposledy použité, Osobné adresy, Zdieľané – firma, Pobočky, Money – adresár (read-only).
+  - Search, a tri-state „Vybrať všetkých“, and contact groups.
+  - The selection is kept across address books and searches.
+  - „Pridať do Komu / Kópia / Skrytá kópia“ never duplicates an address already in one of the three fields.
+- **New Skrytá kópia field in W4.** Bcc was stored with the draft but never sent. Now `build_mime` sets the Bcc header: aiosmtplib puts it on the SMTP envelope and strips it from the transmitted message, and the send guard checks it like To / Cc.
+- API (read-only, same access as autocomplete): `/api/contacts/picker/summary`, `/recent` (sent messages of the active person, 90 days, max 50), `/branches`, `/money?q=` (read cache, ≥ 2 characters, paged). No data-model change, no new dependency.
+- SCREENS_SPEC W4g + M4b and FIGMA_MAP rows added.
+
 ## [Unreleased] — Forward shows the original sender (Roundcube parity)
 
 - A forwarded mail did not say who wrote the original or when (pilot 2026-11-03). Like Roundcube, the forwarded quote now starts with „-------- Pôvodná správa --------“ and a Predmet / Dátum / Od / Komu (+ Kópia) table. The values are escaped and the date is in Bratislava time.

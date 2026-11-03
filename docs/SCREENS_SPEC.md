@@ -305,6 +305,29 @@ Inline editor of the signature block for this message only; "Obnoviť podpis" li
 ### W4f Okno písania (popup mode)
 Same as W4 in a 720 × 640 floating window (setting), minimize to a bar at the bottom; max 3 open drafts.
 
+### W4g Adresár – výber príjemcov (dialog, #203)
+**Purpose:** pick recipients like in Roundcube's address book instead of typing them. **Entry:** `icon/users` next to
+Komu, Kópia and Skrytá kópia in W4 (no shortcut). Read-only — nothing is written to any address book or to Money.
+**Layout (824 × 624):** title "Adresár – vyberte príjemcov" + X · left column "ADRESÁRE" with counts: Naposledy
+použité, Osobné adresy, Zdieľané – firma, Pobočky, Money – adresár (+ hint "Money – adresár je len na čítanie.") ·
+right: SearchField "Hľadať meno, e-mail alebo firmu" (searches the current address book, debounce 250 ms), row
+"Vybrať všetkých v zozname" (tri-state) + count, rows Checkbox + Avatar + name + company + e-mail; contact groups of
+the book are rows that toggle all their members · footer "Vybrané: N", Zrušiť (ghost), Skrytá kópia, Kópia,
+Pridať do Komu — the button of the field the dialog was opened from is primary.
+**Sources:** Naposledy použité = recipients of the active person's sent messages (90 days, max 50, newest first);
+Osobné / Zdieľané = the address books of W9; Pobočky = branch mailboxes; Money – adresár = the read cache of Money
+persons and companies with an e-mail (search of ≥ 2 characters required, paged — never all of them at once, never a
+live Money call).
+**Rules:** a contact with several e-mails is shown as **one row per e-mail** (simplest; each address is picked on
+its own). The selection is kept when switching address books and searching. Adding never duplicates an address
+already in Komu, Kópia or Skrytá kópia; adding to Kópia / Skrytá kópia shows the field when it was hidden.
+**States:** loading; empty address book ("Adresár je prázdny."); no search result ("Nič sme nenašli."); Money without
+a search ("Napíšte aspoň 2 znaky …"); Money unavailable ("Money – adresár je teraz nedostupný. Ostatné adresáre
+fungujú.") — the other address books keep working.
+**Accessibility:** modal dialog with focus trap, Esc / X close without changes, focus returns to the opener;
+checkboxes by keyboard (Tab, ↑/↓ between rows, Space toggles); the select-all checkbox announces "mixed".
+**Mobile:** M4b.
+
 ---------------------------------------------------------------------------------------------------
 ## 6. Asistent
 
@@ -496,6 +519,7 @@ signature; plain-text alternative is always generated; the signature is the bran
 | M2 | Priečinky (drawer) | G3 | mailboxes, folders, AI triedenie, Moje, quota |
 | M3 | Detail vlákna | W2c | AI card first, sticky approve bar, bottom actions |
 | M4 | Písanie | W4 | full screen, ✦ → M17 |
+| M4b | Adresár – výber príjemcov | W4g | full-screen sheet from M4: AppBar "Adresár" (X), SearchField, horizontal chips Naposledy / Osobné / Zdieľané / Pobočky / Money, list with checkboxes (rows ≥ 56 px), bottom bar "Vybrané: N · pridať do" + chips Komu / Kópia / Skrytá + primary "Pridať N príjemcov" |
 | M5 | Asistent | W3 | bottom sheet half/full |
 | M6 | Dnes | W5/W5b | KPI chips scroll, batch approve, tab Pobočka for managers |
 | M8 | Hľadanie | W10 | full-screen search with recent queries |

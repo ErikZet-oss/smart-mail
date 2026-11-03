@@ -21,6 +21,7 @@ from app.api import (
     compose,
     compose_ai,
     contacts,
+    contacts_picker,
     documents,
     mail,
     mail_export,
@@ -139,6 +140,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(mail_export.router)
     app.include_router(documents.router)
     app.include_router(contacts.router)
+    app.include_router(contacts_picker.router)
     app.include_router(search.router)
     app.include_router(notifications.router)
     app.include_router(system.router)
