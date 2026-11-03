@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronUp, CircleAlert, CircleCheck, FileText, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { ChevronUp, CircleAlert, CircleCheck, Sparkles, TriangleAlert, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +10,7 @@ import { ApiError } from '../../lib/api';
 import { day, money } from '../money/moneyApi';
 import { CollapsedSuggestion } from './CollapsedSuggestion';
 import { approveSuggestion, rejectSuggestion, suggestionsKey, type Suggestion } from './suggestionsApi';
+import { FileTypeIcon } from '../../components/FileTypeIcon';
 
 type Props = { suggestion: Suggestion; mailbox: string; messageId: string; readOnly: boolean };
 
@@ -107,7 +108,7 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
       <ul className="flex flex-col divide-y divide-border-default rounded-sm border border-border-default bg-bg-canvas">
         {invoices.map((i) => (
           <li key={i.id} className="type-small flex items-center gap-2 px-3 py-2 text-text-primary">
-            <FileText size={16} aria-hidden="true" className="shrink-0 text-text-secondary" />
+            <FileTypeIcon type="pdf" />
             <span className="font-medium">{i.number}</span>
             <span className="min-w-0 flex-1 truncate text-text-secondary">
               {t(i.kind === 'proforma' ? 'ai.invoice.proforma' : 'ai.invoice.invoice')} ·{' '}

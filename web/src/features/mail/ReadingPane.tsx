@@ -15,7 +15,7 @@ import {
   FolderInput,
   Forward,
   Mail,
-  Paperclip,
+  ShieldAlert,
   Printer,
   Reply,
   ReplyAll,
@@ -53,6 +53,8 @@ import { FolderPicker } from './FolderPicker';
 import { applyActionLocally, REMOVING_ACTIONS } from './optimistic';
 import { useFolderLabel } from './useFolderLabel';
 import { previewKind } from './previewKind';
+import { FileTypeIcon } from '../../components/FileTypeIcon';
+import { FILE_TYPE_LABEL, attachmentLabel, fileTypeOf } from '../../components/fileType';
 import {
   applyAttachmentFlagLocally,
   attachmentUrl,
@@ -796,7 +798,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
             ) : null}
 
             {msg.attachments.filter((a) => !a.is_inline).length > 0 ? (
-              <ul className="mb-4 flex flex-wrap gap-2">
+              <ul className={`mb-4 flex gap-2 ${mobile ? 'flex-col' : 'flex-wrap'}`}>
                 {msg.attachments
                   .filter((a) => !a.is_inline)
                   .map((a) => {
@@ -806,11 +808,22 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
                       <li key={a.id}>
                         <a
                           href={attachmentUrl(mailbox, a.id)}
-                          className={`type-small inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 ${
-                            infected
-                              ? 'cursor-not-allowed border-danger-600 text-danger-600'
-                              : 'border-border-default text-text-primary hover:bg-bg-subtle'
-                          }`}
+                          aria-label={attachmentLabel(a.filename, a.content_type, formatSize(a.size))}
+                          data-file-type={fileTypeOf(a.filename, a.content_type)}
+                          data-testid="attachment"
+                          className={
+                            mobile
+                              ? `flex w-full items-center gap-3 rounded-md border px-3 py-2 ${
+                                  infected
+                                    ? 'cursor-not-allowed border-danger-600 text-danger-600'
+                                    : 'border-border-default text-text-primary hover:bg-bg-subtle'
+                                }`
+                              : `type-small inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 ${
+                                  infected
+                                    ? 'cursor-not-allowed border-danger-600 text-danger-600'
+                                    : 'border-border-default text-text-primary hover:bg-bg-subtle'
+                                }`
+                          }
                           title={
                             infected
                               ? t('mail.attachmentInfected')
@@ -836,11 +849,29 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
                           }}
                           download={infected ? undefined : a.filename}
                         >
-                          <Paperclip size={14} aria-hidden="true" />
-                          {a.filename} <span className="text-text-secondary">{formatSize(a.size)}</span>
-                          {unscanned ? (
-                            <span className="text-text-tertiary">({t('mail.attachmentUnscanned')})</span>
-                          ) : null}
+                          {infected ? (
+                            <ShieldAlert size={mobile ? 24 : 16} aria-hidden="true" className="shrink-0" />
+                          ) : (
+                            <FileTypeIcon type={fileTypeOf(a.filename, a.content_type)} size={mobile ? 'md' : 'sm'} />
+                          )}
+                          {mobile ? (
+                            <span className="flex min-w-0 flex-1 flex-col">
+                              <span className="type-label truncate">{a.filename}</span>
+                              <span className="type-caption text-text-secondary">
+                                {[FILE_TYPE_LABEL[fileTypeOf(a.filename, a.content_type)], formatSize(a.size)]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                                {unscanned ? ` (${t('mail.attachmentUnscanned')})` : ''}
+                              </span>
+                            </span>
+                          ) : (
+                            <>
+                              {a.filename} <span className="text-text-secondary">{formatSize(a.size)}</span>
+                              {unscanned ? (
+                                <span className="text-text-tertiary">({t('mail.attachmentUnscanned')})</span>
+                              ) : null}
+                            </>
+                          )}
                         </a>
                       </li>
                     );

@@ -45,6 +45,12 @@
   --cat-document_request: #F08C00;
   --cat-supplier_info: #364FC7;
   --cat-feed: #868E96;
+  --filetype-pdf: #C92A2A;
+  --filetype-xls: #237A35;
+  --filetype-doc: #0F75BC;
+  --filetype-img: #0C8194;
+  --filetype-zip: #8A5A00;
+  --filetype-xml: #C2255C;
   --font-ui: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
   --font-print: 'Arial Narrow', 'Liberation Sans Narrow', Arial, sans-serif;
@@ -179,6 +185,12 @@
   --cat-document_request: #FFA424;
   --cat-supplier_info: #5D71D3;
   --cat-feed: #A1A8AE;
+  --filetype-pdf: #FF6B6B;
+  --filetype-xls: #51CF66;
+  --filetype-doc: #4AA3F0;
+  --filetype-img: #10AEC8;
+  --filetype-zip: #FFC34D;
+  --filetype-xml: #DB4479;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -228,6 +240,12 @@
     --cat-document_request: #FFA424;
     --cat-supplier_info: #5D71D3;
     --cat-feed: #A1A8AE;
+    --filetype-pdf: #FF6B6B;
+    --filetype-xls: #51CF66;
+    --filetype-doc: #4AA3F0;
+    --filetype-img: #10AEC8;
+    --filetype-zip: #FFC34D;
+    --filetype-xml: #DB4479;
   }
 }
 

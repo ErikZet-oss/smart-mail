@@ -99,6 +99,17 @@ SIZE = {  # component sizes (px) — UX_SPEC §2.6
 }
 MOTION = {"hover": "120ms", "panel": "180ms ease-out", "toast": "200ms", "row-remove": "160ms"}
 
+# file-type band of FileTypeIcon (#205): base token from Figma `199:94925`; the generator only shifts the lightness
+# (light: darker, dark: lighter) until the type label on it reaches 4.5:1 — never edited by hand
+FILE_TYPES: dict[str, tuple[str, str]] = {
+    "pdf": ("danger/600", "PDF príloha"),
+    "xls": ("success/600", "Excel / tabuľka"),
+    "doc": ("brand/primary-600", "Word / dokument"),
+    "img": ("cat/shipping", "obrázok"),
+    "zip": ("warning/700", "archív"),
+    "xml": ("cat/supplier_document", "XML / ISDOC"),
+}
+
 # ------------------------------------------------------------------ contrast requirements (fg, bg, min, why)
 PAIRS = [
     ("text/primary", "bg/canvas", 4.5, "body text"),
@@ -121,7 +132,7 @@ PAIRS = [
     ("warning/600", "bg/canvas", 3.0, "warning icon"),
     ("danger/600", "bg/canvas", 4.5, "error text"),
     ("danger/600", "danger/50", 4.5, "error chip"),
-]
+] + [("text/on-primary", f"filetype/{k}", 4.5, f"FileTypeIcon label ({k})") for k in FILE_TYPES]
 
 
 def _rgb(h: str) -> tuple[float, float, float]:
@@ -148,12 +159,39 @@ def lighten(h: str, d: float = 0.10) -> str:
     return "#%02X%02X%02X" % (round(r * 255), round(g * 255), round(b * 255))
 
 
+def shift(h: str, d: float) -> str:
+    r, g, b = _rgb(h)
+    hh, ll, ss = colorsys.rgb_to_hls(r, g, b)
+    r, g, b = colorsys.hls_to_rgb(hh, max(0.0, min(1.0, ll + d)), ss)
+    return "#%02X%02X%02X" % (round(r * 255), round(g * 255), round(b * 255))
+
+
+def readable(base: str, label: str, step: float) -> str:
+    """The base colour, or the nearest lighter/darker shade on which `label` reaches 4.5:1."""
+    out = base
+    while contrast(label, out) < 4.5:
+        out = shift(out, step)
+    return out
+
+
+def use_of(k: str) -> str:
+    grp, name = k.split("/")
+    if k in COLOR:
+        return COLOR[k][2]
+    if grp == "filetype":
+        return FILE_TYPES[name][1]
+    return CATEGORIES[name][1]
+
+
 def build() -> None:
     light = {k: v[0] for k, v in COLOR.items()}
     dark = {k: v[1] for k, v in COLOR.items()}
     for k, (c, _) in CATEGORIES.items():
         light[f"cat/{k}"] = c
         dark[f"cat/{k}"] = lighten(c)
+    for k, (base, _) in FILE_TYPES.items():
+        light[f"filetype/{k}"] = readable(light[base], light["text/on-primary"], -0.01)
+        dark[f"filetype/{k}"] = readable(dark[base], dark["text/on-primary"], +0.01)
 
     # contrast report (fails the build when a requirement is not met)
     rows, bad = [], []
@@ -183,7 +221,7 @@ def build() -> None:
     for mode, pal in (("light", light), ("dark", dark)):
         for k, v in pal.items():
             grp, name = k.split("/")
-            use = COLOR[k][2] if k in COLOR else CATEGORIES[name][1]
+            use = use_of(k)
             doc["color"][mode].setdefault(grp, {})[name] = tok(v, "color", use)
     for k, v in FONT.items():
         doc["font"][k] = tok(v, "fontFamily")
@@ -230,7 +268,7 @@ def build() -> None:
     # markdown tables for UX_SPEC §2.1/2.2 (printed)
     print("| Token | Light | Dark | Use |\n|---|---|---|---|")
     for k in light:
-        use = COLOR[k][2] if k in COLOR else CATEGORIES[k.split('/')[1]][1]
+        use = use_of(k)
         print(f"| `{k}` | {light[k]} | {dark[k]} | {use} |")
 
 
