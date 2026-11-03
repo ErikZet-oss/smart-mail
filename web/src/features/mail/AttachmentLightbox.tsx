@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Download, FileText, Printer, RotateCw, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Printer, RotateCw, X, ZoomIn, ZoomOut } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -8,6 +8,8 @@ import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { attachmentUrl, type AttachmentOut } from './mailApi';
 import { openPdf, pageImages, pageSize, renderPage } from './pdfRender';
 import { previewKind, xmlRows, type XmlRow } from './previewKind';
+import { FileTypeIcon } from '../../components/FileTypeIcon';
+import { fileTypeOf } from '../../components/fileType';
 
 const ZOOM_STEP = 0.25;
 const ZOOM_MIN = 0.25;
@@ -166,7 +168,7 @@ function LightboxBody({ mailbox, attachments, index, onIndex, onClose, formatSiz
         onClick={onClose}
       />
       <header className="relative flex h-14 shrink-0 items-center gap-3 px-4 text-text-on-rail">
-        <FileText size={18} aria-hidden="true" className="shrink-0 text-text-on-rail-active" />
+        <FileTypeIcon type={fileTypeOf(att.filename, att.content_type)} />
         <p className="type-body-strong min-w-0 flex-1 truncate text-text-on-rail-active">
           {att.filename} · {formatSize(att.size)}
         </p>

@@ -4,7 +4,7 @@ import {
   ChevronDown,
   Clock,
   Download,
-  FileText,
+  ShieldAlert,
   Maximize2,
   MessageSquare,
   Minimize2,
@@ -57,6 +57,8 @@ import { PreSendDialog } from './PreSendDialog';
 import { ResponsesPicker } from './ResponsesPicker';
 import { ScheduleSendDialog } from './ScheduleSendDialog';
 import { SignatureEditDialog } from './SignatureEditDialog';
+import { FileTypeIcon } from '../../components/FileTypeIcon';
+import { attachmentLabel, fileTypeOf } from '../../components/fileType';
 
 const POPUP_KEY = 'sm-compose-popups';
 const POPUP_MAX = 3;
@@ -1102,8 +1104,23 @@ export function ScreenW4() {
                             className="type-small flex flex-col justify-center gap-0.5 rounded-sm border border-border-default px-2.5 py-1 text-text-primary"
                           >
                             <span className="flex h-8 items-center gap-2">
-                              <FileText size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
-                              <span className="min-w-0 flex-1 truncate">{a.filename}</span>
+                              {infected ? (
+                                <ShieldAlert size={16} aria-hidden="true" className="shrink-0 text-danger-600" />
+                              ) : (
+                                <FileTypeIcon type={fileTypeOf(a.filename, a.content_type)} />
+                              )}
+                              <span
+                                className="min-w-0 flex-1 truncate"
+                                data-testid="attachment"
+                                data-file-type={fileTypeOf(a.filename, a.content_type)}
+                                aria-label={attachmentLabel(
+                                  a.filename,
+                                  a.content_type,
+                                  `${Math.round(a.size / 1024)} kB`,
+                                )}
+                              >
+                                {a.filename}
+                              </span>
                               {unscanned ? (
                                 <span className="type-caption shrink-0 text-text-tertiary">
                                   ({t('mail.attachmentUnscanned')})

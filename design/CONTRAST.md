@@ -22,6 +22,12 @@
 | light | `warning/600` #B57800 | `bg/canvas` #FFFFFF | 3.72 | 3.0 | ✓ | warning icon |
 | light | `danger/600` #C92A2A | `bg/canvas` #FFFFFF | 5.46 | 4.5 | ✓ | error text |
 | light | `danger/600` #C92A2A | `danger/50` #FFF1F1 | 4.96 | 4.5 | ✓ | error chip |
+| light | `text/on-primary` #FFFFFF | `filetype/pdf` #C92A2A | 5.46 | 4.5 | ✓ | FileTypeIcon label (pdf) |
+| light | `text/on-primary` #FFFFFF | `filetype/xls` #237A35 | 5.38 | 4.5 | ✓ | FileTypeIcon label (xls) |
+| light | `text/on-primary` #FFFFFF | `filetype/doc` #0F75BC | 4.89 | 4.5 | ✓ | FileTypeIcon label (doc) |
+| light | `text/on-primary` #FFFFFF | `filetype/img` #0C8194 | 4.58 | 4.5 | ✓ | FileTypeIcon label (img) |
+| light | `text/on-primary` #FFFFFF | `filetype/zip` #8A5A00 | 5.93 | 4.5 | ✓ | FileTypeIcon label (zip) |
+| light | `text/on-primary` #FFFFFF | `filetype/xml` #C2255C | 5.66 | 4.5 | ✓ | FileTypeIcon label (xml) |
 | dark | `text/primary` #E6EAF0 | `bg/canvas` #0F141B | 15.31 | 4.5 | ✓ | body text |
 | dark | `text/secondary` #A7B1C2 | `bg/canvas` #0F141B | 8.55 | 4.5 | ✓ | meta text |
 | dark | `text/secondary` #A7B1C2 | `bg/subtle` #151B24 | 8.00 | 4.5 | ✓ | meta text on folder column |
@@ -42,3 +48,9 @@
 | dark | `warning/600` #F0B030 | `bg/canvas` #0F141B | 9.64 | 3.0 | ✓ | warning icon |
 | dark | `danger/600` #FF6B6B | `bg/canvas` #0F141B | 6.66 | 4.5 | ✓ | error text |
 | dark | `danger/600` #FF6B6B | `danger/50` #2E1416 | 6.16 | 4.5 | ✓ | error chip |
+| dark | `text/on-primary` #0B1220 | `filetype/pdf` #FF6B6B | 6.75 | 4.5 | ✓ | FileTypeIcon label (pdf) |
+| dark | `text/on-primary` #0B1220 | `filetype/xls` #51CF66 | 9.33 | 4.5 | ✓ | FileTypeIcon label (xls) |
+| dark | `text/on-primary` #0B1220 | `filetype/doc` #4AA3F0 | 6.94 | 4.5 | ✓ | FileTypeIcon label (doc) |
+| dark | `text/on-primary` #0B1220 | `filetype/img` #10AEC8 | 7.05 | 4.5 | ✓ | FileTypeIcon label (img) |
+| dark | `text/on-primary` #0B1220 | `filetype/zip` #FFC34D | 11.74 | 4.5 | ✓ | FileTypeIcon label (zip) |
+| dark | `text/on-primary` #0B1220 | `filetype/xml` #DB4479 | 4.56 | 4.5 | ✓ | FileTypeIcon label (xml) |

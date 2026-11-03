@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   CheckCircle2,
   Database,
-  FileText,
   ListChecks,
   Pencil,
   RefreshCw,
@@ -17,6 +16,8 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
+import { FileTypeIcon } from '../../components/FileTypeIcon';
+import { fileTypeOf } from '../../components/fileType';
 import { AppShell } from '../../components/shell/AppShell';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
@@ -151,7 +152,7 @@ export function ScreenW6h() {
                     aria-pressed={panel === 'original'}
                     onClick={() => setPanel((p) => (p === 'original' ? null : 'original'))}
                   >
-                    <FileText size={16} aria-hidden="true" />
+                    <FileTypeIcon type={fileTypeOf(d.filename)} />
                     {t('w6h.original')}
                   </button>
                   <button
