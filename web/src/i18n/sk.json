@@ -558,6 +558,7 @@
     "to": "Komu",
     "cc": "Kópia",
     "bcc": "Skrytá kópia",
+    "showCcBcc": "Zobraziť Kópia a Skrytá kópia",
     "picker": {
       "open": "Adresár – vybrať príjemcov",
       "title": "Adresár – vyberte príjemcov",
