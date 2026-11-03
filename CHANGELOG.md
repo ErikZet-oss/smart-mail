@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Forward shows the original sender (Roundcube parity)
+
+- A forwarded mail did not say who wrote the original or when (pilot 2026-11-03). Like Roundcube, the forwarded quote now starts with „-------- Pôvodná správa --------“ and a Predmet / Dátum / Od / Komu (+ Kópia) table. The values are escaped and the date is in Bratislava time.
+- The header is built on the server from the source message: when the draft is created and again at send. The editor copy is never trusted.
+- Tests in `tests/test_compose_forward_header.py`.
+
 ## [Unreleased] — Phase 4b-3: Nastavenia › Nákup a sklad (SETTINGS_SPEC 14)
 
 - **W12-14** `/settings/purchasing` (Figma `75:68205`, admin, only with FEATURE_MONEY):
