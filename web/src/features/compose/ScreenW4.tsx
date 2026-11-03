@@ -809,22 +809,45 @@ export function ScreenW4() {
                   disabled={!ready}
                 />
                 <PickerButton onClick={() => setPickFor('to')} disabled={!ready} label={t('compose.picker.open')} />
-                <button
-                  type="button"
-                  className="type-small h-9 shrink-0 rounded-sm border border-border-default px-3 text-text-primary hover:bg-bg-subtle"
-                  onClick={() => setShowCc(true)}
-                >
-                  + {t('compose.cc')}
-                </button>
-                {!showBcc ? (
-                  <button
-                    type="button"
-                    className="type-small h-9 shrink-0 rounded-sm border border-border-default px-3 text-text-primary hover:bg-bg-subtle"
-                    onClick={() => setShowBcc(true)}
-                  >
-                    + {t('compose.bcc')}
-                  </button>
-                ) : null}
+                {mobile ? (
+                  !showCc || !showBcc ? (
+                    // Mobile: one small toggle instead of two text buttons, so Komu keeps its width (pilot 2026-11-03).
+                    <button
+                      type="button"
+                      className="inline-flex size-9 shrink-0 items-center justify-center rounded-sm border border-border-default text-text-secondary hover:bg-bg-subtle"
+                      onClick={() => {
+                        setShowCc(true);
+                        setShowBcc(true);
+                      }}
+                      aria-label={t('compose.showCcBcc')}
+                      title={t('compose.showCcBcc')}
+                      data-testid="compose-show-cc-bcc"
+                    >
+                      <ChevronDown size={16} aria-hidden="true" />
+                    </button>
+                  ) : null
+                ) : (
+                  <>
+                    {!showCc ? (
+                      <button
+                        type="button"
+                        className="type-small h-9 shrink-0 rounded-sm border border-border-default px-3 text-text-primary hover:bg-bg-subtle"
+                        onClick={() => setShowCc(true)}
+                      >
+                        + {t('compose.cc')}
+                      </button>
+                    ) : null}
+                    {!showBcc ? (
+                      <button
+                        type="button"
+                        className="type-small h-9 shrink-0 rounded-sm border border-border-default px-3 text-text-primary hover:bg-bg-subtle"
+                        onClick={() => setShowBcc(true)}
+                      >
+                        + {t('compose.bcc')}
+                      </button>
+                    ) : null}
+                  </>
+                )}
               </div>
               {showCc ? (
                 <>

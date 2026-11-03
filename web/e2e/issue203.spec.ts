@@ -134,3 +134,19 @@ test('#203 W4g: Kópia opens the field, search filters, Money needs 2 letters an
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Adresár – vyberte príjemcov' })).toHaveCount(0);
 });
+
+test('#203 M4: Komu keeps its width on mobile, one toggle shows Kópia + Skrytá kópia @mobile', async ({
+  page,
+}, info) => {
+  test.skip(info.project.name === 'desktop', 'mobile layout only');
+  await open(page);
+  const to = page.getByLabel('Komu', { exact: true });
+  await expect(page.getByRole('button', { name: '+ Kópia' })).toHaveCount(0);
+  const box = await to.boundingBox();
+  const vw = page.viewportSize()?.width ?? 0;
+  expect(box?.width ?? 0).toBeGreaterThan(vw * 0.4);
+  await page.getByTestId('compose-show-cc-bcc').click();
+  await expect(page.getByLabel('Kópia', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Skrytá kópia', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('compose-show-cc-bcc')).toHaveCount(0);
+});

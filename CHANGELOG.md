@@ -4,6 +4,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — #203 W4g / M4b Adresár – výber príjemcov
 
+### Fixed
+- Compose (mobile M4): the Komu field keeps its width — „+ Kópia“ / „+ Skrytá kópia“ are replaced by one small toggle that shows both fields; on desktop a shown field no longer keeps its „+“ button (pilot 2026-11-03).
+
 - **W4g** (Figma `192:89654`) and **M4b** (`195:3`): an `icon/users` button next to Komu, Kópia and Skrytá kópia opens the address book.
   - Sources: Naposledy použité, Osobné adresy, Zdieľané – firma, Pobočky, Money – adresár (read-only).
   - Search, a tri-state „Vybrať všetkých“, and contact groups.
