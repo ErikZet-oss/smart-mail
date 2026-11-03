@@ -47,6 +47,7 @@ How to use (DECISIONS D24):
 | W4d | [W4d Odpovede (výber šablóny)](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=32-29139) `32:29139` |
 | W4e | [W4e Upraviť podpis len pre túto správu](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=32-29335) `32:29335` |
 | W4f | [W4f Okno písania (vyskakovacie)](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=32-29739) `32:29739` |
+| W4g | [W4g Adresár – výber príjemcov](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=192-89201) `192:89201` · [W4g dialóg](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=192-89654) `192:89654` |
 | W3 | [W3 Asistent – konverzácia](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=36-30532) `36:30532` · [W3 Asistent – AI odpovedá (streaming)](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=36-30686) `36:30686` · [W3 Asistent – história konverzácií](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=36-30977) `36:30977` · [W3 Asistent – stavy panelu](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=36-31043) `36:31043` |
 | W3c | [W3c Asistent – príkazy (/)](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=36-30856) `36:30856` |
 | W3b | [W3b Zákazník – karta firmy](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=36-31480) `36:31480` · [W3b Zákazník – nespárovaný odosielateľ](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=36-31615) `36:31615` |
@@ -137,6 +138,7 @@ How to use (DECISIONS D24):
 | M2 | [M2 Priečinky (drawer)](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=82-2226) `82:2226` |
 | M3 | [M3 Detail vlákna](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=83-2226) `83:2226` · [M3 Detail vlákna – schválené (Späť)](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=83-2269) `83:2269` · [M3 Detail vlákna – tmavý režim](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=83-2377) `83:2377` · [M3 Detail vlákna – bez návrhu AI](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=83-2434) `83:2434` · [M3 Detail vlákna – 360 × 780](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=83-3117) `83:3117` |
 | M4 | [M4 Písanie](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=83-2526) `83:2526` |
+| M4b | [M4b Adresár – výber príjemcov](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=195-3) `195:3` |
 | M17 | [M17 AI pri písaní (sheet)](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=83-2606) `83:2606` |
 | M8 | [M8 Hľadanie](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=83-2733) `83:2733` |
 | M5 | [M5 Asistent – polovičný sheet](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=84-2678) `84:2678` · [M5 Asistent – celá obrazovka](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=84-2905) `84:2905` |

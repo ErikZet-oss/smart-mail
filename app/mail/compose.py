@@ -574,6 +574,9 @@ async def build_mime(
     )
     if draft.cc_addrs:
         msg["Cc"] = ", ".join(a.get("email") or "" for a in draft.cc_addrs)
+    if draft.bcc_addrs:
+        # SMTP RCPT only: aiosmtplib strips Bcc from the transmitted copy; the send guard checks it like To/Cc (#203)
+        msg["Bcc"] = ", ".join(a.get("email") or "" for a in draft.bcc_addrs)
     msg["Subject"] = draft.subject or ""
     msg["Date"] = format_datetime(datetime.now(UTC))
     mid = make_msgid(domain=identity.email.split("@")[-1])

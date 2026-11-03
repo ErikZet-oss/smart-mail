@@ -15,11 +15,14 @@ import {
   SquareArrowOutUpRight,
   X,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { modalOpen } from '../system/shortcuts';
+import { AddressPicker } from './AddressPicker';
+import { addToField, type PickTarget } from './addressPicker';
 
 import { Button } from '../../components/Button';
 import { Avatar } from '../../components/Avatar';
@@ -143,6 +146,9 @@ export function ScreenW4() {
   }, [localId]);
   const [to, setTo] = useState(seedTo);
   const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
+  const [showBcc, setShowBcc] = useState(false);
+  const [pickFor, setPickFor] = useState<PickTarget | null>(null);
   const [subject, setSubject] = useState('');
   const [priority, setPriority] = useState<'low' | 'normal' | 'high'>('normal');
   const [mdn, setMdn] = useState(false);
@@ -153,6 +159,7 @@ export function ScreenW4() {
   // showed the address. Blur commits the composition; the fields are then read from the DOM, not from the state.
   const toInputRef = useRef<HTMLInputElement>(null);
   const ccInputRef = useRef<HTMLInputElement>(null);
+  const bccInputRef = useRef<HTMLInputElement>(null);
   const subjectInputRef = useRef<HTMLInputElement>(null);
   const liveFields = () => {
     const active = document.activeElement;
@@ -160,6 +167,7 @@ export function ScreenW4() {
     return {
       to_addrs: parseAddrs(toInputRef.current?.value ?? to),
       cc_addrs: parseAddrs(ccInputRef.current?.value ?? cc),
+      bcc_addrs: parseAddrs(bccInputRef.current?.value ?? bcc),
       subject: subjectInputRef.current?.value ?? subject,
     };
   };
@@ -230,6 +238,8 @@ export function ScreenW4() {
     setTo(draftTo || seedTo);
     setCc(formatAddrs(d.cc_addrs));
     if (d.cc_addrs.length) setShowCc(true);
+    setBcc(formatAddrs(d.bcc_addrs ?? []));
+    if (d.bcc_addrs?.length) setShowBcc(true);
     setSubject(d.subject);
     setPriority(d.priority);
     setMdn(d.request_mdn);
@@ -798,6 +808,7 @@ export function ScreenW4() {
                   aria-label={t('compose.to')}
                   disabled={!ready}
                 />
+                <PickerButton onClick={() => setPickFor('to')} disabled={!ready} label={t('compose.picker.open')} />
                 <button
                   type="button"
                   className="type-small h-9 shrink-0 rounded-sm border border-border-default px-3 text-text-primary hover:bg-bg-subtle"
@@ -805,26 +816,90 @@ export function ScreenW4() {
                 >
                   + {t('compose.cc')}
                 </button>
+                {!showBcc ? (
+                  <button
+                    type="button"
+                    className="type-small h-9 shrink-0 rounded-sm border border-border-default px-3 text-text-primary hover:bg-bg-subtle"
+                    onClick={() => setShowBcc(true)}
+                  >
+                    + {t('compose.bcc')}
+                  </button>
+                ) : null}
               </div>
               {showCc ? (
                 <>
                   <span className="type-body text-text-primary">{t('compose.cc')}</span>
-                  <input
-                    ref={ccInputRef}
-                    value={cc}
-                    onChange={(event) => {
-                      setCc(event.target.value);
-                      setDirty(true);
-                    }}
-                    className={
-                      mobile
-                        ? 'type-body h-11 bg-transparent focus:outline-none'
-                        : 'type-body h-9 rounded-sm border border-border-default px-3'
-                    }
-                    aria-label={t('compose.cc')}
-                    disabled={!ready}
-                  />
+                  <div className="flex min-w-0 gap-2">
+                    <input
+                      ref={ccInputRef}
+                      value={cc}
+                      onChange={(event) => {
+                        setCc(event.target.value);
+                        setDirty(true);
+                      }}
+                      className={
+                        mobile
+                          ? 'type-body h-11 min-w-0 flex-1 bg-transparent focus:outline-none'
+                          : 'type-body h-9 min-w-0 flex-1 rounded-sm border border-border-default px-3'
+                      }
+                      aria-label={t('compose.cc')}
+                      disabled={!ready}
+                    />
+                    <PickerButton onClick={() => setPickFor('cc')} disabled={!ready} label={t('compose.picker.open')} />
+                  </div>
                 </>
+              ) : null}
+              {showBcc ? (
+                <>
+                  <span className="type-body text-text-primary">{t('compose.bcc')}</span>
+                  <div className="flex min-w-0 gap-2">
+                    <input
+                      ref={bccInputRef}
+                      value={bcc}
+                      onChange={(event) => {
+                        setBcc(event.target.value);
+                        setDirty(true);
+                      }}
+                      className={
+                        mobile
+                          ? 'type-body h-11 min-w-0 flex-1 bg-transparent focus:outline-none'
+                          : 'type-body h-9 min-w-0 flex-1 rounded-sm border border-border-default px-3'
+                      }
+                      aria-label={t('compose.bcc')}
+                      disabled={!ready}
+                    />
+                    <PickerButton
+                      onClick={() => setPickFor('bcc')}
+                      disabled={!ready}
+                      label={t('compose.picker.open')}
+                    />
+                  </div>
+                </>
+              ) : null}
+              {pickFor ? (
+                <AddressPicker
+                  target={pickFor}
+                  mobile={mobile}
+                  onClose={() => setPickFor(null)}
+                  onAdd={(tg, picked) => {
+                    const out = addToField(
+                      {
+                        to: toInputRef.current?.value ?? to,
+                        cc: ccInputRef.current?.value ?? cc,
+                        bcc: bccInputRef.current?.value ?? bcc,
+                      },
+                      tg,
+                      picked,
+                    );
+                    setTo(out.fields.to);
+                    setCc(out.fields.cc);
+                    setBcc(out.fields.bcc);
+                    if (tg === 'cc' && out.fields.cc) setShowCc(true);
+                    if (tg === 'bcc' && out.fields.bcc) setShowBcc(true);
+                    if (out.added) setDirty(true);
+                    setPickFor(null);
+                  }}
+                />
               ) : null}
               <span className="type-body text-text-primary">{t('compose.subject')}</span>
               <input
@@ -1200,5 +1275,22 @@ export function ScreenW4() {
         />
       ) : null}
     </>,
+  );
+}
+
+/** `icon/users` next to Komu / Kópia / Skrytá kópia → W4g / M4b (#203). */
+function PickerButton({ onClick, disabled, label }: { onClick: () => void; disabled: boolean; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="inline-flex size-9 shrink-0 items-center justify-center rounded-sm border border-border-default text-text-secondary hover:bg-bg-subtle disabled:opacity-60"
+      data-testid="open-address-picker"
+    >
+      <Users size={16} aria-hidden="true" />
+    </button>
   );
 }
