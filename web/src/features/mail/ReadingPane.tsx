@@ -39,6 +39,7 @@ import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { AiSuggestionCard } from '../ai/AiSuggestionCard';
 import { ConformitySuggestionCard } from '../ai/ConformitySuggestionCard';
 import { InvoiceSuggestionCard } from '../ai/InvoiceSuggestionCard';
+import { GoodsReceiptCards } from '../purchasing/GoodsReceiptCard';
 import { fetchSuggestions, suggestionsKey } from '../ai/suggestionsApi';
 import { fetchMe } from '../auth/authApi';
 import { CompanyChip } from '../money/CompanyChip';
@@ -878,6 +879,8 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
                   })}
               </ul>
             ) : null}
+
+            <GoodsReceiptCards mailbox={mailbox} messageId={msg.id} />
 
             {plain || !bodyHtml ? (
               <pre className="type-body-lg whitespace-pre-wrap break-words font-ui text-text-primary">

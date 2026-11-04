@@ -24,6 +24,8 @@ from app.core.config import Settings
 from app.core.content_disposition import content_disposition_attachment
 from app.mail import storage
 from app.mail.clamav import scan_bytes
+from app.mail.mailboxes import accessible_mailbox
+from app.mail.models import Message
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.models import MoneyCodebook, MoneyCompany
 from app.money.schemas import Article
@@ -520,3 +522,106 @@ async def ignore_document(
     await db.commit()
     count = await db.scalar(select(func.count()).select_from(DocumentLine).where(DocumentLine.document_id == doc.id))
     return DocumentOut(**_out(doc, int(count or 0)))
+
+
+# ----- #208 AI card „Príjem tovaru“ in the mail thread (W2c / M3) -----
+
+CHECK_METHODS = ("learned", "ean", "our_code")  # matched, but a person should look (amber in W6h)
+
+
+class ThreadDocCard(BaseModel):
+    id: str
+    status: str
+    kind: str
+    filename: str
+    attachment_id: str | None
+    supplier_name: str | None
+    supplier_ico: str | None
+    supplier_in_money: bool | None  # None = Money not reachable / cache empty
+    doc_number: str | None
+    currency: str | None
+    total: str | None
+    lines: int
+    matched: int
+    to_confirm: int
+    unmatched: int
+    matching_done: bool
+    confidence: float | None  # extraction confidence 0–1 for „istota“ (display only, never money)
+    checks: list[dict[str, Any]]
+    money_number: str | None
+    error: str | None
+    money_available: bool
+
+
+def _confidence(values: dict[str, Any]) -> float | None:
+    nums = [v for v in (values or {}).values() if isinstance(v, int | float) and not isinstance(v, bool)]
+    return round(min(nums), 2) if nums else None
+
+
+@router.get("/mailboxes/{ref}/messages/{message_id}/documents")
+async def message_documents(
+    ref: str,
+    message_id: uuid.UUID,
+    ctx: Auth,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+) -> list[ThreadDocCard]:
+    """Supplier documents read from this message (#208). Read-only; the mail never breaks on it: Money off, a role
+    without W6h or no document → an empty list. Ignored (Zamietnuť) documents are not returned."""
+    mailbox = await accessible_mailbox(db, ctx.account, ref)
+    msg = await db.get(Message, message_id)
+    if mailbox is None or msg is None or msg.mailbox_id != mailbox.id:
+        raise fail(404, "message_not_found")
+    if not settings.feature_money or person.role not in ROLES:
+        return []
+    docs = list(
+        await db.scalars(
+            select(SupplierDocument)
+            .where(SupplierDocument.message_id == msg.id, SupplierDocument.status != "ignored")
+            .order_by(SupplierDocument.created_at)
+        )
+    )
+    out: list[ThreadDocCard] = []
+    for doc in docs:
+        lines = await load_lines(db, doc)
+        available = True
+        if doc.status in MATCHABLE and needs_matching(lines):
+            async with BridgeClient(settings) as bridge:
+                available = await match_document(db, bridge, doc)
+            await db.commit()
+            lines = await load_lines(db, doc)
+        goods = [ln for ln in lines if not ln.is_fee]
+        unmatched = sum(1 for ln in goods if ln.line_status == "unmatched" and ln.match_method is not None)
+        to_confirm = sum(1 for ln in goods if ln.line_status == "matched" and ln.match_method in CHECK_METHODS)
+        matched = sum(
+            1
+            for ln in goods
+            if ln.line_status == "non_stock" or (ln.line_status == "matched" and ln.match_method not in CHECK_METHODS)
+        )
+        out.append(
+            ThreadDocCard(
+                id=str(doc.id),
+                status=doc.status,
+                kind=doc.kind,
+                filename=doc.filename,
+                attachment_id=_s(doc.attachment_id),
+                supplier_name=doc.supplier_name,
+                supplier_ico=doc.supplier_ico,
+                supplier_in_money=(doc.supplier_money_id is not None) if available else None,
+                doc_number=doc.doc_number,
+                currency=doc.currency,
+                total=_s(doc.total),
+                lines=len(goods),
+                matched=matched,
+                to_confirm=to_confirm,
+                unmatched=unmatched,
+                matching_done=bool(goods) and not needs_matching(lines),
+                confidence=_confidence(doc.field_confidence),
+                checks=doc.validation or [],
+                money_number=doc.money_number,
+                error=doc.error,
+                money_available=available,
+            )
+        )
+    return out
