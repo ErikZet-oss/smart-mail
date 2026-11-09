@@ -143,6 +143,7 @@ def invoice_from(raw: dict[str, Any], kind: InvoiceKind = "invoice") -> IssuedIn
         reference=_s(raw.get("Odkaz")),
         doc_type=_int(raw.get("TypDokladu")),
         centre_id=_uuid(raw.get("Stredisko_ID")),
+        description=_s(raw.get("Nazev")),
     )
 
 
@@ -391,6 +392,12 @@ class ApiBackend:
         digits = "".join(c for c in (query.number or "") if c.isdigit())
         if digits and digits != query.number:
             steps.append(("number_digits", cond("CisloDokladu", "ct", digits)))
+        if query.order:
+            # #210: the e-shop order number is written in the invoice „Popis“ (Nazev), e.g. „Objednávka 2410006820“
+            order = cond("Nazev", "ct", query.order)
+            steps.append(
+                ("order", all_(cond("Firma_ID", "eq", query.company_id), order) if query.company_id else order)
+            )
         for matched_by, filter_ in steps:
             # a company + date window can hold more than 20 invoices; the server cannot sort, so fetch the whole
             # (bounded) window and sort here — „the latest invoice“ (#182) must not depend on the server's order

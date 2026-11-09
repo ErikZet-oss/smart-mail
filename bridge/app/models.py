@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 InvoiceKind = Literal["invoice", "proforma"]
 CodebookName = Literal["warehouses", "centres", "numerical-series", "currencies", "activity-types"]
-MatchedBy = Literal["number", "variable_symbol", "reference", "company_dates", "number_digits", "none"]
+MatchedBy = Literal["number", "variable_symbol", "reference", "company_dates", "number_digits", "order", "none"]
 
 
 class _Model(BaseModel):
@@ -68,6 +68,7 @@ class IssuedInvoice(_Model):
     reference: str | None  # Odkaz
     doc_type: int | None  # TypDokladu, raw
     centre_id: uuid.UUID | None = None  # Stredisko_ID — selects the branch print report (#174)
+    description: str | None = None  # Nazev = card „Popis“; holds the e-shop order number (#210)
 
 
 class Order(_Model):

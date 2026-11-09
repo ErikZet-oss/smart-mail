@@ -92,3 +92,17 @@ def test_4b_articles_and_supplier_codes_mock() -> None:
     assert nut["unit"] == "bal" and nut["article_unit_qty"] == "200"
     art = client.get(f"/articles/{nut['article_id']}").json()
     assert [u["code"] for u in art["units"]] == ["ks", "bal"]
+
+
+def test_210_invoice_by_eshop_order_in_popis_mock() -> None:
+    client = make_client()
+    data = build()
+    inv = next(i for i in data.invoices if i.description)
+    order = (inv.description or "").split()[-1]
+    out = client.get(f"/invoices/issued/search?order={order}").json()
+    assert out["matched_by"] == "order" and [i["number"] for i in out["items"]] == [inv.number]
+    assert out["items"][0]["description"] == inv.description
+    other = next(c for c in data.companies if c.id != inv.company_id)
+    narrowed = client.get(f"/invoices/issued/search?order={order}&company_id={other.id}").json()
+    assert narrowed["matched_by"] == "none"
+    assert client.get("/invoices/issued/search?order=24%7C10").status_code == 422  # `|` never reaches a filter

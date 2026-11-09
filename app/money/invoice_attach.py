@@ -48,6 +48,16 @@ _AFTER_WORD = re.compile(
     re.IGNORECASE,
 )
 
+# #210 e-shop order numbers: „objednávka č. 2410006820“, „k objednávke 2410006820“, „obj. 2410006820“,
+# „order #2410006820“, „Bestellung Nr. 2410006820“ — also in the forwarded / quoted part. 6+ digits after the word,
+# so a phone, IČO, PSČ or date (never after one of these words) is not taken.
+_ORDER = re.compile(
+    r"(?<![\w])(?:objedn[áa]v[kc]\w*|obj\.|order|bestellung\w*|zak[áa]zk\w*)"
+    r"\s*(?:č\.|c\.|číslo|cislo|no\.?|nr\.?|number|nummer|#|:)?\s*#?\s*(\d{6,14})(?!\d)",
+    re.IGNORECASE,
+)
+MIN_ORDER_DIGITS = 6
+
 # #182 „pošlite poslednú faktúru“ (SK/CZ), „last/latest invoice“, „letzte Rechnung“ — deterministic, no model
 _LATEST = re.compile(
     r"\b(?:posledn\w*\s+(?:fakt[úu]r\w*|FA\b)|(?:last|latest|most\s+recent)\s+invoice\w*|letzte\w*\s+rechnung\w*)",
@@ -83,6 +93,17 @@ def invoice_refs(text: str | None) -> list[str]:
         ref = re.sub(r"\s+", "", raw).upper()
         if ref not in seen and sum(c.isdigit() for c in ref) >= 4:
             seen.add(ref)
+            out.append(ref)
+    return out[:MAX_REFS]
+
+
+def order_refs(text: str | None) -> list[str]:
+    """#210: e-shop order numbers written in the mail (subject, body and the forwarded part), in order, no
+    duplicates. Only used when the mail names no invoice number (`invoice_refs` wins)."""
+    out: list[str] = []
+    for m in _ORDER.finditer(text or ""):
+        ref = m.group(1)
+        if len(ref) >= MIN_ORDER_DIGITS and ref not in out:
             out.append(ref)
     return out[:MAX_REFS]
 
@@ -161,11 +182,22 @@ def report_for_invoice(
     return company.get(lang) or own or company.get("sk") or None
 
 
-def draft_body(language: str | None, numbers: list[str]) -> str:
+ORDER_SUFFIX: dict[str, str] = {
+    "sk": " k objednávke č. {orders}",
+    "cs": " k objednávce č. {orders}",
+    "en": " for order no. {orders}",
+    "de": " zur Bestellung Nr. {orders}",
+}
+
+
+def draft_body(language: str | None, numbers: list[str], orders: list[str] | None = None) -> str:
     lang = (language or "sk").lower()[:2]
     lang = lang if lang in BODIES else "sk"
     one, many = WHAT[lang]
-    return BODIES[lang].format(what=one if len(numbers) == 1 else many, numbers=", ".join(numbers))
+    written = ", ".join(numbers)
+    if orders:
+        written += ORDER_SUFFIX[lang].format(orders=", ".join(orders))
+    return BODIES[lang].format(what=one if len(numbers) == 1 else many, numbers=written)
 
 
 @dataclass
