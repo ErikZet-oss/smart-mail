@@ -2,6 +2,16 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #210 Faktúra k objednávke (číslo e-shopovej objednávky v „Popis“)
+
+- When a mail names **no invoice number** but an **e-shop order number** (also in the forwarded e-shop confirmation), Smart Mail finds the issued invoice through the order number in its **Popis** (GraphQL `IssuedInvoice.Nazev`). It then prepares the existing „Poslať faktúru“ card.
+- `order_refs()` reads „objednávka / objednávke / objednávce / obj. / order # / Bestellung Nr. / zákazka“ + 6–14 digits in the subject, body and quoted part. It never takes a phone number, IČO, PSČ or date, and a written invoice number always wins.
+- **Bridge** (read-only): `GET /invoices/issued/search?order=` → step `order` = `Nazev~ct~<number>`, optionally together with `Firma_ID`. The value goes through the safe filter builder (`~ # | ( )` → 422). `IssuedInvoice.description` (Nazev) is added to the query, the model, the mock (fictional numbers) and the contract fixture.
+- **Owner check unchanged:** an invoice of another company = no card (`not_owned`); approve re-checks the owner live.
+- **New warning on the card:** „Faktúra nájdená podľa objednávky … – skontrolujte.“ The card is never batch-safe. All invoices of the order that belong to the sender are attached. The draft says „… k objednávke č. …“ in SK / CZ / EN / DE.
+- No invoice for the order → no card, log statistic `order_no_invoice`.
+- `tools/money_probe.py`: a new read-only step counts invoices with a number in `Nazev` and tests `Nazev~ct~` with `PROBE_ESHOP_ORDER` (counts only).
+
 ## [Unreleased] — #208 AI karta „Príjem tovaru“ vo vlákne (W2c → W6h)
 
 - **W2c / M3** (Figma `22:6603`): under the attachments of a message, an AI card for every supplier invoice or delivery note Smart Mail read from it. The card shows:

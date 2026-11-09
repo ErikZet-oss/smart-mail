@@ -239,11 +239,13 @@ class BridgeClient:
         company_id: uuid.UUID | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        order: str | None = None,
     ) -> InvoiceSearch:
         """MONEY_API §5.1 cascade in the bridge. A value with `~ # | ( )` answers 422 there → `bridge_422`."""
         params = {
             "number": number,
             "vs": vs,
+            "order": order,
             "company_id": str(company_id) if company_id else None,
             "date_from": date_from.isoformat() if date_from else None,
             "date_to": date_to.isoformat() if date_to else None,

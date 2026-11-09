@@ -87,6 +87,7 @@ class IssuedInvoice(_Model):
     reference: str | None
     doc_type: int | None
     centre_id: uuid.UUID | None = None  # Stredisko_ID (#174)
+    description: str | None = None  # Nazev / „Popis“ — the e-shop order number (#210)
 
 
 class OverduePage(_Model):
@@ -95,7 +96,7 @@ class OverduePage(_Model):
 
 
 class InvoiceSearch(_Model):
-    matched_by: Literal["number", "variable_symbol", "reference", "company_dates", "number_digits", "none"]
+    matched_by: Literal["number", "variable_symbol", "reference", "company_dates", "number_digits", "order", "none"]
     items: list[IssuedInvoice]
 
 

@@ -53,6 +53,7 @@ class InvoiceQuery:
     company_id: uuid.UUID | None = None
     date_from: date | None = None
     date_to: date | None = None
+    order: str | None = None  # #210: e-shop order number in the invoice „Popis“ (`Nazev`)
 
 
 @dataclass(frozen=True)

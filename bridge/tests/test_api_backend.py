@@ -428,3 +428,19 @@ async def test_4b_articles_and_supplier_codes_from_the_api_shape() -> None:
     assert page.items[0].last_price == Decimal("8.05") and isinstance(page.items[0].last_price, Decimal)
     assert seen[1]["filter"] == f"Firma_ID~eq~{sup_id}"
     await backend.aclose()
+
+
+@respx.mock
+async def test_210_order_step_searches_popis_nazev_with_a_safe_filter() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    gql = respx.post(f"{BASE}/graphql")
+    gql.side_effect = [_gql({"IssuedInvoices": [{**INV, "Nazev": "Objednávka 2410006820"}]})]
+    found = await ApiBackend(settings()).search_invoices(InvoiceQuery(order="2410006820", company_id=CID))
+    body = json.loads(gql.calls[0].request.content)
+    assert body["variables"]["filter"] == f"Firma_ID~eq~{CID}#Nazev~ct~2410006820"
+    assert "Nazev" in body["query"]
+    assert found.matched_by == "order" and found.items[0].description == "Objednávka 2410006820"
+    gql.side_effect = [_gql({"IssuedInvoices": []})]
+    none = await ApiBackend(settings()).search_invoices(InvoiceQuery(order="2410006820"))
+    assert none.matched_by == "none"
+    assert json.loads(gql.calls[-1].request.content)["variables"]["filter"] == "Nazev~ct~2410006820"

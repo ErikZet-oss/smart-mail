@@ -47,6 +47,7 @@ Usage
      # MONEY_TOKEN=eyJ...                                       # optional, paste a ready JWT instead
      # MONEY_SCOPE=                                              # optional
      PROBE_INVOICE_NUMBER=FV2026/0123               # an existing issued invoice number (cisloDokladu)
+     PROBE_ESHOP_ORDER=2410006820                   # (#210) an e-shop order number written on an issued invoice
      # PROBE_DL_NUMBER=302600123                     # --branches: an existing received delivery note number
      # PROBE_DL_DOKLAD_PRIJATY=FA-2026-00456       # --branches: its "Doklad prijatý" exactly as shown in Money
      # PROBE_PRICE_LISTS=10-bez DPH,20-bez DPH        # --phase4: price-list codes set on the branches (Settings 11e)
@@ -626,6 +627,25 @@ def gql_filters(http, number):
     report["graphql_filters"] = out
     step("GraphQL filters (eq/ct/sw/ew, date formats, OR)", bool(inv), results=out,
          note=", ".join(f"{k}:{v.get('count')}{'!' if v.get('error') else ''}" for k, v in out.items()))
+
+
+def gql_invoice_popis(http, order):
+    """#210 read-only: is the e-shop order number in the invoice „Popis“ (GraphQL `Nazev`)? Counts only."""
+    st, data, err, _ = gql(http, "{ IssuedInvoices(Count:200){ ID Nazev } }")
+    rows = (data or {}).get("IssuedInvoices") or []
+    filled = [r for r in rows if (r.get("Nazev") or "").strip()]
+    with_number = [r for r in filled if re.search(r"\d{6,}", r.get("Nazev") or "")]
+    out = {"rows": len(rows), "nazev_filled": len(filled), "nazev_with_6plus_digits": len(with_number)}
+    if order:
+        st2, d2, err2, _ = gql(
+            http, 'query($f:String){ IssuedInvoices(Filter:$f, Count:20){ ID } }', {"f": f"Nazev~ct~{order}"}
+        )
+        out["order_filter_count"] = len((d2 or {}).get("IssuedInvoices") or [])
+        out["order_filter_error"] = bool(err2)
+    report["invoice_popis"] = out
+    ok = bool(rows) and not err and (not order or out.get("order_filter_count", 0) > 0)
+    step("IssuedInvoices.Nazev (Popis) holds the e-shop order (#210)", ok, results=out,
+         note=", ".join(f"{k}:{v}" for k, v in out.items()))
 
 
 def gql_suppliers(http):
@@ -1220,6 +1240,7 @@ def main():
     if gql_basic(http):
         if env("PROBE_INVOICE_NUMBER"):
             gql_filters(http, env("PROBE_INVOICE_NUMBER"))
+        gql_invoice_popis(http, env("PROBE_ESHOP_ORDER"))
         gql_suppliers(http)
         gql_stock_prices(http)
         gql_documents(http)

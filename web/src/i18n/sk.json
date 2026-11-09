@@ -1615,6 +1615,7 @@
         "recipient_not_document_owner": "Faktúra {{number}} patrí inej firme – nepriloží sa",
         "invoice_other_customer": "Faktúra {{number}} patrí inej firme – do konceptu sa nepridá",
         "invoice_guessed_latest": "Faktúra určená odhadom (posledná vystavená, {{date}}) – overte, či ide o správny doklad.",
+        "invoice_found_by_order": "Faktúra nájdená podľa objednávky {{order}} – skontrolujte.",
         "invoice_not_found": "Faktúra {{number}} sa v Money nenašla",
         "report_not_configured": "Chýba tlačová zostava v Nastavenia › Money S4 › Tlačové zostavy",
         "no_invoice": "Žiadna faktúra na poslanie"

@@ -188,6 +188,8 @@ def build(seed: int = 20261030) -> MockData:
                 reference=f"PO-{n:04d}" if rng.random() < 0.3 else None,
                 doc_type=0,
                 centre_id=None if n % 7 == 0 else mid("centre", n % 3 + 1),  # no rng: keeps the seed stable
+                # #210: every 4th invoice comes from a (fictional) e-shop order, number in „Popis“; no rng
+                description=f"Objednávka {2410000000 + n}" if n % 4 == 0 else None,
             )
         )
     for n in range(1, 61):
@@ -327,6 +329,15 @@ class MockBackend:
                 ),
             ),
             ("number_digits", bool(digits and digits != query.number), lambda i: digits in i.number),
+            (
+                "order",
+                bool(query.order),
+                lambda i: (
+                    query.order is not None
+                    and query.order in (i.description or "")
+                    and (query.company_id is None or i.company_id == query.company_id)
+                ),
+            ),
         ]
         for matched_by, active, pred in steps:
             if active:

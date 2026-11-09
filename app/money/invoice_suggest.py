@@ -21,6 +21,7 @@ from app.core.config import Settings
 from app.mail.models import FolderMeta, Mailbox, Message
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.invoice_attach import (
+    MAX_REFS,
     STRONG,
     SUGGESTION_TYPE,
     draft_body,
@@ -28,6 +29,7 @@ from app.money.invoice_attach import (
     invoice_json,
     invoice_refs,
     latest_invoice,
+    order_refs,
     wants_latest,
 )
 from app.money.matching import counterparty, match_sender
@@ -74,7 +76,7 @@ async def suggest_invoice_attach(
     db: AsyncSession, mailbox: Mailbox, settings: Settings, *, shadow: bool, client: BridgeClient | None = None
 ) -> dict[str, int]:
     """The caller commits."""
-    stats = {"candidates": 0, "created": 0, "no_refs": 0, "not_owned": 0, "money_down": 0}
+    stats = {"candidates": 0, "created": 0, "no_refs": 0, "not_owned": 0, "order_no_invoice": 0, "money_down": 0}
     if not settings.feature_money or not mailbox.ai_enabled:
         return stats
     candidates = await _candidates(db, mailbox)
@@ -88,7 +90,20 @@ async def suggest_invoice_attach(
             text = f"{message.subject or ''}\n{message.body_text or message.preview or ''}"
             refs = invoice_refs(text)  # written numbers always win over „the last invoice“
             guessed: IssuedInvoice | None = None
+            # #210: no invoice number, but an e-shop order number (the order number is in the invoice „Popis“)
+            orders = order_refs(text) if not refs else []
+            by_order: dict[str, str] = {}
             try:
+                if email is not None and not refs and orders:
+                    for order in orders:
+                        found = await bridge.search_invoices(order=order)
+                        for inv in found.items:
+                            if inv.number not in by_order and len(by_order) < MAX_REFS:
+                                by_order[inv.number] = order
+                    refs = list(by_order)
+                    if not refs:
+                        stats["order_no_invoice"] += 1
+                        continue
                 if email is not None and not refs and wants_latest(text):
                     guessed = await _guess_latest(db, settings, bridge, email, message.body_text)
                     if guessed is not None:
@@ -114,6 +129,9 @@ async def suggest_invoice_attach(
                 else c
                 for c in ev.checks
             ]
+            used_orders = list(dict.fromkeys(by_order[n] for n in numbers if n in by_order))
+            for order in used_orders:
+                checks.append(check("invoice_found_by_order", "warning", order=order))
             if guessed is not None:
                 when = guessed.issued_on.strftime("%d.%m.%Y") if guessed.issued_on else ""
                 checks.append(check("invoice_guessed_latest", "warning", number=guessed.number, date=when))
@@ -129,7 +147,8 @@ async def suggest_invoice_attach(
                     "invoices": [invoice_json(i) for i in ev.invoices],
                     "refs": refs,
                     "language": cls.language,
-                    "body": draft_body(cls.language, numbers),
+                    "body": draft_body(cls.language, numbers, used_orders),
+                    "orders": used_orders,
                     "guessed_latest": guessed is not None,
                 },
                 rationale=None,

@@ -107,11 +107,12 @@ async def search_invoices(
     number: _TEXT = None,
     vs: _TEXT = None,
     reference: _TEXT = None,
+    order: _TEXT = None,
     company_id: uuid.UUID | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> InvoiceSearch:
-    for name, value in (("number", number), ("vs", vs), ("reference", reference)):
+    for name, value in (("number", number), ("vs", vs), ("reference", reference), ("order", order)):
         if value and any(c in UNSAFE for c in value):
             raise UnsafeFilterValue(name)  # same answer from the mock and from Money
     query = InvoiceQuery(
@@ -121,8 +122,9 @@ async def search_invoices(
         company_id=company_id,
         date_from=date_from,
         date_to=date_to,
+        order=(order or "").strip() or None,
     )
-    if not (query.number or query.variable_symbol or query.reference or query.company_id):
+    if not (query.number or query.variable_symbol or query.reference or query.company_id or query.order):
         raise HTTPException(status_code=422, detail={"code": "search_criteria_required"})
     return await _backend(request).search_invoices(query)
 
