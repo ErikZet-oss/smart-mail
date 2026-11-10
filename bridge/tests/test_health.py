@@ -21,7 +21,15 @@ def test_mock_bridge_is_healthy_and_never_writes() -> None:
     ("overrides", "reason"),
     [
         ({"money_base_url": "https://x", "money_client_id": "c", "money_client_secret": "s"}, "BRIDGE_HMAC_SECRET"),
-        ({"money_agenda_label": "PROD", "bridge_hmac_secret": "s", "money_base_url": "https://x"}, "TEST"),
+        (  # #212: PROD is allowed for reading, but never with the development HMAC secret
+            {
+                "money_agenda_label": "PROD",
+                "money_base_url": "https://x",
+                "money_client_id": "c",
+                "money_client_secret": "s",
+            },
+            "BRIDGE_HMAC_SECRET",
+        ),
         ({"bridge_hmac_secret": "s"}, "MONEY_BASE_URL"),
     ],
 )
@@ -34,3 +42,19 @@ def test_api_backend_refuses_to_start(overrides: dict[str, str], reason: str) ->
 def test_prod_agenda_does_not_enable_writes() -> None:
     s = BridgeSettings(money_backend="api", money_agenda_label="PROD", money_base_url="https://x", money_client_id="c")
     assert s.writes_enabled is False
+
+
+def test_212_prod_with_real_api_starts_read_only() -> None:
+    s = BridgeSettings(
+        money_backend="api",
+        money_agenda_label="PROD",
+        money_base_url="https://x",
+        money_client_id="c",
+        money_client_secret="s",  # type: ignore[arg-type]
+        bridge_hmac_secret="prod-secret",  # type: ignore[arg-type]
+        approval_jwt_public_key="a-key-is-set",
+    )
+    assert s.startup_problem() is None
+    assert s.read_only is True and s.writes_enabled is False  # even with the approval key
+    app = create_app(s, backend=MockBackend())
+    assert TestClient(app).get("/healthz").json()["agenda"] == "PROD"

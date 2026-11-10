@@ -14,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.ai.models import OrgSettings
 from app.core.config import Settings
-from app.money.bridge_client import BridgeClient
+from app.money.agenda import finish_switch, note_agenda
+from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.cache_sync import DEFAULT_INTERVAL, ENTITIES, INTERVALS, SyncResult, due, needs_nightly_full, sync_entity
 from app.money.models import MoneySyncState
 
@@ -50,21 +51,32 @@ async def run_money_sync(
     bridge = client or BridgeClient(settings)
     try:
         async with sessionmaker() as db:
+            # #212: another agenda than the cache (TEST ↔ PROD) → full resync of everything, then the checks
+            switching = False
+            try:
+                switching = await note_agenda(db, (await bridge.health()).agenda)
+                await db.commit()
+            except BridgeUnavailable:
+                pass  # the entities below fail the same way and are recorded as errors
             interval = await sync_interval(db)
             states: dict[str, Any] = {s.entity: s for s in (await db.scalars(select(MoneySyncState))).all()}
             for entity in ENTITIES:
                 state = states.get(entity)
                 nightly = now.hour in NIGHTLY_HOURS and needs_nightly_full(state, now)
                 if entity == "codebooks":
-                    run = force or needs_nightly_full(state, now)  # daily (MONEY_API §4)
+                    run = switching or force or needs_nightly_full(state, now)  # daily (MONEY_API §4)
                 else:
-                    run = force or nightly or due(state, interval, now)
+                    run = switching or force or nightly or due(state, interval, now)
                 if not run:
                     continue
-                results.append(await sync_entity(db, bridge, entity, full=nightly and entity == "companies"))
+                full = switching or (nightly and entity == "companies")
+                results.append(await sync_entity(db, bridge, entity, full=full))
                 await db.commit()
                 if results[-1].status != "ok":
                     break  # Money is down: the next entities would fail the same way
+            if switching and len(results) == len(ENTITIES) and all(r.status == "ok" for r in results):
+                await finish_switch(db, deactivated=sum(r.deactivated for r in results))
+                await db.commit()
     finally:
         await redis.delete(LOCK_KEY)
         if own:

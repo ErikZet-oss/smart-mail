@@ -43,7 +43,11 @@ MAX_PER_RUN = 20
 async def _candidates(db: AsyncSession, mailbox: Mailbox) -> list[tuple[Message, Classification]]:
     has_one = (
         select(AiSuggestion.id)
-        .where(AiSuggestion.message_id == Message.id, AiSuggestion.suggestion_type == SUGGESTION_TYPE)
+        .where(
+            AiSuggestion.message_id == Message.id,
+            AiSuggestion.suggestion_type == SUGGESTION_TYPE,
+            AiSuggestion.status != "superseded",  # #212: made again from the new agenda
+        )
         .exists()
     )
     rows = await db.execute(

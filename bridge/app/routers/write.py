@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import ValidationError
 
 from app.approval import verify_approval
 from app.backend import MoneyBackend
 from app.models import ActivityIn, ActivityOut
 
-router = APIRouter()
+
+async def refuse_on_prod(request: Request) -> None:
+    """#212: one guard for the whole write router — on the PRODUCTION agenda every write answers 403 before the
+    approval JWT is checked and before Money is called. New write routes inherit it."""
+    if request.app.state.settings.read_only:
+        raise HTTPException(status_code=403, detail={"code": "prod_read_only"})
+
+
+router = APIRouter(dependencies=[Depends(refuse_on_prod)])
 
 
 @router.post("/activities")

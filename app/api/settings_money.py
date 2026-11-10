@@ -31,6 +31,8 @@ from app.money.activities import (
     failed_activities,
     load_activity_settings,
 )
+from app.money.agenda import is_prod
+from app.money.agenda import load as load_agenda
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.cache_sync import ENTITIES
 from app.money.invoice_attach import (
@@ -69,6 +71,13 @@ class StatusOut(BaseModel):
     latency_ms: int | None
     writes_enabled: bool
     entities: list[EntityState]
+    # #212 the agenda of the cache (TEST / PROD = read-only) and the safe switch
+    read_only: bool = False
+    cache_agenda: str | None = None
+    agenda_changed_at: str | None = None
+    agenda_previous: str | None = None
+    resync_pending: bool = False
+    problems: list[dict[str, Any]] = []
 
 
 class SyncRun(BaseModel):
@@ -118,7 +127,14 @@ async def _entities(db: DB) -> list[EntityState]:
 @router.get("/status")
 async def money_status(admin: Admin, db: DB, settings: SettingsDep) -> StatusOut:
     """13a status card; „Otestovať“ calls it again. Never raises when Money or the bridge is down."""
+    stored = await load_agenda(db)
     out: dict[str, Any] = {
+        "read_only": stored.get("agenda") == "PROD",
+        "cache_agenda": stored.get("agenda"),
+        "agenda_changed_at": stored.get("changed_at"),
+        "agenda_previous": stored.get("previous"),
+        "resync_pending": bool(stored.get("resync_pending")),
+        "problems": stored.get("problems") or [],
         "enabled": settings.feature_money,
         "reachable": False,
         "error": None,
@@ -134,6 +150,7 @@ async def money_status(admin: Admin, db: DB, settings: SettingsDep) -> StatusOut
         try:
             health = await bridge.health()
             out.update(
+                read_only=out["read_only"] or health.agenda == "PROD",
                 backend=health.backend,
                 agenda=health.agenda,
                 bridge_version=health.version,
@@ -415,6 +432,7 @@ async def test_branch_report(
 class WritesOut(BaseModel):
     enabled: bool
     key_configured: bool  # APPROVAL_JWT_PRIVATE_KEY on the VPS
+    read_only: bool = False  # #212 PRODUCTION agenda: the switch is locked
 
 
 class WritesIn(BaseModel):
@@ -436,7 +454,9 @@ def _writes_out(conf: ActivitySettings, settings: Settings) -> WritesOut:
 
 @router.get("/writes")
 async def get_writes(admin: Admin, db: DB, settings: SettingsDep) -> WritesOut:
-    return _writes_out(await load_activity_settings(db), settings)
+    out = _writes_out(await load_activity_settings(db), settings)
+    out.read_only = await is_prod(db)
+    return out
 
 
 @router.put("/writes")
@@ -445,6 +465,8 @@ async def put_writes(body: WritesIn, ctx: RecentReauth, db: DB, settings: Settin
     refuses `MONEY_BACKEND=api` elsewhere), so the „type OSTRÁ“ confirmation of SETTINGS_SPEC 13a is not needed yet."""
     admin = ctx.person
     assert admin is not None
+    if await is_prod(db):
+        raise fail(409, "prod_read_only")  # #212: the PRODUCTION agenda is read-only, the switch stays off
     if body.enabled and not _writes_out(await load_activity_settings(db), settings).key_configured:
         raise fail(409, "approval_key_missing")
     row = await _org_row(db, SECTION_WRITES)

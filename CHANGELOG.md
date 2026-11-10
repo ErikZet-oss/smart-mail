@@ -2,6 +2,30 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #212 Ostrá agenda Money len na čítanie + bezpečné prepnutie z TEST
+
+- **Customer decision (Erik, 2026-11-10):** reading the PRODUCTION agenda is allowed, writing is not. There is no path to a write on PROD.
+- **Bridge:**
+  - `MONEY_BACKEND=api` with `MONEY_AGENDA_LABEL=PROD` starts in read-only mode;
+  - `writes_enabled` is always false on PROD, even with `APPROVAL_JWT_PUBLIC_KEY`;
+  - one dependency on the whole write router answers **403 `prod_read_only`** after HMAC and before the approval JWT and any Money call (`/activities` and every future write route);
+  - startup log `money.agenda … read_only=true`;
+  - `/readyz` also reports `agenda` and `writes_enabled`;
+  - PROD with the dev HMAC secret still refuses to start.
+- **App:**
+  - the agenda of the read cache is stored in `org_settings` (`money.agenda`) — no migration;
+  - on PROD the 13a writes switch is locked (`PUT /settings/money/writes` → 409 `prod_read_only`) and the activity after send is never attempted;
+  - 13a shows „Ostrá agenda – len čítanie“.
+- **Agenda switch (TEST ↔ PROD)**, noticed by the sync job from `/healthz`:
+  - full resync of companies, persons and codebooks; missing rows are deactivated, nothing is deleted;
+  - pending `invoice_attach` suggestions become `superseded` (cannot be approved) and are made again from the new agenda;
+  - checks branch centre / warehouse / series and the learned mappings (`email_company_links`, `supplier_item_mappings`);
+  - unknown items → a warning in 13a, and a branch warehouse unknown in the new agenda behaves as not set;
+  - audit `money.agenda_changed` (from / to, counts) and one admin notification;
+  - an interrupted switch continues with a full run.
+  - Articles and supplier codes are read live from the bridge, so they need no resync. Price lists and print-report ids are not cached and are not checked.
+- README: how to switch to PROD and back.
+
 ## [Unreleased] — #210 Faktúra k objednávke (číslo e-shopovej objednávky v „Popis“)
 
 - When a mail names **no invoice number** but an **e-shop order number** (also in the forwarded e-shop confirmation), Smart Mail finds the issued invoice through the order number in its **Popis** (GraphQL `IssuedInvoice.Nazev`). It then prepares the existing „Poslať faktúru“ card.

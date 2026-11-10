@@ -152,6 +152,12 @@ class FakeBridge:
     def __init__(self, companies: list[Company], persons: list[Person] | None = None, fail: bool = False) -> None:
         self.companies_data, self.persons_data, self.fail = companies, persons or [], fail
         self.since: list[datetime | None] = []
+        self.agenda = "TEST"  # #212: what /healthz reports
+
+    async def health(self) -> Health:
+        if self.fail:
+            raise BridgeUnavailable("money_unavailable")
+        return Health(status="ok", version="t", backend="api", agenda=self.agenda, writes_enabled=False)
 
     async def companies(self, since: datetime | None, start: int, count: int) -> CompanyPage:
         if self.fail:

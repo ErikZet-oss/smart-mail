@@ -28,12 +28,10 @@ class BridgeSettings(BaseSettings):
     log_level: str = "INFO"
 
     def startup_problem(self) -> str | None:
-        """Why the bridge must not start (checked in `create_app`): the real API only on the TEST agenda (Phase 3,
-        CLAUDE.md §0) and never with the development HMAC secret."""
+        """Why the bridge must not start (checked in `create_app`): never with the development HMAC secret or without
+        Money credentials. PROD is allowed for READING only (#212, Erik 2026-11-10) — see `read_only`."""
         if self.money_backend != "api":
             return None
-        if self.money_agenda_label != "TEST":
-            return "MONEY_BACKEND=api is allowed only with MONEY_AGENDA_LABEL=TEST"
         if self.bridge_hmac_secret.get_secret_value() in ("", DEV_HMAC_SECRET):
             return "BRIDGE_HMAC_SECRET must be set for MONEY_BACKEND=api"
         if not (self.money_base_url and self.money_client_id and self.money_client_secret):
@@ -41,10 +39,15 @@ class BridgeSettings(BaseSettings):
         return None
 
     @property
+    def read_only(self) -> bool:
+        """#212: the PRODUCTION agenda is read-only — no write route ever reaches Money, whatever else is set."""
+        return self.money_agenda_label != "TEST"
+
+    @property
     def writes_enabled(self) -> bool:
         """Phase 3f: writes need the approval public key (every write carries a single-use JWT signed by the app) and
         the TEST agenda. The main switch for people stays in Settings 13a of the app (default off)."""
-        return bool(self.approval_jwt_public_key) and self.money_agenda_label == "TEST"
+        return bool(self.approval_jwt_public_key) and not self.read_only
 
 
 @lru_cache
