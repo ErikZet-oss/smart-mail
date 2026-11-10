@@ -235,7 +235,7 @@ async def test_3f_settings_writes_needs_reauth_and_key(
     app.state.settings.approval_jwt_private_key = SecretStr(PRIV_B64)
     try:
         r = await client.send_json("PUT", "/api/settings/money/writes", {"enabled": True})
-        assert r.status_code == 200 and r.json() == {"enabled": True, "key_configured": True}
+        assert r.status_code == 200 and r.json() == {"enabled": True, "key_configured": True, "read_only": False}
     finally:
         app.state.settings.approval_jwt_private_key = None
 

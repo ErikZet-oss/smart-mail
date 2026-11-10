@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.guards import check
 from app.auth.models import Branch
+from app.money.agenda import invalid_branch_ids
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.schemas import Article, SupplierCode
 from app.purchasing import org_settings
@@ -153,7 +154,9 @@ async def _branch_warehouse(db: AsyncSession, doc: SupplierDocument) -> str | No
     if doc.branch_id is None:
         return None
     branch = await db.get(Branch, doc.branch_id)
-    return branch.money_warehouse_id if branch else None
+    if branch is None or "money_warehouse_id" in await invalid_branch_ids(db, branch.id):
+        return None  # #212: not in the current Money agenda → behaves as „not set“
+    return branch.money_warehouse_id
 
 
 async def target_warehouse(db: AsyncSession, doc: SupplierDocument) -> str | None:

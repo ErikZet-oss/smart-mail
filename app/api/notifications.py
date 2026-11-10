@@ -20,7 +20,7 @@ from app.mail.prefs import save_section
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
-Kind = Literal["sync_failed", "assigned", "export_ready"]
+Kind = Literal["sync_failed", "assigned", "export_ready", "money_agenda_changed"]
 SECTION = "notifications.dismissed"
 DISMISS_MAX = 500
 DISMISS_MAX_AGE = timedelta(days=30)
@@ -190,6 +190,25 @@ async def _build(db: DB, ctx: Auth, request: Request | None = None) -> list[Noti
                     unread=nid not in dismissed,
                     href=None,  # the web downloads /api/mail/exports/{id}/download
                     params={"export_id": state.id, "filename": state.filename, "messages": str(state.done)},
+                )
+            )
+
+    if ctx.person is not None and ctx.person.role == "admin":
+        # #212 one notification per agenda switch (TEST ↔ PROD) for admins
+        from app.money.agenda import load as load_agenda
+
+        agenda = await load_agenda(db)
+        if agenda.get("changed_at"):
+            changed = datetime.fromisoformat(str(agenda["changed_at"]))
+            nid = event_id("money-agenda", uuid.UUID(int=0), changed)
+            items.append(
+                NotificationOut(
+                    id=nid,
+                    kind="money_agenda_changed",
+                    created_at=changed,
+                    unread=nid not in dismissed,
+                    href="/settings/money/connection",
+                    params={"agenda": str(agenda.get("agenda") or ""), "previous": str(agenda.get("previous") or "")},
                 )
             )
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import Depends, FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
@@ -17,6 +18,7 @@ from app.models import Health
 from app.routers import read, write
 
 __version__ = "0.3.0"
+log = structlog.get_logger()
 
 
 def make_backend(settings: BridgeSettings) -> MoneyBackend:
@@ -47,6 +49,13 @@ def create_app(settings: BridgeSettings | None = None, backend: MoneyBackend | N
     app.state.settings = settings
     app.state.jtis = JtiCache()
     replay = ReplayCache()
+    log.info(
+        "money.agenda",
+        agenda=settings.money_agenda_label,
+        backend=settings.money_backend,
+        read_only=settings.read_only,
+        writes_enabled=settings.writes_enabled,
+    )
 
     async def hmac_guard(request: Request) -> None:
         await verify_request(
@@ -83,14 +92,18 @@ def create_app(settings: BridgeSettings | None = None, backend: MoneyBackend | N
         )
 
     @app.get("/readyz")
-    async def readyz(response: Response) -> dict[str, str]:
+    async def readyz(response: Response) -> dict[str, str | bool]:
         """Token + `Version` on the real API; the mock is always ready."""
+        agenda: dict[str, str | bool] = {
+            "agenda": settings.money_agenda_label,
+            "writes_enabled": settings.writes_enabled,
+        }
         try:
             version = await app.state.backend.version()
         except (MoneyUnavailable, MoneyError):
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-            return {"status": "not_ready", "reason": "money_unavailable"}
-        return {"status": "ready", "backend": settings.money_backend, "money_version": version}
+            return {"status": "not_ready", "reason": "money_unavailable", **agenda}
+        return {"status": "ready", "backend": settings.money_backend, "money_version": version, **agenda}
 
     app.include_router(read.router, dependencies=[Depends(hmac_guard)])
     app.include_router(write.router, dependencies=[Depends(hmac_guard)])

@@ -30,6 +30,12 @@ function notifBody(item: NotificationItem, t: (k: string, o?: Record<string, str
       messages: item.params.messages ?? '',
     });
   }
+  if (item.kind === 'money_agenda_changed') {
+    return t('notifs.kinds.money_agenda_changed.body', {
+      agenda: item.params.agenda ?? '',
+      previous: item.params.previous ?? '',
+    });
+  }
   return t('notifs.kinds.assigned.body', { subject: item.params.subject ?? '' });
 }
 
@@ -55,6 +61,7 @@ function timeLabel(iso: string): string {
 function KindIcon({ kind }: { kind: NotificationItem['kind'] }) {
   if (kind === 'sync_failed') return <RefreshCw size={18} className="text-danger-600" aria-hidden="true" />;
   if (kind === 'export_ready') return <FolderDown size={18} className="text-brand-primary-600" aria-hidden="true" />;
+  if (kind === 'money_agenda_changed') return <RefreshCw size={18} className="text-warning-700" aria-hidden="true" />;
   return <UserPlus size={18} className="text-brand-primary-600" aria-hidden="true" />;
 }
 

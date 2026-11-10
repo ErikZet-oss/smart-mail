@@ -140,3 +140,37 @@ def test_3f_api_backend_waits_for_the_probe() -> None:
     raw = body()
     r = post(client, raw, token(raw))
     assert r.status_code == 501 and r.json()["detail"]["code"] == "waiting_for_probe"
+
+
+class _SpyBackend(MockBackend):
+    """Records every call that would reach Money."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.writes = 0
+
+    async def create_activity(self, activity: Any) -> Any:
+        self.writes += 1
+        return await super().create_activity(activity)
+
+
+def test_212_prod_agenda_refuses_every_write_before_jwt_and_money() -> None:
+    spy = _SpyBackend()
+    prod = make_client(backend=spy, approval_jwt_public_key=PUB, money_agenda_label="PROD")
+    raw = body()
+    for tok in (token(raw), None, "garbage"):  # a valid, a missing and a broken token: all the same 403
+        r = post(prod, raw, tok)
+        assert r.status_code == 403 and r.json()["detail"]["code"] == "prod_read_only"
+    assert spy.writes == 0
+    health = prod.client.get("/healthz").json()
+    assert health["agenda"] == "PROD" and health["writes_enabled"] is False
+    ready = prod.client.get("/readyz").json()
+    assert ready["agenda"] == "PROD" and ready["writes_enabled"] is False
+    # reads keep working on PROD
+    assert prod.get("/sync/companies?count=1").status_code == 200
+
+
+def test_212_prod_write_router_still_needs_hmac() -> None:
+    prod = make_client(backend=_SpyBackend(), money_agenda_label="PROD")
+    r = prod.client.post("/activities", content=body(), headers={"Content-Type": "application/json"})
+    assert r.status_code == 401  # unsigned: HMAC answers first, nothing about the agenda leaks

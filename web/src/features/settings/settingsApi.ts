@@ -417,6 +417,18 @@ export type MoneyStatus = {
   latency_ms: number | null;
   writes_enabled: boolean;
   entities: MoneyEntityState[];
+  // #212 agenda of the cache (PROD = read-only) and the safe TEST ↔ PROD switch
+  read_only?: boolean;
+  cache_agenda?: string | null;
+  agenda_changed_at?: string | null;
+  agenda_previous?: string | null;
+  resync_pending?: boolean;
+  problems?: {
+    kind: 'branch' | 'email_links' | 'supplier_mappings';
+    branch?: string;
+    field?: string;
+    count?: number;
+  }[];
 };
 export type MoneySyncRun = {
   entity: MoneyEntityState['entity'];
@@ -472,7 +484,7 @@ export const testBranchReport = (id: string, kind: string, number: string) =>
   );
 
 /** 13a „Zápisy do Money povolené“ ⚠ and 13d Aktivity (Phase 3f). */
-export type MoneyWrites = { enabled: boolean; key_configured: boolean };
+export type MoneyWrites = { enabled: boolean; key_configured: boolean; read_only?: boolean };
 export type MoneyActivities = {
   enabled: boolean;
   type_email: string | null;

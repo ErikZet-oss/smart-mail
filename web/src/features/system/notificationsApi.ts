@@ -1,6 +1,6 @@
 import { api } from '../../lib/api';
 
-export type NotificationKind = 'sync_failed' | 'assigned' | 'export_ready';
+export type NotificationKind = 'sync_failed' | 'assigned' | 'export_ready' | 'money_agenda_changed';
 
 export type NotificationItem = {
   id: string;
@@ -16,6 +16,8 @@ export type NotificationItem = {
     export_id?: string;
     filename?: string;
     messages?: string;
+    agenda?: string;
+    previous?: string;
   };
 };
 

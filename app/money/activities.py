@@ -23,6 +23,7 @@ from app.ai.models import OrgSettings
 from app.core.audit import AuditLog, audit
 from app.core.config import Settings
 from app.mail.compose_models import ComposeAttachment, ComposeDraft
+from app.money.agenda import is_prod
 from app.money.approval import ApprovalKeyMissing, sign_approval
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.invoice_attach import marked_company
@@ -53,6 +54,8 @@ async def _data(db: AsyncSession, section: str) -> dict[str, Any]:
 
 async def load_activity_settings(db: AsyncSession) -> ActivitySettings:
     writes = await _data(db, SECTION_WRITES)
+    if await is_prod(db):  # #212: the PRODUCTION agenda is read-only — no activity is even attempted
+        writes = {**writes, "enabled": False}
     data = await _data(db, SECTION_ACTIVITIES)
     return ActivitySettings(
         writes_enabled=writes.get("enabled") is True,

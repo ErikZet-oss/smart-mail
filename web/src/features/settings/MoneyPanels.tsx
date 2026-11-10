@@ -60,6 +60,23 @@ export function MoneyConnectionPanel() {
           details={[t(`money.errors.${s.error ?? 'money_unavailable'}`, { defaultValue: s.error ?? '' })]}
         />
       ) : null}
+      {s?.resync_pending ? <Banner kind="info" message={t('money.agenda.changed')} /> : null}
+      {s?.problems && s.problems.length > 0 ? (
+        <div data-testid="money-agenda-problems">
+          <Banner
+            kind="warning"
+            message={t('money.agenda.problemsTitle')}
+            details={s.problems.map((p) =>
+              p.kind === 'branch'
+                ? t('money.agenda.branchProblem', {
+                    branch: p.branch ?? '',
+                    field: t(`money.agenda.fields.${(p.field ?? '').split(':')[0]}`, { defaultValue: p.field ?? '' }),
+                  })
+                : t(`money.agenda.${p.kind}`, { count: p.count ?? 0 }),
+            )}
+          />
+        </div>
+      ) : null}
       <h2 className="type-label text-text-secondary">{t('money.connection.stateTitle')}</h2>
       <section
         aria-label={t('money.connection.card')}
@@ -91,6 +108,14 @@ export function MoneyConnectionPanel() {
               >
                 {t(`money.connection.agendaChip.${s.agenda}`, { defaultValue: s.agenda })}
                 {s.backend === 'mock' ? ` · ${t('money.connection.mock')}` : ''}
+              </span>
+            ) : null}
+            {s?.read_only ? (
+              <span
+                data-testid="money-read-only"
+                className="type-small inline-flex h-6 items-center rounded-full border border-border-strong bg-bg-muted px-2 text-text-primary"
+              >
+                {t('money.agenda.readOnly')}
               </span>
             ) : null}
           </div>
@@ -524,6 +549,7 @@ function WritesSwitch() {
     },
   });
   const on = writes.data?.enabled ?? false;
+  const locked = writes.data?.read_only === true;
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border-default p-4" data-testid="money-writes">
       <h2 className="type-label text-text-secondary">{t('money.writes.title')}</h2>
@@ -533,12 +559,17 @@ function WritesSwitch() {
           role="switch"
           aria-checked={on}
           checked={on}
-          disabled={!writes.data || save.isPending || (!on && !writes.data.key_configured)}
+          disabled={!writes.data || locked || save.isPending || (!on && !writes.data.key_configured)}
           onChange={(e) => save.mutate(e.target.checked)}
         />
         <span className="type-label text-text-primary">{t('money.writes.label')} ⚠</span>
       </label>
       <p className="type-small text-text-secondary">{t('money.writes.help')}</p>
+      {locked ? (
+        <p className="type-small text-text-primary" data-testid="money-writes-locked">
+          {t('money.agenda.writesLocked')}
+        </p>
+      ) : null}
       {writes.data && !writes.data.key_configured ? (
         <p className="type-small text-warning-700">{t('money.writes.noKey')}</p>
       ) : null}

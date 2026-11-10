@@ -257,6 +257,10 @@
       "export_ready": {
         "title": "Archív je pripravený",
         "body": "{{filename}} – {{messages}} správ, odkaz platí 24 hodín."
+      },
+      "money_agenda_changed": {
+        "title": "Agenda Money sa zmenila",
+        "body": "Agenda {{previous}} → {{agenda}}. Údaje z Money sa načítali znova – skontrolujte Nastavenia › Money S4."
       }
     },
     "syncErrors": {
@@ -1814,6 +1818,24 @@
     }
   },
   "money": {
+    "agenda": {
+      "readOnly": "Ostrá agenda – len čítanie",
+      "writesLocked": "Ostrá agenda je len na čítanie – zápisy do Money sa nedajú zapnúť.",
+      "changed": "Agenda Money sa zmenila – údaje sa načítavajú znova",
+      "problemsTitle": "Nastavenie pobočky odkazuje na položku, ktorá v Money neexistuje",
+      "branchProblem": "{{branch}}: {{field}} – v tejto agende Money neexistuje, správa sa ako nenastavené.",
+      "fields": {
+        "money_centre_id": "stredisko",
+        "money_warehouse_id": "sklad",
+        "series": "číselný rad"
+      },
+      "email_links_one": "{{count}} potvrdené priradenie e-mailu k firme odkazuje na firmu, ktorá v tejto agende nie je – nepoužije sa.",
+      "email_links_few": "{{count}} potvrdené priradenia e-mailov k firmám odkazujú na firmy, ktoré v tejto agende nie sú – nepoužijú sa.",
+      "email_links_other": "{{count}} potvrdených priradení e-mailov k firmám odkazuje na firmy, ktoré v tejto agende nie sú – nepoužijú sa.",
+      "supplier_mappings_one": "{{count}} naučený kód dodávateľa patrí dodávateľovi, ktorý v tejto agende nie je – nepoužije sa.",
+      "supplier_mappings_few": "{{count}} naučené kódy dodávateľov patria dodávateľom, ktorí v tejto agende nie sú – nepoužijú sa.",
+      "supplier_mappings_other": "{{count}} naučených kódov dodávateľov patrí dodávateľom, ktorí v tejto agende nie sú – nepoužijú sa."
+    },
     "writes": {
       "title": "Zápisy",
       "label": "Zápisy do Money povolené",
@@ -2028,6 +2050,7 @@
       "empty": "Synchronizácia ešte neprebehla."
     },
     "errors": {
+      "prod_read_only": "Ostrá agenda Money je len na čítanie – zápis nie je povolený.",
       "money_unavailable": "Money alebo Money most neodpovedá.",
       "money_circuit_open": "Money most opakovane neodpovedal – ďalší pokus o minútu.",
       "bridge_contract": "Money most poslal údaje v neočakávanom tvare.",

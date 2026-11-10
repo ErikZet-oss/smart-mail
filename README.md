@@ -101,8 +101,9 @@ Aplikácia si z Money priebežne načítava firmy, osoby a číselníky do vlast
 Zapína sa `FEATURE_MONEY=true`. Potom správca v **Nastavenia › Money S4** vidí stav prepojenia (13a) a nastaví interval
 synchronizácie, spustí ju ručne a vidí históriu behov (13e). Keď Money nie je dostupné, pošta funguje ďalej.
 
-Skutočné Money (`MONEY_BACKEND=api`) sa spustí len s `MONEY_AGENDA_LABEL=TEST` a s vlastným `BRIDGE_HMAC_SECRET` –
-inak most odmietne štart. Ostrú agendu bez Erikovho súhlasu nepoužívame.
+Skutočné Money (`MONEY_BACKEND=api`) sa spustí len s vlastným `BRIDGE_HMAC_SECRET` a prihlasovacími údajmi Money –
+inak most odmietne štart. Ostrá agenda (`MONEY_AGENDA_LABEL=PROD`) je **len na čítanie** (#212): most odmietne každý
+zápis (403 `prod_read_only`) a aplikácia zápisy nedovolí zapnúť.
 
 ### Prihlásenie (fáza 1a)
 Prihlasuje sa e-mailom a heslom k pošte – heslo overí IMAP server (ten istý ako pre Roundcube). Server nastavte v `.env`:
@@ -410,6 +411,25 @@ Restart-Service SmartMailBridge
    spýta na heslo). Kým je tento vypínač vypnutý, do Money sa nezapisuje nič.
 4. Ak zápis zlyhá, nikdy sa sám neopakuje – uvidíte ho v **Aktivity › Nezapísané** s tlačidlom „Skúsiť znova“.
    Na skutočnom Money sa zápis zapne až po teste `money_probe.py` (dovtedy odpovie „čaká na test prepojenia“).
+
+### 5. Prepnutie na ostrú agendu (len čítanie, #212)
+Kľúče API ostávajú tie isté. Ktorú agendu API obsluhuje, nastaví Erik / IT na strane Money. Smart Mail to nemení.
+1. Na serveri Money upravte `C:\SmartMail\bridge\.env`: `MONEY_AGENDA_LABEL=PROD`.
+2. Reštartujte most (PowerShell ako správca):
+   ```
+   Restart-Service SmartMailBridge
+   ```
+3. Pri ďalšej synchronizácii (najneskôr o 15 minút, alebo **Nastavenia › Money S4 › Synchronizácia ›
+   Synchronizovať teraz**) aplikácia zistí zmenu agendy:
+   - načíta znova firmy, osoby a číselníky; čo v ostrej agende nie je, deaktivuje (nič nemaže);
+   - neschválené návrhy s údajmi z TEST označí ako zastarané a vytvorí ich znova z ostrej agendy;
+   - skontroluje nastavenia pobočiek (stredisko, sklad, číselné rady) a naučené priradenia. Čo v Money neexistuje,
+     ukáže v **Prepojenie (13a)** ako varovanie a správa sa ako nenastavené;
+   - správca dostane jednu notifikáciu.
+4. V **Prepojenie (13a)** je štítok „Ostrá agenda – len čítanie“ a vypínač zápisov je zablokovaný.
+
+**Späť na TEST:** v `.env` nastavte `MONEY_AGENDA_LABEL=TEST`, reštartujte most a postup sa zopakuje opačne.
+Cenníky a ID tlačových zostáv sa pri prepnutí neoverujú (nie sú v lokálnej kópii). Skontrolujte ich v **13b** a **11e**.
 
 ### Aktualizácia mostu
 Stiahnite nový ZIP, rozbaľte ho a ako správca spustite:
