@@ -170,7 +170,9 @@ How to use (DECISIONS D24):
 | Organizmy (z obrazoviek) | [93:94014](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=93-94014) | `CustomerCard`, `AssistantPanel`, `ToolCall`, `OrderLineRow`, `OfferLineRow`, `MoneyGrid`, `MoneyCardHeader`, `HtmlSignatureEditor`, `CommandPalette`, `NotificationsPanel`, `DataTable`, `RuleList` |
 
 AiSuggestionCard (13 types × states), banners, toasts, checks, empty states and form patterns are on page 03 Patterns
-(`2:4`). Foundations (colour variables Light/Dark, typography, spacing, shadows, grids, logo) are on page 01 (`2:2`).
+(`2:4`). **Missing frame (#215):** the invoice card state „faktúra inej firmy“ (red `requires_ack` check row + Checkbox
+`8:1104`, primary button disabled until ticked) is built from the existing components; the reviewer adds the frame
+to page 03 and links it here. Foundations (colour variables Light/Dark, typography, spacing, shadows, grids, logo) are on page 01 (`2:2`).
 
 ## Prototype flows (page 06 Flows) — each flow is also a Playwright e2e test (CLAUDE.md §14)
 

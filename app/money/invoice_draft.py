@@ -46,7 +46,7 @@ async def build_invoice_draft(
 ) -> ComposeDraft:
     """Reply draft to the checked recipient only, with every invoice PDF from Money. The caller commits.
     Raises `InvoiceDraftError` (blocked / pdf missing) or `BridgeUnavailable`."""
-    if evaluation.blocked or evaluation.company_money_id is None:
+    if evaluation.blocked or evaluation.marker_company is None:
         raise InvoiceDraftError("suggestion_blocked")
     reports = await load_reports(db)
     branch_reports = await load_branch_reports(db)
@@ -72,7 +72,7 @@ async def build_invoice_draft(
     )
     draft.to_addrs = [{"name": None, "email": evaluation.email}]  # only the checked recipient
     draft.cc_addrs = []
-    prefix = storage_prefix(draft.id, evaluation.company_money_id)
+    prefix = storage_prefix(draft.id, evaluation.marker_company)
     for filename, data in pdfs:
         key, digest = storage.put_bytes(settings, data, prefix=prefix)
         db.add(

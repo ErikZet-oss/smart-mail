@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from app.ai.language import czech_words
 
-Level = Literal["ok", "warning", "blocking"]
+Level = Literal["ok", "warning", "requires_ack", "blocking"]  # requires_ack: #215, a person must tick it
 
 PLACEHOLDER = re.compile(r"\[\[\s*DOPLNI[TŤ][^\]]*\]\]", re.I)
 # Numbers worth checking: document numbers, prices, dates, quantities (3+ characters with a digit).

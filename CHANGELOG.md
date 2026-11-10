@@ -2,6 +2,16 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #215 Faktúra inej firmy – s červeným upozornením a povinným potvrdením (ADR-019)
+
+- **Deliberate exception to CLAUDE.md §11, decided by Erik (ADR-019):** when the mail itself identified the invoice (written number / VS or the order number from „Popis“, #210) and it belongs to another company than the sender, the card offers it with a red check **`invoice_other_customer`** of the new level **`requires_ack`**: „Faktúra je vystavená na {odberateľ}, žiada {žiadateľ}“.
+- **Never** for „the last invoice“, never when the sender has an invoice of their own in the mail, never for several owners. „Odosielateľ nie je potvrdený“ is merged into the same single tick.
+- **Card (desktop + mobile):** a red row with the checkbox „Overil som, že odosielateľ smie dostať túto faktúru“. „Pripraviť koncept s faktúrou“ is disabled until it is ticked.
+- **Approve** needs `acknowledged_checks: ["invoice_other_customer"]` (else 409 `ack_required`). It re-checks live that the invoice exists and its customer is unchanged (else 409). The ack goes into `final_payload.ack` (no new column), with audit `money.invoice_other_customer_ack`. The suggestion is never `batch_safe`.
+- **Send guard:** the PDF marker names the invoice's customer. Another recipient passes only with an approved ack for exactly this draft; a hand-attached foreign invoice or an ack of another draft stays blocked.
+- New check level `requires_ack` (backend `Level`, web `SuggestionCheck`). On a reply card it counts as blocking.
+- #210's „invoice of another company → no card“ is replaced by this flow (test updated).
+
 ## [Unreleased] — #212 Ostrá agenda Money len na čítanie + bezpečné prepnutie z TEST
 
 - **Customer decision (Erik, 2026-11-10):** reading the PRODUCTION agenda is allowed, writing is not. There is no path to a write on PROD.

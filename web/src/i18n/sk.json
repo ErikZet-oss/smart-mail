@@ -1613,18 +1613,21 @@
       "approve": "Pripraviť koncept s faktúrou",
       "drafted": "Koncept s faktúrou z Money je pripravený v Konceptoch. Skontrolujte ho a odošlite.",
       "footer": "Priloží sa originálne PDF z Money. Pri schválení aj pri odoslaní sa znova overí, že faktúra patrí firme príjemcu.",
+      "ackLabel": "Overil som, že odosielateľ smie dostať túto faktúru",
       "checks": {
         "invoice_owner_ok": "Faktúra patrí firme príjemcu",
         "recipient_unconfirmed": "Príjemca {{email}} nie je overený pre firmu v Money – priraďte ho v paneli Zákazník",
         "recipient_not_document_owner": "Faktúra {{number}} patrí inej firme – nepriloží sa",
         "invoice_other_customer": "Faktúra {{number}} patrí inej firme – do konceptu sa nepridá",
         "invoice_guessed_latest": "Faktúra určená odhadom (posledná vystavená, {{date}}) – overte, či ide o správny doklad.",
+        "invoice_other_customer_ack": "Faktúra je vystavená na {{owner}}, žiada {{requester}}",
         "invoice_found_by_order": "Faktúra nájdená podľa objednávky {{order}} – skontrolujte.",
         "invoice_not_found": "Faktúra {{number}} sa v Money nenašla",
         "report_not_configured": "Chýba tlačová zostava v Nastavenia › Money S4 › Tlačové zostavy",
         "no_invoice": "Žiadna faktúra na poslanie"
       },
       "errors": {
+        "ack_required": "Najprv potvrďte, že odosielateľ smie dostať faktúru inej firmy.",
         "suggestion_blocked": "Kontrola v Money zastavila prípravu – faktúra nepatrí firme príjemcu alebo príjemca nie je overený.",
         "money_unavailable": "Money je teraz nedostupné. Skúste to o chvíľu.",
         "money_disabled": "Prepojenie s Money je vypnuté.",
