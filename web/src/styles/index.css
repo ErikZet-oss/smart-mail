@@ -105,6 +105,13 @@ body {
   padding: 4px 0 4px 12px;
 }
 
+/* plain-text mail quoted in a reply / forward keeps its lines (pilot 2026-11-10) */
+.compose-editor .quoted-message pre {
+  white-space: pre-wrap;
+  font-family: inherit;
+  margin: 0;
+}
+
 .compose-editor .signature-block img {
   max-width: 100%;
   height: auto;

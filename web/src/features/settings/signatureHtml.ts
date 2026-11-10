@@ -26,6 +26,22 @@ const SEP = /(?:[ \t]*[·|–][ \t]*|[ \t]+-[ \t]+|&nbsp;·&nbsp;|<br\s*\/?>)/gi
 const EMPTY = '\u0000';
 
 const ALLOWED_TAGS = new Set([
+  // quoted mail (reply / forward) — plain text arrives as <pre>, so it must survive (pilot 2026-11-10)
+  'pre',
+  'code',
+  'small',
+  'sub',
+  'sup',
+  'cite',
+  'q',
+  'h4',
+  'h5',
+  'h6',
+  'dl',
+  'dt',
+  'dd',
+  'caption',
+  'tfoot',
   'a',
   'b',
   'blockquote',
@@ -113,9 +129,12 @@ export function clientSanitize(html: string): string {
     for (const child of [...node.children]) {
       const tag = child.tagName.toLowerCase();
       if (!ALLOWED_TAGS.has(tag)) {
+        // Unwrap and start this level again: the moved children are not in the snapshot above and must be
+        // cleaned too (an <img onerror> inside an unknown tag kept its handler before).
         while (child.firstChild) node.insertBefore(child.firstChild, child);
         child.remove();
-        continue;
+        clean(node);
+        return;
       }
       for (const attr of [...child.attributes]) {
         const name = attr.name.toLowerCase();

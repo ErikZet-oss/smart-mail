@@ -501,7 +501,8 @@ def quote_html_for_message(settings: Settings, source: Message) -> str | None:
     if stored and REMOTE_PLACEHOLDER not in stored and "/api/mail/image-proxy" not in stored:
         return stored
     if source.body_text:
-        return f"<pre>{html_lib.escape(source.body_text)}</pre>"
+        # plain-text mail: keep the line breaks, wrap long lines, use the normal font (pilot 2026-11-10)
+        return f'<pre style="white-space:pre-wrap;font-family:inherit">{html_lib.escape(source.body_text)}</pre>'
     return None
 
 
