@@ -193,7 +193,10 @@ W1 with an info banner on top ("Heslo k e-mailu sa zmenilo – prihláste sa nov
   Nevyžiadané, Označiť, Viac | Prideliť, Vybavené, ✦); subject (`title`) + "Otvoriť v novom okne" + labels; header like
   Roundcube (avatar, Od with company chip from Money → opens W3b, Komu, Kópia, Dátum; links Zhrnutie · Hlavičky ·
   Čistý text; "Preložiť do slovenčiny" for foreign mail); `SecurityBanner` (phishing / IBAN change / DMARC / first-time sender); **AI cards**
-  (`AiSuggestionCard`, max 2 visible + "Ďalšie návrhy (n)"); presence banner "Jana práve odpovedá" (if any); message
+  (`AiSuggestionCard`, max 2 visible + "Ďalšie návrhy (n)"; state **„faktúra inej firmy“** (#215, ADR-019) on the
+  invoice card: a red check row „Faktúra je vystavená na {odberateľ}, žiada {žiadateľ}“ with a `Checkbox` „Overil som,
+  že odosielateľ smie dostať túto faktúru“ under it — the primary button stays disabled until it is ticked; never in a
+  batch; same on M3); presence banner "Jana práve odpovedá" (if any); message
   body (sanitized, remote images blocked with bar "Zobraziť obrázky · Vždy od tohto odosielateľa"); attachments row
   (`AttachmentChip`: Náhľad → W2l lightbox, Stiahnuť, Uložiť do knižnice, Pripraviť dodací list prijatý /
   objednávku → W6u prefilled); older messages collapsed ("3 staršie správy"); internal notes timeline (yellow-grey

@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronUp, CircleAlert, CircleCheck, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { ChevronUp, CircleAlert, CircleCheck, ShieldAlert, Sparkles, TriangleAlert, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '../../components/Button';
+import { Checkbox } from '../../components/Checkbox';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { day, money } from '../money/moneyApi';
@@ -18,6 +19,7 @@ const ICON = {
   ok: <CircleCheck size={16} aria-hidden="true" className="shrink-0 text-success-700" />,
   warning: <TriangleAlert size={16} aria-hidden="true" className="shrink-0 text-warning-700" />,
   blocking: <CircleAlert size={16} aria-hidden="true" className="shrink-0 text-danger-600" />,
+  requires_ack: <ShieldAlert size={16} aria-hidden="true" className="shrink-0 text-danger-600" />,
 } as const;
 
 /**
@@ -38,9 +40,12 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
   const done = () => void qc.invalidateQueries({ queryKey: suggestionsKey(mailbox, messageId) });
   const invoices = suggestion.invoices ?? [];
   const blocked = suggestion.blocked || suggestion.checks.some((c) => c.level === 'blocking');
-  const warnings = suggestion.checks.filter((c) => c.level === 'warning');
+  const warnings = suggestion.checks.filter((c) => c.level === 'warning' || c.level === 'requires_ack');
+  // #215 (ADR-019): another company's invoice — the primary action unlocks only after the person ticks it
+  const needsAck = suggestion.checks.filter((c) => c.level === 'requires_ack');
+  const [acked, setAcked] = useState(false);
   const approve = useMutation({
-    mutationFn: () => approveSuggestion(suggestion.id, null),
+    mutationFn: () => approveSuggestion(suggestion.id, null, acked ? needsAck.map((c) => c.id) : []),
     onSuccess: (out) => {
       toasts.success(t('ai.invoice.drafted'));
       done();
@@ -119,12 +124,35 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
         ))}
       </ul>
       <ul className="flex flex-col">
-        {suggestion.checks.map((c, n) => (
-          <li key={`${c.id}-${n}`} className="type-small flex min-h-7 items-center gap-2 text-text-primary">
-            {ICON[c.level]}
-            <span>{checkText(c.id, c.params)}</span>
-          </li>
-        ))}
+        {suggestion.checks.map((c, n) =>
+          c.level === 'requires_ack' ? (
+            <li
+              key={`${c.id}-${n}`}
+              className="type-small my-1 flex flex-col gap-2 rounded-sm border border-danger-600 bg-danger-50 px-3 py-2"
+              data-testid="invoice-ack"
+            >
+              <span className="flex items-center gap-2 font-medium text-danger-600">
+                {ICON.requires_ack}
+                {t('ai.invoice.checks.invoice_other_customer_ack', {
+                  owner: String(c.params.owner ?? ''),
+                  requester: String(c.params.requester ?? ''),
+                })}
+              </span>
+              <Checkbox
+                checked={acked}
+                disabled={readOnly}
+                onChange={(e) => setAcked(e.target.checked)}
+                label={t('ai.invoice.ackLabel')}
+                data-testid="invoice-ack-checkbox"
+              />
+            </li>
+          ) : (
+            <li key={`${c.id}-${n}`} className="type-small flex min-h-7 items-center gap-2 text-text-primary">
+              {ICON[c.level]}
+              <span>{checkText(c.id, c.params)}</span>
+            </li>
+          ),
+        )}
       </ul>
       <p className="type-body whitespace-pre-wrap rounded-sm border border-border-default bg-bg-canvas p-3 text-text-primary">
         {suggestion.body}
@@ -132,7 +160,9 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
-          disabled={readOnly || blocked || approve.isPending || invoices.length === 0}
+          disabled={
+            readOnly || blocked || approve.isPending || invoices.length === 0 || (needsAck.length > 0 && !acked)
+          }
           onClick={() => approve.mutate()}
           icon={<CircleCheck size={16} aria-hidden="true" />}
         >
@@ -148,7 +178,11 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
           {t('ai.card.reject')}
         </button>
       </div>
-      <p className="type-caption text-text-secondary">{t('ai.invoice.footer')}</p>
+      <p className="type-caption text-text-secondary">
+        {needsAck.length > 0
+          ? t('ai.invoice.footerForeign', { owner: String(needsAck[0]?.params.owner ?? '') })
+          : t('ai.invoice.footer')}
+      </p>
     </section>
   );
 }

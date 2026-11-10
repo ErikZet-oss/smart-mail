@@ -343,7 +343,7 @@ async def attachment_send_block(
             str(a.get("email") or "")
             for a in [*(draft.to_addrs or []), *(draft.cc_addrs or []), *(draft.bcc_addrs or [])]
         ]
-        bad = await recipient_block(db, settings, recipients, [att.storage_key for att in marked])
+        bad = await recipient_block(db, settings, recipients, [att.storage_key for att in marked], draft.id)
         if bad is not None:
             return AttachmentNotSendable("recipient_not_document_owner", marked[0].filename)
     return None

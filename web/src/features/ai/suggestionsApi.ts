@@ -1,6 +1,11 @@
 import { api } from '../../lib/api';
 
-export type SuggestionCheck = { id: string; level: 'ok' | 'warning' | 'blocking'; params: Record<string, unknown> };
+export type SuggestionCheck = {
+  id: string;
+  /** requires_ack (#215): a person must tick a confirmation before the primary action is allowed */
+  level: 'ok' | 'warning' | 'requires_ack' | 'blocking';
+  params: Record<string, unknown>;
+};
 
 export type Suggestion = {
   id: string;
@@ -48,10 +53,12 @@ export const fetchSuggestions = (mailbox: string, messageId: string) =>
     { global: false },
   );
 
-export const approveSuggestion = (id: string, body: string | null) =>
-  api<{ suggestion_id: string; draft_id: string; edited: boolean }>('POST', `/api/suggestions/${id}/approve`, {
-    body,
-  });
+export const approveSuggestion = (id: string, body: string | null, acknowledged: string[] = []) =>
+  api<{ suggestion_id: string; draft_id: string; edited: boolean }>(
+    'POST',
+    `/api/suggestions/${id}/approve`,
+    acknowledged.length ? { body, acknowledged_checks: acknowledged } : { body },
+  );
 
 export const rejectSuggestion = (id: string, reasons: RejectReason[], note: string | null) =>
   api<{ status: string }>('POST', `/api/suggestions/${id}/reject`, { reasons, note });

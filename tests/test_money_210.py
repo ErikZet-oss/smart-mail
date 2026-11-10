@@ -125,17 +125,20 @@ async def test_210_forwarded_order_confirmation_gives_an_invoice_card(
     assert found["level"] == "warning" and found["params"]["order"] == "2410006820"
 
 
-async def test_210_invoice_of_another_company_gives_no_card(
+async def test_210_invoice_of_another_company_needs_an_ack(
     client: Client, db: AsyncSession, mail_server: FakeMailServer, settings: Settings
 ) -> None:
+    """Changed by #215 (ADR-019): the card is offered, but only with the `requires_ack` check (see test_money_215)."""
     mailbox = await _signed_in(client, db, mail_server)
     await _companies(db)
     FakeBridge.invoices = [_desc("FV2600099", OTHER, "2410006820")]
     await _message(db, mailbox, "faktury@firma1.example", FORWARD)
     stats = await suggest_invoice_attach(db, mailbox, settings.model_copy(update={"feature_money": True}), shadow=False)
     await db.commit()
-    assert stats["created"] == 0 and stats["not_owned"] == 1
-    assert await db.scalar(select(AiSuggestion)) is None
+    assert stats["created"] == 1
+    row = await db.scalar(select(AiSuggestion))
+    assert row is not None and row.payload["foreign"] is True and row.batch_safe is False
+    assert any(c["id"] == "invoice_other_customer" and c["level"] == "requires_ack" for c in row.checks)
 
 
 async def test_210_order_without_invoice_gives_no_card(

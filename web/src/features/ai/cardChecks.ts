@@ -15,7 +15,7 @@ export function cardChecks(s: Suggestion): CardCheck[] {
   const ids = new Set(s.checks.map((c) => c.id));
   const rows: CardCheck[] = s.checks.map((c) => ({
     key: c.id,
-    level: c.level,
+    level: c.level === 'requires_ack' ? 'blocking' : c.level, // a reply card has no tick → never sendable
     params: Object.fromEntries(
       Object.entries(c.params).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)]),
     ),

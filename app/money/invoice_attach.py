@@ -28,6 +28,7 @@ from app.auth.models import Branch
 from app.core.config import Settings
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.matching import match_sender
+from app.money.models import MoneyCompany
 from app.money.schemas import IssuedInvoice
 
 SUGGESTION_TYPE = "invoice_attach"
@@ -207,10 +208,23 @@ class Evaluation:
     company_name: str | None
     invoices: list[IssuedInvoice] = field(default_factory=list)
     checks: list[dict[str, Any]] = field(default_factory=list)
+    # #215 (ADR-019): the invoices belong to ANOTHER company than the sender — sent only after a person ticks
+    # „Overil som…“ (check level `requires_ack`), never in a batch
+    foreign: bool = False
+    owner_money_id: uuid.UUID | None = None
+    owner_name: str | None = None
 
     @property
     def blocked(self) -> bool:
         return any(c["level"] == "blocking" for c in self.checks)
+
+    @property
+    def marker_company(self) -> uuid.UUID | None:
+        """The company the attached PDFs belong to (the send guard reads it from the storage key)."""
+        return self.owner_money_id if self.foreign else self.company_money_id
+
+
+ACK_CHECK = "invoice_other_customer"
 
 
 async def evaluate(
@@ -222,8 +236,13 @@ async def evaluate(
     body_text: str | None,
     refs: list[str],
     language: str | None,
+    allow_other_owner: bool = False,
 ) -> Evaluation:
-    """Live checks against Money for one recipient and the requested invoice numbers. Raises `BridgeUnavailable`."""
+    """Live checks against Money for one recipient and the requested invoice numbers. Raises `BridgeUnavailable`.
+
+    `allow_other_owner` (#215, ADR-019) only when the MAIL identified the invoice (a written number / VS or the order
+    number in „Popis“, never „the last invoice“): if none of them belongs to the sender, the invoices of ONE other
+    company are offered with a `requires_ack` check instead of being dropped."""
     match = await match_sender(db, email, body_text, settings)
     out = Evaluation(
         email=email,
@@ -234,6 +253,7 @@ async def evaluate(
         out.checks.append(check("recipient_unconfirmed", "blocking", email=email))
     reports = await load_reports(db)
     branch_reports = await load_branch_reports(db)
+    foreign: list[IssuedInvoice] = []
     for ref in refs:
         found = await bridge.search_invoices(number=ref)
         if not found.items and any(c.isdigit() for c in ref):
@@ -243,14 +263,38 @@ async def evaluate(
             continue
         for inv in found.items[:1]:  # one document per written number
             if out.company_money_id is None or inv.company_id != out.company_money_id:
-                # never name the other company or its amounts on the card
+                # never name the other company or its amounts on the card (unless acknowledged — below)
                 out.checks.append(check("recipient_not_document_owner", "blocking", number=inv.number))
+                if inv.company_id is not None and inv.id not in {i.id for i in foreign}:
+                    foreign.append(inv)
                 continue
             if inv.id in {i.id for i in out.invoices}:
                 continue
             out.invoices.append(inv)
             if report_for_invoice(reports, branch_reports, inv, language) is None:
                 out.checks.append(check("report_not_configured", "blocking", kind=inv.kind))
+    owners = {i.company_id for i in foreign}
+    if allow_other_owner and not out.invoices and foreign and len(owners) == 1:
+        owner = next(iter(owners))
+        company = await db.scalar(select(MoneyCompany).where(MoneyCompany.money_id == owner))
+        out.foreign, out.owner_money_id = True, owner
+        out.owner_name = company.name if company else None
+        # one tick replaces both „not the owner“ and „sender not confirmed“ (#215)
+        out.checks = [c for c in out.checks if c["id"] not in ("recipient_not_document_owner", "recipient_unconfirmed")]
+        out.checks.append(
+            check(
+                ACK_CHECK,
+                "requires_ack",
+                owner=out.owner_name or "",
+                requester=out.company_name or email,
+                numbers=[i.number for i in foreign],
+            )
+        )
+        for inv in foreign:
+            out.invoices.append(inv)
+            if report_for_invoice(reports, branch_reports, inv, language) is None:
+                out.checks.append(check("report_not_configured", "blocking", kind=inv.kind))
+        return out
     if not out.invoices:
         out.checks.append(check("no_invoice", "blocking"))
     else:
@@ -283,10 +327,39 @@ def marked_company(storage_key: str) -> uuid.UUID | None:
         return None
 
 
+async def acknowledged_owner(db: AsyncSession, draft_id: uuid.UUID | None) -> tuple[uuid.UUID, str] | None:
+    """#215: (invoice owner, requester address) a person explicitly acknowledged for exactly this draft."""
+    if draft_id is None:
+        return None
+    from app.ai.models import AiSuggestion
+
+    row = await db.scalar(
+        select(AiSuggestion).where(
+            AiSuggestion.suggestion_type == SUGGESTION_TYPE,
+            AiSuggestion.status == "approved",
+            AiSuggestion.final_payload["draft_id"].astext == str(draft_id),
+        )
+    )
+    final = (row.final_payload or {}) if row else {}
+    ack = final.get("ack") or {}
+    email = str(ack.get("email") or "").strip().lower()
+    if not row or ack.get("check") != ACK_CHECK or not ack.get("person_id") or not email:
+        return None
+    try:
+        return uuid.UUID(str((row.payload or {}).get("owner_money_id"))), email
+    except ValueError:
+        return None
+
+
 async def recipient_block(
-    db: AsyncSession, settings: Settings, recipients: list[str], storage_keys: list[str]
+    db: AsyncSession,
+    settings: Settings,
+    recipients: list[str],
+    storage_keys: list[str],
+    draft_id: uuid.UUID | None = None,
 ) -> str | None:
-    """At send: every external recipient of a draft with a Money invoice must belong to that invoice's company.
+    """At send: every external recipient of a draft with a Money invoice must belong to that invoice's company —
+    unless a person acknowledged this other owner for exactly this draft (#215, ADR-019).
     Returns the first offending address (or the company marker problem), else None."""
     companies = {c for c in (marked_company(k) for k in storage_keys) if c is not None}
     if not companies:
@@ -294,9 +367,11 @@ async def recipient_block(
     if len(companies) > 1:
         return "several_companies"  # one customer per message
     company = next(iter(companies))
+    ack = await acknowledged_owner(db, draft_id)
+    confirmed = ack[1] if ack and ack[0] == company else None
     for email in recipients:
         email = email.strip().lower()
-        if not email or settings.is_internal_address(email):
+        if not email or settings.is_internal_address(email) or email == confirmed:
             continue
         match = await match_sender(db, email, None, settings)
         if match.company is None or match.company.money_id != company or match.method not in STRONG:

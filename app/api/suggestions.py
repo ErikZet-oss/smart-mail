@@ -34,6 +34,8 @@ RejectReason = Literal["wrong_category", "wrong_data", "tone", "not_needed"]  # 
 
 class ApproveIn(BaseModel):
     body: str | None = Field(default=None, max_length=20000)  # edited text; None = as proposed
+    # #215: checks of level `requires_ack` the person explicitly confirmed (e.g. „invoice_other_customer“)
+    acknowledged_checks: list[str] = Field(default_factory=list, max_length=10)
 
 
 class ApproveOut(BaseModel):
@@ -131,7 +133,7 @@ async def _approve_invoice(
 ) -> ApproveOut:
     """Phase 3d: every check again, live against Money (owner, recipient, report), then the draft with the PDFs."""
     from app.money.bridge_client import BridgeClient, BridgeUnavailable
-    from app.money.invoice_attach import evaluate
+    from app.money.invoice_attach import ACK_CHECK, evaluate
     from app.money.invoice_draft import InvoiceDraftError, build_invoice_draft
 
     if not settings.feature_money:
@@ -146,6 +148,9 @@ async def _approve_invoice(
     to = [str(e) for e in payload.get("to") or []]
     if not numbers or len(to) != 1:
         raise fail(409, "suggestion_blocked", checks=[{"id": "no_invoice", "level": "blocking", "params": {}}])
+    foreign = payload.get("foreign") is True
+    if foreign and ACK_CHECK not in body.acknowledged_checks:
+        raise fail(409, "ack_required", check=ACK_CHECK)  # #215: the person must tick „Overil som…“
     person_row = await db.get(Person, person.id)
     branch = await db.get(Branch, person.branch_id) if person.branch_id else None
     async with BridgeClient(settings) as bridge:
@@ -158,8 +163,12 @@ async def _approve_invoice(
                 body_text=message.body_text,
                 refs=numbers,
                 language=payload.get("language"),
+                allow_other_owner=foreign,
             )
             if ev.blocked or str(ev.company_money_id) != str(payload.get("company_money_id")):
+                raise fail(409, "suggestion_blocked", checks=ev.checks)
+            if ev.foreign != foreign or str(ev.owner_money_id) != str(payload.get("owner_money_id")):
+                # the invoice's customer changed in Money since the suggestion → a new decision is needed
                 raise fail(409, "suggestion_blocked", checks=ev.checks)
             draft = await build_invoice_draft(
                 db,
@@ -184,6 +193,28 @@ async def _approve_invoice(
     row.decided_at = datetime.now(UTC)
     row.checks = ev.checks
     row.final_payload = {**payload, "body": final, "draft_id": str(draft.id)}
+    if foreign:
+        row.final_payload["ack"] = {
+            "check": ACK_CHECK,
+            "email": to[0].strip().lower(),  # the one address the person saw on the card
+            "person_id": str(person.id),
+            "account_id": str(ctx.account.id),
+            "at": datetime.now(UTC).isoformat(),
+        }
+        audit(
+            db,
+            "money.invoice_other_customer_ack",
+            account_id=ctx.account.id,
+            person_id=person.id,
+            object_type="ai_suggestion",
+            object_id=str(row.id),
+            details={
+                "invoices": [i.number for i in ev.invoices],
+                "owner_money_id": str(ev.owner_money_id),
+                "requester_email": to[0],
+                "draft_id": str(draft.id),
+            },
+        )
     row.diff = {"edited": edited}
     audit(
         db,

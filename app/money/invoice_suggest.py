@@ -116,7 +116,15 @@ async def suggest_invoice_attach(
                     stats["no_refs"] += 1
                     continue
                 ev = await evaluate(
-                    db, settings, bridge, email=email, body_text=message.body_text, refs=refs, language=cls.language
+                    db,
+                    settings,
+                    bridge,
+                    email=email,
+                    body_text=message.body_text,
+                    refs=refs,
+                    language=cls.language,
+                    # #215: another company's invoice only when the mail itself named it, never „the last one“
+                    allow_other_owner=guessed is None,
                 )
             except BridgeUnavailable:
                 stats["money_down"] += 1
@@ -154,6 +162,9 @@ async def suggest_invoice_attach(
                     "body": draft_body(cls.language, numbers, used_orders),
                     "orders": used_orders,
                     "guessed_latest": guessed is not None,
+                    "foreign": ev.foreign,
+                    "owner_money_id": str(ev.owner_money_id) if ev.owner_money_id else None,
+                    "owner_name": ev.owner_name,
                 },
                 rationale=None,
                 confidence=Decimal("0.95") if not any(c["level"] == "blocking" for c in checks) else Decimal("0.5"),
