@@ -49,3 +49,21 @@ describe('signature HTML (D22)', () => {
     expect(visible).toBe(source);
   });
 });
+
+describe('clientSanitize – quoted mail (pilot 2026-11-10)', () => {
+  it('keeps <pre> so a plain-text quote keeps its lines', () => {
+    const out = clientSanitize('<pre>Dobrý deň,\n\n1. Cena\n- verzia</pre>');
+    expect(out).toContain('<pre>');
+    expect(out).toContain('Dobrý deň,\n\n1. Cena\n- verzia');
+  });
+
+  it('cleans children of an unwrapped unknown tag', () => {
+    const out = clientSanitize(
+      '<section><img src="https://x.sk/a.png" onerror="alert(1)"><p onclick="x()">t</p></section>',
+    );
+    expect(out).not.toContain('onerror');
+    expect(out).not.toContain('onclick');
+    expect(out).not.toContain('<section');
+    expect(out).toContain('<p>t</p>');
+  });
+});

@@ -28,6 +28,12 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — #210 Faktúra k objednávke (číslo e-shopovej objednávky v „Popis“)
 
+### Fixed
+- Compose: replying to / forwarding a plain-text mail no longer joins the quoted text into one paragraph — the editor sanitizer keeps `<pre>` (and other text tags of quoted mail), the server quote wraps long lines (pilot 2026-11-10).
+
+### Security
+- `clientSanitize`: children of an unwrapped unknown tag are now cleaned too (an `<img onerror>` inside an unknown tag kept its handler in the editor view; the server sanitizer already removed it).
+
 - When a mail names **no invoice number** but an **e-shop order number** (also in the forwarded e-shop confirmation), Smart Mail finds the issued invoice through the order number in its **Popis** (GraphQL `IssuedInvoice.Nazev`). It then prepares the existing „Poslať faktúru“ card.
 - `order_refs()` reads „objednávka / objednávke / objednávce / obj. / order # / Bestellung Nr. / zákazka“ + 6–14 digits in the subject, body and quoted part. It never takes a phone number, IČO, PSČ or date, and a written invoice number always wins.
 - **Bridge** (read-only): `GET /invoices/issued/search?order=` → step `order` = `Nazev~ct~<number>`, optionally together with `Firma_ID`. The value goes through the safe filter builder (`~ # | ( )` → 422). `IssuedInvoice.description` (Nazev) is added to the query, the model, the mock (fictional numbers) and the contract fixture.
