@@ -213,3 +213,48 @@ async def test_215_ack_is_never_batch_safe(
 ) -> None:
     row = await _foreign_card(client, db, mail_server, settings)
     assert row.batch_safe is False  # batch approve (Phase 5) only takes batch_safe suggestions
+
+
+async def _acked_draft(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, settings: Settings
+) -> tuple[ComposeDraft, Any]:
+    row = await _foreign_card(client, db, mail_server, settings)
+    r = await client.send_json("POST", f"/api/suggestions/{row.id}/approve", ACK)
+    assert r.status_code == 200, r.text
+    draft = await db.get(ComposeDraft, uuid.UUID(r.json()["draft_id"]))
+    assert draft is not None
+    await db.refresh(draft)
+    await db.refresh(row)  # this test session cached the suggestion before approve
+    assert await attachment_send_block(db, settings, draft) is None  # baseline: the acknowledged draft passes
+    return draft, row
+
+
+@pytest.mark.parametrize("field", ["to_addrs", "cc_addrs", "bcc_addrs"])
+async def test_215_ack_extra_external_recipient_is_blocked(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, settings: Settings, money_on: None, field: str
+) -> None:
+    draft, _ = await _acked_draft(client, db, mail_server, settings)
+    setattr(draft, field, [*(getattr(draft, field) or []), {"email": "niekto.iny@gmail.example"}])
+    await db.commit()
+    blocked = await attachment_send_block(db, settings, draft)
+    assert blocked is not None and blocked.code == "recipient_not_document_owner"
+
+
+async def test_215_ack_confirmed_address_plus_internal_copy_passes(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, settings: Settings, money_on: None
+) -> None:
+    draft, _ = await _acked_draft(client, db, mail_server, settings)
+    draft.cc_addrs = [{"email": f"kolega@{settings.internal_domain_list[0]}"}]
+    await db.commit()
+    assert await attachment_send_block(db, settings, draft) is None
+
+
+async def test_215_ack_confirmed_address_changed_is_blocked(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, settings: Settings, money_on: None
+) -> None:
+    draft, row = await _acked_draft(client, db, mail_server, settings)
+    assert row.final_payload["ack"]["email"] == "faktury@firma1.example"
+    draft.to_addrs = [{"email": "faktury2@firma1.example"}]
+    await db.commit()
+    blocked = await attachment_send_block(db, settings, draft)
+    assert blocked is not None and blocked.code == "recipient_not_document_owner"

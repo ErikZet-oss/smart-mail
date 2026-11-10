@@ -1613,6 +1613,7 @@
       "approve": "Pripraviť koncept s faktúrou",
       "drafted": "Koncept s faktúrou z Money je pripravený v Konceptoch. Skontrolujte ho a odošlite.",
       "footer": "Priloží sa originálne PDF z Money. Pri schválení aj pri odoslaní sa znova overí, že faktúra patrí firme príjemcu.",
+      "footerForeign": "Pri schválení sa znova overí, že faktúra stále patrí firme {{owner}}. Odoslať ju pôjde iba na potvrdenú adresu.",
       "ackLabel": "Overil som, že odosielateľ smie dostať túto faktúru",
       "checks": {
         "invoice_owner_ok": "Faktúra patrí firme príjemcu",

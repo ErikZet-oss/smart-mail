@@ -8,7 +8,8 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 - **Never** for „the last invoice“, never when the sender has an invoice of their own in the mail, never for several owners. „Odosielateľ nie je potvrdený“ is merged into the same single tick.
 - **Card (desktop + mobile):** a red row with the checkbox „Overil som, že odosielateľ smie dostať túto faktúru“. „Pripraviť koncept s faktúrou“ is disabled until it is ticked.
 - **Approve** needs `acknowledged_checks: ["invoice_other_customer"]` (else 409 `ack_required`). It re-checks live that the invoice exists and its customer is unchanged (else 409). The ack goes into `final_payload.ack` (no new column), with audit `money.invoice_other_customer_ack`. The suggestion is never `batch_safe`.
-- **Send guard:** the PDF marker names the invoice's customer. Another recipient passes only with an approved ack for exactly this draft; a hand-attached foreign invoice or an ack of another draft stays blocked.
+- **Send guard:** the PDF marker names the invoice's customer. With an approved ack for exactly this draft, only the one confirmed address (`final_payload.ack.email`) passes besides internal and owner-company addresses — a second external address added in To / Cc / Bcc, or the confirmed address changed, is blocked. A hand-attached foreign invoice or an ack of another draft stays blocked.
+- **Card footer** for a foreign invoice: „Pri schválení sa znova overí, že faktúra stále patrí firme {odberateľ}. Odoslať ju pôjde iba na potvrdenú adresu.“
 - New check level `requires_ack` (backend `Level`, web `SuggestionCheck`). On a reply card it counts as blocking.
 - #210's „invoice of another company → no card“ is replaced by this flow (test updated).
 

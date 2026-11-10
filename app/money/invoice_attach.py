@@ -327,8 +327,8 @@ def marked_company(storage_key: str) -> uuid.UUID | None:
         return None
 
 
-async def acknowledged_owner(db: AsyncSession, draft_id: uuid.UUID | None) -> uuid.UUID | None:
-    """#215: the invoice owner a person explicitly acknowledged for exactly this draft (approved suggestion)."""
+async def acknowledged_owner(db: AsyncSession, draft_id: uuid.UUID | None) -> tuple[uuid.UUID, str] | None:
+    """#215: (invoice owner, requester address) a person explicitly acknowledged for exactly this draft."""
     if draft_id is None:
         return None
     from app.ai.models import AiSuggestion
@@ -342,10 +342,11 @@ async def acknowledged_owner(db: AsyncSession, draft_id: uuid.UUID | None) -> uu
     )
     final = (row.final_payload or {}) if row else {}
     ack = final.get("ack") or {}
-    if not row or ack.get("check") != ACK_CHECK or not ack.get("person_id"):
+    email = str(ack.get("email") or "").strip().lower()
+    if not row or ack.get("check") != ACK_CHECK or not ack.get("person_id") or not email:
         return None
     try:
-        return uuid.UUID(str((row.payload or {}).get("owner_money_id")))
+        return uuid.UUID(str((row.payload or {}).get("owner_money_id"))), email
     except ValueError:
         return None
 
@@ -366,11 +367,11 @@ async def recipient_block(
     if len(companies) > 1:
         return "several_companies"  # one customer per message
     company = next(iter(companies))
-    if await acknowledged_owner(db, draft_id) == company:
-        return None
+    ack = await acknowledged_owner(db, draft_id)
+    confirmed = ack[1] if ack and ack[0] == company else None
     for email in recipients:
         email = email.strip().lower()
-        if not email or settings.is_internal_address(email):
+        if not email or settings.is_internal_address(email) or email == confirmed:
             continue
         match = await match_sender(db, email, None, settings)
         if match.company is None or match.company.money_id != company or match.method not in STRONG:

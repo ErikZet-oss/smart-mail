@@ -196,6 +196,7 @@ async def _approve_invoice(
     if foreign:
         row.final_payload["ack"] = {
             "check": ACK_CHECK,
+            "email": to[0].strip().lower(),  # the one address the person saw on the card
             "person_id": str(person.id),
             "account_id": str(ctx.account.id),
             "at": datetime.now(UTC).isoformat(),

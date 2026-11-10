@@ -178,7 +178,11 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
           {t('ai.card.reject')}
         </button>
       </div>
-      <p className="type-caption text-text-secondary">{t('ai.invoice.footer')}</p>
+      <p className="type-caption text-text-secondary">
+        {needsAck.length > 0
+          ? t('ai.invoice.footerForeign', { owner: String(needsAck[0]?.params.owner ?? '') })
+          : t('ai.invoice.footer')}
+      </p>
     </section>
   );
 }

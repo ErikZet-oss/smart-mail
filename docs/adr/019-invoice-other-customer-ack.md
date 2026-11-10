@@ -27,7 +27,10 @@ check dropped the invoice, so no card was shown at all, and someone had to look 
   external sends.
 - The PDF marker `compose/<draft>/money-invoice/<company>` names the **invoice's customer**. The send guard accepts
   recipients outside that company only when an approved suggestion with this ack exists for **exactly this draft**
-  and this company. Another company's invoice attached by hand, or an ack of another draft, stays blocked.
+  and this company — and then only for **the one address the person saw on the card** (`final_payload.ack.email`),
+  plus internal addresses and addresses of the invoice's own company. Any other external address in To / Cc / Bcc,
+  or the confirmed address replaced by another one, is blocked (`recipient_not_document_owner`). Another company's
+  invoice attached by hand, or an ack of another draft, stays blocked.
 
 ## Consequences
 - A person always decides; the AI never sends another company's invoice on its own and never in a batch.
