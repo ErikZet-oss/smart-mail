@@ -2,6 +2,13 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — W2p Hlavičky správy
+
+- **„Hlavičky“** in the message header (next to „Čistý text“) opens the dialog **Hlavičky správy** (Figma frame 241:93336): all headers of the message in source order, monospace, folded `Received:` lines indented, encoded names decoded.
+- Footer with the sender check („Overenie odosielateľa: SPF, DKIM, DMARC ✓“, a failure shows ✗), **Zobraziť zdroj** (W2n), **Kopírovať**, **Zavrieť**.
+- New read-only endpoint `GET /api/mail/mailboxes/{ref}/messages/{id}/headers` — only the header block (max 64 kB, 300 headers), never the body.
+- Screen ID **W2p**: the Figma frame is called „W2o“, but W2o is already Nastavenia zoznamu.
+
 ## [Unreleased] — #215 Faktúra inej firmy – s červeným upozornením a povinným potvrdením (ADR-019)
 
 - **Deliberate exception to CLAUDE.md §11, decided by Erik (ADR-019):** when the mail itself identified the invoice (written number / VS or the order number from „Popis“, #210) and it belongs to another company than the sender, the card offers it with a red check **`invoice_other_customer`** of the new level **`requires_ack`**: „Faktúra je vystavená na {odberateľ}, žiada {žiadateľ}“.

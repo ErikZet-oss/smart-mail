@@ -899,6 +899,27 @@ async def message_source(ref: str, message_id: uuid.UUID, ctx: Auth, db: DB, set
     return PlainTextResponse(raw.decode("utf-8", errors="replace"), media_type="text/plain; charset=utf-8")
 
 
+@router.get("/mailboxes/{ref}/messages/{message_id}/headers")
+async def message_headers(ref: str, message_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep) -> dict[str, Any]:
+    """W2p Hlavičky správy: all headers of the raw message (never the body) + the parsed SPF/DKIM/DMARC result."""
+    from app.mail.raw_headers import parse_headers
+
+    mailbox = await _mailbox(db, ctx, ref)
+    message = await db.get(Message, message_id)
+    if message is None or message.mailbox_id != mailbox.id:
+        raise fail(404, "message_not_found")
+    if not message.raw_storage_key:
+        creds = await credentials_for(db, mailbox, settings)
+        if creds is None:
+            raise fail(409, "mailbox_credentials_missing")
+        await ensure_body(db, settings, mailbox, message, creds)
+        await db.commit()
+    raw = storage.get_bytes(settings, message.raw_storage_key or "") if message.raw_storage_key else None
+    if raw is None:
+        raise fail(404, "source_unavailable")
+    return {"headers": parse_headers(raw), "auth_results": message.auth_results}
+
+
 @router.get("/mailboxes/{ref}/attachments/{attachment_id}")
 async def download_attachment(ref: str, attachment_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep) -> Response:
     mailbox = await _mailbox(db, ctx, ref)

@@ -51,6 +51,7 @@ Global rules for all screens:
 | W2g | `/mail/:mailbox/my/:view` (`assigned`, `waiting`, `snoozed`, `open`) | Moje | viewer+ | M1 |
 | W2h | `/mail/all/:folder` | Všetky schránky | viewer+ with 2+ mailboxes | M1 |
 | W2o | dialog (`?dialog=list-options`) | Nastavenia zoznamu | viewer+ | M1 (bottom sheet) |
+| W2p | dialog (from MessageHeader „Hlavičky“) | Hlavičky správy | viewer+ | M3 (same dialog, full width) |
 | W2m | `/mail/:mailbox/:folder/:threadId/print` | Tlač | viewer+ | — |
 | W2n | `/mail/:mailbox/:folder/:threadId/source/:messageId` | Zdroj správy | viewer+ | — |
 | W3 | panel (no route; `?panel=assistant`) | Asistent | sales+ (viewer read-only answers) | M5 |
@@ -222,6 +223,14 @@ W1 with an info banner on top ("Heslo k e-mailu sa zmenilo – prihláste sa nov
 UX_SPEC W2o: Zoraďovanie, Systém zoraďovania, Režim zoznamu (Roundcube) + Hustota, Zobraziť AI zhrnutie; Uložiť /
 Zrušiť. Saves to SETTINGS 01b (per person). Done when: the same three Roundcube fields with the same defaults (Dátum
 prijatia, zostupne, Zoznam).
+
+### W2p Hlavičky správy (dialog)
+Opened by „Hlavičky“ in the MessageHeader (before „Čistý text“). All headers of the raw message in source order
+(`GET /api/mail/mailboxes/{ref}/messages/{id}/headers` — header block only, never the body), monospace, name bold,
+folded lines indented. Footer: „Technické údaje o doručení správy. Overenie odosielateľa: SPF, DKIM, DMARC ✓“ (a
+failed check shows ✗ next to its name; nothing reported → „Overenie odosielateľa nie je k dispozícii.“),
+**Zobraziť zdroj** (→ W2n in a new tab), **Kopírovať** (all headers as text, toast), **Zavrieť**; Esc closes.
+Read-only. Done when: headers match the source in order and content; the dialog works with the keyboard.
 
 ### W2e Hromadné akcie (multi-select bar)
 Replaces the list header: "Vybraté: 12" · Označiť ako prečítané · Vybavené · Presunúť · Prideliť · Archivovať ·

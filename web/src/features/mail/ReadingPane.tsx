@@ -15,6 +15,7 @@ import {
   FolderInput,
   Forward,
   Mail,
+  AlignJustify,
   ShieldAlert,
   Printer,
   Reply,
@@ -50,6 +51,7 @@ import { useTheme } from '../prefs/ThemeProvider';
 import { AttachmentLightbox } from './AttachmentLightbox';
 import { openExternalLinkInNewTab } from './externalLinks';
 import { formatMailDate } from './formatMailDate';
+import { HeadersDialog } from './HeadersDialog';
 import { FolderPicker } from './FolderPicker';
 import { applyActionLocally, REMOVING_ACTIONS } from './optimistic';
 import { useFolderLabel } from './useFolderLabel';
@@ -143,6 +145,7 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
   const queryClient = useQueryClient();
   const [showImages, setShowImages] = useState(false);
   const [plain, setPlain] = useState(false);
+  const [headersOpen, setHeadersOpen] = useState(false);
   const [markMenu, setMarkMenu] = useState<{ x: number; y: number } | null>(null);
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   const [conformity, setConformity] = useState(false);
@@ -747,6 +750,15 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
                 <div className="mt-1 flex gap-4">
                   <button
                     type="button"
+                    onClick={() => setHeadersOpen(true)}
+                    className="type-caption inline-flex items-center gap-1 text-brand-primary-600 hover:underline"
+                    data-testid="open-headers"
+                  >
+                    <AlignJustify size={14} aria-hidden="true" />
+                    {t('mail.headers.open')}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setPlain((v) => !v)}
                     className="type-caption inline-flex items-center gap-1 text-brand-primary-600 hover:underline"
                   >
@@ -754,6 +766,19 @@ export function ReadingPane({ mailbox, folderRef, messageId, threadId, onCleared
                     {plain ? t('mail.showHtml') : t('mail.plainText')}
                   </button>
                 </div>
+                {headersOpen ? (
+                  <HeadersDialog
+                    mailbox={mailbox}
+                    messageId={msg.id}
+                    onClose={() => setHeadersOpen(false)}
+                    onShowSource={() =>
+                      window.open(
+                        `/mail/${encodeURIComponent(mailbox)}/${encodeURIComponent(folderRef)}/${encodeURIComponent(msg.thread_id ?? 'x')}/source/${msg.id}`,
+                        '_blank',
+                      )
+                    }
+                  />
+                ) : null}
               </div>
             </div>
 
