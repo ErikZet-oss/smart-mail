@@ -141,6 +141,16 @@ test.describe('W2 list & reading (1d)', () => {
     await shot(page, 'phase1d-W2-light');
   });
 
+  test('W2 unread row: sender and subject are bold, read row stays regular (pilot 2026-11-17)', async ({ page }) => {
+    await mockMail(page);
+    await page.goto('/mail/default/inbox');
+    const weight = (text: string) =>
+      page.getByText(text, { exact: true }).evaluate((el) => Number(getComputedStyle(el).fontWeight));
+    await expect.poll(() => weight('Kópia faktúry 2026123')).toBeGreaterThanOrEqual(700);
+    await expect.poll(() => weight('Ján Novák')).toBeGreaterThanOrEqual(600);
+    await expect.poll(() => weight('Petra Kováčová')).toBeLessThan(600);
+  });
+
   test('W2 dark mode', async ({ page }) => {
     await mockMail(page, {
       'GET /api/mail/prefs': {
