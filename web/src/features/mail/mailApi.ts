@@ -274,6 +274,14 @@ export function sourceUrl(mailbox: string, messageId: string): string {
   return `${base(mailbox)}/messages/${messageId}/source`;
 }
 
+export type MessageHeaders = {
+  headers: { name: string; value: string }[];
+  auth_results: Record<string, string> | null;
+};
+
+export const fetchMessageHeaders = (mailbox: string, messageId: string) =>
+  api<MessageHeaders>('GET', `${base(mailbox)}/messages/${messageId}/headers`);
+
 export async function fetchSourceText(mailbox: string, messageId: string): Promise<string> {
   const response = await fetch(sourceUrl(mailbox, messageId), { credentials: 'same-origin' });
   if (!response.ok) throw new Error(`source ${response.status}`);

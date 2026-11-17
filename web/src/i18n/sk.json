@@ -769,6 +769,18 @@
     "to": "Komu",
     "date": "Dátum",
     "plainText": "Čistý text",
+    "headers": {
+      "open": "Hlavičky",
+      "title": "Hlavičky správy",
+      "footer": "Technické údaje o doručení správy.",
+      "auth": "Overenie odosielateľa: {{result}}",
+      "authUnknown": "Overenie odosielateľa nie je k dispozícii.",
+      "showSource": "Zobraziť zdroj",
+      "copy": "Kopírovať",
+      "copied": "Hlavičky sú skopírované.",
+      "copyFailed": "Hlavičky sa nepodarilo skopírovať.",
+      "error": "Hlavičky sa nepodarilo načítať."
+    },
     "showHtml": "HTML",
     "remoteImages": "Vzdialené obrázky sú zablokované.",
     "showImages": "Zobraziť obrázky",

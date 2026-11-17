@@ -27,6 +27,7 @@ How to use (DECISIONS D24):
 | W2m | [W2m Tlač](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=26-25517) `26:25517` |
 | W2n | [W2n Zdroj správy](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=26-25544) `26:25544` |
 | W2o | [W2o Nastavenia zoznamu](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=24-10724) `24:10724` |
+| W2p | [W2o Hlavičky správy (dialóg)](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=241-93336) `241:93336` — the frame is titled „W2o“, but W2o is Nastavenia zoznamu; in code and specs this screen is **W2p** |
 | W2i | [W2i Odložiť (popover)](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=24-11281) `24:11281` |
 | W2j | [W2j Prideliť / Odovzdať (popover)](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=24-11406) `24:11406` |
 | G3 | [G3 Menu schránky ⋮](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=24-11538) `24:11538` · [G3 Kontextové menu priečinka](https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU?node-id=24-11661) `24:11661` |
