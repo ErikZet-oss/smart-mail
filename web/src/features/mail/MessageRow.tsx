@@ -136,7 +136,12 @@ export function MessageRow({
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-2 whitespace-nowrap">
-          <span className="type-small min-w-0 flex-1 truncate text-text-secondary">
+          <span
+            className={`type-small min-w-0 flex-1 truncate ${
+              unread ? '!font-semibold text-text-primary' : 'text-text-secondary'
+            }`}
+            data-unread={unread ? 'true' : undefined}
+          >
             {senderLabel(fromName, fromEmail)}
             {threadCount > 1 ? <span className="text-text-tertiary"> · {threadCount}</span> : null}
           </span>
@@ -160,7 +165,7 @@ export function MessageRow({
           )}
           <span
             className={`min-w-0 flex-1 truncate ${
-              unread ? 'type-body-strong text-text-primary' : 'type-body text-text-primary'
+              unread ? 'type-body !font-bold text-text-primary' : 'type-body text-text-primary'
             } ${flagged ? 'text-danger-600' : ''}`}
           >
             {subject}

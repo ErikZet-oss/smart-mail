@@ -4,6 +4,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — W2p Hlavičky správy
 
+### Changed
+- Message list: an unread row shows the sender in semi-bold primary text and the subject in bold, so unread mail stands out (pilot 2026-11-17; Figma MessageRow `state=unread` updated).
+
 - **„Hlavičky“** in the message header (next to „Čistý text“) opens the dialog **Hlavičky správy** (Figma frame 241:93336): all headers of the message in source order, monospace, folded `Received:` lines indented, encoded names decoded.
 - Footer with the sender check („Overenie odosielateľa: SPF, DKIM, DMARC ✓“, a failure shows ✗), **Zobraziť zdroj** (W2n), **Kopírovať**, **Zavrieť**.
 - New read-only endpoint `GET /api/mail/mailboxes/{ref}/messages/{id}/headers` — only the header block (max 64 kB, 300 headers), never the body.
