@@ -286,6 +286,8 @@
       "delete": "Vymazať",
       "purge": "Vymazať natrvalo",
       "selectAll": "Vybrať všetko",
+      "ctrlClick": "Pridať / odobrať správu z výberu",
+      "shiftClick": "Vybrať rozsah správ",
       "unread": "Neprečítané",
       "done": "Vybavené",
       "junk": "Nevyžiadané",

@@ -215,6 +215,30 @@ test.describe('W2 list & reading (1d)', () => {
     await expect(page.getByRole('menuitem', { name: 'Označiť ako prečítané' })).toBeVisible();
   });
 
+  test('W2e Ctrl+click and Shift+click select rows, Vymazať deletes the selection (pilot 2026-11-18)', async ({
+    page,
+  }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop mouse only');
+    const bulkCalls: unknown[] = [];
+    await mockMail(page);
+    await page.route('**/api/mail/mailboxes/default/messages/bulk', async (route: Route) => {
+      bulkCalls.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ok: 1 } });
+    });
+    await page.goto('/mail/default/inbox');
+    await page.getByText('Kópia faktúry 2026123').click({ modifiers: ['Control'] });
+    await expect(page.getByText('Vybraté: 1')).toBeVisible();
+    await page.getByText('Cenová ponuka M10×30 A2').click({ modifiers: ['Control'] });
+    await expect(page.getByText('Vybraté: 2')).toBeVisible();
+    await page.getByText('Cenová ponuka M10×30 A2').click({ modifiers: ['Control'] });
+    await expect(page.getByText('Vybraté: 1')).toBeVisible();
+    await page.getByText('Cenová ponuka M10×30 A2').click({ modifiers: ['Shift'] });
+    await expect(page.getByText('Vybraté: 2')).toBeVisible();
+    await page.getByTestId('bulk-toolbar').getByRole('button', { name: 'Vymazať' }).click();
+    await expect.poll(() => JSON.stringify(bulkCalls)).toContain('delete');
+    expect(JSON.stringify(bulkCalls)).toContain('m-1');
+  });
+
   test('W2o Nastavenia zoznamu', async ({ page }) => {
     await mockMail(page);
     await page.goto('/mail/default/inbox');

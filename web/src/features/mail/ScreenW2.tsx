@@ -390,6 +390,33 @@ function ScreenW2Body({
       : { id: r.data.latest_message_id ?? r.data.id, tid: r.data.id },
   );
   const targets = selectedIds.size > 0 ? [...selectedIds] : activeMessageId ? [activeMessageId] : [];
+  // Ctrl/⌘+click and Shift+click multi-select in the list (pilot 2026-11-18, Roundcube / Outlook habit).
+  const selectAnchor = useRef<string | null>(null);
+  const modifierSelect = (id: string, mode: 'toggle' | 'range') => {
+    setSelectMode(true);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      // The first Ctrl/Shift+click keeps the open message selected too, like Outlook.
+      if (prev.size === 0 && activeMessageId && activeMessageId !== id) next.add(activeMessageId);
+      if (mode === 'range') {
+        const anchor = selectAnchor.current ?? activeMessageId;
+        const from = rowRefs.findIndex((r) => r.id === anchor);
+        const to = rowRefs.findIndex((r) => r.id === id);
+        if (from >= 0 && to >= 0) {
+          const [a, b] = from < to ? [from, to] : [to, from];
+          for (const r of rowRefs.slice(a, b + 1)) next.add(r.id);
+        } else {
+          next.add(id);
+        }
+      } else if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+    if (mode === 'toggle') selectAnchor.current = id;
+  };
   const step = (delta: number) => {
     if (rowRefs.length === 0) return;
     const at = rowRefs.findIndex((r) => r.id === activeMessageId);
@@ -848,7 +875,11 @@ function ScreenW2Body({
                   categoryColorToken={
                     catId ? (colorByCategory.get(catId) ?? CATEGORY_COLOR_TOKEN[catId] ?? null) : null
                   }
-                  onSelect={() => openAndMarkSeen(id, tid, mobile)}
+                  onSelect={() => {
+                    selectAnchor.current = id;
+                    openAndMarkSeen(id, tid, mobile);
+                  }}
+                  onModifierClick={mobile ? undefined : (mode) => modifierSelect(id, mode)}
                   onCheck={(checked) => {
                     setSelectMode(true);
                     setSelectedIds((prev) => {

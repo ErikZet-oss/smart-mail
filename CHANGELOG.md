@@ -4,6 +4,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — W2p Hlavičky správy
 
+### Added
+- Message list (desktop): Ctrl/⌘+click adds or removes a row from the selection, Shift+click selects a range; the first one keeps the open message selected. The bulk bar (Vymazať, Vybavené, …) then acts on the selection. Listed in the `?` shortcuts dialog and UX_SPEC §6 (pilot 2026-11-18).
+
 ### Changed
 - Message list: an unread row shows the sender in semi-bold primary text and the subject in bold, so unread mail stands out (pilot 2026-11-17; Figma MessageRow `state=unread` updated).
 

@@ -479,7 +479,8 @@ Touch targets ≥ 44 px, safe areas, haptics on approve/swipe.
 
 ---------------------------------------------------------------------------------------------------
 ## 6. Keyboard shortcuts (desktop)
-Roundcube-compatible: ↑/↓ move, Enter open, Delete vymazať, Shift+Delete natrvalo, Ctrl+A vybrať všetko.
+Roundcube-compatible: ↑/↓ move, Enter open, Delete vymazať, Shift+Delete natrvalo, Ctrl+A vybrať všetko,
+Ctrl/⌘+klik pridať / odobrať správu z výberu, Shift+klik vybrať rozsah (the first one keeps the open message in the selection).
 Added: `C` vytvoriť správu, `R` odpovedať, `Shift+R` odpovedať všetkým, `F` poslať ďalej, `E` vybavené,
 `S` odložiť, `!` nevyžiadané, `U` neprečítané, `L` presunúť, `#` prideliť, `A` schváliť návrh AI (when focused card
 is ready), `Ctrl+Enter` odoslať, `/` hľadať, `Ctrl+K` príkazy, `Ctrl+J` asistent, `[` skryť priečinky, `Ctrl+Shift+P` prepnúť osobu, `G I`
