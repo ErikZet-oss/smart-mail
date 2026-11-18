@@ -19,6 +19,8 @@ const GROUPS: { id: string; keys: { keys: string; actionKey: string }[] }[] = [
       { keys: 'Delete', actionKey: 'shortcuts.actions.delete' },
       { keys: 'Shift+Delete', actionKey: 'shortcuts.actions.purge' },
       { keys: 'Ctrl+A', actionKey: 'shortcuts.actions.selectAll' },
+      { keys: 'Ctrl+klik', actionKey: 'shortcuts.actions.ctrlClick' },
+      { keys: 'Shift+klik', actionKey: 'shortcuts.actions.shiftClick' },
       { keys: 'U', actionKey: 'shortcuts.actions.unread' },
       { keys: '!', actionKey: 'shortcuts.actions.junk' },
     ],

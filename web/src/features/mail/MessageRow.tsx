@@ -25,6 +25,8 @@ type Props = {
   onLongPress?: () => void;
   /** Desktop drag to a folder (#96); absent = not draggable. */
   onDragStart?: (dt: DataTransfer) => void;
+  /** Ctrl/⌘+click toggles the row in the selection, Shift+click selects a range (pilot 2026-11-18). */
+  onModifierClick?: (mode: 'toggle' | 'range') => void;
 };
 
 function senderLabel(name: string | null, email: string | null): string {
@@ -45,6 +47,7 @@ export function MessageRow({
   onCheck,
   onLongPress,
   onDragStart,
+  onModifierClick,
 }: Props) {
   const { t } = useTranslation();
   const pressTimer = useRef<number | null>(null);
@@ -86,9 +89,23 @@ export function MessageRow({
       aria-selected={selected}
       data-message-id={item.kind === 'message' ? item.data.id : (item.data.latest_message_id ?? item.data.id)}
       tabIndex={0}
-      onClick={() => {
+      onMouseDown={(event) => {
+        // Shift+click must not select the row text.
+        if (event.shiftKey && onModifierClick) event.preventDefault();
+      }}
+      onClick={(event) => {
         if (longPressed.current) {
           longPressed.current = false;
+          return;
+        }
+        if (onModifierClick && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          onModifierClick('toggle');
+          return;
+        }
+        if (onModifierClick && event.shiftKey) {
+          event.preventDefault();
+          onModifierClick('range');
           return;
         }
         onSelect();
