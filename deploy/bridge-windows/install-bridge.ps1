@@ -85,9 +85,14 @@ if ((Test-Path $venvCfg) -and -not (Select-String -Path $venvCfg -SimpleMatch "h
 Push-Location $InstallDir
 try {
     $env:UV_PYTHON = $bridgePython
+    # Copy packages into the venv – the default hardlinks keep the ACL of the per-user uv cache, which LocalService
+    # cannot read („PermissionError … opentelemetry\context\__init__.py“, pilot 2026-11-19).
+    $env:UV_LINK_MODE = 'copy'
     & $python -m uv sync --frozen --no-dev
     if ($LASTEXITCODE -ne 0) { Fail 'Inštalácia závislostí zlyhala (uv sync).' }
 } finally { Pop-Location }
+# Every file in the venv (also ones linked by an older run) must be readable by the service account.
+icacls (Join-Path $InstallDir '.venv') /grant 'NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX' /T /C /Q | Out-Null
 $venvPython = Join-Path $InstallDir '.venv\Scripts\python.exe'
 
 # --- 3. .env ---------------------------------------------------------------------------------------------------
