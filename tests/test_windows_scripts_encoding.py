@@ -49,3 +49,15 @@ def test_update_sh_pulls_explicit_branch() -> None:
     """Pilot 2026-10-31: `git pull --ff-only` without upstream → "Cannot fast-forward to multiple branches"."""
     text = ROOT.joinpath("deploy/update.sh").read_text(encoding="utf-8")
     assert 'git pull --ff-only origin "$BRANCH"' in text
+
+
+def test_bridge_venv_is_readable_by_local_service() -> None:
+    """Pilot 2026-11-19: uv hardlinked packages from the per-user cache, LocalService got PermissionError on import."""
+    from pathlib import Path
+
+    for name in ("install-bridge.ps1", "update-bridge.ps1"):
+        path = Path(__file__).resolve().parents[1] / "deploy" / "bridge-windows" / name
+        text = path.read_text(encoding="utf-8-sig")
+        sync = text.index("uv sync --frozen --no-dev")
+        assert "$env:UV_LINK_MODE = 'copy'" in text[:sync], name
+        assert "'.venv') /grant 'NT AUTHORITY\\LOCAL SERVICE:(OI)(CI)RX' /T" in text[sync:], name
