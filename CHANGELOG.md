@@ -4,6 +4,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — #222 Dodací list vydaný ako PDF z Money (/pdfreport) + AI karta „Dodací list“
 
+### Fixed
+- Windows bridge install/update: `uv sync` copies packages (`UV_LINK_MODE=copy`) and the venv is granted to LocalService (`icacls /T`) — hardlinks from the per-user uv cache made the service fail with `PermissionError` after a dependency update (pilot 2026-11-19).
+
 - **Money `/pdfreport`** (všeobecné PDF z tlačovej zostavy, iba čítanie, povolené aj na PROD). Bridge `GET /documents/{kind}/{id}/pdf?report_id=&design_id=`:
   - `kind` je whitelist (`issued_delivery_note` → `issueddeliverynote`), ID zostavy a návrhu sa overujú (GUID alebo číslo);
   - odpoveď musí byť `application/pdf` a začínať `%PDF`, limit 20 MB, inak chyba.

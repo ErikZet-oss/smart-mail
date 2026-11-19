@@ -56,7 +56,8 @@ def test_bridge_venv_is_readable_by_local_service() -> None:
     from pathlib import Path
 
     for name in ("install-bridge.ps1", "update-bridge.ps1"):
-        text = (Path(__file__).resolve().parents[1] / "deploy" / "bridge-windows" / name).read_text(encoding="utf-8-sig")
+        path = Path(__file__).resolve().parents[1] / "deploy" / "bridge-windows" / name
+        text = path.read_text(encoding="utf-8-sig")
         sync = text.index("uv sync --frozen --no-dev")
         assert "$env:UV_LINK_MODE = 'copy'" in text[:sync], name
         assert "'.venv') /grant 'NT AUTHORITY\\LOCAL SERVICE:(OI)(CI)RX' /T" in text[sync:], name
