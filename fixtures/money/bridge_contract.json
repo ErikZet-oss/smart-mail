@@ -166,7 +166,10 @@
       "reference": "OBJ-0041",
       "state": 0,
       "transport": null,
-      "total": "1047.44"
+      "total": "1047.44",
+      "centre_id": "b05ec643-364e-5a0f-acf0-5dc8cc79d0b0",
+      "description": null,
+      "note": null
     },
     {
       "id": "20282562-ac52-539d-9755-f1363fb3d835",
@@ -177,9 +180,45 @@
       "reference": "OBJ-0033",
       "state": 1,
       "transport": null,
-      "total": "2695.97"
+      "total": "2695.97",
+      "centre_id": "c216e8a8-0b43-500e-9bcc-73bda4cf82ed",
+      "description": "Objednávka OR06024033",
+      "note": null
     }
   ],
+  "delivery_search": {
+    "matched_by": "company",
+    "items": [
+      {
+        "id": "772d0af7-ed9e-55e7-9016-0412e395f541",
+        "number": "DV260041",
+        "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+        "issued_on": "2026-09-19",
+        "moved_on": "2026-09-19",
+        "reference": "OBJ-0041",
+        "state": 0,
+        "transport": null,
+        "total": "1047.44",
+        "centre_id": "b05ec643-364e-5a0f-acf0-5dc8cc79d0b0",
+        "description": null,
+        "note": null
+      },
+      {
+        "id": "20282562-ac52-539d-9755-f1363fb3d835",
+        "number": "DV260033",
+        "company_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+        "issued_on": "2026-07-23",
+        "moved_on": "2026-07-23",
+        "reference": "OBJ-0033",
+        "state": 1,
+        "transport": null,
+        "total": "2695.97",
+        "centre_id": "c216e8a8-0b43-500e-9bcc-73bda4cf82ed",
+        "description": "Objednávka OR06024033",
+        "note": null
+      }
+    ]
+  },
   "activities": [
     {
       "id": "7d119e37-b432-58e8-9f2a-56f357908f89",

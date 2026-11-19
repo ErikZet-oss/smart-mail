@@ -15,6 +15,10 @@ from tests.conftest import make_client
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "money" / "bridge_contract.json"
 
 
+def _trim(search: dict[str, Any]) -> dict[str, Any]:
+    return {**search, "items": search["items"][:2]}
+
+
 def current() -> dict[str, Any]:
     client = make_client()
     companies = client.get("/sync/companies?count=2").json()
@@ -29,6 +33,7 @@ def current() -> dict[str, Any]:
         "receivables": receivables[:2],
         "orders": client.get(f"/companies/{first}/orders?since=2020-01-01").json()[:2],
         "deliveries": client.get(f"/companies/{first}/deliveries?since=2020-01-01").json()[:2],
+        "delivery_search": _trim(client.get(f"/delivery-notes/issued/search?company_id={first}").json()),
         "activities": client.get(f"/companies/{first}/activities").json()[:2],
         "overdue": client.get("/receivables/overdue?before=2026-10-01&count=2").json(),
         "articles": client.get("/articles/search?code=934-10-A2").json(),

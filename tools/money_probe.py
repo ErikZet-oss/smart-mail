@@ -19,6 +19,10 @@ Purpose
   per centre, warehouse per centre, Cenik_ID on items, stock-movement times, vratky, side costs, and - with
   PROBE_DL_NUMBER + PROBE_DL_DOKLAD_PRIJATY - whether "Doklad prijatý" is stored in Odkaz. -> probe_output/branches.md
 
+  With --pdfreport (read-only, #222) it calls Money's generic print endpoint /pdfreport for one ISSUED delivery note
+  (PROBE_DL_ISSUED_NUMBER or PROBE_DL_NUMBER, PROBE_DL_REPORT_ID, optional PROBE_DL_DESIGN_ID) with and without the
+  designid. Only status, content type, size and %PDF are written. -> probe_output/pdfreport.md
+
   With --phase4 (read-only) it lists which fields existing CRM activities fill (#189: the first test write copies
   them) and checks the branch price lists (PROBE_PRICE_LISTS = codes set in Settings 11e, else every active list with
   a default warehouse) via PriceListItems, the company discount / price-list
@@ -50,6 +54,10 @@ Usage
      PROBE_ESHOP_ORDER=2410006820                   # (#210) an e-shop order number written on an issued invoice
      # PROBE_DL_NUMBER=302600123                     # --branches: an existing received delivery note number
      # PROBE_DL_DOKLAD_PRIJATY=FA-2026-00456       # --branches: its "Doklad prijatý" exactly as shown in Money
+     # --- only for --pdfreport (#222, read-only): an ISSUED delivery note and its print report ---
+     # PROBE_DL_ISSUED_NUMBER=DV260042              # (or PROBE_DL_NUMBER when --branches is not run with it)
+     # PROBE_DL_REPORT_ID=12                        # Agenda > Nastavenie tlačových zostáv > Dodací list vydaný > Opraviť
+     # PROBE_DL_DESIGN_ID=34                        # optional: the design id from the list of designs
      # PROBE_PRICE_LISTS=10-bez DPH,20-bez DPH        # --phase4: price-list codes set on the branches (Settings 11e)
      PROBE_EMAIL=novak@abcstav.sk                    # e-mail of a contact person that exists in the address book
      PROBE_ARTICLE=DIN 933                           # a code or name fragment of an existing article
@@ -1167,6 +1175,70 @@ def write_branches_report():
     print(f"Written {OUT_DIR}/branches.md and {OUT_DIR}/branches.json")
 
 
+# ----------------------------------------------------------------------------- --pdfreport (#222)
+pdfreport_report = {"steps": {}}
+
+
+def pdfreport_probe(http, number, report_id, design_id):
+    """#222 read-only: Money's generic print endpoint `GET [API]/pdfreport?objectname=issueddeliverynote&id=&reportid=
+    [&designid=]` for one issued delivery note. Records only status, content type, size, %PDF and whether designid is
+    required — never the document number, its ID or any PDF content."""
+    out = pdfreport_report["steps"]
+    if not number or not report_id:
+        step("pdfreport issueddeliverynote", None, note="PROBE_DL_NUMBER / PROBE_DL_REPORT_ID not set")
+        out["configured"] = False
+        return out
+    out["configured"] = True
+    st, data, err, _ = gql(
+        http,
+        "query($f:String){ IssuedDeliveryNotes(Filter:$f, Count:5){ ID CisloDokladu Deleted } }",
+        {"f": f"CisloDokladu~eq~{number}"},
+    )
+    rows = [r for r in ((data or {}).get("IssuedDeliveryNotes") or []) if not r.get("Deleted")]
+    out["delivery_note_found"] = bool(rows)
+    if not rows:
+        step("pdfreport issueddeliverynote", False, note="the delivery note was not found by its number (GraphQL)")
+        return out
+    record_id = rows[0].get("ID")
+    variants = ([("with_designid", design_id)] if design_id else []) + [("without_designid", None)]
+    for label, design in variants:
+        params = {"objectname": "issueddeliverynote", "id": record_id, "reportid": report_id}
+        if design:
+            params["designid"] = design
+        status, ctype, body, ms = http.get("/pdfreport", params, raw=True)
+        data_bytes = body if isinstance(body, (bytes, bytearray)) else b""
+        out[label] = {
+            "status": status,
+            "content_type": (ctype or "").split(";")[0].strip(),
+            "size": len(data_bytes),
+            "is_pdf": bytes(data_bytes[:4]) == b"%PDF",
+            "ms": ms,
+        }
+    with_ok = (out.get("with_designid") or {}).get("is_pdf")
+    without_ok = (out.get("without_designid") or {}).get("is_pdf")
+    out["designid_required"] = (bool(with_ok) and not without_ok) if design_id else None
+    ok = bool(with_ok or without_ok)
+    step("pdfreport issueddeliverynote", ok,
+         note="PDF returned" + (" (designid required)" if out["designid_required"] else "") if ok else "no PDF returned")
+    return out
+
+
+def write_pdfreport_report():
+    pdfreport_report["generated_at"] = report["generated_at"]
+    os.makedirs(OUT_DIR, exist_ok=True)
+    with open(os.path.join(OUT_DIR, "pdfreport.json"), "w", encoding="utf-8") as fh:
+        json.dump(pdfreport_report, fh, ensure_ascii=False, indent=2, default=str)
+    lines = ["# Money S4 probe – /pdfreport for issued delivery notes (#222)", "",
+             f"Generated: {report['generated_at']}", "",
+             "No document number, ID or PDF content is written here.", ""]
+    for k, v in pdfreport_report["steps"].items():
+        lines.append(f"- **{k}**: {json.dumps(v, ensure_ascii=False, default=str)}")
+    lines += ["", "Give this file to Claude Code before switching the delivery note card on.", ""]
+    with open(os.path.join(OUT_DIR, "pdfreport.md"), "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    print(f"Written {OUT_DIR}/pdfreport.md and {OUT_DIR}/pdfreport.json")
+
+
 # ----------------------------------------------------------------------------- main
 def write_report():
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -1200,6 +1272,9 @@ def main():
                          "(#188) -> probe_output/phase4.md")
     ap.add_argument("--branches", action="store_true",
                     help="read-only: centres, warehouses, price lists, series and received delivery notes -> probe_output/branches.md")
+    ap.add_argument("--pdfreport", action="store_true",
+                    help="read-only: /pdfreport of one issued delivery note (PROBE_DL_NUMBER, PROBE_DL_REPORT_ID, "
+                         "PROBE_DL_DESIGN_ID) -> probe_output/pdfreport.md")
     args = ap.parse_args()
     load_env(args.env)
 
@@ -1217,6 +1292,12 @@ def main():
         sys.exit(1)
 
     gql_schema(http)
+    if args.pdfreport:
+        if gql_basic(http):
+            pdfreport_probe(http, env("PROBE_DL_ISSUED_NUMBER") or env("PROBE_DL_NUMBER"), env("PROBE_DL_REPORT_ID"),
+                            env("PROBE_DL_DESIGN_ID"))
+        write_pdfreport_report()  # report.md of the base run is kept
+        return
     if args.phase4:
         if gql_basic(http):
             phase4_activities(http)

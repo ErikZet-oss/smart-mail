@@ -7,7 +7,16 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.models import CodebookPage, Company, CompanyPage, InvoiceSearch, IssuedInvoice, OverduePage, PersonPage
+from app.models import (
+    CodebookPage,
+    Company,
+    CompanyPage,
+    DeliverySearch,
+    InvoiceSearch,
+    IssuedInvoice,
+    OverduePage,
+    PersonPage,
+)
 from tests.conftest import SignedClient
 
 
@@ -86,3 +95,27 @@ def test_contract_pdf_report_id_is_validated(contract_client: SignedClient) -> N
 def test_contract_overdue_receivables(contract_client: SignedClient) -> None:
     page = OverduePage.model_validate(contract_client.get("/receivables/overdue?before=2026-10-01&count=50").json())
     assert all(i.remaining > Decimal("0") and i.due_on is not None and str(i.due_on) < "2026-10-01" for i in page.items)
+
+
+def test_contract_222_delivery_note_search_and_pdf(contract_client: SignedClient) -> None:
+    company = _first_company(contract_client)
+    latest = DeliverySearch.model_validate(
+        contract_client.get(f"/delivery-notes/issued/search?company_id={company.id}").json()
+    )
+    assert all(d.company_id == company.id for d in latest.items)
+    dates = [d.issued_on for d in latest.items if d.issued_on]
+    assert dates == sorted(dates, reverse=True)  # newest first
+    if latest.items:
+        note = latest.items[0]
+        by_number = DeliverySearch.model_validate(
+            contract_client.get(f"/delivery-notes/issued/search?number={note.number}").json()
+        )
+        assert by_number.matched_by == "number" and note.id in {d.id for d in by_number.items}
+    assert contract_client.get("/delivery-notes/issued/search").status_code == 422
+    assert contract_client.get("/delivery-notes/issued/search?order=OR12").status_code == 422
+    assert contract_client.get("/delivery-notes/issued/search?number=DL%7C1").status_code == 422
+    dead = "00000000-0000-4000-8000-00000000dead"
+    for qs in ("report_id=x;y", "report_id=12&design_id=a%20b"):
+        r = contract_client.get(f"/documents/issued_delivery_note/{dead}/pdf?{qs}")
+        assert r.status_code == 422 and r.json()["detail"]["code"] == "report_id_invalid"
+    assert contract_client.get(f"/documents/issued_invoice/{dead}/pdf?report_id=12").status_code == 422  # whitelist

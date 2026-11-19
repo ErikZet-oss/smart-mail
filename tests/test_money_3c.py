@@ -24,7 +24,7 @@ from app.money import bridge_client as bc
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.matching import counterparty, ico_valid, icos_in, match_sender
 from app.money.models import EmailCompanyLink, MoneyCompany, MoneyPerson
-from app.money.schemas import Activity, Delivery, IssuedInvoice, Order
+from app.money.schemas import Activity, Delivery, DeliverySearch, IssuedInvoice, Order
 from tests.conftest import Client, FakeMailServer
 from tests.test_mail_sync_1c import _signed_in
 
@@ -166,6 +166,7 @@ def test_3c_contract_fixture_has_the_card_parts() -> None:
         Order.model_validate(row)
     for row in data["deliveries"]:
         Delivery.model_validate(row)
+    DeliverySearch.model_validate(data["delivery_search"])  # #222
     for row in data["activities"]:
         Activity.model_validate(row)
 

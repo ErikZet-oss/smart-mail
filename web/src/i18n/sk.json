@@ -1661,6 +1661,44 @@
         "no_recipient": "Správa nemá externého príjemcu."
       }
     },
+    "deliveryNote": {
+      "title": "Návrh: poslať dodací list z Money",
+      "subline": "{{company}} · komu: {{to}}",
+      "note": "dodací list",
+      "approve": "Pripraviť koncept s dodacím listom",
+      "drafted": "Koncept s dodacím listom z Money je pripravený v Konceptoch. Skontrolujte ho a odošlite.",
+      "footer": "Priloží sa PDF z tlačovej zostavy Money (z aktuálnych údajov). Pri schválení aj pri odoslaní sa znova overí, že dodací list patrí firme príjemcu.",
+      "footerForeign": "Pri schválení sa znova overí, že dodací list stále patrí firme {{owner}}. Odoslať ho pôjde iba na potvrdenú adresu.",
+      "ackLabel": "Overil som, že odosielateľ smie dostať tento dodací list",
+      "noReport": "Pobočka {{branch}} nemá nastavenú tlačovú zostavu dodacieho listu (Nastavenia › Pobočky)",
+      "pick": {
+        "legend": "Vyberte dodacie listy do konceptu",
+        "issued": "vystavený {{date}}",
+        "otherCompany": "Dodací list je vystavený na {{owner}}",
+        "oneCustomer": "Jeden koncept môže obsahovať dodacie listy iba jednej firmy – vyberte dodacie listy jednej firmy.",
+        "noneSelected": "Vyberte aspoň jeden dodací list.",
+        "bodyChanges": "Text konceptu sa pri príprave upraví podľa vybraných dodacích listov."
+      },
+      "checks": {
+        "invoice_other_customer_ack": "Dodací list je vystavený na {{owner}}, žiada {{requester}}",
+        "recipient_unconfirmed": "Príjemca {{email}} nie je overený pre firmu v Money – priraďte ho v paneli Zákazník",
+        "delivery_note_corrected": "Zákazník žiada opravu – najprv uprav dodací list v Money, PDF sa vytvorí z aktuálnych údajov.",
+        "delivery_note_found_by_order": "Dodací list nájdený podľa objednávky {{order}} – skontrolujte.",
+        "delivery_note_latest": "V maile nie je číslo – ponúkame posledné dodacie listy firmy, vyberte správny.",
+        "delivery_note_report_missing": "Pobočka {{branch}} nemá nastavenú tlačovú zostavu dodacieho listu (Nastavenia › Pobočky)",
+        "delivery_note_not_found": "Dodací list {{number}} sa v Money nenašiel",
+        "recipient_not_document_owner": "Dodací list {{number}} patrí inej firme"
+      },
+      "errors": {
+        "ack_required": "Najprv potvrďte, že odosielateľ smie dostať dodací list inej firmy.",
+        "selection_invalid": "Výber dodacích listov už nesedí s návrhom. Obnovte správu a vyberte znova.",
+        "suggestion_blocked": "Kontrola v Money zastavila prípravu – dodací list sa zmenil, nepatrí firme príjemcu alebo príjemca nie je overený.",
+        "delivery_note_report_missing": "Pobočka {{branch}} nemá nastavenú tlačovú zostavu dodacieho listu (Nastavenia › Pobočky).",
+        "pdf_missing": "Money pre dodací list {{number}} PDF nevrátilo.",
+        "money_unavailable": "Money je teraz nedostupné. Skúste to o chvíľu.",
+        "money_disabled": "Prepojenie s Money je vypnuté."
+      }
+    },
     "card": {
       "replyTitle": "Návrh odpovede",
       "collapsed": {
@@ -1886,7 +1924,7 @@
     "reports": {
       "document": "Doklad",
       "kinds": { "invoice": "Faktúra vydaná", "proforma": "Zálohová faktúra vydaná" },
-      "short": { "invoice": "faktúra", "proforma": "zálohová" },
+      "short": { "invoice": "faktúra", "proforma": "zálohová", "delivery_note": "dodací list" },
       "field": "ID zostavy – {{kind}} {{lang}}",
       "placeholder": "ID zostavy z Money",
       "fallback": "prázdne = SK",
@@ -1904,10 +1942,14 @@
       "centreMissing": "už neexistuje v Money",
       "report": {
         "invoice": "Tlačová zostava – faktúra vydaná (SK)",
-        "proforma": "Tlačová zostava – zálohová faktúra (SK)"
+        "proforma": "Tlačová zostava – zálohová faktúra (SK)",
+        "delivery_note": "Tlačová zostava – dodací list vydaný: ID zostavy",
+        "delivery_note_design": "ID návrhu (designid)"
       },
       "reportHelp": "Prázdne = firemná zostava z Nastavenia › Money S4 › Tlačové zostavy.",
-      "tryNumber": "Číslo faktúry tejto pobočky na vyskúšanie",
+      "deliveryHelp": "Money → Agenda → Nastavenie tlačových zostáv → Dodací list vydaný → Opraviť. Bez zostavy sa návrh „Dodací list“ pre túto pobočku neponúkne.",
+      "designHelp": "Nepovinné – ID návrhu zo zoznamu návrhov tej istej zostavy.",
+      "tryNumber": "Číslo faktúry alebo dodacieho listu tejto pobočky na vyskúšanie",
       "later": "Cenník, sklad, číselné rady a vzorový dodací list pobočky pribudnú vo fáze 4."
     },
     "c360": {
@@ -2002,6 +2044,7 @@
       "dueOn": "splatná {{date}}",
       "noOpen": "Žiadne neuhradené faktúry.",
       "orders": "Posledné objednávky",
+      "deliveryPdf": "PDF dodacieho listu {{number}} z Money",
       "deliveries": "Posledné dodacie listy",
       "activities": "Aktivity",
       "contacts": "Kontakty",

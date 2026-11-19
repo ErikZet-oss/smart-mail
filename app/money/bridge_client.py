@@ -29,6 +29,7 @@ from app.money.schemas import (
     Company,
     CompanyPage,
     Delivery,
+    DeliverySearch,
     Health,
     InvoiceSearch,
     IssuedInvoice,
@@ -289,8 +290,24 @@ class BridgeClient:
 
     async def invoice_pdf(self, kind: str, invoice_id: uuid.UUID, report_id: str) -> bytes | None:
         """The original Money PDF (never rendered by Smart Mail, DOCUMENTS_SPEC §6); None = not found."""
+        return await self._pdf(f"/invoices/issued/{kind}/{invoice_id}/pdf?{urlencode({'report_id': report_id})}")
+
+    async def document_pdf(
+        self, kind: str, record_id: uuid.UUID, report_id: str, design_id: str | None = None
+    ) -> bytes | None:
+        """#222 Money's own print report through `/pdfreport` (read only); None = not found."""
+        params = {"report_id": report_id, **({"design_id": design_id} if design_id else {})}
+        return await self._pdf(f"/documents/{kind}/{record_id}/pdf?{urlencode(params)}")
+
+    async def search_deliveries(
+        self, *, number: str | None = None, order: str | None = None, company_id: uuid.UUID | None = None
+    ) -> DeliverySearch:
+        """#222 issued delivery notes: number → order in Popis/Poznámka → the company's latest."""
+        params = {"number": number, "order": order, "company_id": str(company_id) if company_id else None}
+        return await self._model(DeliverySearch, "/delivery-notes/issued/search", params)
+
+    async def _pdf(self, path_qs: str) -> bytes | None:
         _circuit.check()
-        path_qs = f"/invoices/issued/{kind}/{invoice_id}/pdf?{urlencode({'report_id': report_id})}"
         stamp = str(int(time.time()))
         headers = {
             "X-Bridge-Key-Id": self._key_id,

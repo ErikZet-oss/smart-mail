@@ -75,6 +75,14 @@ test('#174 W12-11e: centre from Money, branch report ids, validation, save', asy
   await expect(panel.getByRole('button', { name: 'Uložiť' })).toBeDisabled();
   await proforma.fill('78');
   await panel.getByRole('button', { name: 'Uložiť' }).click();
-  await expect.poll(() => saved).toEqual([{ centre_id: CENTRE, reports: { invoice: '77', proforma: '78' } }]);
+  await expect
+    .poll(() => saved)
+    .toEqual([
+      {
+        centre_id: CENTRE,
+        // #222: the delivery note report and design travel in the same JSON (empty here)
+        reports: { invoice: '77', proforma: '78', delivery_note: '', delivery_note_design: '' },
+      },
+    ]);
   await expect(panel).toContainText('Prázdne = firemná zostava z Nastavenia › Money S4 › Tlačové zostavy.');
 });

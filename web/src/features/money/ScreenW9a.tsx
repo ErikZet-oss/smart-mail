@@ -22,7 +22,8 @@ import { Menu } from '../../components/Menu';
 import { AppShell } from '../../components/shell/AppShell';
 import { fetchMe } from '../auth/authApi';
 import { useFeaturesState } from '../system/features';
-import { cardKey, day, fetchCard, fetchCompanyMail, money, type CompanyCard } from './moneyApi';
+import { cardKey, day, deliveryNotePdfUrl, fetchCard, fetchCompanyMail, money, type CompanyCard } from './moneyApi';
+import { FileTypeIcon } from '../../components/FileTypeIcon';
 
 type Tab = 'overview' | 'emails' | 'documents' | 'contacts' | 'activities';
 const TABS: Tab[] = ['overview', 'emails', 'documents', 'contacts', 'activities'];
@@ -288,7 +289,9 @@ function Panel({
   );
 }
 
-function Rows({ rows, empty }: { rows: { id: string; left: string; mid: string; right: string }[]; empty: string }) {
+type Row = { id: string; left: string; mid: string; right: string; pdf?: string | null; pdfLabel?: string };
+
+function Rows({ rows, empty }: { rows: Row[]; empty: string }) {
   if (rows.length === 0) return <p className="type-small text-text-secondary">{empty}</p>;
   return (
     <ul className="flex flex-col divide-y divide-border-default">
@@ -297,6 +300,19 @@ function Rows({ rows, empty }: { rows: { id: string; left: string; mid: string; 
           <span className="shrink-0 font-medium">{row.left}</span>
           <span className="min-w-0 flex-1 truncate text-text-secondary">{row.mid}</span>
           {row.right ? <span className="shrink-0 tabular-nums">{row.right}</span> : null}
+          {row.pdf ? (
+            <a
+              href={row.pdf}
+              target="_blank"
+              rel="noopener"
+              aria-label={row.pdfLabel}
+              title={row.pdfLabel}
+              className="shrink-0 self-center rounded-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary-500"
+              data-testid={`delivery-pdf-${row.id}`}
+            >
+              <FileTypeIcon type="pdf" />
+            </a>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -422,6 +438,8 @@ function Documents({ card }: { card: CompanyCard }) {
             left: d.number,
             mid: [day(d.issued_on), d.transport].filter(Boolean).join(' · '),
             right: money(d.total),
+            pdf: card.delivery_pdf?.includes(d.id) ? deliveryNotePdfUrl(card.company.money_id, d.id) : null,
+            pdfLabel: t('money.customer.deliveryPdf', { number: d.number }),
           }))}
           empty={t('money.customer.none')}
         />

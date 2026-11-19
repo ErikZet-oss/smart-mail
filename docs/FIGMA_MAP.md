@@ -175,7 +175,9 @@ AiSuggestionCard (13 types × states), banners, toasts, checks, empty states and
 `8:1104`, primary button disabled until ticked) is built from the existing components; the reviewer adds the frame
 to page 03 and links it here. **Missing frame (#217):** the invoice card state `type=invoice_attach, state=pick`
 (up to 5 rows with `Checkbox`, „vystavená {dátum}“, amount, red line for another company) is built from the existing
-components; the reviewer adds it to page 03. Foundations (colour variables Light/Dark, typography, spacing, shadows, grids, logo) are on page 01 (`2:2`).
+components; the reviewer adds it to page 03. **Missing frame (#222):** `type=delivery_note_attach` (the pick card
+with delivery note texts, „opravený“ warning, a row without the branch print report) — built from the invoice
+`pick` / `ack-required` states; the reviewer adds it to page 03. Foundations (colour variables Light/Dark, typography, spacing, shadows, grids, logo) are on page 01 (`2:2`).
 
 ## Prototype flows (page 06 Flows) — each flow is also a Playwright e2e test (CLAUDE.md §14)
 

@@ -122,6 +122,16 @@ class Delivery(_Model):
     state: int | None
     transport: str | None
     total: Decimal
+    centre_id: uuid.UUID | None = None  # Stredisko_ID → the branch print report (#222)
+    description: str | None = None  # Nazev / „Popis“ — usually the customer's order number (#222)
+    note: str | None = None  # Poznamka / „Poznámka“ (#222)
+
+
+class DeliverySearch(_Model):
+    """#222 issued delivery notes found by number, by the customer's order or the company's latest."""
+
+    matched_by: Literal["number", "order", "company", "none"]
+    items: list[Delivery]
 
 
 class Activity(_Model):
