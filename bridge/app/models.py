@@ -69,6 +69,7 @@ class IssuedInvoice(_Model):
     doc_type: int | None  # TypDokladu, raw
     centre_id: uuid.UUID | None = None  # Stredisko_ID — selects the branch print report (#174)
     description: str | None = None  # Nazev = card „Popis“; holds the e-shop order number (#210)
+    note: str | None = None  # Poznamka = card „Poznámka“; also holds the customer's order number (#217)
 
 
 class Order(_Model):

@@ -52,12 +52,19 @@ _AFTER_WORD = re.compile(
 # #210 e-shop order numbers: „objednávka č. 2410006820“, „k objednávke 2410006820“, „obj. 2410006820“,
 # „order #2410006820“, „Bestellung Nr. 2410006820“ — also in the forwarded / quoted part. 6+ digits after the word,
 # so a phone, IČO, PSČ or date (never after one of these words) is not taken.
+# #217 also with letters: „objednávka č. OR06024026“, „PO-45821“, „naša objednávka OBJ/2026/123“ — a 1–4 letter
+# prefix, an optional „-“, „/“ or space, 4+ digits, optionally „/digits“. A date („NR 09/11/2026“) has < 4 digits in
+# a row, so it is never taken.
+_ORDER_WORD = r"(?<![\w])(?:(?:objedn[áa]v[kc]\w*|order|bestellung\w*|z[áa]k[áa]zk\w*|PO)(?![\w])|obj\.)"
+_ORDER_FILLER = r"\s*(?:č\.|c\.|číslo|cislo|no\.?|nr\.?|number|nummer|#|:)?\s*#?\s*"
+_ORDER_ALNUM = r"(?!(?:no|nr|č|c)\b)[A-Za-z]{1,4}[-/ ]?\d{4,14}(?:/\d{1,8})*(?![\w/])"
 _ORDER = re.compile(
-    r"(?<![\w])(?:objedn[áa]v[kc]\w*|obj\.|order|bestellung\w*|zak[áa]zk\w*)"
-    r"\s*(?:č\.|c\.|číslo|cislo|no\.?|nr\.?|number|nummer|#|:)?\s*#?\s*(\d{6,14})(?!\d)",
+    _ORDER_WORD + _ORDER_FILLER + r"(\d{6,14}(?!\d)|" + _ORDER_ALNUM + ")",
     re.IGNORECASE,
 )
-MIN_ORDER_DIGITS = 6
+# „PO-45821“ / „PO 4500012345“ on its own: the word is the prefix of the number
+_ORDER_PO = re.compile(r"(?<![\w])(PO[-/ ]?\d{4,14}(?:/\d{1,8})*)(?![\w/])", re.IGNORECASE)
+MIN_ORDER_SEARCH = 6  # #217: never search Money for a shorter text (`ct` over the whole agenda)
 
 # #182 „pošlite poslednú faktúru“ (SK/CZ), „last/latest invoice“, „letzte Rechnung“ — deterministic, no model
 _LATEST = re.compile(
@@ -99,14 +106,45 @@ def invoice_refs(text: str | None) -> list[str]:
 
 
 def order_refs(text: str | None) -> list[str]:
-    """#210: e-shop order numbers written in the mail (subject, body and the forwarded part), in order, no
-    duplicates. Only used when the mail names no invoice number (`invoice_refs` wins)."""
+    """#210 / #217: customer order numbers written in the mail (subject, body and the forwarded part), as written
+    (trimmed), in order, no duplicates. Only used when the mail names no invoice number (`invoice_refs` wins)."""
+    found: list[tuple[int, int, str]] = []
+    for rx in (_ORDER, _ORDER_PO):
+        for m in rx.finditer(text or ""):
+            found.append((m.start(1), m.end(1), m.group(1).strip()))
     out: list[str] = []
-    for m in _ORDER.finditer(text or ""):
-        ref = m.group(1)
-        if len(ref) >= MIN_ORDER_DIGITS and ref not in out:
+    seen: set[str] = set()
+    taken: list[tuple[int, int]] = []
+    for start, end, ref in sorted(found):
+        if any(start < e and s < end for s, e in taken):
+            continue  # the same number matched by both patterns
+        taken.append((start, end))
+        key = order_compact(ref)
+        if len(key) >= MIN_ORDER_SEARCH and sum(c.isdigit() for c in ref) >= 4 and key not in seen:
+            seen.add(key)
             out.append(ref)
     return out[:MAX_REFS]
+
+
+def order_compact(ref: str) -> str:
+    """„PO-45821“ → „PO45821“: the variant without separators (upper case) used for searching and comparing."""
+    return re.sub(r"[\s\-/]", "", ref).upper()
+
+
+def order_search_terms(ref: str) -> list[str]:
+    """What Money is searched for: the number as written and without separators, each at least 6 characters."""
+    terms = [ref.strip(), order_compact(ref)]
+    return [t for t in dict.fromkeys(terms) if len(t) >= MIN_ORDER_SEARCH]
+
+
+def order_in(text: str | None, ref: str) -> bool:
+    """#217: the whole order number is in the invoice „Popis“ / „Poznámka“ — separators and case ignored, and
+    „2410006820“ does not count inside „24100068201“."""
+    key = order_compact(ref)
+    if not key:
+        return False
+    body = r"[\s\-/]?".join(re.escape(c) for c in key)
+    return re.search(rf"(?<![A-Za-z0-9]){body}(?![0-9])", text or "", re.IGNORECASE) is not None
 
 
 def wants_latest(text: str | None) -> bool:
@@ -302,6 +340,112 @@ async def evaluate(
     return out
 
 
+MAX_PICK = 5  # #217: at most 5 invoices offered on the card when an order number finds several
+
+
+@dataclass
+class PickItem:
+    invoice: IssuedInvoice
+    order: str
+    own: bool  # belongs to the sender's (strongly matched) company
+    exact: bool  # „Popis“ / „Poznámka“ holds the whole order number
+    owner_name: str | None = None  # only for an invoice of another company (#215 red row when picked)
+
+    @property
+    def selected(self) -> bool:
+        return self.own and self.exact
+
+
+@dataclass
+class Pick:
+    email: str
+    company_money_id: uuid.UUID | None
+    company_name: str | None
+    items: list[PickItem] = field(default_factory=list)
+    checks: list[dict[str, Any]] = field(default_factory=list)
+    foreign: bool = False  # no own invoice and ONE other owner → the #215 path
+    owner_money_id: uuid.UUID | None = None
+    owner_name: str | None = None
+
+
+def newest_first(found: list[tuple[IssuedInvoice, str]]) -> list[tuple[IssuedInvoice, str]]:
+    """Newest `DatumVystaveni` first, then the number; one row per invoice; at most `MAX_PICK`."""
+    unique: dict[uuid.UUID, tuple[IssuedInvoice, str]] = {}
+    for inv, order in found:
+        unique.setdefault(inv.id, (inv, order))
+    rows = sorted(unique.values(), key=lambda p: (p[0].issued_on or date.min, p[0].number), reverse=True)
+    return rows[:MAX_PICK]
+
+
+async def pick_candidates(
+    db: AsyncSession,
+    settings: Settings,
+    *,
+    email: str,
+    body_text: str | None,
+    found: list[tuple[IssuedInvoice, str]],
+    language: str | None,
+) -> Pick:
+    """#217: the card choice for invoices found by an order number. Pre-selected = the sender's own invoices whose
+    „Popis“ / „Poznámka“ holds the whole order number. Another company's invoice is listed with its owner and needs
+    the #215 tick when picked; approve checks everything again for the picked numbers only."""
+    match = await match_sender(db, email, body_text, settings)
+    strong = match.company is not None and match.method in STRONG
+    out = Pick(
+        email=email,
+        company_money_id=match.company.money_id if match.company else None,
+        company_name=match.company.name if match.company else None,
+    )
+    reports = await load_reports(db)
+    branch_reports = await load_branch_reports(db)
+    names: dict[uuid.UUID, str | None] = {}
+    missing: set[str] = set()
+    for inv, order in newest_first(found):
+        own = strong and inv.company_id is not None and inv.company_id == out.company_money_id
+        owner_name = None
+        if not own and inv.company_id is not None:
+            if inv.company_id not in names:
+                company = await db.scalar(select(MoneyCompany).where(MoneyCompany.money_id == inv.company_id))
+                names[inv.company_id] = company.name if company else None
+            owner_name = names[inv.company_id]
+        exact = order_in(inv.description, order) or order_in(inv.note, order)
+        out.items.append(PickItem(invoice=inv, order=order, own=own, exact=exact, owner_name=owner_name))
+        if report_for_invoice(reports, branch_reports, inv, language) is None:
+            missing.add(inv.kind)
+    for kind in sorted(missing):
+        out.checks.append(check("report_not_configured", "blocking", kind=kind))
+    owners = {i.invoice.company_id for i in out.items if not i.own}
+    if not any(i.own for i in out.items) and len(owners) == 1 and None not in owners:
+        owner = next(iter(owners))
+        out.foreign, out.owner_money_id, out.owner_name = True, owner, names.get(owner) if owner else None
+        out.checks.append(
+            check(
+                ACK_CHECK,
+                "requires_ack",
+                owner=out.owner_name or "",
+                requester=out.company_name or email,
+                numbers=[i.invoice.number for i in out.items],
+            )
+        )
+    elif not strong:
+        out.checks.append(check("recipient_unconfirmed", "blocking", email=email))
+    return out
+
+
+def pick_json(item: PickItem) -> dict[str, Any]:
+    inv = item.invoice
+    return {
+        **invoice_json(inv),
+        "issued_on": inv.issued_on.isoformat() if inv.issued_on else None,
+        "order": item.order,
+        "own": item.own,
+        "exact": item.exact,
+        "selected": item.selected,
+        "owner_money_id": str(inv.company_id) if inv.company_id and not item.own else None,
+        "owner_name": item.owner_name,
+    }
+
+
 def invoice_json(inv: IssuedInvoice) -> dict[str, Any]:
     return {
         "id": str(inv.id),
@@ -346,7 +490,8 @@ async def acknowledged_owner(db: AsyncSession, draft_id: uuid.UUID | None) -> tu
     if not row or ack.get("check") != ACK_CHECK or not ack.get("person_id") or not email:
         return None
     try:
-        return uuid.UUID(str((row.payload or {}).get("owner_money_id"))), email
+        owner = ack.get("owner_money_id") or (row.payload or {}).get("owner_money_id")
+        return uuid.UUID(str(owner)), email
     except ValueError:
         return None
 

@@ -112,7 +112,8 @@
       "reference": null,
       "doc_type": 0,
       "centre_id": "ff0c7c15-73d8-5d99-81d8-1e45f7539519",
-      "description": null
+      "description": null,
+      "note": null
     },
     {
       "id": "1f9c2f98-db23-5555-8f68-3702e2a1454d",
@@ -129,7 +130,8 @@
       "reference": null,
       "doc_type": 0,
       "centre_id": "c216e8a8-0b43-500e-9bcc-73bda4cf82ed",
-      "description": null
+      "description": null,
+      "note": null
     }
   ],
   "orders": [
@@ -206,7 +208,8 @@
         "reference": null,
         "doc_type": 0,
         "centre_id": "c216e8a8-0b43-500e-9bcc-73bda4cf82ed",
-        "description": null
+        "description": null,
+        "note": "Vaša objednávka OR06024003"
       },
       {
         "id": "657d19de-f3f7-52a2-96e8-bf3cc197b873",
@@ -223,7 +226,8 @@
         "reference": null,
         "doc_type": 0,
         "centre_id": null,
-        "description": null
+        "description": null,
+        "note": null
       }
     ],
     "next_from": 2

@@ -1629,6 +1629,14 @@
       "footer": "Priloží sa originálne PDF z Money. Pri schválení aj pri odoslaní sa znova overí, že faktúra patrí firme príjemcu.",
       "footerForeign": "Pri schválení sa znova overí, že faktúra stále patrí firme {{owner}}. Odoslať ju pôjde iba na potvrdenú adresu.",
       "ackLabel": "Overil som, že odosielateľ smie dostať túto faktúru",
+      "pick": {
+        "legend": "Vyberte faktúry do konceptu",
+        "issued": "vystavená {{date}}",
+        "otherCompany": "Faktúra je vystavená na {{owner}}",
+        "oneCustomer": "Jeden koncept môže obsahovať faktúry iba jednej firmy – vyberte faktúry jednej firmy.",
+        "noneSelected": "Vyberte aspoň jednu faktúru.",
+        "bodyChanges": "Text konceptu sa pri príprave upraví podľa vybraných faktúr."
+      },
       "checks": {
         "invoice_owner_ok": "Faktúra patrí firme príjemcu",
         "recipient_unconfirmed": "Príjemca {{email}} nie je overený pre firmu v Money – priraďte ho v paneli Zákazník",
@@ -1643,6 +1651,7 @@
       },
       "errors": {
         "ack_required": "Najprv potvrďte, že odosielateľ smie dostať faktúru inej firmy.",
+        "selection_invalid": "Výber faktúr už nesedí s návrhom. Obnovte správu a vyberte znova.",
         "suggestion_blocked": "Kontrola v Money zastavila prípravu – faktúra nepatrí firme príjemcu alebo príjemca nie je overený.",
         "money_unavailable": "Money je teraz nedostupné. Skúste to o chvíľu.",
         "money_disabled": "Prepojenie s Money je vypnuté.",

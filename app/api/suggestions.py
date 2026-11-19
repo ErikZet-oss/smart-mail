@@ -36,6 +36,8 @@ class ApproveIn(BaseModel):
     body: str | None = Field(default=None, max_length=20000)  # edited text; None = as proposed
     # #215: checks of level `requires_ack` the person explicitly confirmed (e.g. „invoice_other_customer“)
     acknowledged_checks: list[str] = Field(default_factory=list, max_length=10)
+    # #217: invoice numbers the person picked on the card (invoice_attach with `pick`); None = the pre-selection
+    selected: list[str] | None = Field(default=None, max_length=5)
 
 
 class ApproveOut(BaseModel):
@@ -133,7 +135,7 @@ async def _approve_invoice(
 ) -> ApproveOut:
     """Phase 3d: every check again, live against Money (owner, recipient, report), then the draft with the PDFs."""
     from app.money.bridge_client import BridgeClient, BridgeUnavailable
-    from app.money.invoice_attach import ACK_CHECK, evaluate
+    from app.money.invoice_attach import ACK_CHECK, draft_body, evaluate
     from app.money.invoice_draft import InvoiceDraftError, build_invoice_draft
 
     if not settings.feature_money:
@@ -143,12 +145,29 @@ async def _approve_invoice(
         raise fail(409, "message_gone")
     payload = row.payload or {}
     proposed = str(payload.get("body") or "")
-    final = proposed if body.body is None else body.body.strip()
     numbers = [str(i.get("number")) for i in payload.get("invoices") or [] if i.get("number")]
     to = [str(e) for e in payload.get("to") or []]
+    foreign = payload.get("foreign") is True
+    owner_expected = str(payload.get("owner_money_id"))
+    if payload.get("pick") is True:
+        # #217: only the picked invoices; one customer per draft; another company's invoice needs the #215 tick
+        items = [i for i in payload.get("invoices") or [] if isinstance(i, dict) and i.get("number")]
+        picked = body.selected if body.selected is not None else [str(i["number"]) for i in items if i.get("selected")]
+        chosen = [i for i in items if str(i["number"]) in set(picked)]
+        if not picked or len(chosen) != len(set(picked)):
+            raise fail(409, "selection_invalid")
+        owners = {"own" if i.get("own") else str(i.get("owner_money_id")) for i in chosen}
+        if len(owners) != 1:
+            one = [{"id": "one_customer_per_draft", "level": "blocking", "params": {}}]
+            raise fail(409, "suggestion_blocked", checks=one)
+        numbers = [str(i["number"]) for i in chosen]
+        foreign = not chosen[0].get("own")
+        owner_expected = str(chosen[0].get("owner_money_id")) if foreign else "None"
+        orders = list(dict.fromkeys(str(i.get("order")) for i in chosen if i.get("order")))
+        proposed = draft_body(payload.get("language"), numbers, orders)
+    final = proposed if body.body is None else body.body.strip()
     if not numbers or len(to) != 1:
         raise fail(409, "suggestion_blocked", checks=[{"id": "no_invoice", "level": "blocking", "params": {}}])
-    foreign = payload.get("foreign") is True
     if foreign and ACK_CHECK not in body.acknowledged_checks:
         raise fail(409, "ack_required", check=ACK_CHECK)  # #215: the person must tick „Overil som…“
     person_row = await db.get(Person, person.id)
@@ -167,7 +186,7 @@ async def _approve_invoice(
             )
             if ev.blocked or str(ev.company_money_id) != str(payload.get("company_money_id")):
                 raise fail(409, "suggestion_blocked", checks=ev.checks)
-            if ev.foreign != foreign or str(ev.owner_money_id) != str(payload.get("owner_money_id")):
+            if ev.foreign != foreign or str(ev.owner_money_id) != owner_expected:
                 # the invoice's customer changed in Money since the suggestion → a new decision is needed
                 raise fail(409, "suggestion_blocked", checks=ev.checks)
             draft = await build_invoice_draft(
@@ -192,11 +211,12 @@ async def _approve_invoice(
     row.decided_by = person.id
     row.decided_at = datetime.now(UTC)
     row.checks = ev.checks
-    row.final_payload = {**payload, "body": final, "draft_id": str(draft.id)}
+    row.final_payload = {**payload, "body": final, "draft_id": str(draft.id), "selected": numbers}
     if foreign:
         row.final_payload["ack"] = {
             "check": ACK_CHECK,
             "email": to[0].strip().lower(),  # the one address the person saw on the card
+            "owner_money_id": str(ev.owner_money_id),  # #217: the owner of the PICKED invoices
             "person_id": str(person.id),
             "account_id": str(ctx.account.id),
             "at": datetime.now(UTC).isoformat(),

@@ -197,7 +197,11 @@ W1 with an info banner on top ("Heslo k e-mailu sa zmenilo – prihláste sa nov
   (`AiSuggestionCard`, max 2 visible + "Ďalšie návrhy (n)"; state **„faktúra inej firmy“** (#215, ADR-019) on the
   invoice card: a red check row „Faktúra je vystavená na {odberateľ}, žiada {žiadateľ}“ with a `Checkbox` „Overil som,
   že odosielateľ smie dostať túto faktúru“ under it — the primary button stays disabled until it is ticked; never in a
-  batch; same on M3); presence banner "Jana práve odpovedá" (if any); message
+  batch; same on M3); state **„výber faktúr“** (#217) when the order number finds invoices: up to 5 rows newest first,
+  each with a `Checkbox`, number, „vystavená {dátum}“ and amount; pre-selected = the sender's own invoices that hold the
+  whole order number; an invoice of another company shows „Faktúra je vystavená na {odberateľ}“ and, when picked, the
+  #215 tick; picking two companies shows „Jeden koncept môže obsahovať faktúry iba jednej firmy…“ and disables the
+  button, as does an empty choice); presence banner "Jana práve odpovedá" (if any); message
   body (sanitized, remote images blocked with bar "Zobraziť obrázky · Vždy od tohto odosielateľa"); attachments row
   (`AttachmentChip`: Náhľad → W2l lightbox, Stiahnuť, Uložiť do knižnice, Pripraviť dodací list prijatý /
   objednávku → W6u prefilled); older messages collapsed ("3 staršie správy"); internal notes timeline (yellow-grey

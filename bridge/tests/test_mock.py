@@ -106,3 +106,16 @@ def test_210_invoice_by_eshop_order_in_popis_mock() -> None:
     narrowed = client.get(f"/invoices/issued/search?order={order}&company_id={other.id}").json()
     assert narrowed["matched_by"] == "none"
     assert client.get("/invoices/issued/search?order=24%7C10").status_code == 422  # `|` never reaches a filter
+
+
+def test_217_order_with_letters_in_poznamka_and_min_length_mock() -> None:
+    client = make_client()
+    data = build()
+    inv = next(i for i in data.invoices if i.note and not i.description)
+    order = (inv.note or "").split()[-1]
+    out = client.get(f"/invoices/issued/search?order={order}").json()
+    assert out["matched_by"] == "order" and inv.number in [i["number"] for i in out["items"]]
+    assert next(i for i in out["items"] if i["number"] == inv.number)["note"] == inv.note
+    short = client.get("/invoices/issued/search?order=OR123")
+    assert short.status_code == 422 and short.json()["detail"]["code"] == "order_too_short"
+    assert client.get("/invoices/issued/search?order=OR06%7C024026").status_code == 422

@@ -88,6 +88,7 @@ class IssuedInvoice(_Model):
     doc_type: int | None
     centre_id: uuid.UUID | None = None  # Stredisko_ID (#174)
     description: str | None = None  # Nazev / „Popis“ — the e-shop order number (#210)
+    note: str | None = None  # Poznamka / „Poznámka“ — also the customer's order number (#217)
 
 
 class OverduePage(_Model):
