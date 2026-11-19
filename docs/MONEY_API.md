@@ -357,3 +357,9 @@ open purchase orders, delivery notes with remaining quantities; PDF endpoint ret
     needed for customer prices? (`docs/probe-findings-2026-10-31.md` §5)
 11. Together with question 1: when `IssuedOffer` is enabled, also a report endpoint for offers (then Smart Mail can
     attach the original Money PDF and stop rendering its own).
+
+
+## PDF z tlačovej zostavy – `/pdfreport` (stav 2026-11-19)
+- Oficiálna dokumentácia (docs.moneyerp.com → Posílání requestů): `GET [API]/pdfreport?objectname=<objekt>&id=<ID>&reportid=<ID zostavy>&designid=<ID návrhu>`. Je to ten istý S5Api (token `/connect/token`, scope `S5Api`), endpoint je mimo swaggeru – rovnako ako `/graphql`, `/graphql/schema`, `/attachment/…`. Neprítomnosť v `swagger_v*.json` teda nič nedokazuje.
+- REST `…/IssuedInvoice/{id}/Report/{reportId}` má voliteľný `reportDesignId` (swagger) – pojem „návrh“ teda API 1.15.11 pozná.
+- Pilot 2026-11-19 (PROD, API 1.15.11): `/pdfreport?objectname=issueddeliverynote&id=…&reportid=…` **bez** `designid` → 404. Dokumentácia uvádza všetky štyri parametre ako potrebné. Diagnostika: `money_probe.py --pdfreport` (matica: kontrola cez faktúru, varianty `objectname`, prefixy cesty, REST route pre dodací list).

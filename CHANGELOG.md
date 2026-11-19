@@ -4,6 +4,9 @@ All notable changes. Format: Keep a Changelog; versions follow the build phases 
 
 ## [Unreleased] — #222 Dodací list vydaný ako PDF z Money (/pdfreport) + AI karta „Dodací list“
 
+### Added
+- `money_probe.py --pdfreport`: read-only diagnosis matrix for the 404 on issued delivery notes – invoice control (REST report vs `/pdfreport`), objectname spellings, path prefixes, REST report route; masked error text only (pilot 2026-11-19).
+
 ### Fixed
 - Windows bridge install/update: `uv sync` copies packages (`UV_LINK_MODE=copy`) and the venv is granted to LocalService (`icacls /T`) — hardlinks from the per-user uv cache made the service fail with `PermissionError` after a dependency update (pilot 2026-11-19).
 

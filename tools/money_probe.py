@@ -22,6 +22,9 @@ Purpose
   With --pdfreport (read-only, #222) it calls Money's generic print endpoint /pdfreport for one ISSUED delivery note
   (PROBE_DL_ISSUED_NUMBER or PROBE_DL_NUMBER, PROBE_DL_REPORT_ID, optional PROBE_DL_DESIGN_ID) with and without the
   designid. Only status, content type, size and %PDF are written. -> probe_output/pdfreport.md
+  It also runs a read-only diagnosis matrix: the same endpoint for an issued invoice (PROBE_INVOICE_NUMBER +
+  PROBE_REPORT_ID, the REST invoice report as control), objectname spellings, path prefixes and a REST report route
+  for delivery notes. Non-PDF answers keep a short error text with GUIDs and numbers masked.
 
   With --phase4 (read-only) it lists which fields existing CRM activities fill (#189: the first test write copies
   them) and checks the branch price lists (PROBE_PRICE_LISTS = codes set in Settings 11e, else every active list with
@@ -1220,7 +1223,69 @@ def pdfreport_probe(http, number, report_id, design_id):
     ok = bool(with_ok or without_ok)
     step("pdfreport issueddeliverynote", ok,
          note="PDF returned" + (" (designid required)" if out["designid_required"] else "") if ok else "no PDF returned")
+    pdfreport_matrix(http, record_id, report_id, design_id, out)
     return out
+
+
+_GUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+
+def _answer(status, ctype, body, ms):
+    """Technical facts of one answer; for a non-PDF answer a short, masked error text (GUIDs and numbers removed)."""
+    data = body if isinstance(body, (bytes, bytearray)) else (json.dumps(body, default=str).encode() if body else b"")
+    res = {"status": status, "content_type": (ctype or "").split(";")[0].strip(), "size": len(data),
+           "is_pdf": bytes(data[:4]) == b"%PDF", "ms": ms}
+    if not res["is_pdf"] and data:
+        text = data[:400].decode("utf-8", "replace")
+        text = _GUID_RE.sub("<guid>", text)
+        text = re.sub(r"\d{3,}", "<n>", text)
+        res["error_text"] = " ".join(text.split())[:240]
+    return res
+
+
+def pdfreport_matrix(http, dl_id, report_id, design_id, out):
+    """Pilot 2026-11-19: /pdfreport answered 404 for issued delivery notes. Read-only diagnosis of WHY:
+    A) control – the same endpoint for an issued invoice whose REST report already works (PROBE_INVOICE_NUMBER +
+       PROBE_REPORT_ID [+ PROBE_REPORT_DESIGN_ID]); B) objectname spellings; C) path prefixes; D) a REST report
+    route for delivery notes in case the server knows one the swagger copy does not."""
+    m = out.setdefault("matrix", {})
+    inv_no, inv_rep, inv_design = env("PROBE_INVOICE_NUMBER"), env("PROBE_REPORT_ID"), env("PROBE_REPORT_DESIGN_ID")
+    inv_id = None
+    if inv_no and inv_rep:
+        st, data, err, _ = gql(http, "query($f:String){ IssuedInvoices(Filter:$f, Count:5){ ID Deleted } }",
+                               {"f": f"CisloDokladu~eq~{inv_no}"})
+        rows = [r for r in ((data or {}).get("IssuedInvoices") or []) if not r.get("Deleted")]
+        inv_id = rows[0]["ID"] if rows else None
+        if inv_id:
+            q = f"?reportDesignId={inv_design}" if inv_design else ""
+            m["A1 REST IssuedInvoice Report (known to work)"] = _answer(
+                *http.request("GET", f"/{env('MONEY_REST_VERSION', 'v2.0')}/IssuedInvoice/{inv_id}/Report/{inv_rep}{q}",
+                              raw=True))
+            for label, extra in (("A2 /pdfreport issuedinvoice", {}), ("A3 /pdfreport issuedinvoice + designid", None)):
+                params = {"objectname": "issuedinvoice", "id": inv_id, "reportid": inv_rep}
+                if extra is None:
+                    if not inv_design:
+                        continue
+                    params["designid"] = inv_design
+                m[label] = _answer(*http.get("/pdfreport", params, raw=True))
+        else:
+            m["A invoice"] = "PROBE_INVOICE_NUMBER not found"
+    else:
+        m["A invoice"] = "skipped – set PROBE_INVOICE_NUMBER and PROBE_REPORT_ID"
+    base = {"id": dl_id, "reportid": report_id}
+    if design_id:
+        base["designid"] = design_id
+    for name in ("IssuedDeliveryNote", "DodaciListVydany", "dodacilistvydany"):
+        m[f"B objectname={name}"] = _answer(*http.get("/pdfreport", dict(base, objectname=name), raw=True))
+    for prefix in ("/api", "/v1.0", "/v2.0"):
+        m[f"C {prefix}/pdfreport"] = _answer(
+            *http.get(f"{prefix}/pdfreport", dict(base, objectname="issueddeliverynote"), raw=True))
+    for ver in ("v1.0", "v2.0"):
+        q = f"?reportDesignId={design_id}" if design_id else ""
+        m[f"D REST {ver}/IssuedDeliveryNote/Report"] = _answer(
+            *http.request("GET", f"/{ver}/IssuedDeliveryNote/{dl_id}/Report/{report_id}{q}", raw=True))
+    pdfs = [k for k, v in m.items() if isinstance(v, dict) and v.get("is_pdf")]
+    step("pdfreport matrix", bool(pdfs), note=("PDF from: " + ", ".join(pdfs)) if pdfs else "no variant returned a PDF")
 
 
 def write_pdfreport_report():
