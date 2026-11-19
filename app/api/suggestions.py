@@ -15,7 +15,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from app.ai.guards import has_blocking
+from app.ai.guards import check, has_blocking
 from app.ai.models import AiSuggestion
 from app.ai.reply import recheck_reply
 from app.api.mail import fail
@@ -72,6 +72,8 @@ async def approve(
     row, mailbox = await _pending(db, ctx, suggestion_id)
     if row.suggestion_type == "invoice_attach":
         return await _approve_invoice(row, mailbox, body, ctx, person, db, settings)
+    if row.suggestion_type == "delivery_note_attach":
+        return await _approve_delivery_note(row, mailbox, body, ctx, person, db, settings)
     if row.suggestion_type != "reply":
         raise fail(422, "unsupported_type")
     message = await db.get(Message, row.message_id) if row.message_id else None
@@ -249,6 +251,169 @@ async def _approve_invoice(
             "edited": edited,
             "invoices": [i.number for i in ev.invoices],
             "company_money_id": str(ev.company_money_id),
+        },
+    )
+    await db.commit()
+    await sync_draft_to_imap(db, settings, draft)  # level 2: waits in Koncepty; sending is the person's click
+    await db.commit()
+    return ApproveOut(suggestion_id=str(row.id), draft_id=str(draft.id), edited=edited)
+
+
+async def _approve_delivery_note(
+    row: AiSuggestion, mailbox: Mailbox, body: ApproveIn, ctx: Auth, person: Person, db: DB, settings: Settings
+) -> ApproveOut:
+    """#222: only the picked notes, one company per draft, the #215 tick for another company's note; every check
+    again live against Money (exists, owner, branch report) and then the draft with Money's own print PDFs."""
+    from app.mail import storage
+    from app.mail.compose import create_draft as make_draft
+    from app.mail.compose_models import ComposeAttachment
+    from app.money.bridge_client import BridgeClient, BridgeUnavailable
+    from app.money.delivery_note_attach import (
+        DOCUMENT_KIND,
+        branch_reports,
+        draft_body,
+        pdf_filename,
+        report_for,
+    )
+    from app.money.invoice_attach import ACK_CHECK, STRONG, storage_prefix
+    from app.money.matching import match_sender
+
+    if not settings.feature_money:
+        raise fail(409, "money_disabled")
+    message = await db.get(Message, row.message_id) if row.message_id else None
+    if message is None:
+        raise fail(409, "message_gone")
+    payload = row.payload or {}
+    to = [str(e) for e in payload.get("to") or []]
+    items = [i for i in payload.get("invoices") or [] if isinstance(i, dict) and i.get("number")]
+    picked = body.selected if body.selected is not None else [str(i["number"]) for i in items if i.get("selected")]
+    chosen = [i for i in items if str(i["number"]) in set(picked)]
+    if not picked or len(chosen) != len(set(picked)) or len(to) != 1:
+        raise fail(409, "selection_invalid")
+    owners = {"own" if i.get("own") else str(i.get("owner_money_id")) for i in chosen}
+    if len(owners) != 1:
+        raise fail(
+            409, "suggestion_blocked", checks=[{"id": "one_customer_per_draft", "level": "blocking", "params": {}}]
+        )
+    foreign = not chosen[0].get("own")
+    if foreign and ACK_CHECK not in body.acknowledged_checks:
+        raise fail(409, "ack_required", check=ACK_CHECK)
+    numbers = [str(i["number"]) for i in chosen]
+    orders = list(dict.fromkeys(str(i.get("order")) for i in chosen if i.get("order")))
+    proposed = draft_body(payload.get("language"), numbers, orders)
+    final = proposed if body.body is None else body.body.strip()
+
+    match = await match_sender(db, to[0], message.body_text, settings)
+    strong = match.company is not None and match.method in STRONG
+    expected_owner = (
+        str(chosen[0].get("owner_money_id")) if foreign else str(match.company.money_id if match.company else None)
+    )
+    if not foreign and (not strong or expected_owner != str(payload.get("company_money_id"))):
+        raise fail(
+            409, "suggestion_blocked", checks=[{"id": "recipient_unconfirmed", "level": "blocking", "params": {}}]
+        )
+    reports = await branch_reports(db)
+    pdfs: list[tuple[str, bytes]] = []
+    async with BridgeClient(settings) as bridge:
+        try:
+            for number in numbers:
+                found = await bridge.search_deliveries(number=number)
+                note = next((d for d in found.items if d.number == number), None)
+                if note is None:
+                    raise fail(
+                        409, "suggestion_blocked", checks=[check("delivery_note_not_found", "blocking", number=number)]
+                    )
+                if str(note.company_id) != expected_owner:
+                    # the note's customer changed in Money since the suggestion → a new decision is needed
+                    raise fail(
+                        409,
+                        "suggestion_blocked",
+                        checks=[check("recipient_not_document_owner", "blocking", number=number)],
+                    )
+                branch_report = report_for(reports, note)
+                if branch_report is None or not branch_report.report_id:
+                    name = branch_report.branch_name if branch_report else "—"
+                    raise fail(409, "delivery_note_report_missing", branch=name, number=number)
+                data = await bridge.document_pdf(
+                    DOCUMENT_KIND, note.id, branch_report.report_id, branch_report.design_id
+                )
+                if not data:
+                    raise fail(409, "pdf_missing", number=number)
+                pdfs.append((pdf_filename(number), data))
+        except BridgeUnavailable as exc:
+            raise fail(503, "money_unavailable", reason=exc.code) from None
+    person_row = await db.get(Person, person.id)
+    branch = await db.get(Branch, person.branch_id) if person.branch_id else None
+    draft = await make_draft(
+        db,
+        settings,
+        mailbox=mailbox,
+        account_id=ctx.account.id,
+        person=person_row,
+        branch=branch,
+        mode="reply",
+        source=message,
+        user_html=text_to_html(final),
+    )
+    draft.to_addrs = [{"name": None, "email": to[0]}]  # only the checked recipient
+    draft.cc_addrs = []
+    prefix = storage_prefix(draft.id, uuid.UUID(expected_owner))  # the send guard reads the owner from the key
+    for filename, data in pdfs:
+        key, digest = storage.put_bytes(settings, data, prefix=prefix)
+        db.add(
+            ComposeAttachment(
+                draft_id=draft.id,
+                filename=filename,
+                content_type="application/pdf",
+                size=len(data),
+                storage_key=key,
+                sha256=digest,
+                av_status="clean",  # Money's own print report, fetched by the bridge
+                is_inline=False,
+            )
+        )
+    await db.flush()
+    edited = final != proposed
+    row.status = "approved"
+    row.decided_by = person.id
+    row.decided_at = datetime.now(UTC)
+    row.final_payload = {**payload, "body": final, "draft_id": str(draft.id), "selected": numbers}
+    if foreign:
+        row.final_payload["ack"] = {
+            "check": ACK_CHECK,
+            "email": to[0].strip().lower(),
+            "owner_money_id": expected_owner,
+            "person_id": str(person.id),
+            "account_id": str(ctx.account.id),
+            "at": datetime.now(UTC).isoformat(),
+        }
+        audit(
+            db,
+            "money.delivery_note_other_customer_ack",
+            account_id=ctx.account.id,
+            person_id=person.id,
+            object_type="ai_suggestion",
+            object_id=str(row.id),
+            details={
+                "delivery_notes": numbers,
+                "owner_money_id": expected_owner,
+                "requester_email": to[0],
+                "draft_id": str(draft.id),
+            },
+        )
+    row.diff = {"edited": edited}
+    audit(
+        db,
+        "ai.suggestion_approved",
+        person_id=person.id,
+        object_type="ai_suggestion",
+        object_id=str(row.id),
+        details={
+            "actor": "user",
+            "type": row.suggestion_type,
+            "draft_id": str(draft.id),
+            "edited": edited,
+            "delivery_notes": numbers,
         },
     )
     await db.commit()

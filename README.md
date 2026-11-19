@@ -20,7 +20,7 @@ s Money S4 cez API modul – GraphQL podľa schémy vášho servera, REST na PDF
 | `docs/FIGMA_MAP.md` | **mapa obrazoviek → rámce vo Figme** (odkazy na každú obrazovku a stav, komponenty, toky) | agent + dizajnér |
 | `FIGMA.md` | **čo je pripravené na grafiku (§0)**, poradie práce, postup návrhu vo Figme + hotový prompt pre Figma Make / AI | dizajnér / Figma |
 | `design/` | farby, písmo, rozmery ako súbor na import do Figmy (`tokens.json`) a do kódu (`tokens.css`), kontrola kontrastu (`CONTRAST.md`), logo SVG/PNG a ikony aplikácie (`brand/`), anonymizované snímky vášho Roundcube ako predloha (`reference/roundcube/`) | Figma + agent |
-| `tools/money_probe.py` | bezpečný testovací skript (len čítanie; `--orders` pre objednávky, `--branches` pre pobočky a dodacie listy, `--phase4` pre aktivity a ceny objednávok) na overenie API Money | vy (spustiť na serveri) |
+| `tools/money_probe.py` | bezpečný testovací skript (len čítanie; `--orders` pre objednávky, `--branches` pre pobočky a dodacie listy, `--phase4` pre aktivity a ceny objednávok, `--pdfreport` pre PDF dodacieho listu vydaného) na overenie API Money | vy (spustiť na serveri) |
 | `tools/validate_graphql.py` | kontrola všetkých GraphQL dopytov voči schéme vášho Money (beží v CI, chráni pred chybami v názvoch polí) | agent / CI |
 | `app/`, `bridge/`, `web/`, `migrations/`, `tests/` | kód aplikácie (od fázy 0), Money most, webová aplikácia, migrácie databázy, testy | agent |
 | `docker-compose.yml`, `.env.example`, `Makefile`, `.github/workflows/ci.yml` | spustenie celej aplikácie, popis nastavení, bežné príkazy, automatické kontroly na GitHube | agent / správca |
@@ -41,6 +41,12 @@ s Money S4 cez API modul – GraphQL podľa schémy vášho servera, REST na PDF
    **Pred dodacími listami (fáza 4)** spustite `python tools/money_probe.py --env probe.env --branches` (len čítanie):
    vypíše strediská, sklady, cenníky a číselné rady pre rozbaľovacie zoznamy v Nastaveniach a z existujúcich dodacích
    listov zistí, či má každá pobočka vlastný rad a ktoré pole obsahuje „Doklad prijatý“. Výsledok `probe_output/branches.md`.
+   **Pred dodacím listom vydaným ako PDF (#222)** spustite `python tools/money_probe.py --env probe.env --pdfreport`
+   (len čítanie). Do `probe.env` doplňte `PROBE_DL_ISSUED_NUMBER` (číslo existujúceho **vydaného** dodacieho listu;
+   stačí aj `PROBE_DL_NUMBER`, ak naraz nespúšťate `--branches`), `PROBE_DL_REPORT_ID` a voliteľne `PROBE_DL_DESIGN_ID`
+   (Money → Agenda → Nastavenie tlačových zostáv → Dodací list vydaný → Opraviť → zoznam návrhov). Skript zavolá
+   `/pdfreport` s `designid` aj bez neho. Do `probe_output/pdfreport.md` zapíše iba HTTP status, typ obsahu, veľkosť,
+   či ide o PDF a či je `designid` povinný – žiadne údaje z dokladu.
 4. **Figma je hotová**: https://www.figma.com/design/vBDv8OCQTjxPBMzq6KBcHU. `docs/FIGMA_MAP.md` obsahuje odkaz na každú
    obrazovku a jej stavy. Figma MCP server je v repozitári už nastavený (`.mcp.json`) – pri prvom spustení Claude Code
    potvrďte server „figma“ a v `/mcp` sa prihláste do Figmy. (Cursor: Settings › MCP › server `https://mcp.figma.com/mcp`.)

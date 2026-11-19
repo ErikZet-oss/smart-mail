@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import uuid
 from decimal import Decimal
 from functools import cache
 from pathlib import Path
@@ -41,6 +42,9 @@ def load_query(name: str) -> str:
 
 def _json(resp: httpx.Response) -> Any:
     return json.loads(resp.content, parse_float=Decimal)
+
+
+MAX_PDF_BYTES = 20 * 1024 * 1024  # #222: a print report is a few hundred kB; never buffer more than this
 
 
 class TokenProvider:
@@ -126,6 +130,26 @@ class MoneyHttp:
         if resp.status_code != 200:
             raise MoneyError(f"REST {path.split('/')[0]} answered {resp.status_code}")
         return unwrap(_json(resp), f"REST {path.split('/')[0]}")
+
+    async def pdfreport(
+        self, objectname: str, record_id: uuid.UUID, report_id: str, design_id: str | None
+    ) -> bytes | None:
+        """#222 Money's generic print endpoint `GET [API]/pdfreport?objectname=&id=&reportid=&designid=` — the same
+        PDF as „tlač do PDF“ in Money; it stores nothing (read only). The answer must be a PDF."""
+        params = {"objectname": objectname, "id": str(record_id), "reportid": report_id}
+        if design_id:
+            params["designid"] = design_id
+        resp = await self._send("GET", f"{self._base}/pdfreport", params=params)
+        if resp.status_code == 404:
+            return None
+        if resp.status_code != 200:
+            raise MoneyError(f"pdfreport answered {resp.status_code}")
+        content_type = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+        if content_type != "application/pdf" or not resp.content.startswith(b"%PDF"):
+            raise MoneyError("pdfreport did not return a PDF")
+        if len(resp.content) > MAX_PDF_BYTES:
+            raise MoneyError("pdfreport PDF too large")
+        return resp.content
 
     async def rest_bytes(self, path: str) -> bytes | None:
         resp = await self._send("GET", f"{self._base}/{self._rest}/{path.lstrip('/')}")

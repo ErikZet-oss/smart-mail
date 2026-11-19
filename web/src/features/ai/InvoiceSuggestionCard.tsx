@@ -15,6 +15,12 @@ import { FileTypeIcon } from '../../components/FileTypeIcon';
 
 type Props = { suggestion: Suggestion; mailbox: string; messageId: string; readOnly: boolean };
 
+const KIND_LABEL: Record<string, string> = {
+  invoice: 'ai.invoice.invoice',
+  proforma: 'ai.invoice.proforma',
+  delivery_note: 'ai.deliveryNote.note',
+};
+
 const ICON = {
   ok: <CircleCheck size={16} aria-hidden="true" className="shrink-0 text-success-700" />,
   warning: <TriangleAlert size={16} aria-hidden="true" className="shrink-0 text-warning-700" />,
@@ -29,6 +35,9 @@ const ICON = {
  */
 export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly }: Props) {
   const { t } = useTranslation();
+  // #222: the delivery note card is the same card with its own texts (same payload shape and checks)
+  const ns = suggestion.type === 'delivery_note_attach' ? 'ai.deliveryNote' : 'ai.invoice';
+  const testId = suggestion.type === 'delivery_note_attach' ? 'ai-delivery-note-card' : 'ai-invoice-card';
   const toasts = useToasts();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -79,13 +88,19 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
         pick ? invoices.filter((i) => picked.includes(i.number)).map((i) => i.number) : null,
       ),
     onSuccess: (out) => {
-      toasts.success(t('ai.invoice.drafted'));
+      toasts.success(t(`${ns}.drafted`));
       done();
       navigate(`/compose/${out.draft_id}?mailbox=${encodeURIComponent(mailbox)}`);
     },
     onError: (error) => {
       const code = error instanceof ApiError ? error.detail.code : 'generic';
-      toasts.error(t(`ai.invoice.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
+      const params = error instanceof ApiError ? (error.detail as Record<string, unknown>) : {};
+      toasts.error(
+        t(`${ns}.errors.${code}`, {
+          ...params,
+          defaultValue: t(`ai.invoice.errors.${code}`, { defaultValue: t('mail.errors.generic') }),
+        }),
+      );
       done();
     },
   });
@@ -99,17 +114,20 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
   });
   const numbers = invoices.map((i) => i.number).join(', ');
   const checkText = (id: string, params: Record<string, unknown>) =>
-    t(`ai.invoice.checks.${id}`, { ...params, defaultValue: t('ai.card.checks.unknown', { id }) });
+    t(`${ns}.checks.${id}`, {
+      ...params,
+      defaultValue: t(`ai.invoice.checks.${id}`, { ...params, defaultValue: t('ai.card.checks.unknown', { id }) }),
+    });
 
   if (!open) {
     return (
       <CollapsedSuggestion
-        title={t('ai.invoice.title')}
+        title={t(`${ns}.title`)}
         subline={suggestion.company_name ?? ''}
         status={blocked ? 'blocked' : warnings.length > 0 ? 'warning' : 'ok'}
         warnings={warnings.length}
         preview={numbers}
-        testId="ai-invoice-card"
+        testId={testId}
         onExpand={() => setOpen(true)}
         onReject={readOnly ? undefined : () => reject.mutate()}
         rejectDisabled={reject.isPending}
@@ -118,17 +136,17 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
   }
   return (
     <section
-      aria-label={t('ai.invoice.title')}
-      data-testid="ai-invoice-card"
+      aria-label={t(`${ns}.title`)}
+      data-testid={testId}
       data-collapsed="false"
       className="flex max-w-[760px] flex-col gap-3 rounded-lg border border-ai-200 bg-ai-50 p-4"
     >
       <header className="flex items-start gap-2">
         <Sparkles size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-ai-600" />
         <div className="min-w-0 flex-1">
-          <h2 className="type-heading text-text-primary">{t('ai.invoice.title')}</h2>
+          <h2 className="type-heading text-text-primary">{t(`${ns}.title`)}</h2>
           <p className="type-small text-text-secondary">
-            {t('ai.invoice.subline', { company: suggestion.company_name ?? '', to: suggestion.to.join(', ') })}
+            {t(`${ns}.subline`, { company: suggestion.company_name ?? '', to: suggestion.to.join(', ') })}
           </p>
         </div>
         <button
@@ -144,29 +162,35 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
       </header>
       {pick ? (
         <fieldset className="flex flex-col gap-1" data-testid="invoice-pick">
-          <legend className="type-label mb-1 text-text-primary">{t('ai.invoice.pick.legend')}</legend>
+          <legend className="type-label mb-1 text-text-primary">{t(`${ns}.pick.legend`)}</legend>
           <ul className="flex flex-col divide-y divide-border-default rounded-sm border border-border-default bg-bg-canvas">
             {invoices.map((i) => (
               <li key={i.id} className="flex flex-col gap-0.5 px-3 py-2" data-testid="invoice-pick-row">
                 <div className="type-small flex items-center gap-2 text-text-primary">
                   <Checkbox
                     checked={picked.includes(i.number)}
-                    disabled={readOnly}
+                    disabled={readOnly || (i.report_ok === false && !picked.includes(i.number))}
                     onChange={(e) => toggle(i.number, e.target.checked)}
                     label={<span className="font-medium">{i.number}</span>}
                     data-testid={`invoice-pick-${i.number}`}
                   />
                   <FileTypeIcon type="pdf" />
                   <span className="min-w-0 flex-1 truncate text-text-secondary">
-                    {t(i.kind === 'proforma' ? 'ai.invoice.proforma' : 'ai.invoice.invoice')} ·{' '}
-                    {t('ai.invoice.pick.issued', { date: day(i.issued_on ?? null) })}
+                    {t(KIND_LABEL[i.kind] ?? 'ai.invoice.invoice')} ·{' '}
+                    {t(`${ns}.pick.issued`, { date: day(i.issued_on ?? null) })}
                   </span>
                   <span className="shrink-0 tabular-nums">{money(i.total)}</span>
                 </div>
                 {!i.own ? (
                   <span className="type-caption ml-6 flex items-center gap-1 text-danger-600">
                     {ICON.blocking}
-                    {t('ai.invoice.pick.otherCompany', { owner: i.owner_name ?? '—' })}
+                    {t(`${ns}.pick.otherCompany`, { owner: i.owner_name ?? '—' })}
+                  </span>
+                ) : null}
+                {i.report_ok === false ? (
+                  <span className="type-caption ml-6 flex items-center gap-1 text-danger-600">
+                    {ICON.blocking}
+                    {t('ai.deliveryNote.noReport', { branch: i.branch ?? '—' })}
                   </span>
                 ) : null}
               </li>
@@ -175,10 +199,10 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
           {mixed ? (
             <p className="type-small flex items-center gap-2 text-danger-600" role="alert">
               {ICON.blocking}
-              {t('ai.invoice.pick.oneCustomer')}
+              {t(`${ns}.pick.oneCustomer`)}
             </p>
           ) : picked.length === 0 ? (
-            <p className="type-small text-text-secondary">{t('ai.invoice.pick.noneSelected')}</p>
+            <p className="type-small text-text-secondary">{t(`${ns}.pick.noneSelected`)}</p>
           ) : null}
         </fieldset>
       ) : (
@@ -206,7 +230,7 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
             >
               <span className="flex items-center gap-2 font-medium text-danger-600">
                 {ICON.requires_ack}
-                {t('ai.invoice.checks.invoice_other_customer_ack', {
+                {t(`${ns}.checks.invoice_other_customer_ack`, {
                   owner: String(c.params.owner ?? ''),
                   requester: String(c.params.requester ?? ''),
                 })}
@@ -215,7 +239,7 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
                 checked={acked}
                 disabled={readOnly}
                 onChange={(e) => setAcked(e.target.checked)}
-                label={t('ai.invoice.ackLabel')}
+                label={t(`${ns}.ackLabel`)}
                 data-testid="invoice-ack-checkbox"
               />
             </li>
@@ -230,7 +254,7 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
       <p className="type-body whitespace-pre-wrap rounded-sm border border-border-default bg-bg-canvas p-3 text-text-primary">
         {suggestion.body}
       </p>
-      {changedPick ? <p className="type-caption text-text-secondary">{t('ai.invoice.pick.bodyChanges')}</p> : null}
+      {changedPick ? <p className="type-caption text-text-secondary">{t(`${ns}.pick.bodyChanges`)}</p> : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
@@ -245,7 +269,7 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
           onClick={() => approve.mutate()}
           icon={<CircleCheck size={16} aria-hidden="true" />}
         >
-          {t('ai.invoice.approve')}
+          {t(`${ns}.approve`)}
         </Button>
         <button
           type="button"
@@ -259,8 +283,8 @@ export function InvoiceSuggestionCard({ suggestion, mailbox, messageId, readOnly
       </div>
       <p className="type-caption text-text-secondary">
         {needsAck.length > 0
-          ? t('ai.invoice.footerForeign', { owner: String(needsAck[0]?.params.owner ?? '') })
-          : t('ai.invoice.footer')}
+          ? t(`${ns}.footerForeign`, { owner: String(needsAck[0]?.params.owner ?? '') })
+          : t(`${ns}.footer`)}
       </p>
     </section>
   );

@@ -273,6 +273,10 @@ class SuggestionCheckOut(BaseModel):
     params: dict[str, Any]
 
 
+# Money documents offered on a card (Phase 3d invoices, #222 issued delivery notes) — same payload shape
+MONEY_DOCUMENT_TYPES = frozenset({"invoice_attach", "delivery_note_attach"})
+
+
 class SuggestionOut(BaseModel):
     id: str
     type: str
@@ -320,11 +324,11 @@ def suggestion_out(row: AiSuggestion) -> SuggestionOut:
         ),
         invoices=(
             [i for i in payload.get("invoices") or [] if isinstance(i, dict)]
-            if row.suggestion_type == "invoice_attach"
+            if row.suggestion_type in MONEY_DOCUMENT_TYPES
             else None
         ),
-        company_name=payload.get("company_name") if row.suggestion_type == "invoice_attach" else None,
-        pick=row.suggestion_type == "invoice_attach" and payload.get("pick") is True,
+        company_name=payload.get("company_name") if row.suggestion_type in MONEY_DOCUMENT_TYPES else None,
+        pick=row.suggestion_type in MONEY_DOCUMENT_TYPES and payload.get("pick") is True,
     )
 
 

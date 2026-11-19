@@ -467,7 +467,8 @@ export type BranchMoney = {
   name: string;
   centre_id: string | null;
   centre_missing: boolean;
-  reports: Record<'invoice' | 'proforma', string>;
+  /** #222 adds `delivery_note` / `delivery_note_design` (absent from an older server) */
+  reports: Record<'invoice' | 'proforma', string> & Partial<Record<'delivery_note' | 'delivery_note_design', string>>;
 };
 export type BranchMoneyList = {
   centres: { id: string; code: string | null; name: string | null }[];

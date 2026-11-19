@@ -21,7 +21,7 @@ Never call the PRODUCTION agenda without explicit approval from the user in chat
 | Need | API | Why |
 |---|---|---|
 | Almost everything (read + write documents, address book, catalog, stock, prices, codebooks) | **GraphQL** `POST {base}/graphql` | covers delivery notes, stock, supplier codes, customer prices; items accept `ObsahPolozky { Artikl_ID, Sklad_ID }` |
-| PDF of a document | **REST** `GET /v2.0/{IssuedInvoice|PrepaymentIssuedInvoice|ReceivedInvoice|PrepaymentInvoice|PriceList|Service}/{id}/Report/{reportId}` | GraphQL has no report/PDF; delivery notes, orders and offers have no report at all (§5.9b) |
+| PDF of a document | **REST** `GET /v2.0/{IssuedInvoice|PrepaymentIssuedInvoice|ReceivedInvoice|PrepaymentInvoice|PriceList|Service}/{id}/Report/{reportId}` | GraphQL has no report/PDF; issued delivery notes (and any object with a print form) through the generic **`GET [API]/pdfreport`** (#222, §5.9c) |
 | Contact persons (`Person`), CRM activities (`Activity`, `TypeOfActivity`), staff (`Staff`) | **REST** | not in the customer's GraphQL schema |
 | Proforma invoices (`PrepaymentIssuedInvoice`, `PrepaymentInvoice`) | **REST** | not in the customer's GraphQL schema |
 | Offers (Nabídka vydaná / `IssuedOffer`) | **GraphQL once added** — not on the server yet | Smart s.r.o. arranges it with the implementer (DECISIONS D5); offers are created in Money and numbered by Money (§5.7) |
@@ -262,7 +262,23 @@ Polozky:[{ Nazev, Mnozstvi, ObsahPolozky:{ Artikl_ID, Sklad_ID, Mnozstvi } }] })
 `IssuedInvoice` (faktúra vystavená, dobropis), `PrepaymentIssuedInvoice` (zálohová vystavená), `PrepaymentInvoice`
 (zálohová prijatá), `ReceivedInvoice`, `PriceList` (v2), `Service` (v2). **No report** for delivery notes (issued or
 received), orders, offers, complaints → Smart Mail renders only the offer and the order confirmation itself
-(DOCUMENTS_SPEC §4–§5) and never re-creates invoices (DOCUMENTS_SPEC §6).
+(DOCUMENTS_SPEC §4–§5) and never re-creates invoices (DOCUMENTS_SPEC §6). **Update #222:** an issued delivery note
+does have a PDF through the generic print endpoint below.
+
+### 5.9c PDF through `/pdfreport` (#222, Erik 2026-11-19; https://docs.moneyerp.com/developer/posilani-requestu)
+`GET [API]/pdfreport?objectname=<object>&id=<record ID>&reportid=<print report ID>&designid=<design ID>` — the same
+PDF as „tlač do PDF“ in Money for every object with a print form; **it stores nothing** (read only, allowed on the
+PRODUCTION agenda too). `objectname` = the object name of the API reference — the bridge has a whitelist
+(`issued_delivery_note` → `issueddeliverynote`, extendable), never text from a mail. `reportid` / `designid`: Money →
+Agenda → Nastavenie tlačových zostáv → zostava → Opraviť → zoznam návrhov; per branch in Settings 11e
+(`branches.money_report_ids.delivery_note` / `delivery_note_design`), chosen by the note's `Stredisko_ID`. The
+answer must be `application/pdf` starting with `%PDF` (≤ 20 MB), else `MoneyError`. Invoices keep REST
+`…/IssuedInvoice/{id}/Report/{reportId}` (unchanged). Whether `designid` is required is answered by
+`money_probe.py --pdfreport` (`probe_output/pdfreport.md`).
+**Customer asks for a delivery note** (`delivery_note_attach`): `IssuedDeliveryNotes` by `CisloDokladu~eq~` → the
+customer's order in `(Nazev~ct~X)|(Poznamka~ct~X)` (`order_refs` of #217, also with letters) → the latest notes of the
+strongly matched company (≤ 400 days); at most 5 on the card, newest first; owner checks as §5.1 incl. #215; approve
+re-checks existence, owner and branch report live, then attaches `Dodaci_list_<číslo>.pdf`.
 
 ### 5.10 Codebooks in Settings
 `Warehouses`, `NumericalSeries`, `AccountAssignments`, `VATClassifications`, `VatRates`, `Currencies`,
@@ -284,6 +300,7 @@ sha256(payload), exp 5 min, single-use jti). No generic GraphQL proxy — only t
 | GET | `/sync/{companies,persons,articles,article-suppliers,price-history,codebooks}?since=` | GraphQL lists with `ChangeFrom` / REST |
 | GET | `/companies/{id}` · `/companies/{id}/receivables` · `/orders` · `/deliveries` · `/activities` | 5.2, 5.3, 5.9 |
 | GET | `/invoices/issued/search` · `/invoices/issued/{kind}/{id}/pdf?lang=` | 5.1 |
+| GET | `/delivery-notes/issued/search?number=&order=&company_id=` · `/documents/{kind}/{id}/pdf?report_id=&design_id=` | 5.9c (`IssuedDeliveryNotes`, `/pdfreport`) |
 | GET | `/stock?article_ids=` (offers only, information) · `/prices?company_id=&warehouse_id=&article_ids=` | `WarehouseStocks`, `ProdejniCeny` |
 | GET | `/suppliers/{id}/open-orders` · `/suppliers/{id}/template` | 5.5 |
 | POST | `/match/items` (supplier_id, lines[]) | runs cascade 5.5.3 on cache + live checks, returns per-line candidates |

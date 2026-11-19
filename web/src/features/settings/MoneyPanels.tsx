@@ -304,6 +304,15 @@ export function MoneySyncPanel() {
 }
 
 const REPORT_KINDS = ['invoice', 'proforma'] as const;
+// #222: the branch's delivery note report (+ optional design) in the same `money_report_ids`
+const BRANCH_REPORT_KEYS = ['invoice', 'proforma', 'delivery_note', 'delivery_note_design'] as const;
+const BRANCH_TRY_KINDS = ['invoice', 'proforma', 'delivery_note'] as const;
+const BRANCH_REPORT_HELP: Record<(typeof BRANCH_REPORT_KEYS)[number], string> = {
+  invoice: 'money.branch.reportHelp',
+  proforma: 'money.branch.reportHelp',
+  delivery_note: 'money.branch.deliveryHelp',
+  delivery_note_design: 'money.branch.designHelp',
+};
 const REPORT_LANGS = ['sk', 'en', 'de'] as const;
 const REPORT_ID = /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|\d{1,9})$/;
 
@@ -434,9 +443,9 @@ function BranchMoneyForm({ branch, centres }: { branch: BranchMoney; centres: Br
   const toasts = useToasts();
   const qc = useQueryClient();
   const [centre, setCentre] = useState(branch.centre_id ?? '');
-  const [reports, setReports] = useState(branch.reports);
+  const [reports, setReports] = useState({ delivery_note: '', delivery_note_design: '', ...branch.reports });
   const [number, setNumber] = useState('');
-  const invalid = REPORT_KINDS.some((k) => reports[k] && !REPORT_ID.test(reports[k]));
+  const invalid = BRANCH_REPORT_KEYS.some((k) => reports[k] && !REPORT_ID.test(reports[k]));
   const fail = (e: unknown) => {
     const code = e instanceof ApiError ? e.detail.code : 'generic';
     toasts.error(t(`money.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
@@ -483,7 +492,7 @@ function BranchMoneyForm({ branch, centres }: { branch: BranchMoney; centres: Br
           <span className="type-small text-danger-600">{t('money.branch.centreMissing')}</span>
         ) : null}
       </label>
-      {REPORT_KINDS.map((k) => {
+      {BRANCH_REPORT_KEYS.map((k) => {
         const bad = Boolean(reports[k]) && !REPORT_ID.test(reports[k]);
         return (
           <label key={k} className="flex flex-col gap-1">
@@ -495,7 +504,7 @@ function BranchMoneyForm({ branch, centres }: { branch: BranchMoney; centres: Br
               placeholder={t('money.reports.placeholder')}
               className={`${INPUT} ${bad ? 'border-danger-600' : ''}`}
             />
-            <span className="type-small text-text-secondary">{t('money.branch.reportHelp')}</span>
+            <span className="type-small text-text-secondary">{t(BRANCH_REPORT_HELP[k])}</span>
           </label>
         );
       })}
@@ -512,7 +521,7 @@ function BranchMoneyForm({ branch, centres }: { branch: BranchMoney; centres: Br
           <input value={number} onChange={(e) => setNumber(e.target.value)} className={INPUT} />
         </label>
         <div className="flex flex-wrap gap-2">
-          {REPORT_KINDS.map((k) => (
+          {BRANCH_TRY_KINDS.map((k) => (
             <Button
               key={k}
               type="button"

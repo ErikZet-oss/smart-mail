@@ -10,13 +10,13 @@ filter raise `WaitingForProbe`.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 import httpx
 
-from app.backend import ArticleQuery, InvoiceQuery, MoneyError, WaitingForProbe
+from app.backend import ArticleQuery, DeliveryQuery, InvoiceQuery, MoneyError, WaitingForProbe
 from app.config import BridgeSettings
 from app.filters import all_, any_, cond
 from app.gql_client import TIMEOUT, MoneyHttp, TokenProvider
@@ -33,6 +33,9 @@ from app.models import (
     CompanyPage,
     Connection,
     Delivery,
+    DeliveryMatchedBy,
+    DeliverySearch,
+    DocumentKind,
     InvoiceKind,
     InvoiceSearch,
     IssuedInvoice,
@@ -52,6 +55,9 @@ CODEBOOK_QUERIES: dict[str, tuple[str, str]] = {
     "currencies": ("currencies", "Currencies"),
 }
 REPORT_PATHS: dict[InvoiceKind, str] = {"invoice": "IssuedInvoice", "proforma": "PrepaymentIssuedInvoice"}
+# #222 `objectname` of `/pdfreport` = the object name from the API reference; only this whitelist, never mail text
+PDFREPORT_OBJECTS: dict[DocumentKind, str] = {"issued_delivery_note": "issueddeliverynote"}
+LATEST_DELIVERY_DAYS = 400
 SEARCH_LIMIT = 20
 ARTICLE_LIMIT = 20
 HISTORY_LIMIT = 200
@@ -172,6 +178,9 @@ def delivery_from(raw: dict[str, Any]) -> Delivery:
         state=_int(raw.get("Stav")),
         transport=_s((raw.get("ZpusobDopravy") or {}).get("Nazev")),
         total=_dec(raw.get("CelkovaCastka")),
+        centre_id=_uuid(raw.get("Stredisko_ID")),
+        description=_s(raw.get("Nazev")),
+        note=_s(raw.get("Poznamka")),
     )
 
 
@@ -431,6 +440,33 @@ class ApiBackend:
         filter_ = all_(cond("Firma_ID", "eq", company_id), cond("DatumVystaveni", "gte", since))
         rows = await self._list("issued_delivery_notes", "IssuedDeliveryNotes", filter_=filter_, count=HISTORY_LIMIT)
         return _newest_first([delivery_from(r) for r in rows])
+
+    async def search_deliveries(self, query: DeliveryQuery) -> DeliverySearch:
+        """#222 `IssuedDeliveryNotes`: number → the customer's order in „Popis“ OR „Poznámka“ (+ `Firma_ID`) → the
+        company's latest (≤ 400 days, whole window, sorted here — the server cannot sort). Deleted rows dropped."""
+        steps: list[tuple[DeliveryMatchedBy, str, int]] = []
+        if query.number:
+            steps.append(("number", cond("CisloDokladu", "eq", query.number), SEARCH_LIMIT))
+        if query.order:
+            order = any_(cond("Nazev", "ct", query.order), cond("Poznamka", "ct", query.order))
+            by_order = all_(cond("Firma_ID", "eq", query.company_id), order) if query.company_id else order
+            steps.append(("order", by_order, SEARCH_LIMIT))
+        if query.company_id and not query.number and not query.order:
+            since = date.today() - timedelta(days=LATEST_DELIVERY_DAYS)
+            latest = all_(cond("Firma_ID", "eq", query.company_id), cond("DatumVystaveni", "gte", since))
+            steps.append(("company", latest, HISTORY_LIMIT))
+        for matched_by, filter_, count in steps:
+            rows = await self._list("issued_delivery_notes", "IssuedDeliveryNotes", filter_=filter_, count=count)
+            found = _newest_first([delivery_from(r) for r in rows])
+            if found:
+                return DeliverySearch(matched_by=matched_by, items=found)
+        return DeliverySearch(matched_by="none", items=[])
+
+    async def document_pdf(
+        self, kind: DocumentKind, record_id: uuid.UUID, report_id: str, design_id: str | None
+    ) -> bytes | None:
+        """#222 Money's own print report through `/pdfreport` (read only, also on PROD)."""
+        return await self._money.pdfreport(PDFREPORT_OBJECTS[kind], record_id, report_id, design_id)
 
     async def activities(self, company_id: uuid.UUID) -> list[Activity]:
         raise WaitingForProbe("REST Activity list: REST filters do not work (probe 2026-10-31)")

@@ -24,7 +24,7 @@ export type Suggestion = {
   invoices?:
     | {
         id: string;
-        kind: 'invoice' | 'proforma';
+        kind: 'invoice' | 'proforma' | 'delivery_note';
         number: string;
         due_on: string | null;
         total: string;
@@ -37,6 +37,9 @@ export type Suggestion = {
         selected?: boolean;
         owner_money_id?: string | null;
         owner_name?: string | null;
+        /** #222 delivery notes: the branch of the note and whether it has the print report */
+        branch?: string | null;
+        report_ok?: boolean;
       }[]
     | null;
   company_name?: string | null;

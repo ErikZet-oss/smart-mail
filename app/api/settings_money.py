@@ -35,6 +35,8 @@ from app.money.agenda import is_prod
 from app.money.agenda import load as load_agenda
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.cache_sync import ENTITIES
+from app.money.delivery_note_attach import BRANCH_KEYS as DELIVERY_KEYS
+from app.money.delivery_note_attach import DESIGN_KEY, DOCUMENT_KIND, REPORT_KEY
 from app.money.invoice_attach import (
     REPORT_KINDS,
     REPORT_LANGS,
@@ -338,7 +340,7 @@ def _branch_money(branch: Branch, known: set[str]) -> BranchMoneyOut:
         name=branch.name,
         centre_id=centre,
         centre_missing=bool(centre and centre not in known),
-        reports={kind: str(ids.get(kind) or "") for kind in REPORT_KINDS},
+        reports={kind: str(ids.get(kind) or "") for kind in (*REPORT_KINDS, *DELIVERY_KEYS)},
     )
 
 
@@ -365,7 +367,7 @@ async def put_branch_money(
     if centre is not None and centre not in known:
         raise fail(422, "centre_unknown")  # only centres from Money's own codebook, never a typed GUID
     reports: dict[str, str] = {}
-    for kind in REPORT_KINDS:
+    for kind in (*REPORT_KINDS, *DELIVERY_KEYS):  # #222: delivery note report + design, same JSON, no migration
         value = str(body.reports.get(kind) or "").strip()
         if value and not report_id_valid(value):
             raise fail(422, "report_id_invalid", kind=kind)
@@ -393,10 +395,11 @@ async def test_branch_report(
     admin: Admin,
     db: DB,
     settings: SettingsDep,
-    kind: Literal["invoice", "proforma"],
+    kind: Literal["invoice", "proforma", "delivery_note"],
     number: str = Query(min_length=3, max_length=40),
 ) -> Response:
-    """„Vyskúšať PDF“ (11e): the branch report with one invoice of this branch's centre that the admin names."""
+    """„Vyskúšať PDF“ (11e): the branch report with one invoice (or issued delivery note, #222) of this branch's
+    centre that the admin names."""
     if not settings.feature_money:
         raise fail(409, "money_disabled")
     branch = await db.get(Branch, branch_id)
@@ -405,16 +408,26 @@ async def test_branch_report(
     report = str((branch.money_report_ids or {}).get(kind) or "")
     if not report:
         raise fail(409, "report_not_configured")
+    centre = (branch.money_centre_id or "").strip().lower()
     async with BridgeClient(settings) as bridge:
         try:
-            found = await bridge.search_invoices(number=number.strip())
-            invoice = next((i for i in found.items if i.kind == kind), None)
-            if invoice is None:
-                raise fail(404, "invoice_not_found")
-            centre = (branch.money_centre_id or "").strip().lower()
-            if not centre or str(invoice.centre_id or "").lower() != centre:
-                raise fail(409, "invoice_other_branch")
-            pdf = await bridge.invoice_pdf(kind, invoice.id, report)
+            if kind == REPORT_KEY:
+                notes = await bridge.search_deliveries(number=number.strip())
+                note = next((d for d in notes.items if d.number == number.strip()), None)
+                if note is None:
+                    raise fail(404, "delivery_note_not_found")
+                if not centre or str(note.centre_id or "").lower() != centre:
+                    raise fail(409, "invoice_other_branch")
+                design = str((branch.money_report_ids or {}).get(DESIGN_KEY) or "") or None
+                pdf = await bridge.document_pdf(DOCUMENT_KIND, note.id, report, design)
+            else:
+                found = await bridge.search_invoices(number=number.strip())
+                invoice = next((i for i in found.items if i.kind == kind), None)
+                if invoice is None:
+                    raise fail(404, "invoice_not_found")
+                if not centre or str(invoice.centre_id or "").lower() != centre:
+                    raise fail(409, "invoice_other_branch")
+                pdf = await bridge.invoice_pdf(kind, invoice.id, report)
         except BridgeUnavailable as exc:
             raise fail(503, "money_unavailable", reason=exc.code) from None
     if not pdf:

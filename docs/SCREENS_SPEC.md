@@ -201,7 +201,12 @@ W1 with an info banner on top ("Heslo k e-mailu sa zmenilo – prihláste sa nov
   each with a `Checkbox`, number, „vystavená {dátum}“ and amount; pre-selected = the sender's own invoices that hold the
   whole order number; an invoice of another company shows „Faktúra je vystavená na {odberateľ}“ and, when picked, the
   #215 tick; picking two companies shows „Jeden koncept môže obsahovať faktúry iba jednej firmy…“ and disables the
-  button, as does an empty choice); presence banner "Jana práve odpovedá" (if any); message
+  button, as does an empty choice); card **„Dodací list“** (`delivery_note_attach`, #222) — the same card with its
+  own texts: up to 5 issued delivery notes (number, „vystavený {dátum}“, amount), pre-selected = the number from the
+  mail or the whole order number in Popis/Poznámka; a note of a branch without the print report shows „Pobočka {X}
+  nemá nastavenú tlačovú zostavu dodacieho listu (Nastavenia › Pobočky)“ and cannot be picked; „opravený / nový“
+  in the mail → warning „Zákazník žiada opravu – najprv uprav dodací list v Money…“; another company's note → the
+  #215 tick; primary „Pripraviť koncept s dodacím listom“); presence banner "Jana práve odpovedá" (if any); message
   body (sanitized, remote images blocked with bar "Zobraziť obrázky · Vždy od tohto odosielateľa"); attachments row
   (`AttachmentChip`: Náhľad → W2l lightbox, Stiahnuť, Uložiť do knižnice, Pripraviť dodací list prijatý /
   objednávku → W6u prefilled); older messages collapsed ("3 staršie správy"); internal notes timeline (yellow-grey
@@ -354,6 +359,8 @@ query in plain Slovak, never raw GraphQL); proposals as AiSuggestionCard; source
 object; input with `/` command list (W3c: /faktura, /neuhradene, /ponuka, /objednavka, /zhrnutie, /preloz,
 /pripomen, /stav); history list (last 20 conversations) under a clock icon; "Nová konverzácia". Zákazník tab =
 `CustomerCard` for the company of the selected thread; not matched → "Priradiť k firme" / "Založiť firmu v Money".
+„Posledné dodacie listy“ (also on W9a/M10): a PDF icon per note whose branch has the delivery note print report
+(11e) opens Money's own PDF (`/pdfreport`, #222) in a new tab; no icon without the report.
 States: AI disabled for the person ("Asistent je vypnutý v Nastaveniach"), budget exhausted, Money offline (tools
 greyed with reason). Mobile: M5 bottom sheet. Done when: 15 scripted tasks of Phase 5 succeed.
 

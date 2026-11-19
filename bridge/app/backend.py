@@ -17,6 +17,8 @@ from app.models import (
     Company,
     CompanyPage,
     Delivery,
+    DeliverySearch,
+    DocumentKind,
     InvoiceKind,
     InvoiceSearch,
     IssuedInvoice,
@@ -57,6 +59,15 @@ class InvoiceQuery:
 
 
 @dataclass(frozen=True)
+class DeliveryQuery:
+    """#222: number (exact) → order in „Popis“ / „Poznámka“ → the company's latest; the first non-empty step wins."""
+
+    number: str | None = None
+    order: str | None = None
+    company_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True)
 class ArticleQuery:
     """Exact code / catalog / EAN, or a name fragment — one of them (MONEY_API §5.5.3 steps 3, 4, 7)."""
 
@@ -89,6 +100,12 @@ class MoneyBackend(Protocol):
     async def activities(self, company_id: uuid.UUID) -> list[Activity]: ...
 
     async def invoice_pdf(self, kind: InvoiceKind, invoice_id: uuid.UUID, report_id: str) -> bytes | None: ...
+
+    async def search_deliveries(self, query: DeliveryQuery) -> DeliverySearch: ...
+
+    async def document_pdf(
+        self, kind: DocumentKind, record_id: uuid.UUID, report_id: str, design_id: str | None
+    ) -> bytes | None: ...
 
     async def create_activity(self, activity: ActivityIn) -> ActivityOut: ...
 

@@ -11,7 +11,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, or_, select
 
@@ -27,6 +27,10 @@ from app.mail.export import visible_to
 from app.mail.mailboxes import accessible_mailboxes
 from app.mail.models import FolderMeta, Mailbox, Message
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
+from app.money.delivery_note_attach import DOCUMENT_KIND as DELIVERY_KIND
+from app.money.delivery_note_attach import branch_reports as delivery_branch_reports
+from app.money.delivery_note_attach import pdf_filename as delivery_pdf_name
+from app.money.delivery_note_attach import report_for as delivery_report_for
 from app.money.invoice_attach import draft_body, evaluate
 from app.money.invoice_draft import InvoiceDraftError, build_invoice_draft
 from app.money.matching import counterparty, match_sender
@@ -114,6 +118,8 @@ class CardOut(BaseModel):
     deliveries: Part[Delivery]
     activities: Part[Activity]
     persons: list[PersonOut]
+    # #222: ids of the listed delivery notes whose branch has the print report → PDF icon in the panel
+    delivery_pdf: list[str] = []
 
 
 async def _message(db: DB, account_id: uuid.UUID, person_id: uuid.UUID | None, message_id: uuid.UUID) -> Message:
@@ -201,16 +207,50 @@ async def company_card(
             activities.items = (await bridge.activities(money_id))[:rows]
         except BridgeUnavailable as exc:
             activities.error = exc.code
+    reports = await delivery_branch_reports(db)
+    with_pdf = [str(d.id) for d in deliveries.items if (r := delivery_report_for(reports, d)) and r.report_id]
     return CardOut(
         company=_brief(company),
         receivables=receivables,
         orders=orders,
         deliveries=deliveries,
+        delivery_pdf=with_pdf,
         activities=activities,
         persons=[
             PersonOut(money_id=p.money_id, name=p.name, function=p.function, email=p.email, phone=p.phone)
             for p in persons
         ],
+    )
+
+
+@router.get("/companies/{money_id}/delivery-notes/{note_id}/pdf")
+async def delivery_note_pdf(
+    money_id: uuid.UUID, note_id: uuid.UUID, ctx: Auth, db: DB, settings: SettingsDep
+) -> Response:
+    """#222 Zákazník panel / W9a: the PDF of one of the company's recent delivery notes from Money's own print report
+    (`/pdfreport`, read only); only when the note's branch has the report (11e)."""
+    _enabled(settings)
+    since = datetime.now(UTC).date() - timedelta(days=HISTORY_DAYS)
+    async with BridgeClient(settings) as bridge:
+        try:
+            note = next((d for d in await bridge.deliveries(money_id, since) if d.id == note_id), None)
+            if note is None or note.company_id != money_id:
+                raise fail(404, "delivery_note_not_found")
+            report = delivery_report_for(await delivery_branch_reports(db), note)
+            if report is None or not report.report_id:
+                raise fail(409, "delivery_note_report_missing", branch=report.branch_name if report else "—")
+            pdf = await bridge.document_pdf(DELIVERY_KIND, note.id, report.report_id, report.design_id)
+        except BridgeUnavailable as exc:
+            raise fail(503, "money_unavailable", reason=exc.code) from None
+    if not pdf:
+        raise fail(404, "pdf_missing")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": f'inline; filename="{delivery_pdf_name(note.number)}"',
+        },
     )
 
 

@@ -479,7 +479,8 @@ async def acknowledged_owner(db: AsyncSession, draft_id: uuid.UUID | None) -> tu
 
     row = await db.scalar(
         select(AiSuggestion).where(
-            AiSuggestion.suggestion_type == SUGGESTION_TYPE,
+            # #222: a delivery note card acknowledges the same way (same marker, same send guard)
+            AiSuggestion.suggestion_type.in_((SUGGESTION_TYPE, "delivery_note_attach")),
             AiSuggestion.status == "approved",
             AiSuggestion.final_payload["draft_id"].astext == str(draft_id),
         )

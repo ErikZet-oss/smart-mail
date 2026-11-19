@@ -14,7 +14,7 @@ import pytest
 import respx
 
 from app.api_backend import ApiBackend
-from app.backend import InvoiceQuery, MoneyError, MoneyUnavailable, WaitingForProbe
+from app.backend import DeliveryQuery, InvoiceQuery, MoneyError, MoneyUnavailable, WaitingForProbe
 from app.config import BridgeSettings
 
 BASE = "https://money.test"
@@ -459,3 +459,68 @@ async def test_217_order_with_letters_reads_poznamka() -> None:
     body = json.loads(gql.calls[0].request.content)
     assert body["variables"]["filter"] == "(Nazev~ct~PO-45821)|(Poznamka~ct~PO-45821)"
     assert found.items[0].note == "Vaša obj. PO-45821" and found.items[0].description is None
+
+
+DL = {
+    "ID": "33333333-3333-4333-8333-333333333333",
+    "Deleted": False,
+    "CisloDokladu": "DV260042",
+    "Firma_ID": str(CID),
+    "DatumVystaveni": "2026-11-10T00:00:00",
+    "DatumSkladovehoPohybu": "2026-11-10T00:00:00",
+    "Odkaz": None,
+    "Stav": 1,
+    "ZpusobDopravy": {"Nazev": "Kuriér"},
+    "CelkovaCastka": 120.5,
+    "Stredisko_ID": "44444444-4444-4444-8444-444444444444",
+    "Nazev": "Objednávka OR06024026",
+    "Poznamka": None,
+}
+
+
+@respx.mock
+async def test_222_delivery_note_order_search_reads_popis_and_poznamka() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    gql = respx.post(f"{BASE}/graphql")
+    gql.side_effect = [_gql({"IssuedDeliveryNotes": [DL, {**DL, "ID": str(uuid.uuid4()), "Deleted": True}]})]
+    found = await ApiBackend(settings()).search_deliveries(DeliveryQuery(order="OR06024026", company_id=CID))
+    body = json.loads(gql.calls[0].request.content)
+    assert body["variables"]["filter"] == f"Firma_ID~eq~{CID}#(Nazev~ct~OR06024026)|(Poznamka~ct~OR06024026)"
+    assert "Stredisko_ID" in body["query"] and "Poznamka" in body["query"]
+    assert found.matched_by == "order" and [d.number for d in found.items] == ["DV260042"]  # deleted row dropped
+    assert found.items[0].centre_id == uuid.UUID(DL["Stredisko_ID"]) and found.items[0].total == Decimal("120.5")
+
+
+@respx.mock
+async def test_222_pdfreport_with_and_without_designid_and_rejects_non_pdf() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    route = respx.get(f"{BASE}/pdfreport")
+    route.side_effect = [
+        httpx.Response(200, content=b"%PDF-1.4 fiktivny", headers={"content-type": "application/pdf"}),
+        httpx.Response(200, content=b"%PDF-1.4 fiktivny", headers={"content-type": "application/pdf"}),
+        httpx.Response(200, content=b"<html>login</html>", headers={"content-type": "text/html"}),
+        httpx.Response(200, content=b"not a pdf", headers={"content-type": "application/pdf"}),
+        httpx.Response(404),
+    ]
+    backend = ApiBackend(settings())
+    rid = uuid.UUID(DL["ID"])
+    assert await backend.document_pdf("issued_delivery_note", rid, "12", "34") == b"%PDF-1.4 fiktivny"
+    params = dict(route.calls[0].request.url.params)
+    assert params == {"objectname": "issueddeliverynote", "id": str(rid), "reportid": "12", "designid": "34"}
+    assert await backend.document_pdf("issued_delivery_note", rid, "12", None) == b"%PDF-1.4 fiktivny"
+    assert "designid" not in dict(route.calls[1].request.url.params)
+    for _ in range(2):
+        with pytest.raises(MoneyError):
+            await backend.document_pdf("issued_delivery_note", rid, "12", None)
+    assert await backend.document_pdf("issued_delivery_note", rid, "12", None) is None
+    await backend.aclose()
+
+
+def test_222_pdf_endpoint_is_allowed_on_prod() -> None:
+    from app.mock import build
+    from tests.conftest import make_client
+
+    prod = make_client(money_agenda_label="PROD")
+    note = build().deliveries[0]
+    r = prod.get(f"/documents/issued_delivery_note/{note.id}/pdf?report_id=12")
+    assert r.status_code == 200 and r.content.startswith(b"%PDF")  # a GET, read only (#212)

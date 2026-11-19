@@ -9,7 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
-from app.backend import ArticleQuery, InvoiceQuery, MoneyBackend
+from app.backend import ArticleQuery, DeliveryQuery, InvoiceQuery, MoneyBackend
 from app.filters import UNSAFE, UnsafeFilterValue
 from app.models import (
     Activity,
@@ -19,6 +19,8 @@ from app.models import (
     Company,
     CompanyPage,
     Delivery,
+    DeliverySearch,
+    DocumentKind,
     InvoiceKind,
     InvoiceSearch,
     IssuedInvoice,
@@ -141,6 +143,43 @@ async def invoice_pdf(request: Request, kind: InvoiceKind, invoice_id: uuid.UUID
     if not _REPORT_ID.match(report_id):
         raise HTTPException(status_code=422, detail={"code": "report_id_invalid"})
     pdf = await _backend(request).invoice_pdf(kind, invoice_id, report_id)
+    if not pdf:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return Response(content=pdf, media_type="application/pdf", headers={"Cache-Control": "no-store"})
+
+
+# ----- #222 (read-only): issued delivery notes and their PDF through Money's `/pdfreport` -----
+
+
+@router.get("/delivery-notes/issued/search")
+async def search_delivery_notes(
+    request: Request,
+    number: _TEXT = None,
+    order: _TEXT = None,
+    company_id: uuid.UUID | None = None,
+) -> DeliverySearch:
+    for name, value in (("number", number), ("order", order)):
+        if value and any(c in UNSAFE for c in value):
+            raise UnsafeFilterValue(name)
+    query = DeliveryQuery(
+        number=(number or "").strip() or None, order=(order or "").strip() or None, company_id=company_id
+    )
+    if query.order is not None and len(query.order) < MIN_ORDER:
+        raise HTTPException(status_code=422, detail={"code": "order_too_short", "min": MIN_ORDER})
+    if not (query.number or query.order or query.company_id):
+        raise HTTPException(status_code=422, detail={"code": "search_criteria_required"})
+    return await _backend(request).search_deliveries(query)
+
+
+@router.get("/documents/{kind}/{record_id}/pdf")
+async def document_pdf(
+    request: Request, kind: DocumentKind, record_id: uuid.UUID, report_id: str, design_id: str | None = None
+) -> Response:
+    """Money's own print report (`/pdfreport`, „tlač do PDF“) — `kind` is a whitelist, ids are validated; read
+    only, so allowed on the PRODUCTION agenda as well (#212)."""
+    if not _REPORT_ID.match(report_id) or (design_id and not _REPORT_ID.match(design_id)):
+        raise HTTPException(status_code=422, detail={"code": "report_id_invalid"})
+    pdf = await _backend(request).document_pdf(kind, record_id, report_id, design_id or None)
     if not pdf:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     return Response(content=pdf, media_type="application/pdf", headers={"Cache-Control": "no-store"})

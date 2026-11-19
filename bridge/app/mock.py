@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from app.backend import ArticleQuery, InvoiceQuery
+from app.backend import ArticleQuery, DeliveryQuery, InvoiceQuery
 from app.models import (
     Activity,
     ActivityIn,
@@ -27,6 +27,9 @@ from app.models import (
     CompanyPage,
     Connection,
     Delivery,
+    DeliveryMatchedBy,
+    DeliverySearch,
+    DocumentKind,
     InvoiceKind,
     InvoiceSearch,
     IssuedInvoice,
@@ -220,6 +223,10 @@ def build(seed: int = 20261030) -> MockData:
                 state=rng.choice([0, 1]),
                 transport=rng.choice(["Kuriér (fiktívny)", "Osobný odber", None]),
                 total=_money(rng, 50, 3000),
+                # #222 (no rng: keeps the seed stable): branch centre and the customer's order in Popis / Poznámka
+                centre_id=None if n % 7 == 0 else mid("centre", n % 3 + 1),
+                description=f"Objednávka OR{6024000 + n:08d}" if n % 3 == 0 else None,
+                note=f"Vaša objednávka {2410100000 + n}" if n % 5 == 0 else None,
             )
         )
     for n in range(1, 41):
@@ -390,6 +397,40 @@ class MockBackend:
         self.data.activities.append(new)
         self.smids[new.id] = activity.smid
         return ActivityOut(id=new.id, created=True)
+
+    async def search_deliveries(self, query: DeliveryQuery) -> DeliverySearch:
+        rows = self.data.deliveries
+        steps: list[tuple[DeliveryMatchedBy, bool, Callable[[Delivery], bool]]] = [
+            ("number", bool(query.number), lambda d: d.number == query.number),
+            (
+                "order",
+                bool(query.order),
+                lambda d: (
+                    query.order is not None
+                    and (query.order in (d.description or "") or query.order in (d.note or ""))
+                    and (query.company_id is None or d.company_id == query.company_id)
+                ),
+            ),
+            (
+                "company",
+                bool(query.company_id and not query.number and not query.order),
+                lambda d: d.company_id == query.company_id,
+            ),
+        ]
+        for matched_by, active, pred in steps:
+            if active:
+                found = _newest_first([d for d in rows if pred(d)])[: 200 if matched_by == "company" else 20]
+                if found:
+                    return DeliverySearch(matched_by=matched_by, items=found)
+        return DeliverySearch(matched_by="none", items=[])
+
+    async def document_pdf(
+        self, kind: DocumentKind, record_id: uuid.UUID, report_id: str, design_id: str | None
+    ) -> bytes | None:
+        note = next((d for d in self.data.deliveries if d.id == record_id), None)
+        if note is None:
+            return None
+        return minimal_pdf(f"FIKTIVNY DODACI LIST {note.number} - Smart Mail mock")
 
     async def invoice_pdf(self, kind: InvoiceKind, invoice_id: uuid.UUID, report_id: str) -> bytes | None:
         inv = next((i for i in self.data.invoices if i.id == invoice_id and i.kind == kind), None)

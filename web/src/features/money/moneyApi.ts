@@ -64,6 +64,8 @@ export type CompanyCard = {
     email: string | null;
     phone: string | null;
   }[];
+  /** #222: delivery notes whose branch has the print report → PDF icon */
+  delivery_pdf?: string[];
 };
 
 export const customerKey = (messageId: string) => ['money', 'customer', messageId] as const;
@@ -141,3 +143,7 @@ export function day(value: string | null): string {
   const [y, m, d] = value.slice(0, 10).split('-');
   return `${Number(d)}. ${Number(m)}. ${y}`;
 }
+
+/** #222: Money's own print PDF of one of the company's recent delivery notes (opens in a new tab). */
+export const deliveryNotePdfUrl = (companyId: string, noteId: string) =>
+  `/api/money/companies/${encodeURIComponent(companyId)}/delivery-notes/${encodeURIComponent(noteId)}/pdf`;

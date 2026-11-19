@@ -15,6 +15,9 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 InvoiceKind = Literal["invoice", "proforma"]
+# #222: documents whose PDF comes from Money's generic print endpoint `/pdfreport` (whitelist, extendable)
+DocumentKind = Literal["issued_delivery_note"]
+DeliveryMatchedBy = Literal["number", "order", "company", "none"]
 CodebookName = Literal["warehouses", "centres", "numerical-series", "currencies", "activity-types"]
 MatchedBy = Literal["number", "variable_symbol", "reference", "company_dates", "number_digits", "order", "none"]
 
@@ -93,6 +96,9 @@ class Delivery(_Model):
     state: int | None  # Stav, raw
     transport: str | None  # ZpusobDopravy.Nazev
     total: Decimal
+    centre_id: uuid.UUID | None = None  # Stredisko_ID — selects the branch print report (#222)
+    description: str | None = None  # Nazev = „Popis“; usually holds the customer's order number (#222)
+    note: str | None = None  # Poznamka = „Poznámka“; also the customer's order number (#222)
 
 
 class Activity(_Model):
@@ -136,6 +142,13 @@ class OverduePage(_Model):
 class InvoiceSearch(_Model):
     matched_by: MatchedBy
     items: list[IssuedInvoice]
+
+
+class DeliverySearch(_Model):
+    """#222 issued delivery notes: by number, by the customer's order in Popis/Poznámka, or the company's latest."""
+
+    matched_by: DeliveryMatchedBy
+    items: list[Delivery]
 
 
 class ActivityIn(_Model):

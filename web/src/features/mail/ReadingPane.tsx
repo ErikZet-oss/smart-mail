@@ -1028,7 +1028,7 @@ function SuggestionCards({
   return (
     <div className="flex flex-col gap-2 py-3" data-testid="ai-suggestions">
       {shown.map((s) =>
-        s.type === 'invoice_attach' ? (
+        s.type === 'invoice_attach' || s.type === 'delivery_note_attach' ? (
           <InvoiceSuggestionCard
             key={s.id}
             suggestion={s}

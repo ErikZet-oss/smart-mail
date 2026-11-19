@@ -2,6 +2,30 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #222 Dodací list vydaný ako PDF z Money (/pdfreport) + AI karta „Dodací list“
+
+- **Money `/pdfreport`** (všeobecné PDF z tlačovej zostavy, iba čítanie, povolené aj na PROD). Bridge `GET /documents/{kind}/{id}/pdf?report_id=&design_id=`:
+  - `kind` je whitelist (`issued_delivery_note` → `issueddeliverynote`), ID zostavy a návrhu sa overujú (GUID alebo číslo);
+  - odpoveď musí byť `application/pdf` a začínať `%PDF`, limit 20 MB, inak chyba.
+  Faktúry ostávajú na REST `…/Report/{reportId}`.
+- **Bridge – hľadanie dodacích listov vydaných** (`/delivery-notes/issued/search`): podľa čísla, podľa objednávky v Popise ALEBO Poznámke, inak posledné dodacie listy firmy. `Delivery` má nové polia `centre_id`, `description`, `note`.
+- **Probe `--pdfreport`** (iba čítanie): `PROBE_DL_ISSUED_NUMBER` (alebo `PROBE_DL_NUMBER`), `PROBE_DL_REPORT_ID`, `PROBE_DL_DESIGN_ID`. Do `probe_output/pdfreport.md` zapíše iba status, typ obsahu, veľkosť, `%PDF` a či je `designid` povinný – žiadne údaje z dokladu.
+- **Nastavenia › Pobočky › Money (11e):**
+  - nové polia „Tlačová zostava – dodací list vydaný: ID zostavy“ a „ID návrhu (designid)“, uložené v `branches.money_report_ids` (`delivery_note`, `delivery_note_design`) – **bez migrácie**;
+  - „Vyskúšať PDF“ funguje aj pre dodací list.
+- **AI karta „Dodací list“** (`delivery_note_attach`):
+  - kedy: mail žiada dodací list / DL / Lieferschein / delivery note, kategórie `document_request`, `invoice_request`, `shipping`, `order_change`, `complaint`;
+  - hľadanie: číslo dodacieho listu v maile → objednávka (aj s písmenami, #217) v Popise alebo Poznámke → posledné dodacie listy spárovanej firmy;
+  - karta: až 5 dodacích listov s výberom; predvybraný je ten, ktorý sedí s mailom;
+  - cudzí dodací list → červený riadok a potvrdenie podľa #215, vždy iba jedna potvrdená adresa a nikdy hromadne;
+  - „opravený / nový dodací list“ → upozornenie, aby ho najprv upravili v Money;
+  - pobočka bez zostavy → riadok sa nedá vybrať, a keď nemá zostavu žiadny ponúknutý dodací list, je to blokujúca kontrola;
+  - **approve** znova naživo overí existenciu, vlastníka aj zostavu a priloží `Dodaci_list_<číslo>.pdf`.
+  Karta sa neukáže, kým žiadna pobočka nemá nastavenú zostavu.
+- Žiadosť o dodací list bez slova faktúra už nedostane kartu faktúry.
+- **Zákazník (W3b) / W9a:** pri „Posledné dodacie listy“ ikona PDF (iba keď má pobočka zostavu) → PDF z Money v novej karte.
+- Bez migrácie, bez zápisu do Money.
+
 ## [Unreleased] — #217 Faktúra podľa objednávky aj v Poznámke, čísla s písmenami, výber až 5 faktúr
 
 - **Čísla objednávok s písmenami:** „objednávka č. OR06024026“, „PO-45821“, „naša objednávka OBJ/2026/123“, „zákazka ZK-2026001“. Číslo musí stáť pri slove objednávka / obj. / order / Bestellung / PO / zákazka. Telefón, IČO, DIČ, IČ DPH, PSČ, dátum („NR 09/11/2026“) ani IBAN sa nezachytia; číslo faktúry má stále prednosť.

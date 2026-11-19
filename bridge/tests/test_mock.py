@@ -119,3 +119,19 @@ def test_217_order_with_letters_in_poznamka_and_min_length_mock() -> None:
     short = client.get("/invoices/issued/search?order=OR123")
     assert short.status_code == 422 and short.json()["detail"]["code"] == "order_too_short"
     assert client.get("/invoices/issued/search?order=OR06%7C024026").status_code == 422
+
+
+def test_222_delivery_notes_by_order_and_pdf_mock() -> None:
+    client = make_client()
+    data = build()
+    note = next(d for d in data.deliveries if d.description and d.centre_id)
+    order = (note.description or "").split()[-1]
+    out = client.get(f"/delivery-notes/issued/search?order={order}").json()
+    assert out["matched_by"] == "order" and note.number in [d["number"] for d in out["items"]]
+    row = next(d for d in out["items"] if d["number"] == note.number)
+    assert row["centre_id"] == str(note.centre_id) and row["description"] == note.description
+    pdf = client.get(f"/documents/issued_delivery_note/{note.id}/pdf?report_id=12&design_id=34")
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    assert pdf.headers["content-type"] == "application/pdf"
+    missing = client.get("/documents/issued_delivery_note/00000000-0000-4000-8000-00000000dead/pdf?report_id=12")
+    assert missing.status_code == 404

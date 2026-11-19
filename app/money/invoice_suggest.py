@@ -6,6 +6,7 @@ at least one written invoice number belongs to that company. Money down → noth
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -20,6 +21,7 @@ from app.core.audit import audit
 from app.core.config import Settings
 from app.mail.models import FolderMeta, Mailbox, Message
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
+from app.money.delivery_note_attach import wants_delivery_note
 from app.money.invoice_attach import (
     STRONG,
     SUGGESTION_TYPE,
@@ -40,6 +42,7 @@ from app.money.schemas import IssuedInvoice
 
 log = structlog.get_logger(__name__)
 CATEGORY = "invoice_request"
+_INVOICE_WORD = re.compile(r"(?i:fakt[úu]r|invoice|rechnung)|\b(?:FV|FA|ZF)\s?\d")
 MAX_PER_RUN = 20
 
 
@@ -144,6 +147,9 @@ async def suggest_invoice_attach(
             stats["candidates"] += 1
             email = counterparty(message, settings)
             text = f"{message.subject or ''}\n{message.body_text or message.preview or ''}"
+            if wants_delivery_note(text) and not _INVOICE_WORD.search(text):
+                stats["no_refs"] += 1  # #222: a delivery note request is the delivery note card's, not an invoice
+                continue
             refs = invoice_refs(text)  # written numbers always win over „the last invoice“
             guessed: IssuedInvoice | None = None
             # #210 / #217: no invoice number, but the customer's order number (in the invoice „Popis“ or „Poznámka“)

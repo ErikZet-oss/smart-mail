@@ -147,7 +147,13 @@ async def test_174_settings_11e_api(
     listed = (await client.get("/api/settings/money/branches")).json()
     assert [c["code"] for c in listed["centres"]] == ["20", "30"]
     by_name = {b["name"]: b for b in listed["branches"]}
-    assert by_name["Nitra"]["reports"] == {"invoice": "77", "proforma": ""}
+    # #222 adds the delivery note report and design (empty here)
+    assert by_name["Nitra"]["reports"] == {
+        "invoice": "77",
+        "proforma": "",
+        "delivery_note": "",
+        "delivery_note_design": "",
+    }
 
     url = f"/api/settings/money/branches/{senica.id}"
     r = await client.send_json("PUT", url, {"centre_id": str(uuid.uuid4()), "reports": {}})
@@ -158,7 +164,8 @@ async def test_174_settings_11e_api(
     r = await client.send_json(
         "PUT", url, {"centre_id": str(CENTRE_SE), "reports": {"invoice": "31", "proforma": guid}}
     )
-    assert r.status_code == 200 and r.json()["reports"] == {"invoice": "31", "proforma": guid}
+    assert r.status_code == 200
+    assert r.json()["reports"] == {"invoice": "31", "proforma": guid, "delivery_note": "", "delivery_note_design": ""}
     entry = await db.scalar(select(AuditLog).where(AuditLog.action == "settings.branch_money"))
     assert entry is not None and entry.details["after"]["reports"]["invoice"] == "31"
 
