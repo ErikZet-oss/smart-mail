@@ -2,6 +2,15 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #217 Faktúra podľa objednávky aj v Poznámke, čísla s písmenami, výber až 5 faktúr
+
+- **Čísla objednávok s písmenami:** „objednávka č. OR06024026“, „PO-45821“, „naša objednávka OBJ/2026/123“, „zákazka ZK-2026001“. Číslo musí stáť pri slove objednávka / obj. / order / Bestellung / PO / zákazka. Telefón, IČO, DIČ, IČ DPH, PSČ, dátum („NR 09/11/2026“) ani IBAN sa nezachytia; číslo faktúry má stále prednosť.
+- **Bridge:** hľadanie podľa objednávky v **Popise ALEBO Poznámke** (`(Nazev~ct~X)|(Poznamka~ct~X)`, s `Firma_ID`, keď je známa), ako napísané aj bez oddeľovačov. Text kratší ako 6 znakov sa nehľadá (422 `order_too_short`). Nové pole `IssuedInvoice.note` (`Poznamka`).
+- **Karta s výberom (až 5 faktúr):** najnovšie hore, každá so zaškrtávacím políčkom, číslom, dátumom vystavenia a sumou. Predvybrané sú faktúry odosielateľa, ktoré obsahujú celé číslo objednávky. Faktúra inej firmy má červený riadok a po výbere potvrdenie podľa #215. Dve firmy v jednom koncepte sa vybrať nedajú; prázdny výber tiež nie.
+- **Approve** dostane vybrané čísla (`selected`) a znova ich naživo overí; text konceptu sa zostaví z vybraných faktúr. Potvrdený vlastník sa ukladá do `final_payload.ack.owner_money_id` (kontrola pri odoslaní).
+- Zálohové faktúry sa podľa objednávky nehľadajú (REST filtre nefungujú) – zapísané v MONEY_API §5.1.
+- Bez zmeny dátového modelu, bez zápisu do Money.
+
 ## [Unreleased] — W2p Hlavičky správy
 
 ### Added

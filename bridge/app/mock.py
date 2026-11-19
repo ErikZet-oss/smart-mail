@@ -190,6 +190,8 @@ def build(seed: int = 20261030) -> MockData:
                 centre_id=None if n % 7 == 0 else mid("centre", n % 3 + 1),  # no rng: keeps the seed stable
                 # #210: every 4th invoice comes from a (fictional) e-shop order, number in „Popis“; no rng
                 description=f"Objednávka {2410000000 + n}" if n % 4 == 0 else None,
+                # #217: some invoices carry the customer's order (with letters) only in „Poznámka“; no rng
+                note=f"Vaša objednávka OR{6024000 + n:08d}" if n % 6 == 3 else None,
             )
         )
     for n in range(1, 61):
@@ -334,7 +336,7 @@ class MockBackend:
                 bool(query.order),
                 lambda i: (
                     query.order is not None
-                    and query.order in (i.description or "")
+                    and (query.order in (i.description or "") or query.order in (i.note or ""))
                     and (query.company_id is None or i.company_id == query.company_id)
                 ),
             ),

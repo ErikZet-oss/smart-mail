@@ -46,6 +46,9 @@ def _default_since() -> date:
     return date.today() - timedelta(days=365)
 
 
+MIN_ORDER = 6
+
+
 @router.get("/sync/companies")
 async def sync_companies(
     request: Request, since: datetime | None = None, start: Start = 0, count: Count = 200
@@ -124,6 +127,9 @@ async def search_invoices(
         date_to=date_to,
         order=(order or "").strip() or None,
     )
+    if query.order is not None and len(query.order) < MIN_ORDER:
+        # #217: `ct` over the whole agenda — never for a short text like „OR12“
+        raise HTTPException(status_code=422, detail={"code": "order_too_short", "min": MIN_ORDER})
     if not (query.number or query.variable_symbol or query.reference or query.company_id or query.order):
         raise HTTPException(status_code=422, detail={"code": "search_criteria_required"})
     return await _backend(request).search_invoices(query)

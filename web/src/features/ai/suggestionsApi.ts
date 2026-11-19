@@ -29,9 +29,19 @@ export type Suggestion = {
         due_on: string | null;
         total: string;
         remaining: string;
+        /** #217 pick mode */
+        issued_on?: string | null;
+        order?: string | null;
+        own?: boolean;
+        exact?: boolean;
+        selected?: boolean;
+        owner_money_id?: string | null;
+        owner_name?: string | null;
       }[]
     | null;
   company_name?: string | null;
+  /** #217: the person picks which invoices (up to 5, found by the order number) go with the draft */
+  pick?: boolean;
   conformity?: {
     customer: string;
     document_ref: string;
@@ -53,12 +63,17 @@ export const fetchSuggestions = (mailbox: string, messageId: string) =>
     { global: false },
   );
 
-export const approveSuggestion = (id: string, body: string | null, acknowledged: string[] = []) =>
-  api<{ suggestion_id: string; draft_id: string; edited: boolean }>(
-    'POST',
-    `/api/suggestions/${id}/approve`,
-    acknowledged.length ? { body, acknowledged_checks: acknowledged } : { body },
-  );
+export const approveSuggestion = (
+  id: string,
+  body: string | null,
+  acknowledged: string[] = [],
+  selected: string[] | null = null,
+) =>
+  api<{ suggestion_id: string; draft_id: string; edited: boolean }>('POST', `/api/suggestions/${id}/approve`, {
+    body,
+    ...(acknowledged.length ? { acknowledged_checks: acknowledged } : {}),
+    ...(selected ? { selected } : {}),
+  });
 
 export const rejectSuggestion = (id: string, reasons: RejectReason[], note: string | null) =>
   api<{ status: string }>('POST', `/api/suggestions/${id}/reject`, { reasons, note });

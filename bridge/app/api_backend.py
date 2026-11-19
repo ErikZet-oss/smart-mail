@@ -144,6 +144,7 @@ def invoice_from(raw: dict[str, Any], kind: InvoiceKind = "invoice") -> IssuedIn
         doc_type=_int(raw.get("TypDokladu")),
         centre_id=_uuid(raw.get("Stredisko_ID")),
         description=_s(raw.get("Nazev")),
+        note=_s(raw.get("Poznamka")),
     )
 
 
@@ -393,8 +394,9 @@ class ApiBackend:
         if digits and digits != query.number:
             steps.append(("number_digits", cond("CisloDokladu", "ct", digits)))
         if query.order:
-            # #210: the e-shop order number is written in the invoice „Popis“ (Nazev), e.g. „Objednávka 2410006820“
-            order = cond("Nazev", "ct", query.order)
+            # #210 / #217: the customer's order number is written in the invoice „Popis“ (Nazev) or „Poznámka“
+            # (Poznamka), e.g. „Objednávka OR06024026“
+            order = any_(cond("Nazev", "ct", query.order), cond("Poznamka", "ct", query.order))
             steps.append(
                 ("order", all_(cond("Firma_ID", "eq", query.company_id), order) if query.company_id else order)
             )

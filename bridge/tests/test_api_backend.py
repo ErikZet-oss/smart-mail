@@ -437,10 +437,25 @@ async def test_210_order_step_searches_popis_nazev_with_a_safe_filter() -> None:
     gql.side_effect = [_gql({"IssuedInvoices": [{**INV, "Nazev": "Objednávka 2410006820"}]})]
     found = await ApiBackend(settings()).search_invoices(InvoiceQuery(order="2410006820", company_id=CID))
     body = json.loads(gql.calls[0].request.content)
-    assert body["variables"]["filter"] == f"Firma_ID~eq~{CID}#Nazev~ct~2410006820"
-    assert "Nazev" in body["query"]
+    # #217: „Popis“ OR „Poznámka“
+    assert body["variables"]["filter"] == f"Firma_ID~eq~{CID}#(Nazev~ct~2410006820)|(Poznamka~ct~2410006820)"
+    assert "Nazev" in body["query"] and "Poznamka" in body["query"]
     assert found.matched_by == "order" and found.items[0].description == "Objednávka 2410006820"
     gql.side_effect = [_gql({"IssuedInvoices": []})]
     none = await ApiBackend(settings()).search_invoices(InvoiceQuery(order="2410006820"))
     assert none.matched_by == "none"
-    assert json.loads(gql.calls[-1].request.content)["variables"]["filter"] == "Nazev~ct~2410006820"
+    assert (
+        json.loads(gql.calls[-1].request.content)["variables"]["filter"]
+        == "(Nazev~ct~2410006820)|(Poznamka~ct~2410006820)"
+    )
+
+
+@respx.mock
+async def test_217_order_with_letters_reads_poznamka() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    gql = respx.post(f"{BASE}/graphql")
+    gql.side_effect = [_gql({"IssuedInvoices": [{**INV, "Nazev": None, "Poznamka": "Vaša obj. PO-45821"}]})]
+    found = await ApiBackend(settings()).search_invoices(InvoiceQuery(order="PO-45821"))
+    body = json.loads(gql.calls[0].request.content)
+    assert body["variables"]["filter"] == "(Nazev~ct~PO-45821)|(Poznamka~ct~PO-45821)"
+    assert found.items[0].note == "Vaša obj. PO-45821" and found.items[0].description is None

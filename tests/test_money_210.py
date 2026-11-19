@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.models import AiSuggestion
 from app.core.config import Settings
 from app.mail.compose_models import ComposeDraft
-from app.money.invoice_attach import draft_body, invoice_refs, order_refs
+from app.money.invoice_attach import draft_body, invoice_refs, order_compact, order_refs
 from app.money.invoice_suggest import suggest_invoice_attach
 from app.money.schemas import InvoiceSearch
 from tests.conftest import Client, FakeMailServer
@@ -80,7 +80,8 @@ def test_210_order_refs_table(text: str, expected: list[str]) -> None:
 def test_210_order_refs_never_raises_and_are_digits(text: str) -> None:
     refs = order_refs(text)
     assert len(refs) <= 5 and len(set(refs)) == len(refs)
-    assert all(r.isdigit() and 6 <= len(r) <= 14 for r in refs)
+    # #217: also with letters (as written); always 4+ digits and 6+ characters without separators
+    assert all(sum(c.isdigit() for c in r) >= 4 and len(order_compact(r)) >= 6 for r in refs)
 
 
 @given(st.from_regex(r"\+?\d{3} ?\d{3} ?\d{3} ?\d{3}", fullmatch=True))

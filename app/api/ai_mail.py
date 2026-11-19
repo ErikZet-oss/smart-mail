@@ -290,6 +290,8 @@ class SuggestionOut(BaseModel):
     # Phase 3d: invoice_attach — the invoices whose original Money PDF goes with the draft, and the company
     invoices: list[dict[str, Any]] | None = None
     company_name: str | None = None
+    # #217: the person picks which invoices go with the draft (up to 5, found by the order number)
+    pick: bool = False
 
 
 def suggestion_out(row: AiSuggestion) -> SuggestionOut:
@@ -322,6 +324,7 @@ def suggestion_out(row: AiSuggestion) -> SuggestionOut:
             else None
         ),
         company_name=payload.get("company_name") if row.suggestion_type == "invoice_attach" else None,
+        pick=row.suggestion_type == "invoice_attach" and payload.get("pick") is True,
     )
 
 

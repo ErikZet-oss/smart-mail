@@ -120,6 +120,15 @@ invoice of that company: `Firma_ID~eq~<company>#DatumVystaveni~gte~<today−31 d
 with total ≤ 0, deleted records dropped (#179). Same `invoice_attach` card with the warning `invoice_guessed_latest`,
 never `batch_safe`; all owner checks as above. Possible extensions (not built): „faktúra z minulého týždňa“, „za
 október“ (date window from the phrase).
+**Invoice by the customer's order number (#210, #217, Erik 2026-11-12):** no invoice number in the mail, only the
+order number (also with letters: „OR06024026“, „PO-45821“, „OBJ/2026/123“, next to objednávka / obj. / order /
+Bestellung / PO / zákazka) → `(Nazev~ct~<order>)|(Poznamka~ct~<order>)`, with `Firma_ID~eq~` when known — the number
+is written in the invoice „Popis“ or „Poznámka“. Searched as written and without separators; never a text shorter
+than 6 characters (bridge 422 `order_too_short`); values only through the filter builder. The card offers at most
+**5** invoices (newest `DatumVystaveni` first), pre-selected = the sender's own invoices whose Popis/Poznámka holds
+the whole order number; approve gets the picked numbers and checks them again live; one company per draft; another
+company's invoice needs the #215 tick. **Known limit:** proformas are not searched by order — REST filters on
+`PrepaymentIssuedInvoice` do not work (probe 2026-10-31).
 
 ### 5.2 Receivables, payment questions, reminders
 `IssuedInvoices(Filter:"Firma_ID~eq~<X>#UhradyZbyva~gt~0")` (+ REST prepayments). Overdue = `DatumSplatnosti` < today.
