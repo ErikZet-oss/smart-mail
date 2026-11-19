@@ -1932,7 +1932,7 @@
       "tryTitle": "Vyskúšať PDF",
       "tryNumber": "Číslo faktúry na vyskúšanie",
       "try": "Vyskúšať {{kind}} {{lang}}",
-      "info": "Faktúry sa v Smart Mail nikdy nevytvárajú ani neprekresľujú – k e-mailu sa priloží vždy originálne PDF z Money. Dodacie listy a objednávky Money cez API ako PDF neposkytuje.",
+      "info": "Faktúry sa v Smart Mail nikdy nevytvárajú ani neprekresľujú – k e-mailu sa priloží vždy originálne PDF z Money. Dodací list vydaný sa prikladá ako PDF z tlačovej zostavy pobočky (Nastavenia › Pobočky a osoby › pobočka).",
       "branchInfo": "Pobočky môžu mať vlastnú zostavu (Nastavenia › Pobočky)."
     },
     "branch": {
