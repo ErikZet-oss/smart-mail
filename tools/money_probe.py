@@ -1223,7 +1223,8 @@ def pdfreport_probe(http, number, report_id, design_id):
     ok = bool(with_ok or without_ok)
     step("pdfreport issueddeliverynote", ok,
          note="PDF returned" + (" (designid required)" if out["designid_required"] else "") if ok else "no PDF returned")
-    pdfreport_matrix(http, record_id, report_id, design_id, out)
+    if not ok:  # diagnose only when no PDF came back
+        pdfreport_matrix(http, record_id, report_id, design_id, out)
     return out
 
 
