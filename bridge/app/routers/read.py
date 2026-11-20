@@ -211,6 +211,18 @@ async def search_articles(request: Request, code: _TEXT = None, ean: _TEXT = Non
     return await _backend(request).articles(query)
 
 
+MAX_VARIANT_PARENTS = 10
+
+
+@router.get("/articles/variants")
+async def article_variants(
+    request: Request, parent_id: Annotated[list[uuid.UUID], Query(min_length=1, max_length=MAX_VARIANT_PARENTS)]
+) -> dict[str, list[Article]]:
+    """#233 variants of up to 10 main cards (`NadrazenyArtikl_ID`), keyed by the main card id."""
+    found = await _backend(request).article_variants(list(dict.fromkeys(parent_id)))
+    return {str(k): v for k, v in found.items()}
+
+
 @router.get("/articles/{article_id}")
 async def get_article(request: Request, article_id: uuid.UUID) -> Article:
     article = await _backend(request).article(article_id)

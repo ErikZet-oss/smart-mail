@@ -58,6 +58,7 @@ REPORT_PATHS: dict[InvoiceKind, str] = {"invoice": "IssuedInvoice", "proforma": 
 # #222 `objectname` of `/pdfreport` = the object name from the API reference; only this whitelist, never mail text
 PDFREPORT_OBJECTS: dict[DocumentKind, str] = {"issued_delivery_note": "issueddeliverynote"}
 LATEST_DELIVERY_DAYS = 400
+VARIANT_LIMIT = 300  # #233: variants of up to 10 main cards in one GraphQL call
 SEARCH_LIMIT = 20
 ARTICLE_LIMIT = 20
 HISTORY_LIMIT = 200
@@ -242,6 +243,7 @@ def article_from(raw: dict[str, Any]) -> Article:
         unit=_s(main.get("Kod")),
         units=units,
         inactive=raw.get("Hidden") is True,
+        parent_id=_uuid(raw.get("NadrazenyArtikl_ID")),
     )
 
 
@@ -503,6 +505,19 @@ class ApiBackend:
             return []
         rows = await self._list("articles", "Articles", filter_=filter_, count=ARTICLE_LIMIT)
         return [article_from(r) for r in rows]
+
+    async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]:
+        """#233 variants of up to 10 main cards in one call: `(NadrazenyArtikl_ID~eq~A)|(NadrazenyArtikl_ID~eq~B)`.
+        Deleted rows are dropped, hidden ones come as `inactive`."""
+        out: dict[uuid.UUID, list[Article]] = {p: [] for p in parent_ids}
+        if not parent_ids:
+            return out
+        filter_ = any_(*(cond("NadrazenyArtikl_ID", "eq", p) for p in parent_ids))
+        rows = await self._list("articles", "Articles", filter_=filter_, count=VARIANT_LIMIT)
+        for a in (article_from(r) for r in rows):
+            if a.parent_id in out:
+                out[a.parent_id].append(a)
+        return out
 
     async def article(self, article_id: uuid.UUID) -> Article | None:
         raw = (await self._money.graphql("article", {"id": str(article_id)})).get("Article")

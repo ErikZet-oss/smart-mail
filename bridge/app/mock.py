@@ -243,6 +243,7 @@ def build(seed: int = 20261030) -> MockData:
             )
         )
     _articles(data)
+    _variants(data)
     return data
 
 
@@ -255,6 +256,26 @@ _ARTICLES = [
     ("ART-0005", "912-6-20-ZN", "Skrutka DIN 912 M6x20 Zn (fiktívna)", "8590000000055", None, None),
     ("ART-0006", "1481-6-40", "Kolík DIN 1481 6x40 (fiktívny)", None, "K1481-640", ("ks", 1)),
 ]
+
+
+def _variants(data: MockData) -> None:
+    """#233 a fictional main card with three size variants (catalog = main catalog + size suffix)."""
+    main = Article(
+        id=mid("article", 100), code="ART-0100", catalog="9990100", name="Vrut fiktívny (hlavná)", ean=None, unit="ks"
+    )
+    data.articles.append(main)
+    for n, size in enumerate(("0006", "0010", "0016"), start=1):
+        data.articles.append(
+            Article(
+                id=mid("article", 100 + n),
+                code=f"ART-0100-{size}",
+                catalog=f"9990100{size}",
+                name=f"Vrut fiktívny {int(size)} mm",
+                ean=None,
+                unit="ks",
+                parent_id=main.id,
+            )
+        )
 
 
 def _articles(data: MockData) -> None:
@@ -453,6 +474,13 @@ class MockBackend:
         else:
             found = []
         return found[:20]
+
+    async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]:
+        out: dict[uuid.UUID, list[Article]] = {p: [] for p in parent_ids}
+        for a in self.data.articles:
+            if a.parent_id in out:
+                out[a.parent_id].append(a)
+        return out
 
     async def article(self, article_id: uuid.UUID) -> Article | None:
         return next((a for a in self.data.articles if a.id == article_id), None)

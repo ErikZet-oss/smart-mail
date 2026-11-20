@@ -34,6 +34,7 @@ from app.purchasing.item_matching import confirm_article, load_lines, mark_non_s
 from app.purchasing.models import DocumentLine, SupplierDocument
 from app.purchasing.numbers import normalize_code
 from app.purchasing.service import MAX_BYTES, DocumentRejected, Source, ingest
+from app.purchasing.variants import Kind, has_variants, picker_order, variants_of
 
 router = APIRouter(prefix="/api/purchasing", tags=["purchasing"])
 ROLES = frozenset({Role.warehouse, Role.accounting, Role.admin})
@@ -413,8 +414,12 @@ async def confirm_line_article(
     try:
         async with BridgeClient(settings) as bridge:
             article = await bridge.article(body.article_id)
+            # DL-B11 (#233): never on a main card that has variants — checked here, never trusting the UI
+            main_card = article is not None and await has_variants(bridge, article)
     except BridgeUnavailable as exc:
         raise fail(503, exc.code) from None
+    if main_card:
+        raise fail(422, "main_card_has_variants")
     if article is None or article.inactive:
         raise fail(422, "article_not_found")
     if body.warehouse_id is not None and not await db.scalar(
@@ -466,6 +471,15 @@ async def line_non_stock(
 
 
 PICKER_LIMIT = 30
+MAIN_CARD_LIMIT = 10  # #233: variants are asked for at most 10 result articles (one bridge call)
+
+
+class PickerArticle(Article):
+    """#233 a picker row: `kind` = article | main (a main card that has variants — never receivable) | variant."""
+
+    kind: Kind = "article"
+
+
 SUPPLIER_CODE_LIMIT = 10  # each hit is one bridge read; leave room for the catalog variants
 
 
@@ -475,7 +489,7 @@ async def search_articles(
     db: DB,
     settings: SettingsDep,
     q: Annotated[str, Query(min_length=2, max_length=80)],
-) -> list[Article]:
+) -> list[PickerArticle]:
     """Article picker of W6h. Results of every kind together, best first (pilot 2026-11-20: a catalog number showed
     only the main card `3090225`, never its variants `30902250010`, …):
     1. exact code / catalog, 2. EAN, 3. supplier code from the read cache (`money_article_suppliers`),
@@ -512,9 +526,13 @@ async def search_articles(
                         if found:
                             out[found.id] = found
             add(sorted(await bridge.search_articles(q=term), key=lambda a: (a.catalog or a.code or "", a.name)))
+            # #233: main cards (with variants) are marked and followed by their variants
+            results = list(out.values())
+            mains = [a.id for a in results if a.parent_id is None]
+            variants = await variants_of(bridge, mains, limit=MAIN_CARD_LIMIT)
     except BridgeUnavailable as exc:
         raise fail(503, exc.code) from None
-    return list(out.values())
+    return [PickerArticle(**a.model_dump(), kind=kind) for a, kind in picker_order(results, variants, PICKER_LIMIT)]
 
 
 @router.get("/documents/{doc_id}/file")

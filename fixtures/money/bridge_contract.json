@@ -291,7 +291,8 @@
           "decimals": 0
         }
       ],
-      "inactive": false
+      "inactive": false,
+      "parent_id": null
     }
   ],
   "supplier_codes": {

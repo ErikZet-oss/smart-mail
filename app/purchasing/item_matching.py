@@ -36,12 +36,14 @@ from app.money.schemas import Article, SupplierCode
 from app.purchasing import org_settings
 from app.purchasing.models import DocumentLine, SupplierDocument, SupplierItemMapping
 from app.purchasing.numbers import normalize_code
+from app.purchasing.variants import variants_of
 
 log = structlog.get_logger()
 
 PRICE_DIFF_PCT = Decimal("10")  # SETTINGS 14 default (org setting `purchasing.price_diff_pct`)
 USER_METHODS = ("user", "non_stock")
-MATCH_CHECKS = ("DL-B4", "DL-W1", "DL-W6", "DL-W8")
+MATCH_CHECKS = ("DL-B4", "DL-B11", "DL-W1", "DL-W6", "DL-W8")
+MAIN_CARD = "needs_review"  # #233 line status: the cascade hit a main card with variants — a person picks a variant
 UNSAFE = set("~#|()")
 ONE = Decimal("1")
 
@@ -78,13 +80,28 @@ def price_diff_pct(price: Decimal | None, last: Decimal | None) -> Decimal | Non
     return ((price - last) / last * 100).quantize(Decimal("0.1"), ROUND_HALF_UP)
 
 
-def _candidate(a: Article) -> dict[str, Any]:
-    return {"article_id": str(a.id), "code": a.code, "catalog": a.catalog, "name": a.name, "unit": a.unit}
+def _candidate(a: Article, kind: str | None = None) -> dict[str, Any]:
+    return {
+        "article_id": str(a.id),
+        "code": a.code,
+        "catalog": a.catalog,
+        "name": a.name,
+        "unit": a.unit,
+        "kind": kind or ("variant" if a.parent_id else "article"),
+    }
 
 
-def article_snapshot(a: Article) -> dict[str, Any]:
-    """What W6h shows of the Money article (name / catalog / EAN / main unit) — read at matching time."""
-    return {"code": a.code, "catalog": a.catalog, "name": a.name, "ean": a.ean, "unit": a.unit}
+def article_snapshot(a: Article, kind: str | None = None) -> dict[str, Any]:
+    """What W6h shows of the Money article (name / catalog / EAN / main unit) — read at matching time. `kind`
+    (#233): article | main | variant; a variant's name is shown in italics."""
+    return {
+        "code": a.code,
+        "catalog": a.catalog,
+        "name": a.name,
+        "ean": a.ean,
+        "unit": a.unit,
+        "kind": kind or ("variant" if a.parent_id else "article"),
+    }
 
 
 @dataclass(slots=True)
@@ -136,6 +153,9 @@ def line_checks(
     unmatched = [ln.line_no for ln in goods if ln.line_status == "unmatched"]
     if unmatched:
         out.append(check("DL-B4", "blocking", n=len(unmatched), lines=unmatched))
+    for ln in goods:
+        if ln.line_status == MAIN_CARD:  # DL-B11 (#233): goods are never received on a main card with variants
+            out.append(check("DL-B11", "blocking", n=ln.line_no))
     for ln in goods:
         last = (ln.raw or {}).get("_last_price")
         if ln.match_method == "supplier_code" and last is not None and ln.unit_price is not None:
@@ -283,6 +303,9 @@ async def match_document(db: AsyncSession, bridge: BridgeClient, doc: SupplierDo
         for r in results.values():
             if r.article_id and r.article_id not in articles:
                 articles[r.article_id] = await bridge.article(r.article_id)
+        # #233: a hit on a main card with variants never matches — the line waits for a person, its variants offered
+        mains = [a.id for a in articles.values() if a is not None and a.parent_id is None]
+        variants = await variants_of(bridge, mains)
     except BridgeUnavailable as exc:
         log.warning("purchasing.matching_unavailable", document_id=str(doc.id), code=exc.code)
         return False
@@ -303,6 +326,10 @@ async def match_document(db: AsyncSession, bridge: BridgeClient, doc: SupplierDo
         raw["_last_price"] = None if res.last_price is None else str(res.last_price)
         found = articles.get(res.article_id) if res.article_id else None
         raw["_article"] = article_snapshot(found) if found else None
+        if found is not None and variants.get(found.id):
+            ln.line_status, ln.warehouse_id = MAIN_CARD, None
+            ln.candidates = [_candidate(v, "variant") for v in variants[found.id][:30]]
+            raw["_article"] = article_snapshot(found, "main")
         ln.raw = raw
         if res.method == "learned":
             m = learned[normalize_code(ln.supplier_code) or ""]
