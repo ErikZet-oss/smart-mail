@@ -6,6 +6,7 @@ Assertions only use the response models and relations between endpoints, never m
 from __future__ import annotations
 
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from app.models import (
     CodebookPage,
@@ -119,3 +120,23 @@ def test_contract_222_delivery_note_search_and_pdf(contract_client: SignedClient
         r = contract_client.get(f"/documents/issued_delivery_note/{dead}/pdf?{qs}")
         assert r.status_code == 422 and r.json()["detail"]["code"] == "report_id_invalid"
     assert contract_client.get(f"/documents/issued_invoice/{dead}/pdf?report_id=12").status_code == 422  # whitelist
+
+
+def test_contract_228_article_supplier_sync_and_lookup(contract_client: SignedClient) -> None:
+    from app.models import SupplierCode, SupplierCodePage
+
+    page = SupplierCodePage.model_validate(contract_client.get("/sync/article-suppliers?count=5").json())
+    assert len(page.items) <= 5 and all(c.id is not None for c in page.items)
+    if page.items:
+        first = page.items[0]
+        found = [
+            SupplierCode.model_validate(r)
+            for r in contract_client.get(
+                f"/suppliers/{first.supplier_id}/article-codes/lookup?{urlencode({'code': first.code})}"
+            ).json()
+        ]
+        assert first.id in {c.id for c in found}
+    sup = "00000000-0000-4000-8000-00000000dead"
+    for bad in ("09150|1", "a~b", "(x)", "a#b"):
+        r = contract_client.get(f"/suppliers/{sup}/article-codes/lookup?{urlencode({'code': bad})}")
+        assert r.status_code == 422  # never reaches a filter

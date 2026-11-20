@@ -97,10 +97,21 @@ REST only for PDF reports, persons and activity types.
 | `money_companies` (+ e-mails from `Email` and `SeznamSpojeni[].SpojeniCislo`) | `Companies` | 15 min delta (`ChangeFrom`), nightly full |
 | `money_persons` | REST `Person` | 15 min |
 | `money_articles` (+ `Parametry`, units, packaging) | `Articles` | 15 min delta |
-| `money_article_suppliers` (supplier_id, supplier_code normalized, article_id, unit, last price, packaging) | `ArticleSuppliers` | 15 min delta |
+| `money_article_suppliers` (supplier_id, supplier_code normalized, article_id, unit, last price, packaging) | `ArticleSuppliers` | 15 min delta (`ChangeFrom`), nightly full + deactivation (**built in #228**, migration 0022) |
 | `money_price_history` (customer, article, qty, unit price, date, document, `partner_code` = `ObsahPolozky.PartnerskyKod`) | `IssuedInvoices.Polozky` + `ReceivedOrders.Polozky` | nightly (24 months) + after each created order |
 | `money_codebooks` (all lists in §3 "Číselníky") | GraphQL | daily |
 Stock and customer prices are always live (`WarehouseStocks`, `ProdejniCeny`) with a 60 s memo cache.
+
+**Supplier codes (#228, pilot 2026-11-20):** item matching (§5.5.3 step 1) reads `money_article_suppliers` by
+`supplier_id` + `code_norm` (`normalize_code`: no dots, spaces, dashes, case) — one SELECT for the codes on the
+document. Loading every code of a supplier through the bridge is gone: `ArticleSuppliers` has no ordering, so a
+5 000-row cap returned a random subset for a big supplier. A code the cache does not know (added in Money minutes
+ago, or before the first sync) is looked up once per document through the bridge
+(`GET /suppliers/{id}/article-codes/lookup?code=` → `ArticleSuppliers(Filter:"Firma_ID~eq~X#DodavatelskyKod~eq~<code
+as written>")`, value through the filter builder) and saved into the cache. Bridge sync endpoint:
+`GET /sync/article-suppliers?since=&from=&count=` (no supplier filter). After the first full sync, draft documents
+with unmatched lines are matched again once (lines a person decided are kept). An agenda switch (#212) resyncs it in
+full.
 
 ---------------------------------------------------------------------------------------------------
 ## 5. Use cases

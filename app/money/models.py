@@ -11,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -88,3 +88,25 @@ class MoneySyncState(IdMixin, TimestampMixin, Base):
     last_status: Mapped[str | None] = mapped_column(String(20))  # ok | error
     last_error: Mapped[str | None] = mapped_column(String(60))  # an error code, never a Money payload
     history: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+
+
+class MoneyArticleSupplier(TimestampMixin, Base):
+    """#228 read cache of `ArticleSuppliers` (Erik approved the table 2026-11-20): the supplier's code for one of our
+    articles. Delta every sync run by `ChangeFrom`, nightly full + deactivation; never written back to Money.
+    `id` is the Money `ArticleSuppliers.ID`."""
+
+    __tablename__ = "money_article_suppliers"
+    __table_args__ = (Index("ix_money_article_suppliers_supplier_code", "supplier_id", "code_norm"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    article_id: Mapped[uuid.UUID] = mapped_column(index=True)  # Parent_ID
+    supplier_id: Mapped[uuid.UUID]  # Firma_ID
+    code: Mapped[str] = mapped_column(String(120))  # DodavatelskyKod exactly as in Money
+    code_norm: Mapped[str] = mapped_column(String(120))  # normalize_code(code)
+    name: Mapped[str | None] = mapped_column(String(255))
+    last_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    unit: Mapped[str | None] = mapped_column(String(40))
+    article_unit: Mapped[str | None] = mapped_column(String(40))
+    article_unit_qty: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

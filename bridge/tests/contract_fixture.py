@@ -38,6 +38,7 @@ def current() -> dict[str, Any]:
         "overdue": client.get("/receivables/overdue?before=2026-10-01&count=2").json(),
         "articles": client.get("/articles/search?code=934-10-A2").json(),
         "supplier_codes": client.get(f"/suppliers/{first}/article-codes?count=2").json(),
+        "sync_article_suppliers": client.get("/sync/article-suppliers?count=2").json(),
     }
 
 

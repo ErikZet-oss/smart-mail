@@ -256,6 +256,7 @@ def supplier_code_from(raw: dict[str, Any]) -> SupplierCode | None:
     unit: dict[str, Any] = raw["Jednotka"] if isinstance(raw.get("Jednotka"), dict) else {}
     art_unit: dict[str, Any] = raw["ArtiklJednotka"] if isinstance(raw.get("ArtiklJednotka"), dict) else {}
     return SupplierCode(
+        id=_uuid(raw.get("ID")),
         article_id=article_id,
         supplier_id=supplier_id,
         code=code,
@@ -518,3 +519,18 @@ class ApiBackend:
         )
         items = [c for c in (supplier_code_from(r) for r in rows) if c is not None]
         return SupplierCodePage(items=items, next_from=next_from)
+
+    async def all_supplier_codes(self, since: datetime | None, start: int, count: int) -> SupplierCodePage:
+        """#228 read cache: every `ArticleSuppliers` row, no supplier filter, `ChangeFrom` delta (deleted dropped)."""
+        count = min(count, self._page)
+        rows, next_from = await self._page_rows(
+            "article_suppliers", "ArticleSuppliers", start=start, count=count, since=since
+        )
+        items = [c for c in (supplier_code_from(r) for r in rows) if c is not None]
+        return SupplierCodePage(items=items, next_from=next_from)
+
+    async def lookup_supplier_code(self, supplier_id: uuid.UUID, code: str) -> list[SupplierCode]:
+        """#228 fallback for a code the cache does not know yet: `Firma_ID~eq~X#DodavatelskyKod~eq~<code>`."""
+        filter_ = all_(cond("Firma_ID", "eq", supplier_id), cond("DodavatelskyKod", "eq", code))
+        rows = await self._list("article_suppliers", "ArticleSuppliers", filter_=filter_, count=SEARCH_LIMIT)
+        return [c for c in (supplier_code_from(r) for r in rows) if c is not None]

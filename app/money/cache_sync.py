@@ -20,16 +20,19 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
-from app.money.models import MoneyCodebook, MoneyCompany, MoneyPerson, MoneySyncState
-from app.money.schemas import CODEBOOKS, Company, Person
+from app.money.models import MoneyArticleSupplier, MoneyCodebook, MoneyCompany, MoneyPerson, MoneySyncState
+from app.money.schemas import CODEBOOKS, Company, Person, SupplierCode
+from app.purchasing.numbers import normalize_code
 
 log = structlog.get_logger(__name__)
 
-Entity = Literal["companies", "persons", "codebooks"]
-ENTITIES: tuple[Entity, ...] = ("companies", "persons", "codebooks")
+Entity = Literal["companies", "persons", "codebooks", "article_suppliers"]
+ENTITIES: tuple[Entity, ...] = ("companies", "persons", "codebooks", "article_suppliers")
+DELTA_ENTITIES: frozenset[str] = frozenset({"companies", "article_suppliers"})  # `ChangeFrom` delta + nightly full
 PAGE = 200
 MAX_PAGES = 500  # 100 000 rows — a runaway paging loop stops here
 CURSOR_MARGIN = timedelta(minutes=2)
+UPSERT_BATCH = 1000
 HISTORY_KEEP = 20
 INTERVALS = (5, 15, 30, 60)
 DEFAULT_INTERVAL = 15
@@ -85,6 +88,51 @@ def _person_row(p: Person, now: datetime) -> dict[str, Any]:
         "active": True,
         "synced_at": now,
     }
+
+
+def supplier_code_row(c: SupplierCode, now: datetime) -> dict[str, Any] | None:
+    norm = normalize_code(c.code)
+    if c.id is None or not norm:
+        return None
+    return {
+        "id": c.id,
+        "article_id": c.article_id,
+        "supplier_id": c.supplier_id,
+        "code": c.code[:120],
+        "code_norm": norm[:120],
+        "name": (c.name or None) and c.name[:255],
+        "last_price": c.last_price,
+        "unit": c.unit,
+        "article_unit": c.article_unit,
+        "article_unit_qty": c.article_unit_qty,
+        "active": True,
+        "synced_at": now,
+    }
+
+
+async def save_supplier_codes(db: AsyncSession, codes: list[SupplierCode], now: datetime) -> int:
+    """Upsert `ArticleSuppliers` rows into the read cache (also used by the matching fallback, #228)."""
+    rows = [r for r in (supplier_code_row(c, now) for c in codes) if r is not None]
+    unique = list({r["id"]: r for r in rows}.values())  # one row per id in one statement
+    for i in range(0, len(unique), UPSERT_BATCH):  # PostgreSQL allows at most 32 767 parameters per statement
+        await _upsert(db, MoneyArticleSupplier.__table__, unique[i : i + UPSERT_BATCH], ["id"])
+    return len(unique)
+
+
+async def _sync_article_suppliers(
+    db: AsyncSession, client: BridgeClient, since: datetime | None, now: datetime
+) -> tuple[int, set[uuid.UUID]]:
+    """Tens of thousands of rows on the first full run: page by page, one upsert per page, counts only in logs."""
+    seen: set[uuid.UUID] = set()
+    start, changed = 0, 0
+    for _ in range(MAX_PAGES):
+        page = await client.all_supplier_codes(since, start, PAGE)
+        changed += await save_supplier_codes(db, page.items, now)
+        seen |= {c.id for c in page.items if c.id is not None}
+        if page.next_from is None:
+            break
+        start = page.next_from
+    return changed, seen
 
 
 async def _upsert(db: AsyncSession, table: Any, rows: list[dict[str, Any]], key: list[str]) -> None:
@@ -182,12 +230,33 @@ async def _deactivate(db: AsyncSession, model: type[MoneyCompany] | type[MoneyPe
     return int(getattr(result, "rowcount", 0) or 0)
 
 
+async def _deactivate_supplier_codes(db: AsyncSession, seen: set[uuid.UUID]) -> int:
+    """Rows a full run did not see (deleted in Money). The set can be large: a temporary table, not a long IN list."""
+    from sqlalchemy import text
+
+    await db.execute(text("CREATE TEMP TABLE IF NOT EXISTS _seen_as (id uuid PRIMARY KEY) ON COMMIT DROP"))
+    await db.execute(text("TRUNCATE _seen_as"))
+    ids = list(seen)
+    for i in range(0, len(ids), 5000):
+        await db.execute(
+            text("INSERT INTO _seen_as (id) SELECT unnest(CAST(:ids AS uuid[])) ON CONFLICT DO NOTHING"),
+            {"ids": ids[i : i + 5000]},
+        )
+    result = await db.execute(
+        text(
+            "UPDATE money_article_suppliers SET active = false, updated_at = now() "
+            "WHERE active AND id NOT IN (SELECT id FROM _seen_as)"
+        )
+    )
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
 async def sync_entity(db: AsyncSession, client: BridgeClient, entity: Entity, *, full: bool = False) -> SyncResult:
     """One entity, one transaction (the caller commits). Persons and codebooks are always full ([PROBE] delta)."""
     started = time.monotonic()
     now = datetime.now(UTC)
     state = await _state(db, entity)
-    full = full or entity != "companies" or state.cursor is None
+    full = full or entity not in DELTA_ENTITIES or state.cursor is None
     result = SyncResult(entity=entity, full=full)
     try:
         async with db.begin_nested():
@@ -196,6 +265,11 @@ async def sync_entity(db: AsyncSession, client: BridgeClient, entity: Entity, *,
                 result.changed = changed
                 if full:
                     result.deactivated = await _deactivate(db, MoneyCompany, seen)
+            elif entity == "article_suppliers":
+                changed, seen = await _sync_article_suppliers(db, client, None if full else state.cursor, now)
+                result.changed = changed
+                if full:
+                    result.deactivated = await _deactivate_supplier_codes(db, seen)
             elif entity == "persons":
                 changed, seen = await _sync_persons(db, client, now)
                 result.changed = changed

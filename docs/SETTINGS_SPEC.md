@@ -385,6 +385,7 @@ hodnoty z neho.").
 |---|---|---|---|---|---|
 | Interval synchronizácie | select 5 / 15 / 30 / 60 min | 15 min | — | Firmy, artikle, kódy dodávateľov, číselníky. | G |
 | Synchronizovať teraz | button + progress | — | — | — | — |
+| Stav entít | table: Firmy, Osoby, Číselníky, **Dodávateľské kódy** (#228) — počet aktívnych záznamov, posledný beh, posledný plný beh, chyba | — | — | — | — |
 | História | table last 20 runs (čas, trvanie, zmenené záznamy, chyby) | — | — | — | — |
 
 **13f Vrátenie zápisov**

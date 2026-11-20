@@ -17,6 +17,7 @@ from app.money.bridge_client import BridgeUnavailable
 from app.money.schemas import Article, SupplierCode
 from app.purchasing.item_matching import line_checks, price_diff_pct, unit_factor
 from app.purchasing.models import DocumentLine, SupplierDocument, SupplierItemMapping
+from app.purchasing.numbers import normalize_code
 from tests.conftest import Client, FakeMailServer
 from tests.test_mail_sync_1c import _signed_in
 from tests.test_purchasing_4a import ISDOC, SUPPLIER, _supplier, _upload, money_on
@@ -68,10 +69,14 @@ class ArticleBridge:
     async def __aexit__(self, *_: object) -> None:
         return None
 
-    async def supplier_codes(self, supplier_id: uuid.UUID) -> list[SupplierCode]:
+    async def lookup_supplier_code(self, supplier_id: uuid.UUID, code: str) -> list[SupplierCode]:
+        """#228 fallback lookup. These 4b tests predate the read cache (an empty cache here), so the fake answers by
+        the normalized code — the cache's own matching is tested in test_purchasing_228."""
         if self.down:
             raise BridgeUnavailable()
-        return [c for c in self.codes if c.supplier_id == supplier_id]
+        return [
+            c for c in self.codes if c.supplier_id == supplier_id and normalize_code(c.code) == normalize_code(code)
+        ]
 
     async def search_articles(
         self, *, code: str | None = None, ean: str | None = None, q: str | None = None

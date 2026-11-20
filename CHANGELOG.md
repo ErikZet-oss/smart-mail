@@ -2,6 +2,19 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #228 Párovanie dodávateľských kódov z read cache (MEKR'S: 1 z 19 riadkov)
+
+- **Príčina:** párovanie načítalo všetky kódy dodávateľa cez most po 500 riadkoch s limitom 5 000. `ArticleSuppliers` nemá zoradenie, takže pri veľkom dodávateľovi sa načítala náhodná podmnožina – väčšina kódov chýbala a bolo to aj pomalé (desiatky volaní).
+- **Nová tabuľka `money_article_suppliers`** (migrácia 0022, iba nová tabuľka a indexy, schválil Erik): `id` = `ArticleSuppliers.ID`, `article_id`, `supplier_id`, `code`, `code_norm`, cena a jednotky ako `numeric`. Index (`supplier_id`, `code_norm`) a `article_id`. Iba čítanie z Money.
+- **Sync:** nová entita „Dodávateľské kódy“ – delta každý beh cez `ChangeFrom`, v noci plný sync s deaktiváciou zmazaných (nič sa nemaže), pri zmene agendy plný resync. Upsert po dávkach a v logoch iba počty. Most má nový endpoint `GET /sync/article-suppliers` (bez filtra na firmu).
+- **Párovanie:** kódy z dokladu sa hľadajú v cache jedným SELECTom (`supplier_id` + `code_norm`).
+  - Kód, ktorý cache nepozná, sa raz na doklad overí priamo v Money (`GET /suppliers/{id}/article-codes/lookup?code=`, presne podľa dokladu) a uloží sa do cache.
+  - Hodnota so znakmi `~ # | ( )` sa do Money nepošle.
+  - Hromadné načítanie kódov a limit 5 000 sú preč (iné miesto, ktoré by ich volalo, neexistuje).
+- **Po prvom plnom syncu** sa návrhy dokladov s nespárovanými riadkami znova spárujú automaticky. Riadky, ktoré rozhodol človek, ostávajú.
+- **Nastavenia 13e:** riadok „Dodávateľské kódy“ s počtom a časom.
+- Po nasadení: aktualizovať most na Windows (nové endpointy) a na serveri `update.sh` (migrácia 0022).
+
 ## [Unreleased] — #222 Dodací list vydaný ako PDF z Money (/pdfreport) + AI karta „Dodací list“
 
 ### Added

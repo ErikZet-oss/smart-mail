@@ -399,7 +399,7 @@ export const removePrivateImage = (url: string) => api<Record<string, boolean>>(
 
 /** 13a / 13e Money S4 (Phase 3b, admin). */
 export type MoneyEntityState = {
-  entity: 'companies' | 'persons' | 'codebooks';
+  entity: 'companies' | 'persons' | 'codebooks' | 'article_suppliers';
   last_run_at: string | null;
   last_full_at: string | null;
   status: 'ok' | 'error' | null;

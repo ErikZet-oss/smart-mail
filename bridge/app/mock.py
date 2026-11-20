@@ -270,6 +270,7 @@ def _articles(data: MockData) -> None:
         if sup_code and sup_unit:
             data.supplier_codes.append(
                 SupplierCode(
+                    id=mid("article-supplier", len(data.supplier_codes) + 1),
                     article_id=article.id,
                     supplier_id=supplier,
                     code=sup_code,
@@ -455,6 +456,14 @@ class MockBackend:
 
     async def article(self, article_id: uuid.UUID) -> Article | None:
         return next((a for a in self.data.articles if a.id == article_id), None)
+
+    async def all_supplier_codes(self, since: datetime | None, start: int, count: int) -> SupplierCodePage:
+        rows = self.data.supplier_codes  # the mock has no change dates: a delta returns everything (idempotent)
+        page = rows[start : start + count]
+        return SupplierCodePage(items=page, next_from=start + count if start + count < len(rows) else None)
+
+    async def lookup_supplier_code(self, supplier_id: uuid.UUID, code: str) -> list[SupplierCode]:
+        return [c for c in self.data.supplier_codes if c.supplier_id == supplier_id and c.code == code]
 
     async def supplier_codes(self, supplier_id: uuid.UUID, start: int, count: int) -> SupplierCodePage:
         rows = [c for c in self.data.supplier_codes if c.supplier_id == supplier_id]
