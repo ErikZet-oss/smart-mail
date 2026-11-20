@@ -227,9 +227,9 @@ Probe on PROD (2026-11-20, 2 main cards, 42 variants; examples below are fiction
 - names are short and without diacritics (`tyc zav. M10 x2000 4.8 ZN`), the main card has the generic name
 - every variant has the main card parameters (Norma, Akost/Trieda, …) plus its own (Priemer (M), Dĺžka (L)) — all
   with codebook values (`Hodnota_ID`); these parameters **cannot be written through the API**
-- the parameters drive the **e-shop filters** (Erik, 2026-11-20); Erik wants creating articles and variants in
-  Smart Mail (not postponed) — how the missing parameters are handled is decided in the plan of that feature
-  (Money write: TEST agenda first, approval, Phase 4c rules)
+- the parameters drive the **e-shop filters**; Smart Mail does **not** handle them (D32) — people fill them in Money
+- creating articles and variants in Smart Mail: **D32** (production agenda, carefully; first test
+  `money_probe.py --article-write-test` → `probe_output/article_write.md` before the feature is planned)
 - `Group_ID` / `Kategorie` are usually the same as on the main card, but not always; `HlavniJednotka_ID` is a unit
   row of the article itself (never shared)
 
