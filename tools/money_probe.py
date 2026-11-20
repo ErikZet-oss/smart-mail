@@ -26,6 +26,12 @@ Purpose
   PROBE_REPORT_ID, the REST invoice report as control), objectname spellings, path prefixes and a REST report route
   for delivery notes. Non-PDF answers keep a short error text with GUIDs and numbers masked.
 
+  With --variants (read-only) it reads main article cards (PROBE_VARIANT_MAIN = their catalog numbers, comma
+  separated) and their variants (NadrazenyArtikl_ID): catalog/name pattern, the "Varianta" text, the variant
+  parameters (Parametry), which card fields the variants share with the main card, and whether the live schema
+  lets the API write variant parameters. Only article catalog data is written (catalog number, name, parameter
+  values) - no prices, stock, suppliers or customers. -> probe_output/variants.md
+
   With --phase4 (read-only) it lists which fields existing CRM activities fill (#189: the first test write copies
   them) and checks the branch price lists (PROBE_PRICE_LISTS = codes set in Settings 11e, else every active list with
   a default warehouse) via PriceListItems, the company discount / price-list
@@ -61,6 +67,7 @@ Usage
      # PROBE_DL_ISSUED_NUMBER=DV260042              # (or PROBE_DL_NUMBER when --branches is not run with it)
      # PROBE_DL_REPORT_ID=12                        # Agenda > Nastavenie tlačových zostáv > Dodací list vydaný > Opraviť
      # PROBE_DL_DESIGN_ID=34                        # optional: the design id from the list of designs
+     # PROBE_VARIANT_MAIN=3090225,3090025            # --variants: catalog numbers of main cards that have variants
      # PROBE_PRICE_LISTS=10-bez DPH,20-bez DPH        # --phase4: price-list codes set on the branches (Settings 11e)
      PROBE_EMAIL=novak@abcstav.sk                    # e-mail of a contact person that exists in the address book
      PROBE_ARTICLE=DIN 933                           # a code or name fragment of an existing article
@@ -76,6 +83,7 @@ Usage
 
   2) python money_probe.py --env probe.env            (add --save-pdf to save the generated PDF)
   3) python money_probe.py --env probe.env --orders   (customer orders, read-only)
+     python money_probe.py --env probe.env --variants (main cards and their variants, read-only)
      python money_probe.py --env probe.env --orders --allow-write-test   (TEST agenda only, see Safety)
 """
 import argparse
@@ -102,7 +110,7 @@ report = {"generated_at": dt.datetime.now().isoformat(timespec="seconds"), "step
 def load_env(path):
     if not path:
         return
-    with open(path, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8-sig") as fh:  # PowerShell 5 writes a BOM
         for line in fh:
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
@@ -1305,6 +1313,137 @@ def write_pdfreport_report():
     print(f"Written {OUT_DIR}/pdfreport.md and {OUT_DIR}/pdfreport.json")
 
 
+# ----------------------------------------------------------------------------- --variants (main cards + variants)
+variants_report = {"schema": {}, "cards": []}
+
+VARIANT_FIELDS = """ID Hidden Deleted Kod Katalog Nazev Varianta NadrazenyArtikl_ID Parent_ID Root_ID Group_ID
+  KatalogCislo RadaKatalog_ID TypArtiklu DruhArtiklu_ID HlavniJednotka_ID Kategorie NoveVygenerovanaVarianta
+  PripojitParametryKeKatalogu PripojitParametryKNazvu PripojitParametryKVariante OddelovacParametruVKoduVariant
+  Parametry { Poradi TextovaHodnota Hodnota_ID IsPresentInGenerated Parametr { Kod Nazev Variantni } }"""
+VARIANT_SHARED = ("Group_ID", "RadaKatalog_ID", "TypArtiklu", "DruhArtiklu_ID", "HlavniJednotka_ID", "Kategorie")
+VARIANT_FLAGS = ("PripojitParametryKeKatalogu", "PripojitParametryKNazvu", "PripojitParametryKVariante",
+                 "OddelovacParametruVKoduVariant", "NoveVygenerovanaVarianta", "Varianta", "TypArtiklu")
+
+
+def _params(article):
+    out = []
+    for p in sorted(article.get("Parametry") or [], key=lambda x: x.get("Poradi") or 0):
+        par = p.get("Parametr") or {}
+        out.append({"parameter": par.get("Nazev") or par.get("Kod"), "variant_parameter": par.get("Variantni"),
+                    "value": p.get("TextovaHodnota"), "has_value_id": bool(p.get("Hodnota_ID"))})
+    return out
+
+
+def variants_schema_check():
+    """Can the API write variants? Read from the live schema saved by gql_schema() (no request)."""
+    path = os.path.join(OUT_DIR, "graphql_schema_raw.txt")
+    out = variants_report["schema"]
+    try:
+        with open(path, encoding="utf-8", errors="ignore") as fh:
+            raw = json.load(fh)
+    except (OSError, ValueError):
+        out["read"] = False
+        return step("schema: ArticleInput (zápis variantov)", None, note="live schema not available")
+    schema = (raw.get("data") or raw).get("__schema") or {}
+    types = {t.get("name"): t for t in schema.get("types") or []}
+    inputs = (types.get("ArticleInput") or {}).get("inputFields") or []
+    fields = [f.get("name") for f in inputs]
+
+    def _kind(tp):
+        while tp and tp.get("kind") == "NON_NULL":
+            tp = tp.get("ofType")
+        return (tp or {}).get("kind")
+    mutation_type = (schema.get("mutationType") or {}).get("name") or "Mutation"
+    mutations = [f.get("name") for f in (types.get(mutation_type) or {}).get("fields") or []]
+    out.update({
+        "read": True,
+        "CreateArticle": "CreateArticle" in mutations,
+        "ArticleInput_NadrazenyArtikl_ID": "NadrazenyArtikl_ID" in fields,
+        "ArticleInput_Varianta": "Varianta" in fields,
+        # a list / object of parameter values; flags such as SmazatOstatniParametry do not count
+        "ArticleInput_parameter_fields": [f.get("name") for f in inputs if "aramet" in (f.get("name") or "")
+                                          and _kind(f.get("type")) in ("LIST", "INPUT_OBJECT")],
+        "parameter_mutations": [m for m in mutations if "aramet" in m],
+    })
+    can = bool(out["ArticleInput_parameter_fields"] or out["parameter_mutations"])
+    step("schema: ArticleInput (zápis variantov)", out["CreateArticle"] and out["ArticleInput_NadrazenyArtikl_ID"],
+         note=f"CreateArticle {out['CreateArticle']}, NadrazenyArtikl_ID {out['ArticleInput_NadrazenyArtikl_ID']}, "
+              f"parameters writable: {can}")
+
+
+def variants_probe(http, catalogs):
+    variants_schema_check()
+    if not catalogs:
+        return step("variants", None, note="PROBE_VARIANT_MAIN not set (catalog numbers of main cards)")
+    for catalog in [c.strip() for c in catalogs.split(",") if c.strip()][:5]:
+        card = {"catalog": catalog}
+        variants_report["cards"].append(card)
+        st, data, err, _ = gql(http, "query($f:String){ Articles(Filter:$f, Count:5){ %s } }" % VARIANT_FIELDS,
+                               {"f": f"Katalog~eq~{catalog}"})
+        rows = [r for r in ((data or {}).get("Articles") or []) if not r.get("Deleted")]
+        if err or not rows:
+            card["found"] = False
+            step(f"variants {catalog}", False, note=f"main card not found ({str(err)[:160] if err else 'no rows'})")
+            continue
+        main = rows[0]
+        card.update({"found": True, "name": main.get("Nazev"), "is_itself_variant": bool(main.get("NadrazenyArtikl_ID")),
+                     "hidden": main.get("Hidden"), "flags": {k: main.get(k) for k in VARIANT_FLAGS},
+                     "parameters": _params(main)})
+        found, by = [], {}
+        for field in ("NadrazenyArtikl_ID", "Parent_ID"):
+            st, d, e, _ = gql(http, "query($f:String){ Articles(Filter:$f, Count:300){ %s } }" % VARIANT_FIELDS,
+                              {"f": f"{field}~eq~{main['ID']}"})
+            got = [r for r in ((d or {}).get("Articles") or []) if not r.get("Deleted") and r.get("ID") != main["ID"]]
+            by[field] = len(got) if not e else f"error: {str(e)[:120]}"
+            if got and not found:
+                found = got
+        card["variants_by_field"] = by
+        card["variant_count"] = len(found)
+        cats = [v.get("Katalog") or "" for v in found]
+        card["catalog_prefix_is_main"] = sum(1 for c in cats if c.startswith(catalog))
+        card["suffix_lengths"] = distinct(len(c) - len(catalog) for c in cats if c.startswith(catalog))
+        card["duplicate_catalogs"] = sorted({c for c in cats if cats.count(c) > 1})
+        card["shared_with_main"] = {k: sum(1 for v in found if v.get(k) == main.get(k)) for k in VARIANT_SHARED}
+        card["variant_flags"] = {k: distinct(v.get(k) for v in found) for k in VARIANT_FLAGS}
+        card["variants_with_parameters"] = sum(1 for v in found if v.get("Parametry"))
+        card["variants_with_children"] = None  # variants of variants are not expected (main -> variant only)
+        card["sample"] = [{"catalog": v.get("Katalog"), "suffix": (v.get("Katalog") or "")[len(catalog):]
+                           if (v.get("Katalog") or "").startswith(catalog) else None,
+                           "name": v.get("Nazev"), "varianta": v.get("Varianta"), "kod": v.get("Kod"),
+                           "hidden": v.get("Hidden"), "parameters": _params(v)}
+                          for v in sorted(found, key=lambda x: x.get("Katalog") or "")[:15]]
+        step(f"variants {catalog}", bool(found),
+             note=f"{len(found)} variants; catalog = main + suffix in {card['catalog_prefix_is_main']}; "
+                  f"with parameters {card['variants_with_parameters']}")
+
+
+def write_variants_report():
+    variants_report["generated_at"] = report["generated_at"]
+    os.makedirs(OUT_DIR, exist_ok=True)
+    with open(os.path.join(OUT_DIR, "variants.json"), "w", encoding="utf-8") as fh:
+        json.dump(variants_report, fh, ensure_ascii=False, indent=2, default=str)
+    lines = ["# Money S4 probe – main cards and variants", "", f"Generated: {report['generated_at']}", "",
+             "Only article catalog data (catalog numbers, names, parameter values). No prices, stock, suppliers or "
+             "customers.", "", "## Can the API write variants? (live schema)", ""]
+    for k, v in variants_report["schema"].items():
+        lines.append(f"- **{k}**: {json.dumps(v, ensure_ascii=False, default=str)}")
+    for card in variants_report["cards"]:
+        lines += ["", f"## Main card {card['catalog']}", ""]
+        for k, v in card.items():
+            if k in ("catalog", "sample"):
+                continue
+            lines.append(f"- **{k}**: {json.dumps(v, ensure_ascii=False, default=str)}")
+        if card.get("sample"):
+            lines += ["", "| Katalóg | prípona | Názov | Varianta | Parametre |", "|---|---|---|---|---|"]
+            for v in card["sample"]:
+                params = "; ".join(f"{p['parameter']}={p['value']}" for p in v["parameters"])
+                lines.append(f"| {v['catalog']} | {v['suffix']} | {v['name']} | {v['varianta'] or ''} | {params} |")
+    lines += ["", "Give this file to Claude Code before planning article / variant creation.", ""]
+    with open(os.path.join(OUT_DIR, "variants.md"), "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    print(f"Written {OUT_DIR}/variants.md and {OUT_DIR}/variants.json")
+
+
 # ----------------------------------------------------------------------------- main
 def write_report():
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -1341,6 +1480,8 @@ def main():
     ap.add_argument("--pdfreport", action="store_true",
                     help="read-only: /pdfreport of one issued delivery note (PROBE_DL_NUMBER, PROBE_DL_REPORT_ID, "
                          "PROBE_DL_DESIGN_ID) -> probe_output/pdfreport.md")
+    ap.add_argument("--variants", action="store_true",
+                    help="read-only: main article cards (PROBE_VARIANT_MAIN) and their variants -> probe_output/variants.md")
     args = ap.parse_args()
     load_env(args.env)
 
@@ -1358,6 +1499,11 @@ def main():
         sys.exit(1)
 
     gql_schema(http)
+    if args.variants:
+        if gql_basic(http):
+            variants_probe(http, env("PROBE_VARIANT_MAIN"))
+        write_variants_report()  # report.md of the base run is kept
+        return
     if args.pdfreport:
         if gql_basic(http):
             pdfreport_probe(http, env("PROBE_DL_ISSUED_NUMBER") or env("PROBE_DL_NUMBER"), env("PROBE_DL_REPORT_ID"),
