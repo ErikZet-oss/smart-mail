@@ -201,3 +201,12 @@ async def test_239_timeout_with_a_foreign_card_or_nothing_stays_an_error() -> No
     with pytest.raises(MoneyUnavailable):
         await ApiBackend(settings()).create_article(ArticleCreateIn(katalog="99902390", nazev="X", smid=SMID))
     assert sum("CreateArticle" in json.loads(c.request.content)["query"] for c in gql.calls) == 1
+
+
+@respx.mock
+async def test_239_a_repeat_with_the_same_smid_returns_our_card_without_a_mutation() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    gql = respx.post(f"{BASE}/graphql")
+    gql.side_effect = [_gql({"Articles": [_row()]})]
+    out = await ApiBackend(settings()).create_article(ArticleCreateIn(katalog="99902390", nazev="X", smid=SMID))
+    assert out.reconciled is True and len(gql.calls) == 1

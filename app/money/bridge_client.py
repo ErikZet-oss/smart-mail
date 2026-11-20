@@ -24,6 +24,8 @@ from app.money.schemas import (
     Activity,
     ActivityOut,
     Article,
+    ArticleCreated,
+    CatalogFree,
     CodebookName,
     CodebookPage,
     Company,
@@ -50,6 +52,14 @@ class BridgeUnavailable(Exception):
     def __init__(self, code: str = "money_unavailable") -> None:
         super().__init__(code)
         self.code = code
+
+
+class BridgeRefused(Exception):
+    """The bridge refused a write with 4xx (409 `catalog_exists`, 403 `prod_read_only` …) — Money was not changed."""
+
+    def __init__(self, status: int, code: str, detail: dict[str, Any]) -> None:
+        super().__init__(code)
+        self.status, self.code, self.detail = status, code, detail
 
 
 def sign(secret: str, method: str, path_qs: str, timestamp: str, body: bytes = b"") -> str:
@@ -261,8 +271,9 @@ class BridgeClient:
         }
         return await self._model(InvoiceSearch, "/invoices/issued/search", params)
 
-    async def create_activity(self, payload: dict[str, Any], approval_token: str) -> ActivityOut:
-        """Phase 3f write: HMAC over the exact body + the single-use approval JWT. Never retried (MONEY_API §2)."""
+    async def _post(self, path: str, payload: dict[str, Any], approval_token: str) -> Any:
+        """A write: HMAC over the exact body + the single-use approval JWT. Never retried (MONEY_API §2).
+        A refusal raises `BridgeRefused` (status + the bridge's `detail`); transport/5xx → `BridgeUnavailable`."""
         _circuit.check()
         body = json.dumps(payload, separators=(",", ":")).encode()
         stamp = str(int(time.time()))
@@ -270,17 +281,21 @@ class BridgeClient:
             "Content-Type": "application/json",
             "X-Bridge-Key-Id": self._key_id,
             "X-Bridge-Timestamp": stamp,
-            "X-Bridge-Signature": sign(self._secret, "POST", "/activities", stamp, body),
+            "X-Bridge-Signature": sign(self._secret, "POST", path, stamp, body),
             "X-Approval-Token": approval_token,
         }
         try:
-            resp = await self._http.post(self._base + "/activities", content=body, headers=headers)
+            resp = await self._http.post(self._base + path, content=body, headers=headers)
         except httpx.HTTPError as exc:
             _circuit.failure()
             raise BridgeUnavailable() from exc
         code = f"bridge_{resp.status_code}"
+        detail: dict[str, Any] = {}
         try:
-            code = str(resp.json()["detail"]["code"])
+            raw = resp.json()["detail"]
+            if isinstance(raw, dict):
+                detail = raw
+                code = str(raw["code"])
         except (ValueError, KeyError, TypeError):
             pass
         if resp.status_code == 501:
@@ -290,11 +305,32 @@ class BridgeClient:
             raise BridgeUnavailable(code)
         _circuit.success()
         if resp.status_code != 200:
-            raise BridgeUnavailable(code)
+            raise BridgeRefused(resp.status_code, code, detail)
+        return resp.json()
+
+    async def create_activity(self, payload: dict[str, Any], approval_token: str) -> ActivityOut:
+        """Phase 3f write. A refusal keeps the old contract: `BridgeUnavailable(code)`."""
         try:
-            return ActivityOut.model_validate(resp.json())
+            data = await self._post("/activities", payload, approval_token)
+        except BridgeRefused as exc:
+            raise BridgeUnavailable(exc.code) from None
+        try:
+            return ActivityOut.model_validate(data)
         except ValidationError as exc:
             raise BridgeUnavailable("bridge_contract") from exc
+
+    async def create_article(self, payload: dict[str, Any], approval_token: str) -> ArticleCreated:
+        """D32 (#239) `CreateArticle` — only Katalog, Názov, SMID and the main card of a variant. 409
+        `catalog_exists` → `BridgeRefused`; a timeout is never retried here (the caller reconciles by catalog)."""
+        data = await self._post("/articles", payload, approval_token)
+        try:
+            return ArticleCreated.model_validate(data)
+        except ValidationError as exc:
+            raise BridgeUnavailable("bridge_contract") from exc
+
+    async def catalog_free(self, katalog: str) -> CatalogFree:
+        """D32 live check of a catalog number (exact match, deleted cards ignored)."""
+        return await self._model(CatalogFree, "/articles/catalog-free", {"katalog": katalog})
 
     async def invoice_pdf(self, kind: str, invoice_id: uuid.UUID, report_id: str) -> bytes | None:
         """The original Money PDF (never rendered by Smart Mail, DOCUMENTS_SPEC §6); None = not found."""

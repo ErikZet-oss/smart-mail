@@ -555,11 +555,13 @@ class ApiBackend:
         """D32 / MONEY_API 5.5.8b: the catalog must be free right before the mutation (else `CatalogExists`); the
         payload holds only Katalog, Nazev, Poznamka (SMID) and NadrazenyArtikl_ID for a variant. Never retried: after an
         error or a timeout the catalog is looked up ONCE — a card carrying this SMID is the one just created
-        (`reconciled`), anything else is an error. The created card is read back."""
+        (`reconciled`), anything else is an error. A repeat with the same SMID returns that card. Read back."""
+        smid = f"SMID:{article.smid}"
         existing = await self._catalog_row(article.katalog)
         if existing is not None:
+            if smid in (_s(existing.get("Poznamka")) or ""):
+                return _created(existing, reconciled=True)  # a repeat of our own earlier create (same SMID)
             raise CatalogExists(article.katalog, _s(existing.get("Nazev")) or "")
-        smid = f"SMID:{article.smid}"
         payload: dict[str, Any] = {
             "Katalog": article.katalog,
             "Nazev": article.nazev,

@@ -1,5 +1,5 @@
 {
-  "version": "4b",
+  "version": "4b-239",
   "phase": "4b",
   "sections": [
     {
@@ -994,6 +994,17 @@
               "label": "Dátum schválenia"
             }
           ],
+          "validation": {},
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.create_article",
+          "label": "Zakladanie artiklov v Money",
+          "control": "switch",
+          "default": false,
+          "help": "Sklad, účtovníctvo a správca môžu z riadku dodacieho listu založiť v Money hlavnú kartu alebo variant (DECISIONS D32). Na ostrej agende musí zápis povoliť aj most (MONEY_PROD_ALLOW).",
+          "scope": "G",
+          "options": [],
           "validation": {},
           "admin_only": true
         },

@@ -348,5 +348,24 @@
       }
     ],
     "next_from": 2
+  },
+  "catalog_free": {
+    "free": true,
+    "article": null
+  },
+  "catalog_taken": {
+    "free": false,
+    "article": {
+      "katalog": "934-10-A2",
+      "nazev": "Matica DIN 934 M10 A2 (fiktívna)"
+    }
+  },
+  "article_created": {
+    "id": "00000000-0000-0000-0000-000000000239",
+    "katalog": "FIKT-239",
+    "nazev": "Fiktívny artikel",
+    "parent_id": null,
+    "unit": "ks",
+    "reconciled": false
   }
 }

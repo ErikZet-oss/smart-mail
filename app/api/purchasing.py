@@ -5,9 +5,10 @@ Roles: warehouse, accounting, admin (SCREENS_SPEC W6e/W6h). Only with FEATURE_MO
 
 from __future__ import annotations
 
+import copy
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Any, Literal
 
@@ -26,10 +27,11 @@ from app.mail import storage
 from app.mail.clamav import scan_bytes
 from app.mail.mailboxes import accessible_mailbox
 from app.mail.models import Message
-from app.money.bridge_client import BridgeClient, BridgeUnavailable
+from app.money.approval import ApprovalKeyMissing, sign_approval
+from app.money.bridge_client import BridgeClient, BridgeRefused, BridgeUnavailable
 from app.money.models import MoneyArticleSupplier, MoneyCodebook, MoneyCompany
 from app.money.schemas import Article
-from app.purchasing import org_settings
+from app.purchasing import new_article, org_settings
 from app.purchasing.item_matching import confirm_article, load_lines, mark_non_stock, match_document, needs_matching
 from app.purchasing.models import DocumentLine, SupplierDocument
 from app.purchasing.numbers import normalize_code
@@ -38,6 +40,7 @@ from app.purchasing.variants import Kind, has_variants, picker_order, variants_o
 
 router = APIRouter(prefix="/api/purchasing", tags=["purchasing"])
 ROLES = frozenset({Role.warehouse, Role.accounting, Role.admin})
+ARTICLE_ROLES = ROLES  # D32: who may create a Money article from a line
 PAGE = 50
 
 
@@ -93,6 +96,7 @@ class LineOut(BaseModel):
     qty_our: str | None = None  # quantity in the article unit = qty × unit factor (never rounded to packaging)
     price_our: str | None = None  # net unit price per article unit = unit price / factor, 4 dp
     warehouse_code: str | None = None
+    new_article: dict[str, Any] | None = None  # D32 (#239): partial / failed state of „Založiť artikel v Money“
 
 
 class DocumentDetail(DocumentOut):
@@ -110,6 +114,7 @@ class DocumentDetail(DocumentOut):
     series: str | None  # branch series for received delivery notes (SETTINGS 11e)
     template: dict[str, Any]  # cached values of the branch template document (4c fills them)
     warehouses: list[dict[str, str]]  # Money warehouses for the line select (D18)
+    can_create_article: bool = False  # D32: Settings 14 switch on + role warehouse / accounting / admin
     items: list[LineOut]
 
 
@@ -299,10 +304,18 @@ def _line(ln: DocumentLine, wh_codes: dict[str, str]) -> LineOut:
         qty_our=_s(qty_our.quantize(Q4) if qty_our is not None else None),
         price_our=_s(price_our),
         warehouse_code=wh_codes.get(str(ln.warehouse_id).lower()) if ln.warehouse_id else None,
+        new_article=_new_article_view(ln),
     )
 
 
-async def _detail(db: DB, doc: SupplierDocument, *, money_available: bool = True) -> DocumentDetail:
+def _new_article_view(ln: DocumentLine) -> dict[str, Any] | None:
+    state = new_article.state_of(ln.raw)
+    if state.get("status") not in ("partial", "failed", "in_progress"):
+        return None
+    return {"status": state["status"], "main": state.get("main"), "error": state.get("error")}
+
+
+async def _detail(db: DB, doc: SupplierDocument, *, money_available: bool = True, person: Any = None) -> DocumentDetail:
     lines = await load_lines(db, doc)
     warehouses = [
         {"id": str(w.money_id), "code": w.code or "", "name": w.name or ""}
@@ -336,6 +349,9 @@ async def _detail(db: DB, doc: SupplierDocument, *, money_available: bool = True
         series=str(series) if series else None,
         template=(branch.dl_template_values or {}) if branch else {},
         warehouses=warehouses,
+        can_create_article=person is not None
+        and person.role in ARTICLE_ROLES
+        and (await org_settings.load(db)).create_article,
         items=[_line(ln, wh_codes) for ln in lines],
     )
 
@@ -353,7 +369,7 @@ async def get_document(doc_id: uuid.UUID, person: ActivePerson, db: DB, settings
         async with BridgeClient(settings) as bridge:
             available = await match_document(db, bridge, doc)
         await db.commit()
-    return await _detail(db, doc, money_available=available)
+    return await _detail(db, doc, money_available=available, person=person)
 
 
 @router.post("/documents/{doc_id}/match")
@@ -366,7 +382,7 @@ async def rematch_document(doc_id: uuid.UUID, person: ActivePerson, db: DB, sett
     async with BridgeClient(settings) as bridge:
         available = await match_document(db, bridge, doc)
     await db.commit()
-    return await _detail(db, doc, money_available=available)
+    return await _detail(db, doc, money_available=available, person=person)
 
 
 class ConfirmArticleIn(BaseModel):
@@ -439,7 +455,7 @@ async def confirm_line_article(
         details={"line_no": line_no, "article_id": str(article.id), "learn": body.learn},
     )
     await db.commit()
-    return await _detail(db, doc)
+    return await _detail(db, doc, person=person)
 
 
 @router.post("/documents/{doc_id}/lines/{line_no}/non-stock")
@@ -467,7 +483,7 @@ async def line_non_stock(
         details={"line_no": line_no},
     )
     await db.commit()
-    return await _detail(db, doc)
+    return await _detail(db, doc, person=person)
 
 
 PICKER_LIMIT = 30
@@ -673,3 +689,266 @@ async def message_documents(
             )
         )
     return out
+
+
+# ----- D32 (#239) „Založiť artikel v Money“ from the W6h / M13b line drawer -----
+
+
+class NewArticleOut(BaseModel):
+    status: Literal["done", "partial"]
+    main: dict[str, Any] | None  # the created (or earlier created) main card
+    variant: dict[str, Any] | None
+    error: str | None  # partial: why the variant was not created
+    article_id: str | None  # the card now picked for the line (the variant when both)
+    document: DocumentDetail
+
+
+class CatalogProposal(BaseModel):
+    katalog: str | None  # None = no size in the text or 20 numbers taken — the user types it
+    size: int | None
+    main_catalog: str | None
+
+
+async def _article_guard(db: DB, settings: Settings, person: Any) -> None:
+    if not settings.feature_money:
+        raise fail(404, "money_disabled")
+    if person.role not in ARTICLE_ROLES:
+        raise fail(403, "role_not_allowed")
+    if not (await org_settings.load(db)).create_article:
+        raise fail(403, "create_article_disabled")
+
+
+async def _locked_doc(db: DB, doc_id: uuid.UUID) -> SupplierDocument:
+    """Row lock: two clicks of the same person (or two people) serialise here; the second sees `in_progress` or a new
+    version."""
+    doc = await db.scalar(select(SupplierDocument).where(SupplierDocument.id == doc_id).with_for_update())
+    if doc is None:
+        raise fail(404, "document_not_found")
+    return doc
+
+
+async def _the_line(db: DB, doc: SupplierDocument, line_no: int) -> DocumentLine:
+    line = await db.scalar(
+        select(DocumentLine).where(DocumentLine.document_id == doc.id, DocumentLine.line_no == line_no)
+    )
+    if line is None or line.is_fee:
+        raise fail(404, "line_not_found")
+    return line
+
+
+def _same_request(state: dict[str, Any], body: new_article.NewArticleIn) -> bool:
+    req = state.get("request") or {}
+    return bool(req.get("mode") == body.mode and req.get("catalogs") == body.catalogs())
+
+
+async def _out_new(
+    db: DB, doc: SupplierDocument, state: dict[str, Any], person: Any, *, status: Literal["done", "partial"]
+) -> NewArticleOut:
+    picked = state.get("variant") or (state.get("main") if status == "done" else None)
+    return NewArticleOut(
+        status=status,
+        main=state.get("main"),
+        variant=state.get("variant"),
+        error=state.get("error") if status == "partial" else None,
+        article_id=picked["id"] if picked else None,
+        document=await _detail(db, doc, person=person),
+    )
+
+
+@router.post("/documents/{doc_id}/lines/{line_no}/new-article")
+async def create_line_article(
+    doc_id: uuid.UUID,
+    line_no: int,
+    body: new_article.NewArticleIn,
+    ctx: Auth,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+) -> NewArticleOut:
+    """D32 / MONEY_API 5.5.8b: the user's click is the approval. Catalogs are checked here and again in the bridge right
+    before the mutation; nothing is retried automatically. The new card (the variant when both) is picked for the line
+    with a learned supplier code."""
+    await _article_guard(db, settings, person)
+    doc = await _locked_doc(db, doc_id)
+    if doc.status not in MATCHABLE:
+        raise fail(409, "document_not_reviewable")
+    line = await _the_line(db, doc, line_no)
+    now = datetime.now(UTC)
+    state = new_article.state_of(line.raw)
+    if new_article.in_progress(state, now):
+        raise fail(409, "in_progress")
+    if state.get("status") == "done" and _same_request(state, body):
+        return await _out_new(db, doc, state, person, status="done")  # a repeat after success: the stored result
+    if doc.version != body.version:
+        raise fail(409, "version_conflict")
+    main_done = state.get("main") if state.get("status") == "partial" and body.mode == "main_and_variant" else None
+    if state.get("status") not in ("partial", "failed"):
+        state = {"smids": state.get("smids") or {}}  # a fresh request keeps only the SMIDs of earlier catalogs
+
+    # what to create, in order: (role, card, parent) — parent "main" = the main card created in this request
+    plan: list[tuple[str, new_article.CardIn, uuid.UUID | str | None]] = []
+    if body.mode == "main" and body.main:
+        plan.append(("main", body.main, None))
+    elif body.mode == "variant" and body.variant:
+        plan.append(("variant", body.variant, body.parent_id))
+    elif body.main and body.variant:
+        if main_done is None:
+            plan.append(("main", body.main, None))
+        plan.append(("variant", body.variant, uuid.UUID(main_done["id"]) if main_done else "main"))
+
+    try:
+        async with BridgeClient(settings) as bridge:
+            for _, c, _parent in plan:  # re-check every catalog (a known SMID = maybe ours: the bridge decides)
+                if c.katalog in (state.get("smids") or {}):
+                    continue
+                free = await bridge.catalog_free(c.katalog)
+                if not free.free:
+                    raise fail(409, "catalog_exists", katalog=c.katalog)
+            if body.mode == "variant" and body.parent_id is not None:
+                parent_card = await bridge.article(body.parent_id)
+                if parent_card is None or parent_card.inactive:
+                    raise fail(422, "parent_not_found")
+                if parent_card.parent_id is not None:
+                    raise fail(422, "parent_not_main")  # a variant of a variant does not exist in Money
+    except BridgeUnavailable as exc:
+        raise fail(503, exc.code) from None
+
+    for _, c, _ in plan:
+        new_article.smid_for(state, c.katalog)
+    state.update(
+        status="in_progress",
+        started_at=now.isoformat(),
+        request={"mode": body.mode, "catalogs": body.catalogs()},
+        main=main_done,
+        variant=None,
+        error=None,
+    )
+    line.raw = {**(line.raw or {}), new_article.STATE: copy.deepcopy(state)}  # never share `state`: JSON change
+    doc.version += 1
+    await db.commit()  # the SMIDs are stored before the bridge is called
+
+    async def save(status: str, error: str | None = None) -> None:
+        state.update(status=status, error=error)
+        line.raw = {**(line.raw or {}), new_article.STATE: copy.deepcopy(state)}
+
+    created_main: dict[str, Any] | None = main_done
+    try:
+        async with BridgeClient(settings) as bridge:
+            for role, c, parent in plan:
+                parent_id = (
+                    uuid.UUID(created_main["id"])
+                    if parent == "main" and created_main
+                    else parent
+                    if isinstance(parent, uuid.UUID)
+                    else None
+                )
+                p = new_article.payload(c.katalog, c.nazev, state["smids"][c.katalog], parent_id)
+                try:
+                    token = sign_approval(
+                        settings,
+                        action="article.create",
+                        company_id=doc.supplier_money_id or new_article.NIL,
+                        person_id=person.id,
+                        body=new_article.body_bytes(p),
+                    )
+                except ApprovalKeyMissing:
+                    raise BridgeUnavailable("approval_key_missing") from None
+                got = new_article.card(await bridge.create_article(p, token))
+                state[role] = got
+                if role == "main":
+                    created_main = got
+                audit(
+                    db,
+                    "purchasing.article_created",
+                    account_id=ctx.account.id,
+                    person_id=person.id,
+                    object_type="document",
+                    object_id=str(doc.id),
+                    details={
+                        "line_no": line_no,
+                        "card": role,
+                        "katalog": got["katalog"],
+                        "money_id": got["id"],
+                        "payload_sha256": new_article.payload_hash(p),
+                    },
+                )
+                await save("in_progress")
+                await db.commit()  # each created card is kept, whatever happens next
+    except (BridgeUnavailable, BridgeRefused) as exc:
+        code = exc.code
+        if body.mode == "main_and_variant" and created_main is not None:
+            await save("partial", code)
+            doc.version += 1
+            await db.commit()
+            return await _out_new(db, doc, state, person, status="partial")
+        await save("failed", code)
+        await db.commit()
+        if isinstance(exc, BridgeRefused):
+            raise fail(exc.status if exc.status in (403, 409, 422) else 502, code, **_katalog(exc)) from None
+        raise fail(503, code) from None
+
+    picked = state.get("variant") or state.get("main")
+    assert picked is not None
+    await confirm_article(db, doc, line, new_article.as_article(picked), Decimal("1"), person.id, learn=True)
+    await save("done")
+    await db.commit()
+    return await _out_new(db, doc, state, person, status="done")
+
+
+def _katalog(exc: BridgeRefused) -> dict[str, Any]:
+    k = exc.detail.get("katalog")
+    return {"katalog": str(k)} if k else {}
+
+
+@router.get("/articles/catalog-free")
+async def article_catalog_free(
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+    katalog: Annotated[str, Query(min_length=1, max_length=50)],
+) -> dict[str, Any]:
+    """Live check while typing (debounced in the drawer): taken → „Tento katalóg už v Money existuje – zadajte iný.“"""
+    await _article_guard(db, settings, person)
+    term = katalog.strip()
+    if not term or set(term) & set("~#|()"):
+        raise fail(422, "unsafe_query")
+    try:
+        async with BridgeClient(settings) as bridge:
+            free = await bridge.catalog_free(term)
+    except BridgeUnavailable as exc:
+        raise fail(503, exc.code) from None
+    return free.model_dump(mode="json")
+
+
+@router.get("/catalog-proposal")
+async def catalog_proposal(
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+    parent_id: Annotated[uuid.UUID | None, Query()] = None,
+    main_catalog: Annotated[str | None, Query(max_length=50)] = None,
+    size: Annotated[str | None, Query(max_length=200)] = None,
+) -> CatalogProposal:
+    """D32: variant catalog = main catalog + 5-digit size (M10 → `00010`); taken → the next free number, at most 20
+    tries. Only a proposal — the user can edit it. The main catalog comes from `parent_id` (an existing card) or
+    `main_catalog` (a new main card typed in the drawer)."""
+    await _article_guard(db, settings, person)
+    n = new_article.size_of(size)
+    base = (main_catalog or "").strip() or None
+    try:
+        async with BridgeClient(settings) as bridge:
+            if parent_id is not None:
+                parent = await bridge.article(parent_id)
+                if parent is None:
+                    raise fail(422, "parent_not_found")
+                base = parent.catalog
+            if base and set(base) & set("~#|()"):
+                raise fail(422, "unsafe_query")
+            if not base or n is None:
+                return CatalogProposal(katalog=None, size=n, main_catalog=base)
+            for candidate in new_article.proposals(base, n):
+                if len(candidate) <= 50 and (await bridge.catalog_free(candidate)).free:
+                    return CatalogProposal(katalog=candidate, size=n, main_catalog=base)
+    except BridgeUnavailable as exc:
+        raise fail(503, exc.code) from None
+    return CatalogProposal(katalog=None, size=n, main_catalog=base)
