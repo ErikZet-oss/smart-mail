@@ -1,4 +1,12 @@
+import type { Locator } from '@playwright/test';
+
 import { expect, ME, ME_PICKER, mockApi, shot, test } from './fixtures';
+
+async function box(l: Locator) {
+  const b = await l.boundingBox();
+  if (!b) throw new Error('element has no box');
+  return b;
+}
 
 // Phase 4b — W6h Dodací list prijatý – karta (Figma 43:38227, drawer 44:37979, M13b 85:3565 / 85:3615).
 // Read-only: „Vytvoriť v Money“ stays disabled until 4c. All companies, articles and prices are fictional.
@@ -118,7 +126,13 @@ test('4b W6h: Money card, matching status, line drawer with candidate → matche
         ),
       };
     },
-    'GET /api/purchasing/articles': { body: [] },
+    'GET /api/purchasing/articles': {
+      body: Array.from({ length: 14 }, (_, i) => ({
+        id: `v-${i}`,
+        ...art(`tyč záv. M${i + 2}x2000 4.8 ZN`, `9990001000${String(i + 2).padStart(2, '0')}`, null),
+        inactive: false,
+      })),
+    },
   });
   await page.goto('/docs/delivery-notes/d-1');
   await expect(page.getByTestId('screen-w6h')).toBeVisible();
@@ -154,6 +168,17 @@ test('4b W6h: Money card, matching status, line drawer with candidate → matche
   const drawer = page.getByRole('dialog', { name: 'Riadok 3' });
   await expect(drawer).toContainText('FX-7380-0616-A2');
   await expect(drawer.getByRole('radio', { name: /skr\. ISO 7380 M6 x16 A2 TX/ })).toBeChecked();
+  await expect(drawer.getByText('Zapamätať kód dodávateľa')).toBeVisible();
+  // pilot 2026-11-20: search above the results, one compact row per article, the list scrolls inside the drawer
+  await drawer.getByTestId('w6h-article-search').fill('9990001');
+  const list = drawer.getByTestId('w6h-article-list');
+  await expect(list).toContainText('tyč záv. M15x2000 4.8 ZN');
+  const searchBox = await box(drawer.getByTestId('w6h-article-search'));
+  const listBox = await box(list);
+  expect(searchBox.y).toBeLessThan(listBox.y);
+  const rowBox = await box(list.getByRole('radio', { name: /M4x2000/ }).locator('xpath=..'));
+  expect(rowBox.height).toBeLessThanOrEqual(44);
+  expect(listBox.height).toBeLessThanOrEqual(420);
   await expect(drawer.getByText('Zapamätať kód dodávateľa')).toBeVisible();
   await shot(page, `phase4b-W6h-drawer-${info.project.name}`);
   await drawer.getByTestId('w6h-apply').click();
