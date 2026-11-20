@@ -62,6 +62,9 @@ class MatchBridge:
     async def article(self, article_id: uuid.UUID) -> Article | None:
         return Article(id=article_id, code="X", catalog=None, name="Fiktívny artikel", ean=None, unit="ks")
 
+    async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]:
+        return {}
+
 
 async def _doc(db: AsyncSession, codes: list[str], *, decided: dict[int, str] | None = None) -> SupplierDocument:
     doc = SupplierDocument(
@@ -220,6 +223,11 @@ async def test_228_first_full_sync_rematches_drafts_but_never_a_persons_choice(
     monkeypatch.setattr(FakeBridge, "lookup_supplier_code", lookup, raising=False)
     monkeypatch.setattr(FakeBridge, "article", article, raising=False)
     monkeypatch.setattr(FakeBridge, "search_articles", search_articles, raising=False)
+
+    async def article_variants(self: Any, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]:
+        return {}
+
+    monkeypatch.setattr(FakeBridge, "article_variants", article_variants, raising=False)
     await run_money_sync(app.state.sessionmaker, on, app.state.redis, client=bridge)  # type: ignore[arg-type]
     async with app.state.sessionmaker() as db:
         lines = list(

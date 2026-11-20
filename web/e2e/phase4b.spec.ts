@@ -230,3 +230,91 @@ test('4b W6h: Money offline banner', async ({ page }) => {
   await page.goto('/docs/delivery-notes/d-1');
   await expect(page.getByText('Money je nedostupné – položky sa nespárovali.', { exact: false })).toBeVisible();
 });
+
+// #233 — main card with variants (Figma ArticlePickRow 249:3369, drawer 250:90910). Fictional catalogs.
+const variant = (size: number) => ({
+  article_id: `v-${size}`,
+  code: null,
+  catalog: `999000100${String(size).padStart(2, '0')}`,
+  name: `tyč záv. M${size}×2000 4.8 ZN`,
+  unit: 'ks',
+  kind: 'variant',
+});
+const ON_MAIN = line(10, {
+  supplier_code: 'FX-976-10-2000',
+  name: 'Tyč závitová 4.8 ZN 2m M10',
+  line_status: 'needs_review',
+  article_id: 'a-main',
+  match_method: 'supplier_code',
+  warehouse_id: null,
+  article: { ...art('Tyč závitová DIN 976 4.8 ZN 2m', '9990001', null), kind: 'main' },
+  candidates: [6, 8, 10, 12, 24].map(variant),
+});
+
+test('#233 W6h: main card is never selectable, its variants are italic and pickable (DL-B11) @mobile', async ({
+  page,
+}, info) => {
+  const mobile = info.project.name !== 'desktop';
+  let sent: Record<string, unknown> | null = null;
+  const withVariant = line(2, { article: { ...art('tyč záv. M8×2000 4.8 ZN', '99900010008', null), kind: 'variant' } });
+  const before = {
+    ...detail([line(1, {}), withVariant, ON_MAIN]),
+    checks: [{ id: 'DL-B11', level: 'blocking', params: { n: 10 } }],
+  };
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': { body: before },
+    'POST /api/purchasing/documents/d-1/lines/10/article': (body) => {
+      sent = body as Record<string, unknown>;
+      return {
+        body: detail(
+          [
+            line(1, {}),
+            withVariant,
+            {
+              ...ON_MAIN,
+              line_status: 'matched',
+              match_method: 'user',
+              candidates: [],
+              article: { ...art('tyč záv. M10×2000 4.8 ZN', '99900010010', null), kind: 'variant' },
+            },
+          ],
+          'needs_review',
+          4,
+        ),
+      };
+    },
+  });
+  await page.goto('/docs/delivery-notes/d-1');
+  if (mobile) {
+    await expect(page.getByTestId('m13b-line-2').locator('.italic')).toHaveText('tyč záv. M8×2000 4.8 ZN');
+    await expect(page.getByTestId('m13b-summary')).toContainText('1 nespárovaných');
+    await page.getByTestId('m13b-line-10').click();
+  } else {
+    await expect(page.getByTestId('w6h-line-2').locator('td.italic')).toHaveText('tyč záv. M8×2000 4.8 ZN');
+    await page.getByTestId('w6h-checks-toggle').click();
+    await expect(page.getByTestId('check-DL-B11')).toContainText(
+      'Riadok 10 je na hlavnej karte, ktorá má varianty – vyberte variant.',
+    );
+    await page.getByTestId('w6h-checks-toggle').click();
+    await page.getByTestId('w6h-line-10').dblclick();
+  }
+  const drawer = page.getByRole('dialog', { name: 'Riadok 10' });
+  const main = drawer.getByTestId('w6h-pick-main');
+  await expect(main).toContainText('hlavná karta');
+  await expect(main.getByRole('radio')).toBeDisabled();
+  await expect(drawer.getByTestId('w6h-main-card-hint')).toHaveText(
+    'Na hlavnú kartu s variantmi sa tovar neprijíma – vyberte variant.',
+  );
+  const variants = drawer.getByTestId('w6h-pick-variant');
+  await expect(variants).toHaveCount(5);
+  await expect(variants.first().locator('.italic')).toHaveText('tyč záv. M6×2000 4.8 ZN');
+  const mainBox = await box(main.locator('.type-small'));
+  const variantBox = await box(variants.first().locator('.italic'));
+  expect(variantBox.x).toBeGreaterThan(mainBox.x); // indented under its main card
+  await drawer.getByRole('radio', { name: /M10×2000/ }).check();
+  await shot(page, `issue233-W6h-variants-${info.project.name}`);
+  await drawer.getByTestId('w6h-apply').click();
+  await expect(drawer).toHaveCount(0);
+  expect(sent).toMatchObject({ article_id: 'v-10' });
+});

@@ -11,18 +11,20 @@ import {
   moneyNum,
   nonStockLine,
   searchArticles,
+  type ArticleKind,
   type Candidate,
   type DocLine,
   type DocumentDetail,
 } from './purchasingApi';
 
-type Pick = { article_id: string; name: string; catalog: string | null; unit: string | null };
+type Pick = { article_id: string; name: string; catalog: string | null; unit: string | null; kind: ArticleKind };
 
 const toPick = (c: Candidate): Pick => ({
   article_id: c.article_id,
   name: c.name,
   catalog: c.catalog ?? c.code,
   unit: c.unit,
+  kind: c.kind ?? 'article',
 });
 
 /**
@@ -53,9 +55,13 @@ export function LineDrawer({
           name: line.article.name,
           catalog: line.article.catalog ?? line.article.code,
           unit: line.article.unit,
+          kind: line.article.kind ?? 'article',
         }
       : null;
-  const [pick, setPick] = useState<Pick | null>(current ?? (line.candidates[0] ? toPick(line.candidates[0]) : null));
+  // #233: a main card with variants is never pre-selected (DL-B11) — the person picks one of its variants
+  const [pick, setPick] = useState<Pick | null>(
+    current && current.kind !== 'main' ? current : line.candidates[0] ? toPick(line.candidates[0]) : null,
+  );
   const [q, setQ] = useState('');
   const [factor, setFactor] = useState(line.unit_factor ? trimZeros(line.unit_factor) : '1');
   const [warehouse, setWarehouse] = useState<string>(line.warehouse_id ?? '');
@@ -100,8 +106,20 @@ export function LineDrawer({
     ...line.candidates.map(toPick).filter((c) => c.article_id !== current?.article_id),
     ...(found.data ?? [])
       .filter((a) => !a.inactive)
-      .map((a) => ({ article_id: a.id, name: a.name, catalog: a.catalog ?? a.code, unit: a.unit })),
+      .map((a) => ({
+        article_id: a.id,
+        name: a.name,
+        catalog: a.catalog ?? a.code,
+        unit: a.unit,
+        kind: a.kind ?? 'article',
+      })),
   ].filter((o, i, all) => all.findIndex((x) => x.article_id === o.article_id) === i);
+  const hasMain = options.some((o) => o.kind === 'main');
+  // a main card: list its variants (the picker returns the main card with its variants for its catalog)
+  const openMain = (o: Pick) => {
+    const term = o.catalog ?? o.name;
+    if (term && term !== q) setQ(term);
+  };
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-bg-overlay" onClick={onClose}>
@@ -163,23 +181,33 @@ export function LineDrawer({
               >
                 {options.map((o) => {
                   const on = pick?.article_id === o.article_id;
+                  const main = o.kind === 'main';
                   return (
                     <label
                       key={o.article_id}
-                      className={`flex cursor-pointer items-center gap-3 border-b border-border-default px-3 py-2 last:border-b-0 ${
-                        on ? 'bg-brand-primary-50' : 'hover:bg-bg-subtle'
-                      }`}
+                      data-testid={`w6h-pick-${o.kind}`}
+                      onClick={main ? () => openMain(o) : undefined}
+                      className={`flex items-center gap-3 border-b border-border-default py-2 pr-3 last:border-b-0 ${
+                        o.kind === 'variant' ? 'pl-8' : 'pl-3'
+                      } ${main ? 'cursor-pointer bg-bg-subtle' : on ? 'cursor-pointer bg-brand-primary-50' : 'cursor-pointer hover:bg-bg-subtle'}`}
                     >
                       <input
                         type="radio"
                         name="article"
-                        checked={on}
+                        checked={on && !main}
+                        disabled={main}
                         onChange={() => setPick(o)}
-                        className="shrink-0 accent-brand-primary-600"
+                        className="shrink-0 accent-brand-primary-600 disabled:opacity-50"
                       />
                       <span className="type-small min-w-0 flex-1 truncate text-text-primary" title={o.name}>
-                        {o.name}
+                        {/* the `type-small` font shorthand would reset `italic`, so it sits on the inner element */}
+                        <span className={o.kind === 'variant' ? 'italic' : undefined}>{o.name}</span>
                       </span>
+                      {main ? (
+                        <span className="type-caption shrink-0 rounded-full bg-bg-muted px-2 py-0.5 text-text-secondary">
+                          {t('w6h.drawer.mainCard')}
+                        </span>
+                      ) : null}
                       <span className="type-caption shrink-0 tabular-nums text-text-secondary">{o.catalog ?? ''}</span>
                       {o.unit ? (
                         <span className="type-caption w-6 shrink-0 text-right text-text-tertiary">{o.unit}</span>
@@ -188,6 +216,11 @@ export function LineDrawer({
                   );
                 })}
               </div>
+            ) : null}
+            {hasMain ? (
+              <p className="type-caption text-text-secondary" data-testid="w6h-main-card-hint">
+                {t('w6h.drawer.mainCardHint')}
+              </p>
             ) : null}
           </fieldset>
           <div className="grid grid-cols-2 gap-3">
@@ -257,7 +290,11 @@ export function LineDrawer({
           <Button variant="secondary" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => save.mutate()} disabled={!pick || !factorOk || save.isPending} data-testid="w6h-apply">
+          <Button
+            onClick={() => save.mutate()}
+            disabled={!pick || pick.kind === 'main' || !factorOk || save.isPending}
+            data-testid="w6h-apply"
+          >
             {t('w6h.drawer.apply')}
           </Button>
         </footer>

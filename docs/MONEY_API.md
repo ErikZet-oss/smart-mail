@@ -232,6 +232,13 @@ Probe on PROD (2026-11-20, 2 main cards, 42 variants; examples below are fiction
   `money_probe.py --article-write-test` → `probe_output/article_write.md` before the feature is planned)
 - `Group_ID` / `Kategorie` are usually the same as on the main card, but not always; `HlavniJednotka_ID` is a unit
   row of the article itself (never shared)
+**Built in #233 (read only):** `Articles`/`Article` read `NadrazenyArtikl_ID` (`Article.parent_id`). Bridge
+`GET /articles/variants?parent_id=…` (≤ 10 main cards) → `{parent_id: [Article]}` in one GraphQL call
+`(NadrazenyArtikl_ID~eq~A)|(NadrazenyArtikl_ID~eq~B)`, `Count` ≤ 300, deleted rows dropped, hidden → `inactive`.
+The W6h picker marks every row `kind` = `article` | `main` (has variants) | `variant` and lists the variants right
+under their main card. **DL-B11** (DOCUMENTS_SPEC §2): the matching cascade never ends on a main card with variants
+(the line becomes `needs_review`, its candidates are the variants, the method stays visible) and
+`POST …/lines/{n}/article` refuses one with 422 `main_card_has_variants`.
 
 ### 5.5.9 Branch values on every write (PRODUCT_SPEC §2.0, SETTINGS_SPEC 11e)
 Resolve the document's branch first, then: header `Stredisko_ID` = branch centre; every item `Stredisko_ID` = branch

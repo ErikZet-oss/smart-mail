@@ -2232,6 +2232,7 @@
       "matched": "Spárované",
       "check": "Spárované – skontrolujte",
       "unmatched": "Nespárované",
+      "needs_review": "Hlavná karta – vyberte variant",
       "non_stock": "Neskladová položka"
     },
     "f": {
@@ -2297,12 +2298,15 @@
       "branchWarehouse": "Sklad pobočky",
       "learn": "Zapamätať kód dodávateľa",
       "learnHint": "{{code}} → vybraný artikel pre {{supplier}}. Zápis do karty artikla v Money robí nákup (export v Nastaveniach).",
-      "apply": "Použiť"
+      "apply": "Použiť",
+      "mainCard": "hlavná karta",
+      "mainCardHint": "Na hlavnú kartu s variantmi sa tovar neprijíma – vyberte variant."
     },
     "rules": {
       "DL-B2": "Dodávateľ nie je v Money alebo nesedí IČO.",
       "DL-B3": "Doklad dodávateľa {{number}} už existuje.",
       "DL-B4": "{{n}} riadkov nie je spárovaných.",
+      "DL-B11": "Riadok {{n}} je na hlavnej karte, ktorá má varianty – vyberte variant.",
       "DL-B7": "Súčet riadkov nesedí so súčtom dokladu (sadzba {{rate}} %).",
       "DL-B8": "Množstvo musí byť väčšie ako 0 – vratky len v Money.",
       "DL-W1": "Riadok {{line}}: cena o {{x}} % iná ako minule ({{last}}).",
@@ -2317,7 +2321,8 @@
       "article_not_found": "Artikel v Money nie je (alebo je neaktívny).",
       "warehouse_not_found": "Sklad v Money nie je.",
       "search": "Hľadanie v Money sa nepodarilo.",
-      "money_unavailable": "Money je nedostupné."
+      "money_unavailable": "Money je nedostupné.",
+      "main_card_has_variants": "Na hlavnú kartu s variantmi sa tovar neprijíma – vyberte variant."
     }
   },
   "goods": {

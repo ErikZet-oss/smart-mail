@@ -112,7 +112,7 @@ class BridgeClient:
         self, path: str, params: dict[str, Any] | None = None, *, signed: bool = True, allow_404: bool = False
     ) -> Any:
         _circuit.check()
-        query = urlencode({k: v for k, v in (params or {}).items() if v is not None})
+        query = urlencode({k: v for k, v in (params or {}).items() if v is not None}, doseq=True)
         path_qs = f"{path}?{query}" if query else path
         headers: dict[str, str] = {}
         if signed:
@@ -206,6 +206,16 @@ class BridgeClient:
     ) -> list[Article]:
         """A value with `~ # | ( )` answers 422 in the bridge → `bridge_422` (never a broken filter)."""
         return await self._list(Article, "/articles/search", {"code": code, "ean": ean, "q": q})
+
+    async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]:
+        """#233 variants of up to 10 main cards (`NadrazenyArtikl_ID`) in one bridge call."""
+        if not parent_ids:
+            return {}
+        data = await self._get("/articles/variants", {"parent_id": [str(p) for p in parent_ids[:10]]})
+        try:
+            return {uuid.UUID(k): [Article.model_validate(a) for a in v] for k, v in (data or {}).items()}
+        except (ValidationError, ValueError, TypeError, AttributeError) as exc:
+            raise BridgeUnavailable("bridge_contract") from exc
 
     async def article(self, article_id: uuid.UUID) -> Article | None:
         data = await self._get(f"/articles/{article_id}", allow_404=True)

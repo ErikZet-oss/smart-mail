@@ -268,7 +268,7 @@ export function ScreenW6h() {
               <div className="fixed inset-x-0 bottom-0 z-20 flex flex-col gap-2 border-t border-border-default bg-bg-canvas p-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
                 <span className="type-caption text-danger-600" data-testid="m13b-summary">
                   {t('w6h.mobileSummary', {
-                    blocking: goods.filter((l) => l.line_status === 'unmatched').length,
+                    blocking: goods.filter((l) => needsPerson(l)).length,
                     warnings: checks.filter((c) => c.level === 'warning').length,
                   })}
                 </span>
@@ -439,10 +439,21 @@ function HeaderGrid({ d }: { d: DocumentDetail }) {
   );
 }
 
+/** A line a person has to resolve: unmatched, or (#233 DL-B11) matched to a main card that has variants. */
+function needsPerson(l: DocLine): boolean {
+  return l.line_status === 'unmatched' || l.line_status === 'needs_review';
+}
+
 function StatusIcon({ line }: { line: DocLine }) {
   const { t } = useTranslation();
-  if (line.line_status === 'unmatched')
-    return <XCircle size={16} className="text-danger-600" aria-label={t('w6h.lineStatus.unmatched')} />;
+  if (needsPerson(line))
+    return (
+      <XCircle
+        size={16}
+        className="text-danger-600"
+        aria-label={t(line.line_status === 'needs_review' ? 'w6h.lineStatus.needs_review' : 'w6h.lineStatus.unmatched')}
+      />
+    );
   if (line.line_status === 'non_stock')
     return (
       <span className="type-caption font-semibold text-text-secondary" aria-label={t('w6h.lineStatus.non_stock')}>
@@ -506,12 +517,11 @@ function ItemsGrid({
         </thead>
         <tbody>
           {lines.map((l) => {
-            const tone =
-              l.line_status === 'unmatched'
-                ? 'bg-danger-50 text-danger-600'
-                : l.match_method === 'learned' || l.match_method === 'ean' || l.match_method === 'our_code'
-                  ? 'bg-warning-50'
-                  : '';
+            const tone = needsPerson(l)
+              ? 'bg-danger-50 text-danger-600'
+              : l.match_method === 'learned' || l.match_method === 'ean' || l.match_method === 'our_code'
+                ? 'bg-warning-50'
+                : '';
             return (
               <tr
                 key={l.line_no}
@@ -531,7 +541,9 @@ function ItemsGrid({
                   <StatusIcon line={l} />
                 </td>
                 <td className="px-2 text-right tabular-nums">{l.line_no}</td>
-                <td className="max-w-[220px] truncate px-2">{l.article?.name ?? `${l.name}`}</td>
+                <td className={`max-w-[220px] truncate px-2 ${l.article?.kind === 'variant' ? 'italic' : ''}`}>
+                  {l.article?.name ?? `${l.name}`}
+                </td>
                 <td className="px-2">{l.article?.catalog ?? l.article?.code ?? '—'}</td>
                 <td className="px-2">{l.supplier_code ?? '—'}</td>
                 <td className="px-2">{l.warehouse_code ?? '—'}</td>
@@ -675,7 +687,7 @@ function MobileCard({ d, goods, onOpen }: { d: DocumentDetail; goods: DocLine[];
               onClick={() => onOpen(l.line_no)}
               data-testid={`m13b-line-${l.line_no}`}
               className={`type-small flex w-full flex-col gap-1 rounded-md border p-3 text-left ${
-                l.line_status === 'unmatched'
+                needsPerson(l)
                   ? 'border-danger-200 bg-danger-50'
                   : l.match_method === 'learned' || l.match_method === 'ean' || l.match_method === 'our_code'
                     ? 'border-warning-200 bg-warning-50'
@@ -684,7 +696,8 @@ function MobileCard({ d, goods, onOpen }: { d: DocumentDetail; goods: DocLine[];
             >
               <span className="type-label flex items-center gap-2">
                 <StatusIcon line={l} />
-                {l.line_no}. {l.article?.name ?? l.name}
+                {l.line_no}.{' '}
+                <span className={l.article?.kind === 'variant' ? 'italic' : ''}>{l.article?.name ?? l.name}</span>
               </span>
               <span className="text-text-secondary">
                 {L('catalogShort')} {l.article?.catalog ?? l.article?.code ?? '—'} · {L('supplierCodeShort')}{' '}

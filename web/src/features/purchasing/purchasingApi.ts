@@ -45,12 +45,15 @@ export const uploadDocument = (file: File) => {
 
 /** Phase 4b — W6h detail with item matching (read-only; „Vytvoriť v Money“ comes with 4c). */
 export type Check = { id: string; level: 'blocking' | 'warning' | 'info'; params: Record<string, unknown> };
+/** #233: `main` = a main card with variants (never receivable), `variant` = shown in italics under its main card. */
+export type ArticleKind = 'article' | 'main' | 'variant';
 export type ArticleSnap = {
   code: string | null;
   catalog: string | null;
   name: string;
   ean: string | null;
   unit: string | null;
+  kind?: ArticleKind;
 };
 export type Candidate = {
   article_id: string;
@@ -58,6 +61,7 @@ export type Candidate = {
   catalog: string | null;
   name: string;
   unit: string | null;
+  kind?: ArticleKind;
 };
 export type DocLine = {
   line_no: number;
@@ -70,7 +74,7 @@ export type DocLine = {
   vat_rate: string | null;
   line_total: string | null;
   is_fee: boolean;
-  line_status: 'matched' | 'unmatched' | 'non_stock';
+  line_status: 'matched' | 'unmatched' | 'non_stock' | 'needs_review';
   article_id: string | null;
   match_method: string | null;
   unit_factor: string | null;

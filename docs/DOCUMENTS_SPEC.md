@@ -184,6 +184,7 @@ DL-B6 blocks with "Pobočka nemá vzorový dodací list – vytvorte jeden v Mon
 | DL-B8 | All quantities > 0 (returns only in Money, D15) | "Záporné množstvo – vratku urobte v Money." |
 | DL-B9 | Item `Stredisko_ID` = header `Stredisko_ID` | (internal, should never fire) |
 | DL-B10 | Approval token valid, person has role warehouse/accounting, payload hash unchanged | "Návrh sa medzičasom zmenil – skontrolujte ho znova." |
+| DL-B11 | No goods line on a main card that has variants (`Article.NadrazenyArtikl_ID`, MONEY_API §5.5.8a, #233) — the cascade stops at `needs_review` with the variants as candidates; confirming a main card answers 422 `main_card_has_variants`; part of the line checks that approval re-runs | "Riadok {n} je na hlavnej karte, ktorá má varianty – vyberte variant." |
 | DL-W1 | Unit price differs from `ArticleSupplier.PosledniCena` by more than the SETTINGS 14 threshold (10 %) | "Cena o {x} % vyššia ako minule." |
 | DL-W2 | Quantity differs from the open purchase order | "Objednané {a}, dodané {b}." |
 | DL-W3 | VAT mode differs from the document (reverse charge vs. domestic) | "Doklad je s prenesením DP, návrh nie." |

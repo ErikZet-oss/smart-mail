@@ -5,6 +5,7 @@ Assertions only use the response models and relations between endpoints, never m
 
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 from urllib.parse import urlencode
 
@@ -140,3 +141,19 @@ def test_contract_228_article_supplier_sync_and_lookup(contract_client: SignedCl
     for bad in ("09150|1", "a~b", "(x)", "a#b"):
         r = contract_client.get(f"/suppliers/{sup}/article-codes/lookup?{urlencode({'code': bad})}")
         assert r.status_code == 422  # never reaches a filter
+
+
+def test_contract_233_article_variants(contract_client: SignedClient) -> None:
+    from app.models import Article
+
+    variants = [
+        Article.model_validate(r) for r in contract_client.get("/articles/search?q=Vrut").json() if r.get("parent_id")
+    ]
+    if variants:
+        main = variants[0].parent_id
+        out = contract_client.get(f"/articles/variants?parent_id={main}").json()
+        rows = [Article.model_validate(r) for r in out[str(main)]]
+        assert rows and all(a.parent_id == main for a in rows)
+    eleven = "&".join(f"parent_id={uuid.uuid4()}" for _ in range(11))
+    assert contract_client.get(f"/articles/variants?{eleven}").status_code == 422  # at most 10 main cards
+    assert contract_client.get("/articles/variants").status_code == 422

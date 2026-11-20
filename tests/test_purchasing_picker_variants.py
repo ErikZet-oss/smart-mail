@@ -22,13 +22,21 @@ from tests.test_purchasing_4a import SUPPLIER, money_on
 __all__ = ["money_on"]
 
 
-def _a(key: str, code: str, catalog: str, name: str) -> Article:
-    return Article(id=uuid.uuid5(uuid.NAMESPACE_URL, key), code=code, catalog=catalog, name=name, ean=None, unit="ks")
+def _a(key: str, code: str, catalog: str, name: str, parent: uuid.UUID | None = None) -> Article:
+    return Article(
+        id=uuid.uuid5(uuid.NAMESPACE_URL, key),
+        code=code,
+        catalog=catalog,
+        name=name,
+        ean=None,
+        unit="ks",
+        parent_id=parent,
+    )
 
 
 MAIN = _a("main", "TZ-MAIN", "9990001", "Tyč závitová DIN 976 4.8 ZN 2m")
-VAR_M12 = _a("m12", "TZ-M12", "99900010012", "tyč záv. M12x2000 4.8 ZN")
-VAR_M10 = _a("m10", "TZ-M10", "99900010010", "tyč záv. M10x2000 4.8 ZN")
+VAR_M12 = _a("m12", "TZ-M12", "99900010012", "tyč záv. M12x2000 4.8 ZN", MAIN.id)  # #233: variants of MAIN
+VAR_M10 = _a("m10", "TZ-M10", "99900010010", "tyč záv. M10x2000 4.8 ZN", MAIN.id)
 OTHER = _a("other", "X-1", "1234567", "Matica M10")
 ARTICLES = [MAIN, VAR_M12, VAR_M10, OTHER]
 
@@ -58,6 +66,9 @@ class PickerBridge:
     async def article(self, article_id: uuid.UUID) -> Article | None:
         return next((a for a in ARTICLES if a.id == article_id), None)
 
+    async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]:
+        return {p: [a for a in ARTICLES if a.parent_id == p] for p in parent_ids}
+
 
 @pytest.fixture(autouse=True)
 def _bridge(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -71,6 +82,7 @@ async def test_picker_exact_catalog_hit_still_lists_variants_exact_first(
     await _signed_in(client, db, mail_server, role=Role.warehouse)
     found = (await client.get("/api/purchasing/articles", params={"q": "9990001"})).json()
     assert [a["id"] for a in found] == [str(MAIN.id), str(VAR_M10.id), str(VAR_M12.id)]
+    assert [a["kind"] for a in found] == ["main", "variant", "variant"]  # #233
 
 
 async def test_picker_finds_article_by_cached_supplier_code(
@@ -96,3 +108,4 @@ async def test_picker_finds_article_by_cached_supplier_code(
     await db.commit()
     found = (await client.get("/api/purchasing/articles", params={"q": "09999.11.00"})).json()
     assert [a["id"] for a in found] == [str(VAR_M10.id)]
+    assert found[0]["kind"] == "variant"  # #233: a variant without its main card stays a variant

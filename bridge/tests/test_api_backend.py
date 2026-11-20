@@ -562,3 +562,42 @@ async def test_228_sync_all_article_suppliers_with_changefrom_and_lookup_one_cod
     assert body["variables"]["filter"] == f"Firma_ID~eq~{SUP}#DodavatelskyKod~eq~09150.14.01.120.000"
     assert [c.article_id for c in found] == [uuid.UUID(AS_ROW["Parent_ID"])]
     await backend.aclose()
+
+
+ART = {
+    "ID": "88888888-8888-4888-8888-888888888888",
+    "Deleted": False,
+    "Hidden": False,
+    "Kod": "V-1",
+    "Katalog": "99901000006",
+    "Nazev": "Vrut fiktívny 6 mm",
+    "CarovyKod": None,
+    "NadrazenyArtikl_ID": "99999999-9999-4999-8999-999999999999",
+    "HlavniJednotka": {"Kod": "ks"},
+    "SeznamJednotek": [],
+}
+
+
+@respx.mock
+async def test_233_variants_of_several_main_cards_in_one_or_call() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    gql = respx.post(f"{BASE}/graphql")
+    main_a = uuid.UUID(ART["NadrazenyArtikl_ID"])
+    main_b = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+    gql.side_effect = [
+        _gql(
+            {
+                "Articles": [
+                    ART,
+                    {**ART, "ID": str(uuid.uuid4()), "Hidden": True},
+                    {**ART, "ID": str(uuid.uuid4()), "Deleted": True},
+                ]
+            }
+        )
+    ]
+    found = await ApiBackend(settings()).article_variants([main_a, main_b])
+    body = json.loads(gql.calls[0].request.content)
+    assert body["variables"]["filter"] == f"(NadrazenyArtikl_ID~eq~{main_a})|(NadrazenyArtikl_ID~eq~{main_b})"
+    assert body["variables"]["count"] <= 300 and "NadrazenyArtikl_ID" in body["query"]
+    assert [a.inactive for a in found[main_a]] == [False, True] and found[main_b] == []  # deleted dropped
+    assert found[main_a][0].parent_id == main_a

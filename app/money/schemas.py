@@ -175,6 +175,7 @@ class Article(_Model):
     unit: str | None
     units: list[ArticleUnit] = []
     inactive: bool = False
+    parent_id: uuid.UUID | None = None  # NadrazenyArtikl_ID: a variant → its main card (#233)
 
 
 class SupplierCode(_Model):

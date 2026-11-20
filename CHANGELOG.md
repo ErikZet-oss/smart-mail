@@ -2,6 +2,25 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #233 W6h: hlavná karta a varianty (DL-B11)
+
+- **Most:** `Articles` / `Article` čítajú `NadrazenyArtikl_ID` (`Article.parent_id`). Nový endpoint `GET /articles/variants?parent_id=…` vráti varianty najviac 10 hlavných kariet jedným GraphQL volaním (OR filter cez filter builder, `Count` ≤ 300, zmazané preč, skryté ako `inactive`). **Most na Windows treba aktualizovať.**
+- **Výber artikla (W6h):**
+  - každý riadok má `kind` = `article` | `main` (hlavná karta s variantmi) | `variant`;
+  - varianty sú hneď pod svojou hlavnou kartou, zoradené podľa katalógu, bez duplicít;
+  - limit 30 riadkov nikdy neodreže varianty prvej hlavnej karty;
+  - variant bez svojej hlavnej karty ostáva variant.
+- **Šuplík riadku** (Figma `ArticlePickRow` 249:3369, 250:90910):
+  - hlavná karta má vypnutý výber, sivé pozadie a štítok „hlavná karta“;
+  - klik na hlavnú kartu načíta jej varianty;
+  - pod zoznamom je text „Na hlavnú kartu s variantmi sa tovar neprijíma – vyberte variant.“;
+  - varianty sú odsadené a kurzívou.
+- **Mriežka W6h a karty riadkov M13b:** názov variantu je kurzívou.
+- **DL-B11 (blocking):** „Riadok {n} je na hlavnej karte, ktorá má varianty – vyberte variant.“
+  - Párovanie (kód dodávateľa, naučený kód, EAN, katalóg) nikdy neskončí na hlavnej karte s variantmi. Riadok dostane stav `needs_review`, kandidáti sú jej varianty a metóda párovania ostáva viditeľná.
+  - Výber hlavnej karty server odmietne (422 `main_card_has_variants`).
+- Bez zápisu do Money, bez migrácie.
+
 ## [Unreleased] — #228 Párovanie dodávateľských kódov z read cache (MEKR'S: 1 z 19 riadkov)
 
 - **Príčina:** párovanie načítalo všetky kódy dodávateľa cez most po 500 riadkoch s limitom 5 000. `ArticleSuppliers` nemá zoradenie, takže pri veľkom dodávateľovi sa načítala náhodná podmnožina – väčšina kódov chýbala a bolo to aj pomalé (desiatky volaní).

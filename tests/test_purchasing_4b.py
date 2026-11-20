@@ -59,6 +59,8 @@ class ArticleBridge:
     codes: ClassVar[list[SupplierCode]] = []
     down: ClassVar[bool] = False
     calls: ClassVar[list[dict[str, Any]]] = []
+    extra: ClassVar[list[Article]] = []  # #233 main cards / variants a test adds
+    variant_calls: ClassVar[list[list[uuid.UUID]]] = []
 
     def __init__(self, *_: Any, **__: Any) -> None:
         pass
@@ -89,13 +91,19 @@ class ArticleBridge:
         return [a for a in ARTICLES if q and q.split()[0].lower() in a.name.lower()]
 
     async def article(self, article_id: uuid.UUID) -> Article | None:
-        return next((a for a in ARTICLES if a.id == article_id), None)
+        return next((a for a in ARTICLES + self.extra if a.id == article_id), None)
+
+    async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]:
+        """#233: variants of main cards (none unless a test adds them to `extra`)."""
+        self.variant_calls.append(list(parent_ids))
+        return {p: [a for a in self.extra if a.parent_id == p] for p in parent_ids}
 
 
 @pytest.fixture(autouse=True)
 def _bridge(monkeypatch: pytest.MonkeyPatch) -> None:
     bc._circuit.success()
     ArticleBridge.codes, ArticleBridge.down, ArticleBridge.calls = [], False, []
+    ArticleBridge.extra, ArticleBridge.variant_calls = [], []
     monkeypatch.setattr("app.api.purchasing.BridgeClient", ArticleBridge)
 
 
