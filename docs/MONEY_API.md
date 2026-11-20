@@ -240,6 +240,24 @@ under their main card. **DL-B11** (DOCUMENTS_SPEC §2): the matching cascade nev
 (the line becomes `needs_review`, its candidates are the variants, the method stays visible) and
 `POST …/lines/{n}/article` refuses one with 422 `main_card_has_variants`.
 
+**5.5.8b Creating articles and variants (D32)** — `CreateArticle` only, from the W6h / M13b drawer, after the
+user's click (the click is the approval; autonomy ≤ 2, never proposed or executed by AI on its own).
+- Payload, main card: `{ Katalog, Nazev, Poznamka: "SMID:<id> · Smart Mail" }` — nothing else: the PROD probe
+  (2026-11-20, `--article-write-test`) showed that Money fills unit `ks`, VAT rates and `DruhArtiklu_ID` by itself and
+  puts the card in the root group without a name („nezaradená“), no category. Variant: the same + `NadrazenyArtikl_ID`
+  = main card. Never send `Group_ID`, `Kategorie`, units, VAT or parameters (D32).
+- Main card + variant in one step = two sequential creates (main first); each has its own SMID; a failed variant
+  leaves the main card created and only the variant can be retried by the user.
+- Before every create (and again inside the bridge right before the mutation): `Articles(Filter:"Katalog~eq~<k>")`
+  must be empty → else 409 `catalog_exists`. After a timeout/unknown error: look up by catalog once (reconciliation),
+  never auto-retry the mutation. Read back the created card (`ID Katalog Nazev NadrazenyArtikl_ID HlavniJednotka{Kod}`).
+- Catalog proposal for a variant: main catalog + `str(size).zfill(5)` where size = the thread diameter of the
+  supplier text (M10 → `00010`); if taken, the next free number (+1) — only a proposal, the user can edit.
+- Bridge: `POST /articles` (write router, HMAC + single-use approval JWT bound to the payload hash). On
+  `MONEY_AGENDA_LABEL=PROD` the bridge allows **only this endpoint**, and only when `MONEY_PROD_ALLOW=create_article`
+  is set in the bridge `.env`; every other write keeps answering 403 `prod_read_only`.
+- Audit: person, account, line, payload hash, Money ID + catalog; no Money payload in logs.
+
 ### 5.5.9 Branch values on every write (PRODUCT_SPEC §2.0, SETTINGS_SPEC 11e)
 Resolve the document's branch first, then: header `Stredisko_ID` = branch centre; every item `Stredisko_ID` = branch
 centre; `ObsahPolozky.Sklad_ID` = branch warehouse (unless the user changed the line); `ObsahPolozky.Cenik_ID` = branch
