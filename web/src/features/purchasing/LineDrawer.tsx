@@ -141,30 +141,6 @@ export function LineDrawer({
           </section>
           <fieldset className="flex flex-col gap-2">
             <legend className="type-label mb-2 text-text-primary">{t('w6h.drawer.article')}</legend>
-            {options.map((o) => (
-              <label
-                key={o.article_id}
-                className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 ${
-                  pick?.article_id === o.article_id
-                    ? 'border-brand-primary-500 bg-brand-primary-50'
-                    : 'border-border-default'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="article"
-                  checked={pick?.article_id === o.article_id}
-                  onChange={() => setPick(o)}
-                  className="mt-1 accent-brand-primary-600"
-                />
-                <span className="type-small flex flex-col">
-                  <span className="text-text-primary">
-                    {o.name} <span className="text-text-secondary">{o.catalog ?? ''}</span>
-                  </span>
-                  {o.unit ? <span className="text-text-tertiary">{o.unit}</span> : null}
-                </span>
-              </label>
-            ))}
             <label className="relative">
               <Search size={16} aria-hidden="true" className="absolute left-3 top-2.5 text-text-tertiary" />
               <input
@@ -177,6 +153,42 @@ export function LineDrawer({
               />
             </label>
             {found.isError ? <p className="type-caption text-danger-600">{t('w6h.errors.search')}</p> : null}
+            {q.trim().length >= 2 && found.isSuccess && found.data.length === 0 ? (
+              <p className="type-caption text-text-secondary">{t('w6h.drawer.noResults')}</p>
+            ) : null}
+            {options.length ? (
+              <div
+                className="max-h-[min(50vh,420px)] overflow-y-auto rounded-md border border-border-default"
+                data-testid="w6h-article-list"
+              >
+                {options.map((o) => {
+                  const on = pick?.article_id === o.article_id;
+                  return (
+                    <label
+                      key={o.article_id}
+                      className={`flex cursor-pointer items-center gap-3 border-b border-border-default px-3 py-2 last:border-b-0 ${
+                        on ? 'bg-brand-primary-50' : 'hover:bg-bg-subtle'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="article"
+                        checked={on}
+                        onChange={() => setPick(o)}
+                        className="shrink-0 accent-brand-primary-600"
+                      />
+                      <span className="type-small min-w-0 flex-1 truncate text-text-primary" title={o.name}>
+                        {o.name}
+                      </span>
+                      <span className="type-caption shrink-0 tabular-nums text-text-secondary">{o.catalog ?? ''}</span>
+                      {o.unit ? (
+                        <span className="type-caption w-6 shrink-0 text-right text-text-tertiary">{o.unit}</span>
+                      ) : null}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : null}
           </fieldset>
           <div className="grid grid-cols-2 gap-3">
             <label className="type-label flex flex-col gap-1">
