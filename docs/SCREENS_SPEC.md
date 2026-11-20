@@ -414,6 +414,22 @@ bridge → W6h in state "V Money" with the Money number, read-back result and "V
 progress), created, failed (error text from Money + "Skúsiť znova" only after reconciliation), unknown (reconcile
 banner), undone, Money offline (read-only), template missing (DL-B6 banner with link to SETTINGS 11e), duplicate
 (DL-B3 banner with link to the existing Money document number).
+**Drawer view „Nový artikel v Money“ (D32, Figma `255:90955`, `255:91815`, `256:90550`):** link „+ Založiť nový
+artikel v Money“ under the article list (roles warehouse / accounting / admin, hidden for others and when Money is
+offline) replaces the drawer body with a form: SegmentedControl **Hlavná karta / Variant k hlavnej karte**;
+*Hlavná karta*: Názov (prefilled from the supplier text), Katalóg (typed); *Variant*: Hlavná karta (search by
+catalog / name, only cards without `NadrazenyArtikl_ID`, or „+ Nová hlavná karta“ → box „Nová hlavná karta“ with
+Názov hlavnej karty + Katalóg hlavnej karty), Názov variantu (prefilled), Katalóg variantu (proposed = main catalog +
+5-digit size suffix, e.g. M10 → `00010`, next free number when taken; recomputed when the main catalog changes; always
+editable). Every catalog is checked in Money while typing (debounced): taken → field error „Tento katalóg už v Money
+existuje – zadajte iný.“ and the primary button disabled. Info banner: „Jednotku ks, DPH a druh artikla doplní
+Money. Karta bude v nezaradenej skupine, bez kategórie a parametrov – na e-shop ju zaradíte v Money po kontrole.“
+Footer: Späť na výber · Zrušiť · primary **Založiť v Money** / **Založiť obe karty v Money**. After success the new
+card (the variant when both) is picked for the line, the drawer returns to the picker view, toast „Artikel {katalóg}
+bol založený v Money.“ Partial result (main card created, variant failed): banner „Hlavná karta {katalóg} je
+založená, variant nie: {chyba}“, the main card fields become read-only, the button changes to „Založiť variant“.
+States: form, checking catalog, catalog taken, creating (locked), created, partial, failed (Money error text, nothing
+retried automatically), Money offline (link hidden). Mobile M13b: the same form in the bottom sheet.
 **Mobile:** M13b — stacked groups in Money order, items as cards (Názov, Katalóg · Kód dodávateľa, Počet MJ, Jedn. cena,
 status), "Vytvoriť v Money" in a sticky bar; editing a line in a bottom sheet.
 **Done when:** DOCUMENTS_SPEC §10 acceptance; Playwright: open by deep link, fix 2 unmatched lines, create (mock),
