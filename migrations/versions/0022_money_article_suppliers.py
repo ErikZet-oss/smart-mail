@@ -38,9 +38,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
     )
-    op.create_index(
-        "ix_money_article_suppliers_supplier_code", "money_article_suppliers", ["supplier_id", "code_norm"]
-    )
+    op.create_index("ix_money_article_suppliers_supplier_code", "money_article_suppliers", ["supplier_id", "code_norm"])
     op.create_index("ix_money_article_suppliers_article_id", "money_article_suppliers", ["article_id"])
 
 
