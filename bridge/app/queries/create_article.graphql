@@ -1,0 +1,6 @@
+mutation CreateArticle($a: ArticleInput!) {
+  CreateArticle(Article: $a) {
+    ID Katalog Nazev NadrazenyArtikl_ID
+    HlavniJednotka { Kod }
+  }
+}

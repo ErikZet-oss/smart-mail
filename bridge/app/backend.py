@@ -12,6 +12,8 @@ from app.models import (
     ActivityIn,
     ActivityOut,
     Article,
+    ArticleCreated,
+    ArticleCreateIn,
     CodebookName,
     CodebookPage,
     Company,
@@ -36,6 +38,15 @@ class MoneyUnavailable(Exception):
 
 class MoneyError(Exception):
     """Money answered with an error (GraphQL `errors`, 4xx/5xx other than auth)."""
+
+
+class CatalogExists(Exception):
+    """D32: an article with this catalog number already exists in Money — nothing was created."""
+
+    def __init__(self, katalog: str, nazev: str) -> None:
+        super().__init__(katalog)
+        self.katalog = katalog
+        self.nazev = nazev
 
 
 class WaitingForProbe(Exception):
@@ -118,6 +129,10 @@ class MoneyBackend(Protocol):
     async def article(self, article_id: uuid.UUID) -> Article | None: ...
 
     async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]: ...
+
+    async def article_by_catalog(self, katalog: str) -> Article | None: ...
+
+    async def create_article(self, article: ArticleCreateIn) -> ArticleCreated: ...
 
     async def supplier_codes(self, supplier_id: uuid.UUID, start: int, count: int) -> SupplierCodePage: ...
 
