@@ -1346,6 +1346,10 @@ def variants_schema_check():
         return step("schema: ArticleInput (zápis variantov)", None, note="live schema not available")
     schema = (raw.get("data") or raw).get("__schema") or {}
     types = {t.get("name"): t for t in schema.get("types") or []}
+    if not types:  # pilot 2026-11-20: GET /graphql/schema is not an introspection result on API 1.15.11
+        out["read"] = False
+        return step("schema: ArticleInput (zápis variantov)", None,
+                    note="live schema has no introspection types - see bridge/schema/graphql_schema.json")
     inputs = (types.get("ArticleInput") or {}).get("inputFields") or []
     fields = [f.get("name") for f in inputs]
 
