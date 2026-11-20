@@ -178,6 +178,7 @@ class Article(_Model):
 
 
 class SupplierCode(_Model):
+    id: uuid.UUID | None = None  # `ArticleSuppliers.ID` — key of `money_article_suppliers` (#228)
     article_id: uuid.UUID
     supplier_id: uuid.UUID
     code: str

@@ -2099,7 +2099,8 @@
     "entities": {
       "companies": "Firmy",
       "persons": "Osoby",
-      "codebooks": "Číselníky"
+      "codebooks": "Číselníky",
+      "article_suppliers": "Dodávateľské kódy"
     },
     "sync": {
       "title": "Synchronizácia",

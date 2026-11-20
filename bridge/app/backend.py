@@ -25,6 +25,7 @@ from app.models import (
     Order,
     OverduePage,
     PersonPage,
+    SupplierCode,
     SupplierCodePage,
 )
 
@@ -117,3 +118,7 @@ class MoneyBackend(Protocol):
     async def article(self, article_id: uuid.UUID) -> Article | None: ...
 
     async def supplier_codes(self, supplier_id: uuid.UUID, start: int, count: int) -> SupplierCodePage: ...
+
+    async def all_supplier_codes(self, since: datetime | None, start: int, count: int) -> SupplierCodePage: ...
+
+    async def lookup_supplier_code(self, supplier_id: uuid.UUID, code: str) -> list[SupplierCode]: ...

@@ -34,6 +34,8 @@ from app.money.schemas import (
     IssuedInvoice,
     Person,
     PersonPage,
+    SupplierCode,
+    SupplierCodePage,
 )
 from tests.conftest import Client, FakeMailServer
 from tests.test_mail_sync_1c import _signed_in
@@ -153,6 +155,8 @@ class FakeBridge:
         self.companies_data, self.persons_data, self.fail = companies, persons or [], fail
         self.since: list[datetime | None] = []
         self.agenda = "TEST"  # #212: what /healthz reports
+        self.supplier_codes_data: list[SupplierCode] = []  # #228
+        self.supplier_since: list[datetime | None] = []
 
     async def health(self) -> Health:
         if self.fail:
@@ -172,6 +176,11 @@ class FakeBridge:
     async def codebook(self, name: CodebookName, start: int, count: int) -> CodebookPage:
         item = CodebookItem(id=uuid.uuid5(uuid.NAMESPACE_URL, name), code=name[:3].upper(), name=name)
         return CodebookPage(items=[item], next_from=None)
+
+    async def all_supplier_codes(self, since: datetime | None, start: int, count: int) -> SupplierCodePage:
+        self.supplier_since.append(since)  # #228
+        rows = self.supplier_codes_data[start : start + 2]
+        return SupplierCodePage(items=rows, next_from=start + 2 if start + 2 < len(self.supplier_codes_data) else None)
 
     async def aclose(self) -> None:
         return None
@@ -274,12 +283,12 @@ async def test_3b_job_runs_only_with_feature_money_and_one_at_a_time(app: FastAP
     assert await run_money_sync(app.state.sessionmaker, on, redis, client=bridge) == []  # type: ignore[arg-type]
     await redis.delete(LOCK_KEY)
     results = await run_money_sync(app.state.sessionmaker, on, redis, client=bridge)  # type: ignore[arg-type]
-    assert [r.entity for r in results] == ["companies", "persons", "codebooks"]
+    assert [r.entity for r in results] == ["companies", "persons", "codebooks", "article_suppliers"]
     assert not await redis.exists(LOCK_KEY)
     # right after a run nothing is due; a manual run forces all
     assert await run_money_sync(app.state.sessionmaker, on, redis, client=bridge) == []  # type: ignore[arg-type]
     forced = await run_money_sync(app.state.sessionmaker, on, redis, client=bridge, force=True)  # type: ignore[arg-type]
-    assert len(forced) == 3
+    assert len(forced) == 4
 
 
 async def test_3b_job_stops_after_money_fails(app: FastAPI, settings: Settings) -> None:
@@ -300,7 +309,7 @@ async def test_3b_status_when_the_bridge_is_down(
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["reachable"] is False and body["error"] == "money_unavailable"
-    assert [e["entity"] for e in body["entities"]] == ["companies", "persons", "codebooks"]
+    assert [e["entity"] for e in body["entities"]] == ["companies", "persons", "codebooks", "article_suppliers"]
 
 
 async def test_3b_money_settings_are_admin_only(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:

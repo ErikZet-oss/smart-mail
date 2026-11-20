@@ -27,6 +27,7 @@ from app.models import (
     Order,
     OverduePage,
     PersonPage,
+    SupplierCode,
     SupplierCodePage,
 )
 
@@ -63,6 +64,14 @@ async def sync_persons(
     request: Request, since: datetime | None = None, start: Start = 0, count: Count = 200
 ) -> PersonPage:
     return await _backend(request).persons(since, start, count)
+
+
+@router.get("/sync/article-suppliers")
+async def sync_article_suppliers(
+    request: Request, since: datetime | None = None, start: Start = 0, count: Count = 200
+) -> SupplierCodePage:
+    """#228 read cache of `ArticleSuppliers` for all suppliers (`ChangeFrom` delta, paged)."""
+    return await _backend(request).all_supplier_codes(since, start, count)
 
 
 @router.get("/sync/codebooks/{name}")
@@ -208,6 +217,16 @@ async def get_article(request: Request, article_id: uuid.UUID) -> Article:
     if article is None:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     return article
+
+
+@router.get("/suppliers/{supplier_id}/article-codes/lookup")
+async def supplier_article_code_lookup(
+    request: Request, supplier_id: uuid.UUID, code: Annotated[str, Query(min_length=1, max_length=60)]
+) -> list[SupplierCode]:
+    """#228 one supplier code exactly as written on the document (the cache does not know it yet)."""
+    if any(c in UNSAFE for c in code):
+        raise UnsafeFilterValue("code")
+    return await _backend(request).lookup_supplier_code(supplier_id, code.strip())
 
 
 @router.get("/suppliers/{supplier_id}/article-codes")

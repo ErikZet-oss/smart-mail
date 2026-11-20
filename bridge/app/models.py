@@ -198,6 +198,7 @@ class Article(_Model):
 class SupplierCode(_Model):
     """`ArticleSuppliers` row: the supplier's code for one of our articles."""
 
+    id: uuid.UUID | None = None  # `ArticleSuppliers.ID` — the key of the app's read cache (#228)
     article_id: uuid.UUID
     supplier_id: uuid.UUID
     code: str

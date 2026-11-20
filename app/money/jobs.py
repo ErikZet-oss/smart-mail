@@ -16,7 +16,16 @@ from app.ai.models import OrgSettings
 from app.core.config import Settings
 from app.money.agenda import finish_switch, note_agenda
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
-from app.money.cache_sync import DEFAULT_INTERVAL, ENTITIES, INTERVALS, SyncResult, due, needs_nightly_full, sync_entity
+from app.money.cache_sync import (
+    DEFAULT_INTERVAL,
+    DELTA_ENTITIES,
+    ENTITIES,
+    INTERVALS,
+    SyncResult,
+    due,
+    needs_nightly_full,
+    sync_entity,
+)
 from app.money.models import MoneySyncState
 
 SECTION_SYNC = "money.sync"
@@ -69,9 +78,16 @@ async def run_money_sync(
                     run = switching or force or nightly or due(state, interval, now)
                 if not run:
                     continue
-                full = switching or (nightly and entity == "companies")
+                full = switching or (nightly and entity in DELTA_ENTITIES)
+                first_codes = entity == "article_suppliers" and (state is None or state.last_full_at is None)
                 results.append(await sync_entity(db, bridge, entity, full=full))
                 await db.commit()
+                if first_codes and results[-1].status == "ok" and results[-1].full:
+                    # #228: documents matched before the cache existed get a second chance (people's choices stay)
+                    from app.purchasing.item_matching import rematch_after_first_supplier_sync
+
+                    await rematch_after_first_supplier_sync(db, bridge)
+                    await db.commit()
                 if results[-1].status != "ok":
                     break  # Money is down: the next entities would fail the same way
             if switching and len(results) == len(ENTITIES) and all(r.status == "ok" for r in results):

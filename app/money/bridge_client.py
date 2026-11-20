@@ -216,17 +216,15 @@ class BridgeClient:
         except ValidationError as exc:
             raise BridgeUnavailable("bridge_contract") from exc
 
-    async def supplier_codes(self, supplier_id: uuid.UUID) -> list[SupplierCode]:
-        """All supplier codes of one supplier (paged by the bridge, at most 5 000 rows)."""
-        out: list[SupplierCode] = []
-        start: int | None = 0
-        while start is not None and len(out) < 5000:
-            page = await self._model(
-                SupplierCodePage, f"/suppliers/{supplier_id}/article-codes", {"from": start, "count": 500}
-            )
-            out.extend(page.items)
-            start = page.next_from
-        return out
+    async def all_supplier_codes(self, since: datetime | None, start: int, count: int) -> SupplierCodePage:
+        """#228 read cache sync: every `ArticleSuppliers` row (all suppliers), `ChangeFrom` delta, paged."""
+        params = {"since": since.isoformat() if since else None, "from": start, "count": count}
+        return await self._model(SupplierCodePage, "/sync/article-suppliers", params)
+
+    async def lookup_supplier_code(self, supplier_id: uuid.UUID, code: str) -> list[SupplierCode]:
+        """#228 one code exactly as written on the document (`Firma_ID` + `DodavatelskyKod` eq) — the fallback for a
+        code the cache does not know yet. A value with `~ # | ( )` answers 422 there → `bridge_422`."""
+        return await self._list(SupplierCode, f"/suppliers/{supplier_id}/article-codes/lookup", {"code": code})
 
     async def overdue(self, before: date, start: int, count: int) -> OverduePage:
         params = {"before": before.isoformat(), "from": start, "count": count}

@@ -2,6 +2,8 @@
 
 Read-only: Money is only asked (through the bridge), nothing is written. Cascade per goods line:
 1. supplier code in Money (`ArticleSuppliers` of this supplier)            → `supplier_code`
+   (#228: from the read cache `money_article_suppliers`; a code the cache does not know is looked up once through the
+   bridge and saved — never all codes of a supplier)
 2. learned mapping confirmed by a person (`supplier_item_mappings`)        → `learned` (+ DL-W6)
 3. EAN (`CarovyKod`), exactly one article                                  → `ean`
 4. our code / catalog (`Kod` / `Katalog`), exactly one article             → `our_code`
@@ -28,6 +30,8 @@ from app.ai.guards import check
 from app.auth.models import Branch
 from app.money.agenda import invalid_branch_ids
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
+from app.money.cache_sync import save_supplier_codes
+from app.money.models import MoneyArticleSupplier
 from app.money.schemas import Article, SupplierCode
 from app.purchasing import org_settings
 from app.purchasing.models import DocumentLine, SupplierDocument, SupplierItemMapping
@@ -193,6 +197,68 @@ def needs_matching(lines: list[DocumentLine]) -> bool:
     return any(not ln.is_fee and ln.match_method is None for ln in lines)
 
 
+_UNSAFE = frozenset("~#|()")
+
+
+async def cached_supplier_codes(db: AsyncSession, supplier_id: uuid.UUID, norms: set[str]) -> dict[str, SupplierCode]:
+    """#228: the supplier's codes from the read cache `money_article_suppliers`, only for the codes on the document
+    (one SELECT by `supplier_id` + `code_norm`)."""
+    if not norms:
+        return {}
+    rows = await db.scalars(
+        select(MoneyArticleSupplier)
+        .where(
+            MoneyArticleSupplier.supplier_id == supplier_id,
+            MoneyArticleSupplier.code_norm.in_(norms),
+            MoneyArticleSupplier.active.is_(True),
+        )
+        .order_by(MoneyArticleSupplier.code_norm, MoneyArticleSupplier.id)
+    )
+    out: dict[str, SupplierCode] = {}
+    for r in rows:
+        out.setdefault(
+            r.code_norm,
+            SupplierCode(
+                id=r.id,
+                article_id=r.article_id,
+                supplier_id=r.supplier_id,
+                code=r.code,
+                name=r.name,
+                last_price=r.last_price,
+                unit=r.unit,
+                article_unit=r.article_unit,
+                article_unit_qty=r.article_unit_qty,
+            ),
+        )
+    return out
+
+
+async def supplier_codes_for(
+    db: AsyncSession, bridge: BridgeClient, supplier_id: uuid.UUID, lines: list[DocumentLine]
+) -> dict[str, SupplierCode]:
+    """#228: cache first; a code the cache does not know (new in Money, or the first sync has not run yet) is looked
+    up once through the bridge exactly as written on the document and saved into the cache. Never „load all codes“."""
+    todo = [ln for ln in lines if not ln.is_fee and ln.match_method not in USER_METHODS and ln.supplier_code]
+    norms = {n for n in (normalize_code(ln.supplier_code) for ln in todo) if n}
+    codes = await cached_supplier_codes(db, supplier_id, norms)
+    tried: set[str] = set()
+    now = datetime.now(UTC)
+    for ln in todo:
+        raw = (ln.supplier_code or "").strip()
+        norm = normalize_code(raw)
+        if not norm or norm in codes or norm in tried or any(c in _UNSAFE for c in raw) or len(raw) > 60:
+            continue
+        tried.add(norm)
+        found = await bridge.lookup_supplier_code(supplier_id, raw)
+        if found:
+            await save_supplier_codes(db, found, now)
+            for sc in found:
+                key = normalize_code(sc.code)
+                if key:
+                    codes.setdefault(key, sc)
+    return codes
+
+
 async def match_document(db: AsyncSession, bridge: BridgeClient, doc: SupplierDocument) -> bool:
     """Run the cascade for every goods line not decided by a person. False = Money unavailable (nothing changed)."""
     lines = await load_lines(db, doc)
@@ -201,10 +267,7 @@ async def match_document(db: AsyncSession, bridge: BridgeClient, doc: SupplierDo
     try:
         codes: dict[str, SupplierCode] = {}
         if doc.supplier_money_id:
-            for sc in await bridge.supplier_codes(doc.supplier_money_id):
-                key = normalize_code(sc.code)
-                if key:
-                    codes.setdefault(key, sc)
+            codes = await supplier_codes_for(db, bridge, doc.supplier_money_id, lines)
             learned = {
                 m.code_norm: m
                 for m in await db.scalars(
@@ -304,3 +367,37 @@ async def mark_non_stock(db: AsyncSession, doc: SupplierDocument, line: Document
     line.raw = {**(line.raw or {}), "_article": None, "_last_price": None}
     await refresh_checks(db, doc, await load_lines(db, doc))
     doc.version += 1
+
+
+REMATCH_STATUSES = ("needs_review", "missing_data")
+REMATCH_LIMIT = 200
+
+
+async def rematch_after_first_supplier_sync(db: AsyncSession, bridge: BridgeClient) -> int:
+    """#228 one-off after the first full sync of the supplier code cache: draft documents with unmatched lines are
+    matched again. Lines a person decided (`USER_METHODS`) are never touched (`match_document` skips them).
+    The caller commits. Returns the number of documents matched again."""
+    with_unmatched = (
+        select(DocumentLine.document_id)
+        .where(DocumentLine.line_status == "unmatched", DocumentLine.is_fee.is_(False))
+        .distinct()
+    )
+    docs = list(
+        await db.scalars(
+            select(SupplierDocument)
+            .where(
+                SupplierDocument.status.in_(REMATCH_STATUSES),
+                SupplierDocument.supplier_money_id.is_not(None),
+                SupplierDocument.id.in_(with_unmatched),
+            )
+            .order_by(SupplierDocument.created_at.desc())
+            .limit(REMATCH_LIMIT)
+        )
+    )
+    done = 0
+    for doc in docs:
+        if not await match_document(db, bridge, doc):
+            break  # Money down: the rest waits for „Znova spárovať“ on W6h
+        done += 1
+    log.info("purchasing.rematched_after_supplier_sync", documents=done, candidates=len(docs))
+    return done

@@ -297,6 +297,7 @@
   "supplier_codes": {
     "items": [
       {
+        "id": "53186ce8-3ca7-59eb-a70d-8da6433a1b19",
         "article_id": "c96b114d-38fe-59af-b482-c168ac5b7f17",
         "supplier_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
         "code": "D933-830",
@@ -307,6 +308,34 @@
         "article_unit_qty": "1"
       },
       {
+        "id": "4b97a16f-92d2-5580-a4f8-b8bae6a76e2b",
+        "article_id": "e1d8a64c-333f-5e59-a57d-df87154b735e",
+        "supplier_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+        "code": "933-10-30-A2",
+        "name": "Skrutka DIN 933 M10x30 A2",
+        "last_price": "0.0840",
+        "unit": "ks",
+        "article_unit": "ks",
+        "article_unit_qty": "1"
+      }
+    ],
+    "next_from": 2
+  },
+  "sync_article_suppliers": {
+    "items": [
+      {
+        "id": "53186ce8-3ca7-59eb-a70d-8da6433a1b19",
+        "article_id": "c96b114d-38fe-59af-b482-c168ac5b7f17",
+        "supplier_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
+        "code": "D933-830",
+        "name": "Skrutka DIN 933 M8x30 8.8 Zn",
+        "last_price": "0.0840",
+        "unit": "ks",
+        "article_unit": "ks",
+        "article_unit_qty": "1"
+      },
+      {
+        "id": "4b97a16f-92d2-5580-a4f8-b8bae6a76e2b",
         "article_id": "e1d8a64c-333f-5e59-a57d-df87154b735e",
         "supplier_id": "780e665a-f5b1-5454-bbbd-38a02bae840f",
         "code": "933-10-30-A2",

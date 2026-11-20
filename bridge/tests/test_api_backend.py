@@ -524,3 +524,41 @@ def test_222_pdf_endpoint_is_allowed_on_prod() -> None:
     note = build().deliveries[0]
     r = prod.get(f"/documents/issued_delivery_note/{note.id}/pdf?report_id=12")
     assert r.status_code == 200 and r.content.startswith(b"%PDF")  # a GET, read only (#212)
+
+
+SUP = uuid.UUID("55555555-5555-4555-8555-555555555555")
+AS_ROW = {
+    "ID": "66666666-6666-4666-8666-666666666666",
+    "Deleted": False,
+    "Parent_ID": "77777777-7777-4777-8777-777777777777",
+    "Firma_ID": str(SUP),
+    "DodavatelskyKod": "09150.14.01.120.000",
+    "DodavatelskyNazev": "Skrutka fiktívna",
+    "PosledniCena": 0.084,
+    "Jednotka": {"Kod": "ks"},
+    "ArtiklJednotka": {"Kod": "ks", "Mnozstvi": 1},
+}
+
+
+@respx.mock
+async def test_228_sync_all_article_suppliers_with_changefrom_and_lookup_one_code() -> None:
+    from datetime import UTC, datetime
+
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    gql = respx.post(f"{BASE}/graphql")
+    gql.side_effect = [
+        _gql({"ArticleSuppliers": [AS_ROW, {**AS_ROW, "ID": str(uuid.uuid4()), "Deleted": True}]}),
+        _gql({"ArticleSuppliers": [AS_ROW]}),
+    ]
+    backend = ApiBackend(settings())
+    since = datetime(2026, 11, 20, 8, 0, tzinfo=UTC)
+    page = await backend.all_supplier_codes(since, 0, 200)
+    body = json.loads(gql.calls[0].request.content)
+    assert "filter" not in body["variables"] and body["variables"]["changeFrom"].startswith("2026-11-20T08:00")
+    assert [c.code for c in page.items] == ["09150.14.01.120.000"]  # the deleted row is dropped
+    assert page.items[0].id == uuid.UUID(AS_ROW["ID"]) and page.items[0].last_price == Decimal("0.084")
+    found = await backend.lookup_supplier_code(SUP, "09150.14.01.120.000")
+    body = json.loads(gql.calls[1].request.content)
+    assert body["variables"]["filter"] == f"Firma_ID~eq~{SUP}#DodavatelskyKod~eq~09150.14.01.120.000"
+    assert [c.article_id for c in found] == [uuid.UUID(AS_ROW["Parent_ID"])]
+    await backend.aclose()
