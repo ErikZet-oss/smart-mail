@@ -2,6 +2,13 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — #239 Založiť artikel v Money (D32)
+
+- **Most:** `POST /articles` (`CreateArticle`) v zapisovacom routeri – HMAC + jednorazový schvaľovací JWT (`article.create`) viazaný na telo. Do Money ide len `Katalog`, `Nazev`, `Poznamka` „SMID:<id> · Smart Mail“ a pri variante `NadrazenyArtikl_ID`. Katalóg sa overí tesne pred mutáciou (409 `catalog_exists`), mutácia sa nikdy neopakuje; po chybe/timeoute jedno dohľadanie podľa katalógu a SMID, opakovanie s tým istým SMID vráti už založenú kartu. Karta sa po založení načíta späť. `GET /articles/catalog-free`. **Most na Windows treba aktualizovať.**
+- **Ostrá agenda:** most pustí na PROD jedine `POST /articles`, a len s `MONEY_PROD_ALLOW=create_article` v `.env` mosta (predvolene prázdne). Všetky ostatné zápisy ostávajú 403 `prod_read_only`.
+- **Aplikácia:** `POST /api/purchasing/documents/{id}/lines/{n}/new-article` (režimy `main` / `variant` / `main_and_variant`), role sklad / účtovníctvo / správca, nový prepínač **Nastavenia › Nákup a sklad › Zakladanie artiklov v Money** (predvolene vypnutý). SMID sa uloží na riadok pred volaním mosta; dvojklik → 409 `in_progress`; opakovanie po úspechu vráti uložený výsledok; optimistický zámok `version`. Hlavná karta + variant: najprv hlavná karta (uloží sa hneď), pri zlyhaní variantu čiastočný výsledok a ďalší pokus založí len variant. Riadok dostane novú kartu (pri oboch variant), metóda `user` a naučený kód dodávateľa. Audit za každú kartu (osoba, účet, doklad, riadok, katalóg, Money ID, hash tela) – bez obsahu v logoch. `GET /api/purchasing/catalog-proposal` (katalóg hlavnej karty + 5-miestny rozmer, M10 → `00010`, ďalšie voľné číslo, najviac 20 pokusov) a `GET /api/purchasing/articles/catalog-free`.
+- **Šuplík riadku W6h / M13b** (Figma 255:91329, 255:92189, 256:90924): odkaz „+ Založiť nový artikel v Money“, prepínač Hlavná karta / Variant k hlavnej karte, výber hlavnej karty (len karty bez nadradenej) alebo „+ Nová hlavná karta“, predvyplnené názvy, návrh katalógu variantu, priebežná kontrola katalógu v Money, informačný banner, čiastočný výsledok s tlačidlom „Založiť variant“, toast „Artikel {katalóg} bol založený v Money.“ Odkaz sa nezobrazí bez oprávnenia ani keď je Money nedostupné.
+
 ## [Unreleased] — #233 W6h: hlavná karta a varianty (DL-B11)
 
 - **Most:** `Articles` / `Article` čítajú `NadrazenyArtikl_ID` (`Article.parent_id`). Nový endpoint `GET /articles/variants?parent_id=…` vráti varianty najviac 10 hlavných kariet jedným GraphQL volaním (OR filter cez filter builder, `Count` ≤ 300, zmazané preč, skryté ako `inactive`). **Most na Windows treba aktualizovať.**

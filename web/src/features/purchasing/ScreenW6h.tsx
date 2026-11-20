@@ -287,6 +287,7 @@ export function ScreenW6h() {
                   qc.setQueryData(documentKey(id), next);
                   setOpen(null);
                 }}
+                onDocument={(next) => qc.setQueryData(documentKey(id), next)}
               />
             ) : null}
             <span className="sr-only" aria-live="polite">

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
+import { Switch } from '../../components/Switch';
 import { useToasts } from '../../components/toastContext';
 import { api, ApiError } from '../../lib/api';
 import { day } from '../money/moneyApi';
@@ -20,6 +21,7 @@ type Purchasing = {
   confirm_roles: Role[];
   issue_date: 'supplier' | 'approval';
   warehouse_rules: Rule[];
+  create_article: boolean;
   branch_warehouses: string[];
   warehouses: { id: string; label: string }[];
   suppliers: { id: string; label: string }[];
@@ -42,13 +44,17 @@ const URL = '/api/settings/purchasing';
 const ROLES: Role[] = ['warehouse', 'admin', 'accounting', 'sales'];
 const PCT = /^\d{1,3}([.,]\d{1,2})?$/;
 
-type Form = Pick<Purchasing, 'price_diff_pct' | 'qty_diff_pct' | 'confirm_roles' | 'issue_date' | 'warehouse_rules'>;
+type Form = Pick<
+  Purchasing,
+  'price_diff_pct' | 'qty_diff_pct' | 'confirm_roles' | 'issue_date' | 'warehouse_rules' | 'create_article'
+>;
 const toForm = (p: Purchasing): Form => ({
   price_diff_pct: p.price_diff_pct,
   qty_diff_pct: p.qty_diff_pct,
   confirm_roles: p.confirm_roles,
   issue_date: p.issue_date,
   warehouse_rules: p.warehouse_rules,
+  create_article: p.create_article,
 });
 const pctOk = (v: string) => PCT.test(v) && Number(v.replace(',', '.')) <= 100;
 
@@ -231,6 +237,13 @@ export function PurchasingPanel() {
               </button>
             ))}
           </div>
+        </Row>
+        <Row label={L('createArticle')} help={L('createArticleHelp')}>
+          <Switch
+            checked={form.create_article}
+            onChange={(v) => set({ create_article: v })}
+            label={L('createArticleSwitch')}
+          />
         </Row>
       </section>
 
