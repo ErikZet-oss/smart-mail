@@ -110,7 +110,7 @@ report = {"generated_at": dt.datetime.now().isoformat(timespec="seconds"), "step
 def load_env(path):
     if not path:
         return
-    with open(path, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8-sig") as fh:  # PowerShell 5 writes a BOM
         for line in fh:
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
