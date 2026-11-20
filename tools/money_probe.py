@@ -1478,13 +1478,14 @@ def _article_facts(a, ref, groups):
         return "same as existing card" if mine == theirs else "set (other than existing card)"
     return {
         "hidden": a.get("Hidden"),
-        "group": groups.get(a.get("Group_ID"), "empty / not found") if a.get("Group_ID") else "empty",
+        "group": (groups.get(a.get("Group_ID")) or "group without a name (root)") if a.get("Group_ID") in groups
+        else ("set, not found" if a.get("Group_ID") else "empty"),
         "main_unit": (a.get("HlavniJednotka") or {}).get("Kod"),
         "units": [u.get("Kod") for u in a.get("SeznamJednotek") or []],
         "vat_rates": [{"vstup": v.get("SazbaVstup"), "vystup": v.get("SazbaVystup")} for v in a.get("SazbyDPH") or []],
         "NepodlehaDPH": a.get("NepodlehaDPH"),
         "TypArtiklu": a.get("TypArtiklu"), "TypEvidence": a.get("TypEvidence"),
-        "DruhArtiklu_ID": cmp("DruhArtiklu_ID"), "RadaKatalog_ID": cmp("RadaKatalog_ID"), "Kategorie": a.get("Kategorie"),
+        "DruhArtiklu_ID": cmp("DruhArtiklu_ID"), "RadaKatalog_ID": cmp("RadaKatalog_ID"), "Kategorie": cmp("Kategorie"),  # e-shop category IDs, never printed
         "linked_to_main": bool(a.get("NadrazenyArtikl_ID")),
         "Poznamka_kept": "SMID:" in (a.get("Poznamka") or ""),
     }
