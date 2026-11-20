@@ -32,6 +32,12 @@ Purpose
   lets the API write variant parameters. Only article catalog data is written (catalog number, name, parameter
   values) - no prices, stock, suppliers or customers. -> probe_output/variants.md
 
+  With --article-write-test (WRITES, D32) it creates ONE hidden test main card and ONE hidden test variant with
+  CreateArticle (catalog PROBE_ARTICLE_TEST_CATALOG, default SMPROBE<time>), reads both back and reports which
+  values Money filled by default (group, units, VAT, kind) compared with an existing variant (PROBE_VARIANT_MAIN).
+  It asks you to type ZALOZIT, never retries a failed create and never deletes - delete the two test cards in Money
+  yourself. -> probe_output/article_write.md
+
   With --phase4 (read-only) it lists which fields existing CRM activities fill (#189: the first test write copies
   them) and checks the branch price lists (PROBE_PRICE_LISTS = codes set in Settings 11e, else every active list with
   a default warehouse) via PriceListItems, the company discount / price-list
@@ -40,7 +46,9 @@ Purpose
 Safety
   - Only GET requests and read-only GraphQL queries (plus the token POST). By default it never creates, changes or
     deletes anything.
-  - The ONLY exception is "--orders --allow-write-test": it creates 1-2 test orders (Odkaz "SMPROBE-...") on the
+  - "--article-write-test" (D32, Erik 2026-11-20: article creation is tested on the production agenda) creates
+    exactly two hidden cards named "SMPROBE ... zmazať" after you type ZALOZIT; nothing else is written.
+  - The other exception is "--orders --allow-write-test": it creates 1-2 test orders (Odkaz "SMPROBE-...") on the
     agenda, reads them back and deletes them again. It refuses to run unless MONEY_AGENDA_LABEL=TEST is set and you
     type TEST when asked. Never use it on the production agenda.
   - Run it against the TEST agenda first.
@@ -68,6 +76,7 @@ Usage
      # PROBE_DL_REPORT_ID=12                        # Agenda > Nastavenie tlačových zostáv > Dodací list vydaný > Opraviť
      # PROBE_DL_DESIGN_ID=34                        # optional: the design id from the list of designs
      # PROBE_VARIANT_MAIN=3090225,3090025            # --variants: catalog numbers of main cards that have variants
+     # PROBE_ARTICLE_TEST_CATALOG=SMPROBE01            # --article-write-test: catalog of the test card (must not exist)
      # PROBE_PRICE_LISTS=10-bez DPH,20-bez DPH        # --phase4: price-list codes set on the branches (Settings 11e)
      PROBE_EMAIL=novak@abcstav.sk                    # e-mail of a contact person that exists in the address book
      PROBE_ARTICLE=DIN 933                           # a code or name fragment of an existing article
@@ -1448,6 +1457,126 @@ def write_variants_report():
     print(f"Written {OUT_DIR}/variants.md and {OUT_DIR}/variants.json")
 
 
+# ----------------------------------------------------------------------------- --article-write-test (D32)
+article_write_report = {"steps": {}}
+
+ARTICLE_READ = """ID Hidden Deleted Katalog Nazev Poznamka NadrazenyArtikl_ID Group_ID DruhArtiklu_ID TypArtiklu TypEvidence
+  Kategorie RadaKatalog_ID HlavniJednotka_ID ProdejniJednotka_ID NakupniJednotka_ID NepodlehaDPH
+  HlavniJednotka { Kod Jednotka_ID } SeznamJednotek { Kod Mnozstvi Jednotka_ID }
+  SazbyDPH { SazbaVstup SazbaVystup Zacatek }"""
+
+
+def _article_facts(a, ref, groups):
+    """Technical facts of a created card: values Money filled by default, codebook IDs only as same/other/empty
+    compared with an existing card (never printed)."""
+    if not a:
+        return None
+    def cmp(key):
+        mine, theirs = a.get(key), (ref or {}).get(key)
+        if not mine:
+            return "empty"
+        return "same as existing card" if mine == theirs else "set (other than existing card)"
+    return {
+        "hidden": a.get("Hidden"),
+        "group": groups.get(a.get("Group_ID"), "empty / not found") if a.get("Group_ID") else "empty",
+        "main_unit": (a.get("HlavniJednotka") or {}).get("Kod"),
+        "units": [u.get("Kod") for u in a.get("SeznamJednotek") or []],
+        "vat_rates": [{"vstup": v.get("SazbaVstup"), "vystup": v.get("SazbaVystup")} for v in a.get("SazbyDPH") or []],
+        "NepodlehaDPH": a.get("NepodlehaDPH"),
+        "TypArtiklu": a.get("TypArtiklu"), "TypEvidence": a.get("TypEvidence"),
+        "DruhArtiklu_ID": cmp("DruhArtiklu_ID"), "RadaKatalog_ID": cmp("RadaKatalog_ID"), "Kategorie": a.get("Kategorie"),
+        "linked_to_main": bool(a.get("NadrazenyArtikl_ID")),
+        "Poznamka_kept": "SMID:" in (a.get("Poznamka") or ""),
+    }
+
+
+def article_write_test(http):
+    out = article_write_report["steps"]
+    catalog = env("PROBE_ARTICLE_TEST_CATALOG") or "SMPROBE" + dt.datetime.now().strftime("%y%m%d%H%M")
+    variant_catalog = catalog + "00010"
+    for c in (catalog, variant_catalog):
+        st, d, e, _ = gql(http, "query($f:String){ Articles(Filter:$f, Count:1){ ID } }", {"f": f"Katalog~eq~{c}"})
+        if e or (d or {}).get("Articles"):
+            out["refused"] = f"catalog {c} already exists or the check failed"
+            return step("article write test", None, note=out["refused"])
+    print(f"\nThis creates 2 HIDDEN test cards in Money (agenda {env('MONEY_AGENDA_LABEL') or '?'}):")
+    print(f"  {catalog}  'SMPROBE testovacia hlavná karta - zmazať'")
+    print(f"  {variant_catalog}  'SMPROBE testovací variant - zmazať' (variant of the card above)")
+    try:
+        typed = input("Type ZALOZIT to continue: ")
+    except EOFError:
+        typed = ""
+    if typed.strip() != "ZALOZIT":
+        out["refused"] = "cancelled by user"
+        return step("article write test", None, note="cancelled by user")
+    smid = "SMID:PROBE-ARTICLE-" + dt.datetime.now().strftime("%Y%m%d%H%M%S")
+    groups = {}
+    for obj in ("Artikl", "Article", "Sklady.Artikl"):  # read-only tries; the S5 object name is not documented
+        st, d, e, _ = gql(http, "query($o:String!){ MerpGroups(ObjectName:$o, Count:2000){ ID Nazev } }", {"o": obj})
+        rows = (d or {}).get("MerpGroups") or []
+        if rows and not e:
+            groups = {g.get("ID"): g.get("Nazev") for g in rows if g.get("ID")}
+            out["groups_object_name"] = obj
+            break
+    ref = None
+    main_ref = (env("PROBE_VARIANT_MAIN") or "").split(",")[0].strip()
+    if main_ref:
+        st, d, e, _ = gql(http, "query($f:String){ Articles(Filter:$f, Count:1){ ID } }", {"f": f"Katalog~eq~{main_ref}"})
+        mid = (((d or {}).get("Articles") or [{}])[0]).get("ID")
+        if mid:
+            st, d, e, _ = gql(http, "query($f:String){ Articles(Filter:$f, Count:1){ %s } }" % ARTICLE_READ,
+                              {"f": f"NadrazenyArtikl_ID~eq~{mid}"})
+            ref = ((d or {}).get("Articles") or [None])[0]
+    out["reference_card"] = bool(ref)
+
+    def create(article):
+        # Never retried: on any error the catalog is looked up once, so nothing is created twice.
+        st, d, e, ms = gql(http, "mutation($a: ArticleInput!){ CreateArticle(Article:$a){ ID Katalog } }", {"a": article})
+        res = (d or {}).get("CreateArticle")
+        if not res:
+            st2, d2, e2, _ = gql(http, "query($f:String){ Articles(Filter:$f, Count:1){ ID Katalog } }",
+                                 {"f": f"Katalog~eq~{article['Katalog']}"})
+            res = ((d2 or {}).get("Articles") or [None])[0]
+        return res, (str(e)[:300] if e else None), ms
+
+    main, err, ms = create({"Katalog": catalog, "Nazev": "SMPROBE testovacia hlavná karta - zmazať", "Hidden": True,
+                            "Poznamka": smid + " · Smart Mail probe – zmažte túto kartu"})
+    out["main_created"], out["main_error"], out["main_ms"] = bool(main), err, ms
+    if not main:
+        return step("article write test – main card", False, note=f"CreateArticle failed: {err}")
+    variant, err, ms = create({"Katalog": variant_catalog, "Nazev": "SMPROBE testovací variant - zmazať", "Hidden": True,
+                               "NadrazenyArtikl_ID": main["ID"], "Poznamka": smid + " · Smart Mail probe – zmažte túto kartu"})
+    out["variant_created"], out["variant_error"], out["variant_ms"] = bool(variant), err, ms
+    back = {}
+    for key, row in (("main", main), ("variant", variant)):
+        if row:
+            st, d, e, _ = gql(http, "query($f:String){ Articles(Filter:$f, Count:1){ %s } }" % ARTICLE_READ,
+                              {"f": f"Katalog~eq~{row['Katalog']}"})
+            back[key] = ((d or {}).get("Articles") or [None])[0]
+    out["main_card"] = _article_facts(back.get("main"), ref, groups)
+    out["variant_card"] = _article_facts(back.get("variant"), ref, groups)
+    out["existing_card_for_comparison"] = _article_facts(ref, ref, groups) if ref else None
+    out["delete_in_money"] = [catalog] + ([variant_catalog] if variant else [])
+    step("article write test – CreateArticle", bool(main and variant),
+         note=f"main {bool(main)}, variant {bool(variant)}; DELETE in Money: {', '.join(out['delete_in_money'])}")
+
+
+def write_article_write_report():
+    article_write_report["generated_at"] = report["generated_at"]
+    os.makedirs(OUT_DIR, exist_ok=True)
+    with open(os.path.join(OUT_DIR, "article_write.json"), "w", encoding="utf-8") as fh:
+        json.dump(article_write_report, fh, ensure_ascii=False, indent=2, default=str)
+    lines = ["# Money S4 probe – CreateArticle test (D32)", "", f"Generated: {report['generated_at']}", "",
+             "Codebook IDs are only compared (same / other / empty), never printed.", ""]
+    for k, v in article_write_report["steps"].items():
+        lines.append(f"- **{k}**: {json.dumps(v, ensure_ascii=False, default=str)}")
+    lines += ["", "**Delete the test cards listed in delete_in_money in Money.**",
+              "Give this file to Claude Code before implementing article creation.", ""]
+    with open(os.path.join(OUT_DIR, "article_write.md"), "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    print(f"Written {OUT_DIR}/article_write.md and {OUT_DIR}/article_write.json")
+
+
 # ----------------------------------------------------------------------------- main
 def write_report():
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -1486,6 +1615,8 @@ def main():
                          "PROBE_DL_DESIGN_ID) -> probe_output/pdfreport.md")
     ap.add_argument("--variants", action="store_true",
                     help="read-only: main article cards (PROBE_VARIANT_MAIN) and their variants -> probe_output/variants.md")
+    ap.add_argument("--article-write-test", action="store_true",
+                    help="WRITES (D32): create 1 hidden test card + 1 hidden variant, read back -> probe_output/article_write.md")
     args = ap.parse_args()
     load_env(args.env)
 
@@ -1503,6 +1634,11 @@ def main():
         sys.exit(1)
 
     gql_schema(http)
+    if args.article_write_test:
+        if gql_basic(http):
+            article_write_test(http)
+        write_article_write_report()  # report.md of the base run is kept
+        return
     if args.variants:
         if gql_basic(http):
             variants_probe(http, env("PROBE_VARIANT_MAIN"))
