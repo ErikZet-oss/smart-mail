@@ -210,6 +210,15 @@ local `item_mappings` table (supplier_id, normalized code, article_id, unit fact
 Settings › Money S4 › Kódy dodávateľov with CSV export, so the accountant can also enter them into Money cards.
 If the implementer enables supplier-code writes, add a bridge endpoint and sync the table to Money (admin setting).
 
+**5.5.8a Main cards and variants** (pilot 2026-11-20) — the customer keeps some articles as a main card with
+variants (`Article.NadrazenyArtikl_ID` = main card; the variant differs by its parameters `Parametry`, e.g. M10 ×
+2000). The variant catalog number = main card catalog + a suffix by size, so catalog numbers are never duplicated.
+Goods are **never received on a main card that has variants** — the W6h picker marks main cards ("hlavná karta"),
+shows variants in italics and does not let the user pick a main card that has variants. Creating articles is not in
+scope yet (Money write, Phase 4c). Schema check: `CreateArticle` takes `NadrazenyArtikl_ID` and `Varianta`, but
+`ArticleInput` has **no field for parameter values** (REST `ArticleInputDto` neither) — read
+`probe_output/variants.md` (`money_probe.py --variants`, read-only) before any plan to create variants.
+
 ### 5.5.9 Branch values on every write (PRODUCT_SPEC §2.0, SETTINGS_SPEC 11e)
 Resolve the document's branch first, then: header `Stredisko_ID` = branch centre; every item `Stredisko_ID` = branch
 centre; `ObsahPolozky.Sklad_ID` = branch warehouse (unless the user changed the line); `ObsahPolozky.Cenik_ID` = branch
