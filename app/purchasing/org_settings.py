@@ -34,6 +34,7 @@ class PurchasingSettings(BaseModel):
     confirm_roles: list[ConfirmRole] = Field(default_factory=lambda: _default_roles(), min_length=1)
     issue_date: Literal["supplier", "approval"] = "supplier"
     warehouse_rules: list[WarehouseRule] = Field(default_factory=list, max_length=200)
+    create_article: bool = False  # D32 (#239) „Zakladanie artiklov v Money“ from the W6h drawer; default off
 
     @field_validator("confirm_roles")
     @classmethod

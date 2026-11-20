@@ -178,6 +178,27 @@ class Article(_Model):
     parent_id: uuid.UUID | None = None  # NadrazenyArtikl_ID: a variant → its main card (#233)
 
 
+class ArticleCreated(_Model):
+    """D32 (#239) the card read back after `CreateArticle` (bridge `ArticleCreated`)."""
+
+    id: uuid.UUID
+    katalog: str
+    nazev: str
+    parent_id: uuid.UUID | None = None
+    unit: str | None = None
+    reconciled: bool = False
+
+
+class CatalogArticle(_Model):
+    katalog: str
+    nazev: str
+
+
+class CatalogFree(_Model):
+    free: bool
+    article: CatalogArticle | None = None
+
+
 class SupplierCode(_Model):
     id: uuid.UUID | None = None  # `ArticleSuppliers.ID` — key of `money_article_suppliers` (#228)
     article_id: uuid.UUID

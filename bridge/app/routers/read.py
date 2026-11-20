@@ -14,6 +14,8 @@ from app.filters import UNSAFE, UnsafeFilterValue
 from app.models import (
     Activity,
     Article,
+    CatalogArticle,
+    CatalogFree,
     CodebookName,
     CodebookPage,
     Company,
@@ -221,6 +223,18 @@ async def article_variants(
     """#233 variants of up to 10 main cards (`NadrazenyArtikl_ID`), keyed by the main card id."""
     found = await _backend(request).article_variants(list(dict.fromkeys(parent_id)))
     return {str(k): v for k, v in found.items()}
+
+
+@router.get("/articles/catalog-free")
+async def catalog_free(request: Request, katalog: Annotated[str, Query(min_length=1, max_length=50)]) -> CatalogFree:
+    """D32: is this catalog number free in Money? (live check while the user types; checked again before the write)"""
+    value = katalog.strip()
+    if not value or any(c in UNSAFE for c in value):
+        raise UnsafeFilterValue("katalog")
+    found = await _backend(request).article_by_catalog(value)
+    if found is None:
+        return CatalogFree(free=True)
+    return CatalogFree(free=False, article=CatalogArticle(katalog=found.catalog or value, nazev=found.name))
 
 
 @router.get("/articles/{article_id}")

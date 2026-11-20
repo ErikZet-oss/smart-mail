@@ -68,6 +68,12 @@ def test_3b_contract_fixture_parses_with_the_app_models() -> None:
 
     assert [Article.model_validate(a).catalog for a in data["articles"]] == ["934-10-A2"]
     assert SupplierCodePage.model_validate(data["supplier_codes"]).items
+    # #239 article creation (D32)
+    from app.money.schemas import ArticleCreated, CatalogFree
+
+    assert CatalogFree.model_validate(data["catalog_free"]).free is True
+    assert CatalogFree.model_validate(data["catalog_taken"]).article is not None
+    assert ArticleCreated.model_validate(data["article_created"]).unit == "ks"
 
 
 # ----- bridge client -----

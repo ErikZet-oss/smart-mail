@@ -110,6 +110,9 @@ synchronizácie, spustí ju ručne a vidí históriu behov (13e). Keď Money nie
 Skutočné Money (`MONEY_BACKEND=api`) sa spustí len s vlastným `BRIDGE_HMAC_SECRET` a prihlasovacími údajmi Money –
 inak most odmietne štart. Ostrá agenda (`MONEY_AGENDA_LABEL=PROD`) je **len na čítanie** (#212): most odmietne každý
 zápis (403 `prod_read_only`) a aplikácia zápisy nedovolí zapnúť.
+Jediná výnimka je zakladanie artiklov (D32, #239): most ho na ostrej agende pustí len vtedy, keď je v jeho `.env`
+`MONEY_PROD_ALLOW=create_article` (predvolene prázdne), a aplikácia ho ponúkne len so zapnutým príznakom
+**Nastavenia › Nákup › Zakladanie artiklov v Money** (predvolene vypnutý). Všetky ostatné zápisy ostávajú zakázané.
 
 ### Prihlásenie (fáza 1a)
 Prihlasuje sa e-mailom a heslom k pošte – heslo overí IMAP server (ten istý ako pre Roundcube). Server nastavte v `.env`:
@@ -433,6 +436,8 @@ Kľúče API ostávajú tie isté. Ktorú agendu API obsluhuje, nastaví Erik / 
      ukáže v **Prepojenie (13a)** ako varovanie a správa sa ako nenastavené;
    - správca dostane jednu notifikáciu.
 4. V **Prepojenie (13a)** je štítok „Ostrá agenda – len čítanie“ a vypínač zápisov je zablokovaný.
+5. Zakladanie artiklov (D32): ak ho chcete na ostrej agende povoliť, doplňte do `C:\SmartMail\bridge\.env`
+   `MONEY_PROD_ALLOW=create_article`, reštartujte most a v **Nastavenia › Nákup** zapnite „Zakladanie artiklov v Money“.
 
 **Späť na TEST:** v `.env` nastavte `MONEY_AGENDA_LABEL=TEST`, reštartujte most a postup sa zopakuje opačne.
 Cenníky a ID tlačových zostáv sa pri prepnutí neoverujú (nie sú v lokálnej kópii). Skontrolujte ich v **13b** a **11e**.

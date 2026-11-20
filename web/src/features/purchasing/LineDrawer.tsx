@@ -16,6 +16,7 @@ import {
   type DocLine,
   type DocumentDetail,
 } from './purchasingApi';
+import { NewArticleForm } from './NewArticleForm';
 
 type Pick = { article_id: string; name: string; catalog: string | null; unit: string | null; kind: ArticleKind };
 
@@ -38,12 +39,15 @@ export function LineDrawer({
   sheet,
   onClose,
   onSaved,
+  onDocument,
 }: {
   doc: DocumentDetail;
   line: DocLine;
   sheet: boolean;
   onClose: () => void;
   onSaved: (d: DocumentDetail) => void;
+  /** D32: the document changed without closing the drawer (an article created in Money). */
+  onDocument?: (d: DocumentDetail) => void;
 }) {
   const { t } = useTranslation();
   const titleId = useId();
@@ -67,6 +71,11 @@ export function LineDrawer({
   const [warehouse, setWarehouse] = useState<string>(line.warehouse_id ?? '');
   const [learn, setLearn] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // D32 (#239): „+ Založiť nový artikel v Money“ replaces the body; an unfinished (partial) create reopens there
+  const canCreate = Boolean(doc.can_create_article) && doc.money_available;
+  const [view, setView] = useState<'pick' | 'new'>(
+    canCreate && line.new_article?.status === 'partial' ? 'new' : 'pick',
+  );
   const found = useQuery({
     queryKey: ['purchasing', 'articles', q.trim()],
     queryFn: () => searchArticles(q.trim()),
@@ -139,165 +148,212 @@ export function LineDrawer({
       >
         <header className="flex items-center justify-between border-b border-border-default px-5 py-4">
           <h2 id={titleId} className="type-heading text-text-primary">
-            {t('w6h.drawer.title', { n: line.line_no })}
+            {view === 'new'
+              ? t('w6h.newArticle.title', { n: line.line_no })
+              : t('w6h.drawer.title', { n: line.line_no })}
           </h2>
           <button type="button" onClick={onClose} aria-label={t('common.close')} className="text-text-secondary">
             <X size={20} aria-hidden="true" />
           </button>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
-          <section className="rounded-md border border-border-default bg-bg-subtle p-3">
-            <p className="type-caption uppercase tracking-wide text-text-secondary">{t('w6h.drawer.supplierText')}</p>
-            <p className="type-label text-text-primary">
-              {line.supplier_code ? `${line.supplier_code} · ` : ''}
-              {line.name}
-            </p>
-            <p className="type-caption text-text-secondary">
-              {moneyNum(line.qty, 4)} {line.unit ?? ''} × {moneyNum(line.unit_price, 4)} ={' '}
-              {moneyNum(line.line_total, 2)} €
-            </p>
-          </section>
-          <fieldset className="flex flex-col gap-2">
-            <legend className="type-label mb-2 text-text-primary">{t('w6h.drawer.article')}</legend>
-            <label className="relative">
-              <Search size={16} aria-hidden="true" className="absolute left-3 top-2.5 text-text-tertiary" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder={t('w6h.drawer.search')}
-                aria-label={t('w6h.drawer.search')}
-                data-testid="w6h-article-search"
-                className="type-body h-9 w-full rounded-md bg-bg-muted pl-9 pr-3 placeholder:text-text-tertiary"
-              />
-            </label>
-            {found.isError ? <p className="type-caption text-danger-600">{t('w6h.errors.search')}</p> : null}
-            {q.trim().length >= 2 && found.isSuccess && found.data.length === 0 ? (
-              <p className="type-caption text-text-secondary">{t('w6h.drawer.noResults')}</p>
-            ) : null}
-            {options.length ? (
-              <div
-                className="max-h-[min(50vh,420px)] overflow-y-auto rounded-md border border-border-default"
-                data-testid="w6h-article-list"
-              >
-                {options.map((o) => {
-                  const on = pick?.article_id === o.article_id;
-                  const main = o.kind === 'main';
-                  return (
-                    <label
-                      key={o.article_id}
-                      data-testid={`w6h-pick-${o.kind}`}
-                      onClick={main ? () => openMain(o) : undefined}
-                      className={`flex items-center gap-3 border-b border-border-default py-2 pr-3 last:border-b-0 ${
-                        o.kind === 'variant' ? 'pl-8' : 'pl-3'
-                      } ${main ? 'cursor-pointer bg-bg-subtle' : on ? 'cursor-pointer bg-brand-primary-50' : 'cursor-pointer hover:bg-bg-subtle'}`}
-                    >
-                      <input
-                        type="radio"
-                        name="article"
-                        checked={on && !main}
-                        disabled={main}
-                        onChange={() => setPick(o)}
-                        className="shrink-0 accent-brand-primary-600 disabled:opacity-50"
-                      />
-                      <span className="type-small min-w-0 flex-1 truncate text-text-primary" title={o.name}>
-                        {/* the `type-small` font shorthand would reset `italic`, so it sits on the inner element */}
-                        <span className={o.kind === 'variant' ? 'italic' : undefined}>{o.name}</span>
-                      </span>
-                      {main ? (
-                        <span className="type-caption shrink-0 rounded-full bg-bg-muted px-2 py-0.5 text-text-secondary">
-                          {t('w6h.drawer.mainCard')}
-                        </span>
-                      ) : null}
-                      <span className="type-caption shrink-0 tabular-nums text-text-secondary">{o.catalog ?? ''}</span>
-                      {o.unit ? (
-                        <span className="type-caption w-6 shrink-0 text-right text-text-tertiary">{o.unit}</span>
-                      ) : null}
-                    </label>
-                  );
-                })}
+        {view === 'new' ? (
+          <NewArticleForm
+            doc={doc}
+            line={line}
+            onBack={() => setView('pick')}
+            onCancel={onClose}
+            onDocument={(d) => onDocument?.(d)}
+            onCreated={(r) => {
+              onDocument?.(r.document);
+              const card = r.variant ?? r.main;
+              if (card) {
+                setPick({
+                  article_id: card.id,
+                  name: card.nazev,
+                  catalog: card.katalog,
+                  unit: card.unit,
+                  kind: card.parent_id ? 'variant' : 'article',
+                });
+                setFactor('1');
+              }
+              setView('pick');
+            }}
+          />
+        ) : (
+          <>
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
+              <section className="rounded-md border border-border-default bg-bg-subtle p-3">
+                <p className="type-caption uppercase tracking-wide text-text-secondary">
+                  {t('w6h.drawer.supplierText')}
+                </p>
+                <p className="type-label text-text-primary">
+                  {line.supplier_code ? `${line.supplier_code} · ` : ''}
+                  {line.name}
+                </p>
+                <p className="type-caption text-text-secondary">
+                  {moneyNum(line.qty, 4)} {line.unit ?? ''} × {moneyNum(line.unit_price, 4)} ={' '}
+                  {moneyNum(line.line_total, 2)} €
+                </p>
+              </section>
+              <fieldset className="flex flex-col gap-2">
+                <legend className="type-label mb-2 text-text-primary">{t('w6h.drawer.article')}</legend>
+                <label className="relative">
+                  <Search size={16} aria-hidden="true" className="absolute left-3 top-2.5 text-text-tertiary" />
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder={t('w6h.drawer.search')}
+                    aria-label={t('w6h.drawer.search')}
+                    data-testid="w6h-article-search"
+                    className="type-body h-9 w-full rounded-md bg-bg-muted pl-9 pr-3 placeholder:text-text-tertiary"
+                  />
+                </label>
+                {found.isError ? <p className="type-caption text-danger-600">{t('w6h.errors.search')}</p> : null}
+                {q.trim().length >= 2 && found.isSuccess && found.data.length === 0 ? (
+                  <p className="type-caption text-text-secondary">{t('w6h.drawer.noResults')}</p>
+                ) : null}
+                {options.length ? (
+                  <div
+                    className="max-h-[min(50vh,420px)] overflow-y-auto rounded-md border border-border-default"
+                    data-testid="w6h-article-list"
+                  >
+                    {options.map((o) => {
+                      const on = pick?.article_id === o.article_id;
+                      const main = o.kind === 'main';
+                      return (
+                        <label
+                          key={o.article_id}
+                          data-testid={`w6h-pick-${o.kind}`}
+                          onClick={main ? () => openMain(o) : undefined}
+                          className={`flex items-center gap-3 border-b border-border-default py-2 pr-3 last:border-b-0 ${
+                            o.kind === 'variant' ? 'pl-8' : 'pl-3'
+                          } ${main ? 'cursor-pointer bg-bg-subtle' : on ? 'cursor-pointer bg-brand-primary-50' : 'cursor-pointer hover:bg-bg-subtle'}`}
+                        >
+                          <input
+                            type="radio"
+                            name="article"
+                            checked={on && !main}
+                            disabled={main}
+                            onChange={() => setPick(o)}
+                            className="shrink-0 accent-brand-primary-600 disabled:opacity-50"
+                          />
+                          <span className="type-small min-w-0 flex-1 truncate text-text-primary" title={o.name}>
+                            {/* the `type-small` font shorthand would reset `italic`, so it sits on the inner element */}
+                            <span className={o.kind === 'variant' ? 'italic' : undefined}>{o.name}</span>
+                          </span>
+                          {main ? (
+                            <span className="type-caption shrink-0 rounded-full bg-bg-muted px-2 py-0.5 text-text-secondary">
+                              {t('w6h.drawer.mainCard')}
+                            </span>
+                          ) : null}
+                          <span className="type-caption shrink-0 tabular-nums text-text-secondary">
+                            {o.catalog ?? ''}
+                          </span>
+                          {o.unit ? (
+                            <span className="type-caption w-6 shrink-0 text-right text-text-tertiary">{o.unit}</span>
+                          ) : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                {hasMain ? (
+                  <p className="type-caption text-text-secondary" data-testid="w6h-main-card-hint">
+                    {t('w6h.drawer.mainCardHint')}
+                  </p>
+                ) : null}
+                {canCreate ? (
+                  <button
+                    type="button"
+                    onClick={() => setView('new')}
+                    className="type-label self-start text-brand-primary-600"
+                    data-testid="w6h-new-article-link"
+                  >
+                    {t('w6h.newArticle.link')}
+                  </button>
+                ) : null}
+              </fieldset>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="type-label flex flex-col gap-1">
+                  {t('w6h.drawer.factor', { unit: line.unit ?? '–', target: pick?.unit ?? '–' })}
+                  <input
+                    value={factor}
+                    onChange={(e) => setFactor(e.target.value)}
+                    inputMode="decimal"
+                    aria-invalid={!factorOk}
+                    data-testid="w6h-factor"
+                    className="type-body h-9 rounded-sm border border-border-default px-2"
+                  />
+                </label>
+                <div className="type-label flex flex-col gap-1">
+                  {t('w6h.cols.qty')}
+                  <output
+                    className="type-body flex h-9 items-center rounded-sm border border-border-default bg-bg-muted px-2"
+                    data-testid="w6h-qty-our"
+                  >
+                    {moneyNum(qtyOur, 4)}
+                  </output>
+                </div>
               </div>
-            ) : null}
-            {hasMain ? (
-              <p className="type-caption text-text-secondary" data-testid="w6h-main-card-hint">
-                {t('w6h.drawer.mainCardHint')}
-              </p>
-            ) : null}
-          </fieldset>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="type-label flex flex-col gap-1">
-              {t('w6h.drawer.factor', { unit: line.unit ?? '–', target: pick?.unit ?? '–' })}
-              <input
-                value={factor}
-                onChange={(e) => setFactor(e.target.value)}
-                inputMode="decimal"
-                aria-invalid={!factorOk}
-                data-testid="w6h-factor"
-                className="type-body h-9 rounded-sm border border-border-default px-2"
-              />
-            </label>
-            <div className="type-label flex flex-col gap-1">
-              {t('w6h.cols.qty')}
-              <output
-                className="type-body flex h-9 items-center rounded-sm border border-border-default bg-bg-muted px-2"
-                data-testid="w6h-qty-our"
+              <label className="type-label flex flex-col gap-1">
+                {t('w6h.cols.warehouse')}
+                <select
+                  value={warehouse}
+                  onChange={(e) => setWarehouse(e.target.value)}
+                  className="type-body h-9 rounded-sm border border-border-default bg-bg-canvas px-2"
+                >
+                  <option value="">{t('w6h.drawer.branchWarehouse')}</option>
+                  {doc.warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.code} – {w.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {line.supplier_code ? (
+                <div className="flex flex-col gap-1">
+                  <Checkbox
+                    checked={learn}
+                    onChange={(e) => setLearn(e.target.checked)}
+                    label={t('w6h.drawer.learn')}
+                  />
+                  <p className="type-caption pl-6 text-text-secondary">
+                    {t('w6h.drawer.learnHint', {
+                      code: line.supplier_code,
+                      supplier: doc.supplier?.name ?? doc.supplier_name ?? '',
+                    })}
+                  </p>
+                </div>
+              ) : null}
+              {error ? (
+                <p role="alert" className="type-small text-danger-600">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+            <footer className="flex items-center gap-2 border-t border-border-default px-5 py-4">
+              <button
+                type="button"
+                className="type-label mr-auto text-brand-primary-600"
+                onClick={() => nonStock.mutate()}
+                disabled={nonStock.isPending}
+                data-testid="w6h-non-stock"
               >
-                {moneyNum(qtyOur, 4)}
-              </output>
-            </div>
-          </div>
-          <label className="type-label flex flex-col gap-1">
-            {t('w6h.cols.warehouse')}
-            <select
-              value={warehouse}
-              onChange={(e) => setWarehouse(e.target.value)}
-              className="type-body h-9 rounded-sm border border-border-default bg-bg-canvas px-2"
-            >
-              <option value="">{t('w6h.drawer.branchWarehouse')}</option>
-              {doc.warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code} – {w.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {line.supplier_code ? (
-            <div className="flex flex-col gap-1">
-              <Checkbox checked={learn} onChange={(e) => setLearn(e.target.checked)} label={t('w6h.drawer.learn')} />
-              <p className="type-caption pl-6 text-text-secondary">
-                {t('w6h.drawer.learnHint', {
-                  code: line.supplier_code,
-                  supplier: doc.supplier?.name ?? doc.supplier_name ?? '',
-                })}
-              </p>
-            </div>
-          ) : null}
-          {error ? (
-            <p role="alert" className="type-small text-danger-600">
-              {error}
-            </p>
-          ) : null}
-        </div>
-        <footer className="flex items-center gap-2 border-t border-border-default px-5 py-4">
-          <button
-            type="button"
-            className="type-label mr-auto text-brand-primary-600"
-            onClick={() => nonStock.mutate()}
-            disabled={nonStock.isPending}
-            data-testid="w6h-non-stock"
-          >
-            {t('w6h.nonStockAction')}
-          </button>
-          <Button variant="secondary" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            onClick={() => save.mutate()}
-            disabled={!pick || pick.kind === 'main' || !factorOk || save.isPending}
-            data-testid="w6h-apply"
-          >
-            {t('w6h.drawer.apply')}
-          </Button>
-        </footer>
+                {t('w6h.nonStockAction')}
+              </button>
+              <Button variant="secondary" onClick={onClose}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                onClick={() => save.mutate()}
+                disabled={!pick || pick.kind === 'main' || !factorOk || save.isPending}
+                data-testid="w6h-apply"
+              >
+                {t('w6h.drawer.apply')}
+              </Button>
+            </footer>
+          </>
+        )}
       </div>
     </div>
   );

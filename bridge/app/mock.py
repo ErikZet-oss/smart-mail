@@ -13,12 +13,14 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from app.backend import ArticleQuery, DeliveryQuery, InvoiceQuery
+from app.backend import ArticleQuery, CatalogExists, DeliveryQuery, InvoiceQuery
 from app.models import (
     Activity,
     ActivityIn,
     ActivityOut,
     Article,
+    ArticleCreated,
+    ArticleCreateIn,
     ArticleUnit,
     CodebookItem,
     CodebookName,
@@ -312,6 +314,7 @@ class MockBackend:
     def __init__(self, data: MockData | None = None) -> None:
         self.data = data or build()
         self.smids: dict[uuid.UUID, str] = {}
+        self.article_smids: dict[uuid.UUID, str] = {}  # D32: SMID of every created article
 
     async def aclose(self) -> None:
         return None
@@ -474,6 +477,40 @@ class MockBackend:
         else:
             found = []
         return found[:20]
+
+    async def article_by_catalog(self, katalog: str) -> Article | None:
+        return next((a for a in self.data.articles if a.catalog == katalog), None)
+
+    async def create_article(self, article: ArticleCreateIn) -> ArticleCreated:
+        """D32: catalog checked first, then the card is added (unit ks as Money does); a repeated SMID is returned."""
+        for existing_id, smid in self.article_smids.items():
+            if smid == article.smid:
+                found = next(a for a in self.data.articles if a.id == existing_id)
+                return ArticleCreated(
+                    id=found.id,
+                    katalog=found.catalog or "",
+                    nazev=found.name,
+                    parent_id=found.parent_id,
+                    unit=found.unit,
+                    reconciled=True,
+                )
+        taken = await self.article_by_catalog(article.katalog)
+        if taken is not None:
+            raise CatalogExists(article.katalog, taken.name)
+        new = Article(
+            id=uuid.uuid4(),
+            code=None,
+            catalog=article.katalog,
+            name=article.nazev,
+            ean=None,
+            unit="ks",
+            parent_id=article.parent_id,
+        )
+        self.data.articles.append(new)
+        self.article_smids[new.id] = article.smid
+        return ArticleCreated(
+            id=new.id, katalog=article.katalog, nazev=article.nazev, parent_id=article.parent_id, unit="ks"
+        )
 
     async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]:
         out: dict[uuid.UUID, list[Article]] = {p: [] for p in parent_ids}

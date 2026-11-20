@@ -162,6 +162,39 @@ class ActivityIn(_Model):
     smid: str = Field(pattern=r"^SMID:[0-9a-f-]{36}$")
 
 
+CATALOG_RE = r"^[^~#|()]{1,50}$"  # used in a filter (`Katalog~eq~…`), so never a filter character
+SMID_RE = r"^[A-Za-z0-9-]{8,64}$"
+
+
+class ArticleCreateIn(_Model):
+    """D32 (#239) `CreateArticle` — only these values; Money fills unit, VAT and kind, the card lands in the unnamed
+    root group without a category. Never a group, category, unit, VAT or parameter."""
+
+    katalog: str = Field(pattern=CATALOG_RE)
+    nazev: str = Field(min_length=1, max_length=200)
+    parent_id: uuid.UUID | None = None  # NadrazenyArtikl_ID — a variant of this main card
+    smid: str = Field(pattern=SMID_RE)  # written to Poznamka as `SMID:<smid> · Smart Mail`
+
+
+class ArticleCreated(_Model):
+    id: uuid.UUID
+    katalog: str
+    nazev: str
+    parent_id: uuid.UUID | None = None
+    unit: str | None = None  # read back: HlavniJednotka.Kod filled by Money
+    reconciled: bool = False  # True = the create answered with an error, the card was then found by its catalog + SMID
+
+
+class CatalogArticle(_Model):
+    katalog: str
+    nazev: str
+
+
+class CatalogFree(_Model):
+    free: bool
+    article: CatalogArticle | None = None
+
+
 class ActivityOut(_Model):
     id: uuid.UUID
     created: bool  # False = an activity with this SMID already existed (idempotent repeat)

@@ -16,7 +16,15 @@ from typing import Any
 
 import httpx
 
-from app.backend import ArticleQuery, DeliveryQuery, InvoiceQuery, MoneyError, WaitingForProbe
+from app.backend import (
+    ArticleQuery,
+    CatalogExists,
+    DeliveryQuery,
+    InvoiceQuery,
+    MoneyError,
+    MoneyUnavailable,
+    WaitingForProbe,
+)
 from app.config import BridgeSettings
 from app.filters import all_, any_, cond
 from app.gql_client import TIMEOUT, MoneyHttp, TokenProvider
@@ -25,6 +33,8 @@ from app.models import (
     ActivityIn,
     ActivityOut,
     Article,
+    ArticleCreated,
+    ArticleCreateIn,
     ArticleUnit,
     CodebookItem,
     CodebookName,
@@ -244,6 +254,18 @@ def article_from(raw: dict[str, Any]) -> Article:
         units=units,
         inactive=raw.get("Hidden") is True,
         parent_id=_uuid(raw.get("NadrazenyArtikl_ID")),
+    )
+
+
+def _created(raw: dict[str, Any], *, reconciled: bool = False) -> ArticleCreated:
+    unit: dict[str, Any] = raw["HlavniJednotka"] if isinstance(raw.get("HlavniJednotka"), dict) else {}
+    return ArticleCreated(
+        id=_required_uuid(raw.get("ID")),
+        katalog=_s(raw.get("Katalog")) or "",
+        nazev=_s(raw.get("Nazev")) or "",
+        parent_id=_uuid(raw.get("NadrazenyArtikl_ID")),
+        unit=_s(unit.get("Kod")),
+        reconciled=reconciled,
     )
 
 
@@ -518,6 +540,56 @@ class ApiBackend:
             if a.parent_id in out:
                 out[a.parent_id].append(a)
         return out
+
+    async def article_by_catalog(self, katalog: str) -> Article | None:
+        """D32: the (not deleted) article with exactly this catalog number, or None."""
+        row = await self._catalog_row(katalog)
+        return article_from(row) if row else None
+
+    async def _catalog_row(self, katalog: str) -> dict[str, Any] | None:
+        rows = await self._raw("article_by_catalog", "Articles", {"filter": cond("Katalog", "eq", katalog)})
+        alive = [r for r in _alive(rows) if _s(r.get("Katalog")) == katalog]
+        return alive[0] if alive else None
+
+    async def create_article(self, article: ArticleCreateIn) -> ArticleCreated:
+        """D32 / MONEY_API 5.5.8b: the catalog must be free right before the mutation (else `CatalogExists`); the
+        payload holds only Katalog, Nazev, Poznamka (SMID) and NadrazenyArtikl_ID for a variant. Never retried: after an
+        error or a timeout the catalog is looked up ONCE — a card carrying this SMID is the one just created
+        (`reconciled`), anything else is an error. A repeat with the same SMID returns that card. Read back."""
+        smid = f"SMID:{article.smid}"
+        existing = await self._catalog_row(article.katalog)
+        if existing is not None:
+            if smid in (_s(existing.get("Poznamka")) or ""):
+                return _created(existing, reconciled=True)  # a repeat of our own earlier create (same SMID)
+            raise CatalogExists(article.katalog, _s(existing.get("Nazev")) or "")
+        payload: dict[str, Any] = {
+            "Katalog": article.katalog,
+            "Nazev": article.nazev,
+            "Poznamka": f"{smid} · Smart Mail",
+        }
+        if article.parent_id is not None:
+            payload["NadrazenyArtikl_ID"] = str(article.parent_id)
+        try:
+            data = await self._money.graphql("create_article", {"a": payload})
+            created = data.get("CreateArticle")
+            new_id = _uuid(created.get("ID")) if isinstance(created, dict) else None
+            if new_id is None:
+                raise MoneyError("CreateArticle returned no ID")
+        except (MoneyError, MoneyUnavailable):
+            found = await self._catalog_row(article.katalog)  # reconciliation — once, never a second create
+            if found is None or smid not in (_s(found.get("Poznamka")) or ""):
+                raise
+            return _created(found, reconciled=True)
+        back = await self.article(new_id)  # read back what Money stored
+        if back is None:
+            raise MoneyError("created article not found on read-back")
+        return ArticleCreated(
+            id=back.id,
+            katalog=back.catalog or article.katalog,
+            nazev=back.name,
+            parent_id=back.parent_id,
+            unit=back.unit,
+        )
 
     async def article(self, article_id: uuid.UUID) -> Article | None:
         raw = (await self._money.graphql("article", {"id": str(article_id)})).get("Article")

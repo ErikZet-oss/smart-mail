@@ -1,0 +1,6 @@
+query ArticleByCatalog($filter: String) {
+  Articles(Filter: $filter, Count: 5) {
+    ID Deleted Hidden Kod Katalog Nazev Poznamka NadrazenyArtikl_ID
+    HlavniJednotka { Kod }
+  }
+}

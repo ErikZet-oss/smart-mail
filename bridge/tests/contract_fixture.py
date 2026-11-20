@@ -39,7 +39,25 @@ def current() -> dict[str, Any]:
         "articles": client.get("/articles/search?code=934-10-A2").json(),
         "supplier_codes": client.get(f"/suppliers/{first}/article-codes?count=2").json(),
         "sync_article_suppliers": client.get("/sync/article-suppliers?count=2").json(),
+        "catalog_free": client.get("/articles/catalog-free?katalog=FREE-0001").json(),
+        "catalog_taken": client.get("/articles/catalog-free?katalog=934-10-A2").json(),
+        "article_created": _created(),
     }
+
+
+def _created() -> dict[str, Any]:
+    """#239 the body of `POST /articles` (the HTTP route needs an approval JWT — the mock backend answers the same)."""
+    import asyncio
+    import uuid
+
+    from app.mock import MockBackend
+    from app.models import ArticleCreateIn
+
+    smid = str(uuid.UUID(int=239))
+    out = asyncio.run(
+        MockBackend().create_article(ArticleCreateIn(katalog="FIKT-239", nazev="Fiktívny artikel", smid=smid))
+    )
+    return {**out.model_dump(mode="json"), "id": str(uuid.UUID(int=0x239))}  # stable id in the file
 
 
 if __name__ == "__main__":

@@ -582,6 +582,18 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
                 admin_only=True,
             ),
             field(
+                "purchasing.create_article",
+                label="Zakladanie artiklov v Money",
+                control="switch",
+                default=False,
+                help=(
+                    "Sklad, účtovníctvo a správca môžu z riadku dodacieho listu založiť v Money hlavnú kartu alebo"
+                    " variant (DECISIONS D32). Na ostrej agende musí zápis povoliť aj most (MONEY_PROD_ALLOW)."
+                ),
+                scope="G",
+                admin_only=True,
+            ),
+            field(
                 "purchasing.movement_time",
                 label="Dátum a čas skladového pohybu",
                 control="info",
@@ -733,7 +745,7 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
 
 def schema_document() -> dict[str, Any]:
     return {
-        "version": "4b",
+        "version": "4b-239",
         "phase": "4b",
         "sections": PHASE_1F_SECTIONS,
     }

@@ -25,6 +25,9 @@ class BridgeSettings(BaseSettings):
     bridge_hmac_key_id: str = "dev"
     bridge_hmac_secret: SecretStr = SecretStr(DEV_HMAC_SECRET)
     approval_jwt_public_key: str | None = None
+    # D32 (#239): the ONLY writes allowed on the PRODUCTION agenda, comma list; empty = none. Today only
+    # `create_article` (POST /articles) exists — every other write keeps answering 403 `prod_read_only`.
+    money_prod_allow: str = ""
     log_level: str = "INFO"
 
     def startup_problem(self) -> str | None:
@@ -42,6 +45,10 @@ class BridgeSettings(BaseSettings):
     def read_only(self) -> bool:
         """#212: the PRODUCTION agenda is read-only — no write route ever reaches Money, whatever else is set."""
         return self.money_agenda_label != "TEST"
+
+    def prod_allows(self, action: str) -> bool:
+        """D32: an action explicitly allowed on PROD by `MONEY_PROD_ALLOW` (unknown names never match a route)."""
+        return action in {a.strip() for a in self.money_prod_allow.split(",") if a.strip()}
 
     @property
     def writes_enabled(self) -> bool:

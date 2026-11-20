@@ -84,6 +84,14 @@ export type DocLine = {
   article: ArticleSnap | null;
   qty_our: string | null;
   price_our: string | null;
+  /** D32 (#239): an unfinished „Založiť artikel v Money“ (partial = main card created, variant not). */
+  new_article?: NewArticleState | null;
+};
+export type CreatedCard = { id: string; katalog: string; nazev: string; parent_id: string | null; unit: string | null };
+export type NewArticleState = {
+  status: 'partial' | 'failed' | 'in_progress';
+  main: CreatedCard | null;
+  error: string | null;
 };
 export type Warehouse = { id: string; code: string; name: string };
 export type DocumentDetail = SupplierDocument & {
@@ -100,6 +108,8 @@ export type DocumentDetail = SupplierDocument & {
   series: string | null;
   template: Record<string, unknown>;
   warehouses: Warehouse[];
+  /** D32: Settings 14 switch on + role warehouse / accounting / admin. */
+  can_create_article?: boolean;
   items: DocLine[];
 };
 export type Article = ArticleSnap & { id: string; inactive: boolean };
@@ -120,6 +130,43 @@ export const nonStockLine = (id: string, lineNo: number, version: number) =>
     { version },
     { global: false },
   );
+/** D32 (#239) „Založiť artikel v Money“ — the click is the approval; nothing is retried automatically. */
+export type NewArticleMode = 'main' | 'variant' | 'main_and_variant';
+export type NewArticleBody = {
+  mode: NewArticleMode;
+  main?: { katalog: string; nazev: string };
+  parent_id?: string;
+  variant?: { katalog: string; nazev: string };
+  version: number;
+};
+export type NewArticleResult = {
+  status: 'done' | 'partial';
+  main: CreatedCard | null;
+  variant: CreatedCard | null;
+  error: string | null;
+  article_id: string | null;
+  document: DocumentDetail;
+};
+export type CatalogFree = { free: boolean; article: { katalog: string; nazev: string } | null };
+export type CatalogProposal = { katalog: string | null; size: number | null; main_catalog: string | null };
+
+export const createArticle = (id: string, lineNo: number, body: NewArticleBody) =>
+  api<NewArticleResult>('POST', `/api/purchasing/documents/${id}/lines/${lineNo}/new-article`, body, {
+    global: false,
+  });
+export const catalogFree = (katalog: string) =>
+  api<CatalogFree>('GET', `/api/purchasing/articles/catalog-free?katalog=${encodeURIComponent(katalog)}`, undefined, {
+    global: false,
+  });
+export const catalogProposal = (p: { parentId?: string; mainCatalog?: string; size: string }) => {
+  const q = new URLSearchParams({ size: p.size });
+  if (p.parentId) q.set('parent_id', p.parentId);
+  if (p.mainCatalog) q.set('main_catalog', p.mainCatalog);
+  return api<CatalogProposal>('GET', `/api/purchasing/catalog-proposal?${q.toString()}`, undefined, {
+    global: false,
+  });
+};
+
 export const searchArticles = (q: string) =>
   api<Article[]>('GET', `/api/purchasing/articles?q=${encodeURIComponent(q)}`, undefined, { global: false });
 
