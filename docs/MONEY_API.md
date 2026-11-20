@@ -218,6 +218,17 @@ shows variants in italics and does not let the user pick a main card that has va
 scope yet (Money write, Phase 4c). Schema check: `CreateArticle` takes `NadrazenyArtikl_ID` and `Varianta`, but
 `ArticleInput` has **no field for parameter values** (REST `ArticleInputDto` neither) — read
 `probe_output/variants.md` (`money_probe.py --variants`, read-only) before any plan to create variants.
+Probe on PROD (2026-11-20, 2 main cards, 42 variants; examples below are fictional):
+- variants are linked only by `NadrazenyArtikl_ID` (`Parent_ID` is empty); Money's variant generator is **not**
+  used (`PripojitParametry*` false, `NoveVygenerovanaVarianta` false, `Varianta` empty, no parameter is
+  `Variantni`) — people create each variant card by hand with its own name and catalog
+- catalog = main catalog + **5-digit suffix** = the size, zero padded (`9990001` M10 → `999000100010`); when that
+  number is taken (same size, other finish) the next free number is used (M12 → `…00013`); never duplicated
+- names are short and without diacritics (`tyc zav. M10 x2000 4.8 ZN`), the main card has the generic name
+- every variant has the main card parameters (Norma, Akost/Trieda, …) plus its own (Priemer (M), Dĺžka (L)) — all
+  with codebook values (`Hodnota_ID`); these parameters **cannot be written through the API**
+- `Group_ID` / `Kategorie` are usually the same as on the main card, but not always; `HlavniJednotka_ID` is a unit
+  row of the article itself (never shared)
 
 ### 5.5.9 Branch values on every write (PRODUCT_SPEC §2.0, SETTINGS_SPEC 11e)
 Resolve the document's branch first, then: header `Stredisko_ID` = branch centre; every item `Stredisko_ID` = branch

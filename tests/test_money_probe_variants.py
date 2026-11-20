@@ -90,3 +90,13 @@ def test_variants_query_is_valid_against_the_customer_schema() -> None:
     schema = json.loads((ROOT / "bridge/schema/graphql_schema.json").read_text(encoding="utf-8"))
     query = "query($f:String){ Articles(Filter:$f){ " + m.group(1) + " } }"
     assert validate(build_client_schema(schema.get("data", schema)), parse(query)) == []
+
+
+def test_variants_schema_check_reports_unreadable_schema(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pilot 2026-11-20: GET /graphql/schema was not an introspection result → no false "CreateArticle: false"."""
+    probe = _probe()
+    monkeypatch.setattr(probe, "OUT_DIR", str(tmp_path))
+    (tmp_path / "graphql_schema_raw.txt").write_text(json.dumps({"schema": "type Query { Version: String }"}))
+    probe.variants_report.update({"schema": {}, "cards": []})
+    probe.variants_schema_check()
+    assert probe.variants_report["schema"] == {"read": False}
