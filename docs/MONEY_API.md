@@ -227,6 +227,9 @@ Probe on PROD (2026-11-20, 2 main cards, 42 variants; examples below are fiction
 - names are short and without diacritics (`tyc zav. M10 x2000 4.8 ZN`), the main card has the generic name
 - every variant has the main card parameters (Norma, Akost/Trieda, …) plus its own (Priemer (M), Dĺžka (L)) — all
   with codebook values (`Hodnota_ID`); these parameters **cannot be written through the API**
+- the parameters drive the **e-shop filters** (Erik, 2026-11-20) — a card without them would be missing in the
+  filters, so creating articles / variants from Smart Mail is **postponed** until the API can write parameters
+  (question for Seyfor); until then cards are created in Money and only picked in Smart Mail
 - `Group_ID` / `Kategorie` are usually the same as on the main card, but not always; `HlavniJednotka_ID` is a unit
   row of the article itself (never shared)
 
