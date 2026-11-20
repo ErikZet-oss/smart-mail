@@ -27,11 +27,12 @@ from app.mail.clamav import scan_bytes
 from app.mail.mailboxes import accessible_mailbox
 from app.mail.models import Message
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
-from app.money.models import MoneyCodebook, MoneyCompany
+from app.money.models import MoneyArticleSupplier, MoneyCodebook, MoneyCompany
 from app.money.schemas import Article
 from app.purchasing import org_settings
 from app.purchasing.item_matching import confirm_article, load_lines, mark_non_stock, match_document, needs_matching
 from app.purchasing.models import DocumentLine, SupplierDocument
+from app.purchasing.numbers import normalize_code
 from app.purchasing.service import MAX_BYTES, DocumentRejected, Source, ingest
 
 router = APIRouter(prefix="/api/purchasing", tags=["purchasing"])
@@ -464,27 +465,56 @@ async def line_non_stock(
     return await _detail(db, doc)
 
 
+PICKER_LIMIT = 30
+SUPPLIER_CODE_LIMIT = 10  # each hit is one bridge read; leave room for the catalog variants
+
+
 @router.get("/articles")
 async def search_articles(
     person: ActivePerson,
+    db: DB,
     settings: SettingsDep,
     q: Annotated[str, Query(min_length=2, max_length=80)],
 ) -> list[Article]:
-    """Article picker of W6h: by EAN (digits only), else by code / catalog, else by name."""
+    """Article picker of W6h. Results of every kind together, best first (pilot 2026-11-20: a catalog number showed
+    only the main card `3090225`, never its variants `30902250010`, …):
+    1. exact code / catalog, 2. EAN, 3. supplier code from the read cache (`money_article_suppliers`),
+    4. catalog or name containing the text (variants of a main card). At most `PICKER_LIMIT`, no duplicates."""
     _guard(settings, person)
     term = q.strip()
     if set(term) & set("~#|()"):
         raise fail(422, "unsafe_query")
+    out: dict[uuid.UUID, Article] = {}
+
+    def add(items: list[Article]) -> None:
+        for a in items:
+            if len(out) < PICKER_LIMIT:
+                out.setdefault(a.id, a)
+
     try:
         async with BridgeClient(settings) as bridge:
+            add(await bridge.search_articles(code=term))
             if term.isdigit() and len(term) >= 8:
-                found = await bridge.search_articles(ean=term)
-                if found:
-                    return found
-            found = await bridge.search_articles(code=term)
-            return found or await bridge.search_articles(q=term)
+                add(await bridge.search_articles(ean=term))
+            norm = normalize_code(term) or ""
+            if len(norm) >= 5:
+                ids = list(
+                    await db.scalars(
+                        select(MoneyArticleSupplier.article_id)
+                        .where(MoneyArticleSupplier.active.is_(True), MoneyArticleSupplier.code_norm.startswith(norm))
+                        .distinct()
+                        .limit(SUPPLIER_CODE_LIMIT)
+                    )
+                )
+                for article_id in ids:
+                    if article_id not in out and len(out) < PICKER_LIMIT:
+                        found = await bridge.article(article_id)
+                        if found:
+                            out[found.id] = found
+            add(sorted(await bridge.search_articles(q=term), key=lambda a: (a.catalog or a.code or "", a.name)))
     except BridgeUnavailable as exc:
         raise fail(503, exc.code) from None
+    return list(out.values())
 
 
 @router.get("/documents/{doc_id}/file")
