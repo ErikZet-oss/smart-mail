@@ -651,7 +651,9 @@ function BranchTemplate({ branchId, centreSet }: { branchId: string; centreSet: 
             </span>
             {tpl.missing.length ? (
               <span className="type-caption text-danger-600">
-                {t('money.template.missing', { fields: tpl.missing.join(', ') })}
+                {t('money.template.missing', {
+                  fields: tpl.missing.map((k) => t(`w6h.rules.fields.${k}`, { defaultValue: k })).join(', '),
+                })}
               </span>
             ) : null}
           </div>
