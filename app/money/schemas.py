@@ -214,3 +214,52 @@ class SupplierCode(_Model):
 class SupplierCodePage(_Model):
     items: list[SupplierCode]
     next_from: int | None
+
+
+# ----- Phase 4c (#247, D33): received delivery note as a koncept (bridge `DeliveryNoteCreated` …) -----
+
+
+class DeliveryNoteLineBack(_Model):
+    id: uuid.UUID | None
+    number: int | None
+    order: int | None
+    qty: Decimal
+    unit_price: Decimal
+    content_type: int | None
+    article_id: uuid.UUID | None
+    warehouse_id: uuid.UUID | None
+    centre_id: uuid.UUID | None
+
+
+class DeliveryNoteCreated(_Model):
+    id: uuid.UUID
+    number: str | None
+    faze: int | None
+    schvaleno: bool | None
+    group_id: uuid.UUID | None
+    centre_id: uuid.UUID | None
+    total_base: Decimal
+    total: Decimal
+    address_empty: bool
+    lines: list[DeliveryNoteLineBack]
+    reconciled: bool = False
+
+
+class ReceivedNoteRow(_Model):
+    id: uuid.UUID
+    number: str | None
+    supplier: str | None
+    issued_on: date | None
+    koncept: bool
+    by_smart_mail: bool
+
+
+class DeliveryNoteTemplate(_Model):
+    id: uuid.UUID
+    number: str | None
+    supplier: str | None
+    issued_on: date | None
+    centre_id: uuid.UUID | None
+    header: dict[str, str]
+    line: dict[str, str | int]
+    text_line: dict[str, int] | None

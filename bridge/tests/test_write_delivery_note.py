@@ -198,6 +198,7 @@ def test_247_template_endpoints() -> None:
         "DruhSazbyDPH": 2,
         "DruhPolozky_ID": str(mid("item-kind", 1)),
         "SazbaDPH_ID": str(mid("vat-rate", 23)),
+        "DphSazba": "23",
         "VazbaTypVazby": 0,
     }
     assert tpl["text_line"] == {"TypObsahu": 0}

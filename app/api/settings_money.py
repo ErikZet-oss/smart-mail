@@ -315,16 +315,20 @@ class BranchMoneyOut(BaseModel):
     centre_id: str | None
     centre_missing: bool  # the saved centre is no longer in Money's codebook
     reports: dict[str, str]  # {"invoice": "", "proforma": ""}
+    warehouse_id: str | None = None  # 4c (#247) „Sklad pobočky“ — where received goods go (DL-B1)
+    warehouse_missing: bool = False
 
 
 class BranchMoneyList(BaseModel):
     centres: list[CentreOption]
     branches: list[BranchMoneyOut]
+    warehouses: list[CentreOption] = []  # every Money warehouse (D18), never a typed code
 
 
 class BranchMoneyIn(BaseModel):
     centre_id: str | None = None
     reports: dict[str, str]
+    warehouse_id: str | None = None  # None = unchanged (older clients), "" = clear
 
 
 async def _centres(db: DB) -> list[MoneyCodebook]:
@@ -336,8 +340,18 @@ async def _centres(db: DB) -> list[MoneyCodebook]:
     return list(rows)
 
 
-def _branch_money(branch: Branch, known: set[str]) -> BranchMoneyOut:
+async def _warehouses(db: DB) -> list[MoneyCodebook]:
+    rows = await db.scalars(
+        select(MoneyCodebook)
+        .where(MoneyCodebook.kind == "warehouses", MoneyCodebook.active.is_(True))
+        .order_by(MoneyCodebook.code)
+    )
+    return list(rows)
+
+
+def _branch_money(branch: Branch, known: set[str], known_wh: set[str] | None = None) -> BranchMoneyOut:
     centre = (branch.money_centre_id or "").strip().lower() or None
+    warehouse = (branch.money_warehouse_id or "").strip().lower() or None
     ids = branch.money_report_ids or {}
     return BranchMoneyOut(
         id=str(branch.id),
@@ -345,6 +359,8 @@ def _branch_money(branch: Branch, known: set[str]) -> BranchMoneyOut:
         centre_id=centre,
         centre_missing=bool(centre and centre not in known),
         reports={kind: str(ids.get(kind) or "") for kind in (*REPORT_KINDS, *DELIVERY_KEYS)},
+        warehouse_id=warehouse,
+        warehouse_missing=bool(warehouse and known_wh is not None and warehouse not in known_wh),
     )
 
 
@@ -352,10 +368,13 @@ def _branch_money(branch: Branch, known: set[str]) -> BranchMoneyOut:
 async def get_branch_money(admin: Admin, db: DB) -> BranchMoneyList:
     centres = await _centres(db)
     known = {str(c.money_id) for c in centres}
+    warehouses = await _warehouses(db)
+    known_wh = {str(w.money_id) for w in warehouses}
     branches = await db.scalars(select(Branch).order_by(Branch.name))
     return BranchMoneyList(
         centres=[CentreOption(id=str(c.money_id), code=c.code, name=c.name) for c in centres],
-        branches=[_branch_money(b, known) for b in branches],
+        branches=[_branch_money(b, known, known_wh) for b in branches],
+        warehouses=[CentreOption(id=str(w.money_id), code=w.code, name=w.name) for w in warehouses],
     )
 
 
@@ -377,8 +396,19 @@ async def put_branch_money(
             raise fail(422, "report_id_invalid", kind=kind)
         if value:
             reports[kind] = value
-    before = {"centre_id": branch.money_centre_id, "reports": dict(branch.money_report_ids or {})}
+    known_wh = {str(w.money_id) for w in await _warehouses(db)}
+    warehouse = branch.money_warehouse_id
+    if body.warehouse_id is not None:
+        warehouse = body.warehouse_id.strip().lower() or None
+        if warehouse is not None and warehouse not in known_wh:
+            raise fail(422, "warehouse_unknown")  # only warehouses from Money's codebook (D18), never typed
+    before = {
+        "centre_id": branch.money_centre_id,
+        "warehouse_id": branch.money_warehouse_id,
+        "reports": dict(branch.money_report_ids or {}),
+    }
     branch.money_centre_id = centre
+    branch.money_warehouse_id = warehouse
     branch.money_report_ids = reports
     audit(
         db,
@@ -387,10 +417,10 @@ async def put_branch_money(
         person_id=admin.id,
         object_type="branch",
         object_id=str(branch.id),
-        details={"before": before, "after": {"centre_id": centre, "reports": reports}},
+        details={"before": before, "after": {"centre_id": centre, "warehouse_id": warehouse, "reports": reports}},
     )
     await db.commit()
-    return _branch_money(branch, known)
+    return _branch_money(branch, known, known_wh)
 
 
 @router.get("/branches/{branch_id}/test")

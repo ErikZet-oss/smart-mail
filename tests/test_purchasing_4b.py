@@ -225,7 +225,9 @@ async def test_4b_unmatched_line_confirmed_by_a_person_is_learned_for_the_next_d
     )
     assert r.status_code == 200, r.text
     after = r.json()
-    assert after["items"][1]["match_method"] == "user" and after["status"] == "needs_review"
+    assert after["items"][1]["match_method"] == "user" and not any(c["id"] == "DL-B4" for c in after["checks"])
+    # 4c (#247): what still blocks is only the branch setup for the Money write (no branch / template in this test)
+    assert {c["id"] for c in after["checks"] if c["level"] == "blocking"} <= {"DL-B1", "DL-B5", "DL-B6"}
     assert not any(c["id"] == "DL-B4" for c in after["checks"])
     mapping = await db.scalar(select(SupplierItemMapping))
     assert mapping is not None and mapping.code_norm == "93410A2" and mapping.article_id == A_NUT

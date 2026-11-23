@@ -8,10 +8,11 @@ from __future__ import annotations
 import copy
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Any, Literal
 
+import structlog
 from fastapi import APIRouter, File, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
@@ -27,18 +28,27 @@ from app.mail import storage
 from app.mail.clamav import scan_bytes
 from app.mail.mailboxes import accessible_mailbox
 from app.mail.models import Message
+from app.money.agenda import invalid_branch_ids
 from app.money.approval import ApprovalKeyMissing, sign_approval
 from app.money.bridge_client import BridgeClient, BridgeRefused, BridgeUnavailable
 from app.money.models import MoneyArticleSupplier, MoneyCodebook, MoneyCompany
 from app.money.schemas import Article
-from app.purchasing import new_article, org_settings
-from app.purchasing.item_matching import confirm_article, load_lines, mark_non_stock, match_document, needs_matching
+from app.purchasing import delivery_note, new_article, org_settings
+from app.purchasing.item_matching import (
+    confirm_article,
+    load_lines,
+    mark_non_stock,
+    match_document,
+    needs_matching,
+    refresh_checks,
+)
 from app.purchasing.models import DocumentLine, SupplierDocument
 from app.purchasing.numbers import normalize_code
 from app.purchasing.service import MAX_BYTES, DocumentRejected, Source, ingest
 from app.purchasing.variants import Kind, has_variants, picker_order, variants_of
 
 router = APIRouter(prefix="/api/purchasing", tags=["purchasing"])
+log = structlog.get_logger(__name__)
 ROLES = frozenset({Role.warehouse, Role.accounting, Role.admin})
 ARTICLE_ROLES = ROLES  # D32: who may create a Money article from a line
 PAGE = 50
@@ -73,6 +83,7 @@ class DocumentOut(BaseModel):
     warnings: int
     error: str | None
     created_at: datetime
+    money_number: str | None = None  # 4c (#247): number of the koncept in Money (W6e „Koncept“ chip)
 
 
 class LineOut(BaseModel):
@@ -115,6 +126,8 @@ class DocumentDetail(DocumentOut):
     template: dict[str, Any]  # cached values of the branch template document (4c fills them)
     warehouses: list[dict[str, str]]  # Money warehouses for the line select (D18)
     can_create_article: bool = False  # D32: Settings 14 switch on + role warehouse / accounting / admin
+    can_write: bool = False  # D33 (#247): Settings 14 „Zápis dodacích listov“ on + role warehouse / accounting / admin
+    write: dict[str, Any] | None = None  # 4c state: creating | created | write_failed | unknown, number, mismatches
     items: list[LineOut]
 
 
@@ -173,6 +186,7 @@ def _out(doc: SupplierDocument, lines: int, branches: dict[uuid.UUID, BranchInfo
         "blocking": sum(1 for c in checks if c.get("level") == "blocking"),
         "warnings": sum(1 for c in checks if c.get("level") == "warning"),
         "error": doc.error,
+        "money_number": doc.money_number,
         "created_at": doc.created_at,
     }
 
@@ -331,6 +345,7 @@ async def _detail(db: DB, doc: SupplierDocument, *, money_available: bool = True
     )
     branch = await db.get(Branch, doc.branch_id) if doc.branch_id else None
     series = (branch.series_overrides or {}).get("received_delivery_note") if branch else None
+    conf = await org_settings.load(db)
     return DocumentDetail(
         **_out(doc, len(lines), await _branches(db)),
         delivery_note_number=doc.delivery_note_number,
@@ -349,14 +364,30 @@ async def _detail(db: DB, doc: SupplierDocument, *, money_available: bool = True
         series=str(series) if series else None,
         template=(branch.dl_template_values or {}) if branch else {},
         warehouses=warehouses,
-        can_create_article=person is not None
-        and person.role in ARTICLE_ROLES
-        and (await org_settings.load(db)).create_article,
+        can_create_article=person is not None and person.role in ARTICLE_ROLES and conf.create_article,
+        can_write=person is not None and person.role in ROLES and conf.write_delivery_notes,
+        write=_write_view(doc),
         items=[_line(ln, wh_codes) for ln in lines],
     )
 
 
-MATCHABLE = ("needs_review", "missing_data")
+MATCHABLE = ("needs_review", "missing_data", "write_failed")  # lines still editable
+WRITE_STATES = ("creating", "created", "write_failed", "unknown")
+
+
+def _write_view(doc: SupplierDocument) -> dict[str, Any] | None:
+    if doc.status not in WRITE_STATES and not doc.money_number:
+        return None
+    meta = doc.readback_diff or {}
+    return {
+        "state": doc.status if doc.status in WRITE_STATES else "created",
+        "number": doc.money_number,
+        "money_id": _s(doc.money_doc_id),
+        "mismatches": meta.get("mismatches") or [],
+        "reconciled": bool(meta.get("reconciled")),
+        "error": doc.error if doc.status in ("write_failed", "unknown") else None,
+        "written_at": meta.get("written_at"),
+    }
 
 
 @router.get("/documents/{doc_id}")
@@ -369,6 +400,11 @@ async def get_document(doc_id: uuid.UUID, person: ActivePerson, db: DB, settings
         async with BridgeClient(settings) as bridge:
             available = await match_document(db, bridge, doc)
         await db.commit()
+    elif doc.status in MATCHABLE:  # 4c: branch settings / template may have changed since the last check
+        before = (doc.validation, doc.status)
+        await refresh_checks(db, doc, await load_lines(db, doc))
+        if (doc.validation, doc.status) != before:
+            await db.commit()
     return await _detail(db, doc, money_available=available, person=person)
 
 
@@ -955,3 +991,153 @@ async def catalog_proposal(
     except BridgeUnavailable as exc:
         raise fail(503, exc.code) from None
     return CatalogProposal(katalog=None, size=n, main_catalog=base)
+
+
+# ----- Phase 4c (#247, D33) „Vytvoriť v Money“ — the received delivery note as a KONCEPT -----
+
+CREATING_TTL = timedelta(minutes=2)  # bridge timeout × 2 — an older `creating` is a crashed attempt → reconcile
+
+
+class CreateIn(BaseModel):
+    version: int
+
+
+async def _write_guard(db: DB, settings: Settings, person: Any) -> None:
+    _guard(settings, person)  # roles warehouse / accounting / admin
+    if not (await org_settings.load(db)).write_delivery_notes:
+        raise fail(403, "write_disabled")
+
+
+def _creating_fresh(doc: SupplierDocument, now: datetime) -> bool:
+    started = (doc.readback_diff or {}).get("started_at")
+    try:
+        return doc.status == "creating" and now - datetime.fromisoformat(str(started)) < CREATING_TTL
+    except ValueError:
+        return False
+
+
+@router.post("/documents/{doc_id}/create")
+async def create_in_money(
+    doc_id: uuid.UUID,
+    body: CreateIn,
+    ctx: Auth,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+) -> DocumentDetail:
+    """D33 / MONEY_API 5.5.7: the person's click in the confirm dialog is the approval. Every check runs again here
+    (DL-B1–B11), the SMID is stored before the bridge is called, nothing is retried automatically; a timeout leaves
+    `unknown` and the next click reconciles by the SMID. Money keeps the note as a koncept — a person finishes it."""
+    await _write_guard(db, settings, person)
+    doc = await db.scalar(select(SupplierDocument).where(SupplierDocument.id == doc_id).with_for_update())
+    if doc is None:
+        raise fail(404, "document_not_found")
+    blog = log.bind(document_id=str(doc.id))
+    now = datetime.now(UTC)
+    if doc.status == "created":
+        return await _detail(db, doc, person=person)  # a repeat after success: the stored result, nothing in Money
+    if _creating_fresh(doc, now):
+        raise fail(409, "in_progress")
+    if doc.status not in (*MATCHABLE, "creating", "unknown"):
+        raise fail(409, "document_not_reviewable")
+    if doc.version != body.version:
+        raise fail(409, "version_conflict")
+    lines = await load_lines(db, doc)
+    reviewable = doc.status in MATCHABLE
+    if reviewable:
+        await refresh_checks(db, doc, lines)
+    blocking = [c for c in (doc.validation or []) if c.get("level") == "blocking"]
+    if blocking:
+        await db.commit()
+        raise fail(409, "checks_failed", checks=blocking)  # DL-B1–B11 at approval, never trusting the UI
+    branch = await db.get(Branch, doc.branch_id) if doc.branch_id else None
+    if branch is None:  # pragma: no cover — DL-B1 blocks above
+        raise fail(409, "checks_failed")
+    conf = await org_settings.load(db)
+    state = await org_settings.load_state(db)
+    values = delivery_note.branch_values(branch, await invalid_branch_ids(db, branch.id))
+    payload, expected = delivery_note.build_payload(
+        doc,
+        lines,
+        branch,
+        values,
+        now=now,
+        issue_on_approval=conf.issue_date == "approval",
+        with_address=state.send_supplier_address,
+    )
+    digest = delivery_note.payload_hash(payload)
+    doc.status = "creating"
+    doc.error = None
+    doc.readback_diff = {"started_at": now.isoformat(), "payload_sha256": digest}
+    doc.version += 1
+    await db.commit()  # the SMID (`idempotency_key`) and the attempt are stored before the bridge is called
+    blog.info("purchasing.koncept_write_started", lines=len(expected))
+
+    try:
+        token = sign_approval(
+            settings,
+            action="delivery_note.create",
+            company_id=doc.supplier_money_id or new_article.NIL,
+            person_id=person.id,
+            body=delivery_note.body_bytes(payload),
+        )
+    except ApprovalKeyMissing:
+        doc.status, doc.error = "write_failed", "approval_key_missing"
+        await db.commit()
+        raise fail(503, "approval_key_missing") from None
+    try:
+        async with BridgeClient(settings) as bridge:
+            back = await bridge.create_delivery_note(payload, token)
+    except BridgeRefused as exc:
+        if exc.code == "duplicate":  # DL-B3 in Money: a person must look — nothing was created
+            number = exc.detail.get("number")
+            doc.status = "missing_data"
+            doc.validation = [
+                *(doc.validation or []),
+                {"id": "DL-B3", "level": "blocking", "params": {"number": number, "money": True}},
+            ]
+            await db.commit()
+            blog.info("purchasing.koncept_write_duplicate")
+            raise fail(409, "duplicate", number=number) from None
+        doc.status, doc.error = "write_failed", exc.code
+        await db.commit()
+        blog.warning("purchasing.koncept_write_refused", code=exc.code)
+        raise fail(exc.status if exc.status in (403, 409, 422) else 502, exc.code) from None
+    except BridgeUnavailable as exc:
+        doc.status, doc.error = "unknown", exc.code  # maybe written — the next click reconciles by SMID
+        await db.commit()
+        blog.warning("purchasing.koncept_write_unknown", code=exc.code)
+        raise fail(503, exc.code) from None
+
+    mismatches = delivery_note.compare(expected, back)
+    doc.status = "created"
+    doc.money_doc_id, doc.money_number = back.id, back.number
+    doc.readback_diff = {
+        "started_at": now.isoformat(),
+        "written_at": datetime.now(UTC).isoformat(),
+        "payload_sha256": digest,
+        "mismatches": mismatches,
+        "reconciled": back.reconciled,
+    }
+    doc.template_source = branch.dl_template_money_id
+    if back.address_empty and not state.send_supplier_address:  # MONEY_API 5.5.7: next writes send the address
+        await org_settings.save_state(db, state.model_copy(update={"send_supplier_address": True}))
+    audit(
+        db,
+        "purchasing.delivery_note_created",
+        account_id=ctx.account.id,
+        person_id=person.id,
+        object_type="document",
+        object_id=str(doc.id),
+        details={
+            "money_id": str(back.id),
+            "number": back.number,
+            "payload_sha256": digest,
+            "reconciled": back.reconciled,
+            "mismatches": len(mismatches),
+            "koncept": True,
+        },
+    )
+    await db.commit()
+    blog.info("purchasing.koncept_written", reconciled=back.reconciled, mismatches=len(mismatches))
+    return await _detail(db, doc, person=person)

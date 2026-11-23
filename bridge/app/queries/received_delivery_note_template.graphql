@@ -3,7 +3,7 @@ query ReceivedDeliveryNoteTemplate($id: ID!) {
     ID Deleted CisloDokladu Nazev DatumVystaveni Firma { Nazev } Stredisko_ID
     CiselnaRada_ID DruhPohybu_ID DruhSkladovehoPohybu_ID Predkontace_ID RegistraceDPH_ID DruhDokladu_ID Group_ID Mena_ID
     Polozky {
-      TypObsahu TypCeny DruhPolozky_ID SazbaDPH_ID DruhSazbyDPH
+      TypObsahu TypCeny DruhPolozky_ID SazbaDPH_ID DruhSazbyDPH DphSazba
       ObsahPolozky { Artikl_ID Sklad_ID VazbaTypVazby DruhPolozky_ID }
     }
   }

@@ -35,6 +35,7 @@ class PurchasingSettings(BaseModel):
     issue_date: Literal["supplier", "approval"] = "supplier"
     warehouse_rules: list[WarehouseRule] = Field(default_factory=list, max_length=200)
     create_article: bool = False  # D32 (#239) „Zakladanie artiklov v Money“ from the W6h drawer; default off
+    write_delivery_notes: bool = False  # D33 (#247) „Zápis dodacích listov do Money (koncept)“; default off
 
     @field_validator("confirm_roles")
     @classmethod
@@ -58,5 +59,26 @@ async def save(db: AsyncSession, value: PurchasingSettings) -> None:
     row = await db.scalar(select(OrgSettings).where(OrgSettings.section == SECTION))
     if row is None:
         row = OrgSettings(section=SECTION, data={})
+        db.add(row)
+    row.data = value.model_dump(mode="json")
+
+
+STATE_SECTION = "purchasing_state"  # values the app learns itself — never edited in Settings
+
+
+class PurchasingState(BaseModel):
+    # MONEY_API 5.5.7: a koncept read back without the supplier address → the next writes send Adresa*/IC/DIC/ICDPH
+    send_supplier_address: bool = False
+
+
+async def load_state(db: AsyncSession) -> PurchasingState:
+    row = await db.scalar(select(OrgSettings).where(OrgSettings.section == STATE_SECTION))
+    return PurchasingState.model_validate(row.data) if row and row.data else PurchasingState()
+
+
+async def save_state(db: AsyncSession, value: PurchasingState) -> None:
+    row = await db.scalar(select(OrgSettings).where(OrgSettings.section == STATE_SECTION))
+    if row is None:
+        row = OrgSettings(section=STATE_SECTION, data={})
         db.add(row)
     row.data = value.model_dump(mode="json")

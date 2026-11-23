@@ -405,6 +405,8 @@ def template_from(raw: dict[str, Any]) -> DeliveryNoteTemplate:
             for k in ("DruhPolozky_ID", "SazbaDPH_ID"):
                 if (v := _uuid(item.get(k))) is not None:
                     line[k] = str(v)
+            if item.get("DphSazba") is not None:  # the VAT % of SazbaDPH_ID — lines with another rate never get it
+                line["DphSazba"] = format(_dec(item["DphSazba"]).normalize(), "f")
             if content.get("VazbaTypVazby") is not None:
                 line["VazbaTypVazby"] = int(content["VazbaTypVazby"])
             if "DruhPolozky_ID" not in line and (v := _uuid(content.get("DruhPolozky_ID"))) is not None:
