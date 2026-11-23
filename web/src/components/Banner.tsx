@@ -1,8 +1,8 @@
-import { CircleX, Info, Sparkles, TriangleAlert, WifiOff, X } from 'lucide-react';
+import { CircleCheck, CircleX, Info, Sparkles, TriangleAlert, WifiOff, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-export type BannerKind = 'offline' | 'info' | 'warning' | 'ai' | 'danger';
+export type BannerKind = 'offline' | 'info' | 'warning' | 'ai' | 'danger' | 'success';
 
 const STYLE: Record<BannerKind, { box: string; icon: ReactNode; text: string; action: string }> = {
   offline: {
@@ -28,6 +28,12 @@ const STYLE: Record<BannerKind, { box: string; icon: ReactNode; text: string; ac
     icon: <Sparkles size={18} aria-hidden="true" className="shrink-0 text-ai-600" />,
     text: 'text-text-primary',
     action: 'text-ai-600',
+  },
+  success: {
+    box: 'bg-success-50 border-success-600',
+    icon: <CircleCheck size={18} aria-hidden="true" className="shrink-0 text-success-600" />,
+    text: 'text-text-primary',
+    action: 'text-brand-primary-600',
   },
   danger: {
     box: 'bg-danger-50 border-danger-600',

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CircleAlert, CircleCheck, Database, RefreshCw } from 'lucide-react';
+import { CircleAlert, CircleCheck, CircleMinus, CircleX, Database, FileText, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,10 +7,16 @@ import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
+import { day } from '../money/moneyApi';
 import { INPUT } from './adminUi';
 import {
   branchMoneyKey,
+  dlTemplateKey,
   fetchBranchMoney,
+  fetchDlTemplate,
+  fetchDlTemplates,
+  saveDlTemplate,
+  verifyBranch,
   saveBranchMoney,
   testBranchReport,
   type BranchMoney,
@@ -427,22 +433,38 @@ function ReportsForm({ initial }: { initial: MoneyReports }) {
   );
 }
 
-/** W12-11e Money (pobočka), #174: centre of the branch (Money codebook, never typed) and its own print reports, SK
- * only. Price list, warehouse, series and the template delivery note come with Phase 4. */
+/** W12-11e Money (pobočka), #174 / #247: centre and warehouse of the branch (Money codebooks, never typed), its own
+ * print reports (SK only) and the template received delivery note for the koncept write (D33). */
 export function BranchMoneyPanel({ branchId }: { branchId: string }) {
   const { t } = useTranslation();
   const query = useQuery({ queryKey: branchMoneyKey, queryFn: fetchBranchMoney });
   if (query.isError) return <Banner kind="danger" message={t('money.errors.money_unavailable')} />;
   const branch = query.data?.branches.find((b) => b.id === branchId);
   if (!query.data || !branch) return null;
-  return <BranchMoneyForm key={`${branchId}-${query.dataUpdatedAt}`} branch={branch} centres={query.data.centres} />;
+  return (
+    <BranchMoneyForm
+      key={`${branchId}-${query.dataUpdatedAt}`}
+      branch={branch}
+      centres={query.data.centres}
+      warehouses={query.data.warehouses ?? []}
+    />
+  );
 }
 
-function BranchMoneyForm({ branch, centres }: { branch: BranchMoney; centres: BranchMoneyList['centres'] }) {
+function BranchMoneyForm({
+  branch,
+  centres,
+  warehouses,
+}: {
+  branch: BranchMoney;
+  centres: BranchMoneyList['centres'];
+  warehouses: NonNullable<BranchMoneyList['warehouses']>;
+}) {
   const { t } = useTranslation();
   const toasts = useToasts();
   const qc = useQueryClient();
   const [centre, setCentre] = useState(branch.centre_id ?? '');
+  const [warehouse, setWarehouse] = useState(branch.warehouse_id ?? '');
   const [reports, setReports] = useState({ delivery_note: '', delivery_note_design: '', ...branch.reports });
   const [number, setNumber] = useState('');
   const invalid = BRANCH_REPORT_KEYS.some((k) => reports[k] && !REPORT_ID.test(reports[k]));
@@ -451,7 +473,13 @@ function BranchMoneyForm({ branch, centres }: { branch: BranchMoney; centres: Br
     toasts.error(t(`money.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
   };
   const save = useMutation({
-    mutationFn: () => saveBranchMoney(branch.id, { centre_id: centre || null, reports }),
+    mutationFn: () =>
+      saveBranchMoney(branch.id, {
+        centre_id: centre || null,
+        reports,
+        // sent only when changed: an unchanged form never clears the warehouse
+        ...(warehouse !== (branch.warehouse_id ?? '') ? { warehouse_id: warehouse } : {}),
+      }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: branchMoneyKey });
       toasts.success(t('settings.saved'));
@@ -491,6 +519,27 @@ function BranchMoneyForm({ branch, centres }: { branch: BranchMoney; centres: Br
         {branch.centre_missing ? (
           <span className="type-small text-danger-600">{t('money.branch.centreMissing')}</span>
         ) : null}
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="type-label text-text-primary">{t('money.branch.warehouse')}</span>
+        <select
+          value={warehouse}
+          onChange={(e) => setWarehouse(e.target.value)}
+          className={INPUT}
+          aria-invalid={branch.warehouse_missing}
+          data-testid="branch-warehouse"
+        >
+          <option value="">{t('money.branch.centreNone')}</option>
+          {branch.warehouse_missing && branch.warehouse_id ? (
+            <option value={branch.warehouse_id}>{t('money.branch.centreMissing')}</option>
+          ) : null}
+          {warehouses.map((w) => (
+            <option key={w.id} value={w.id}>
+              {[w.code, w.name].filter(Boolean).join(' – ')}
+            </option>
+          ))}
+        </select>
+        <span className="type-small text-text-secondary">{t('money.branch.warehouseHelp')}</span>
       </label>
       {BRANCH_REPORT_KEYS.map((k) => {
         const bad = Boolean(reports[k]) && !REPORT_ID.test(reports[k]);
@@ -534,8 +583,160 @@ function BranchMoneyForm({ branch, centres }: { branch: BranchMoney; centres: Br
           ))}
         </div>
       </section>
+      <BranchTemplate branchId={branch.id} centreSet={Boolean(branch.centre_id)} />
       <p className="type-small text-text-secondary">{t('money.branch.later')}</p>
     </div>
+  );
+}
+
+/** SETTINGS 11e „Vzorový dodací list pobočky“ + „Overiť nastavenie v Money“ (#247, D33; Figma `72:62745`,
+ * `72:62757`): the received note of the branch centre whose Money values the koncept write copies — never guessed. */
+function BranchTemplate({ branchId, centreSet }: { branchId: string; centreSet: boolean }) {
+  const { t } = useTranslation();
+  const toasts = useToasts();
+  const qc = useQueryClient();
+  const [picking, setPicking] = useState(false);
+  const state = useQuery({
+    queryKey: dlTemplateKey(branchId),
+    queryFn: () => fetchDlTemplate(branchId),
+    enabled: centreSet,
+    retry: false,
+  });
+  const rows = useQuery({
+    queryKey: [...dlTemplateKey(branchId), 'list'],
+    queryFn: () => fetchDlTemplates(branchId),
+    enabled: picking,
+    retry: false,
+  });
+  const fail = (e: unknown) => {
+    const code = e instanceof ApiError ? e.detail.code : 'generic';
+    toasts.error(t(`money.template.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
+  };
+  const pick = useMutation({
+    mutationFn: (noteId: string) => saveDlTemplate(branchId, noteId),
+    onSuccess: (out) => {
+      qc.setQueryData(dlTemplateKey(branchId), out);
+      setPicking(false);
+      toasts.success(t('settings.saved'));
+    },
+    onError: fail,
+  });
+  const verify = useMutation({ mutationFn: () => verifyBranch(branchId), onError: fail });
+  const tpl = state.data?.template ?? null;
+  return (
+    <section className="flex flex-col gap-3" data-testid="branch-dl-template">
+      <div className="flex flex-col gap-0.5">
+        <span className="type-label flex items-center gap-1.5 text-text-primary">
+          {t('money.template.label')}
+          <span className="type-caption text-warning-600" aria-hidden="true">
+            ⚠
+          </span>
+        </span>
+        <span className="type-caption text-text-secondary">{t('money.template.help')}</span>
+      </div>
+      {!centreSet ? (
+        <p className="type-small text-text-secondary">{t('money.template.centreFirst')}</p>
+      ) : state.data && !state.data.money_available ? (
+        <Banner kind="warning" message={t('money.errors.money_unavailable')} />
+      ) : tpl ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border-default bg-bg-subtle p-3">
+          <FileText size={18} aria-hidden="true" className="shrink-0 text-text-secondary" />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="type-body-strong text-text-primary" data-testid="branch-dl-template-number">
+              {tpl.number ?? '–'}
+            </span>
+            <span className="type-caption text-text-secondary">
+              {[tpl.supplier, tpl.issued_on ? day(tpl.issued_on) : null].filter(Boolean).join(' · ')}
+              {tpl.cached_at ? ` · ${t('money.template.cached', { date: day(tpl.cached_at) })}` : ''}
+            </span>
+            {tpl.missing.length ? (
+              <span className="type-caption text-danger-600">
+                {t('money.template.missing', { fields: tpl.missing.join(', ') })}
+              </span>
+            ) : null}
+          </div>
+          <Button variant="secondary" type="button" onClick={() => setPicking((p) => !p)}>
+            {t('money.template.pick')}
+          </Button>
+        </div>
+      ) : state.isSuccess ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="type-small text-danger-600">{t('money.template.none')}</span>
+          <Button variant="secondary" type="button" onClick={() => setPicking(true)}>
+            {t('money.template.pick')}
+          </Button>
+        </div>
+      ) : null}
+      {picking ? (
+        <div className="overflow-hidden rounded-md border border-border-default" data-testid="branch-dl-template-list">
+          {rows.isError ? (
+            <p className="type-small p-3 text-danger-600">{t('money.errors.money_unavailable')}</p>
+          ) : rows.data && rows.data.length === 0 ? (
+            <p className="type-small p-3 text-text-secondary">{t('money.template.empty')}</p>
+          ) : (
+            (rows.data ?? []).map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                disabled={pick.isPending || r.selected}
+                onClick={() => pick.mutate(r.id)}
+                className="type-small flex w-full items-center gap-3 border-b border-border-default px-3 py-2 text-left last:border-b-0 hover:bg-bg-subtle disabled:cursor-default"
+              >
+                <span className="w-32 shrink-0 tabular-nums text-text-primary">{r.number ?? '–'}</span>
+                <span className="min-w-0 flex-1 truncate text-text-primary">{r.supplier ?? '–'}</span>
+                <span className="shrink-0 text-text-secondary">{r.issued_on ? day(r.issued_on) : ''}</span>
+                {r.by_smart_mail ? (
+                  <span className="type-caption shrink-0 rounded-full bg-bg-muted px-2 text-text-secondary">
+                    {t('money.template.bySmartMail')}
+                  </span>
+                ) : null}
+                {r.selected ? (
+                  <span className="type-caption shrink-0 rounded-full bg-success-50 px-2 text-success-600">
+                    {t('money.template.selected')}
+                  </span>
+                ) : null}
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+      <div className="flex flex-col gap-2">
+        <div>
+          <Button
+            variant="secondary"
+            type="button"
+            disabled={verify.isPending}
+            onClick={() => verify.mutate()}
+            data-testid="branch-verify"
+          >
+            {t('money.template.verify')}
+          </Button>
+        </div>
+        {verify.data ? (
+          <ul className="flex flex-col gap-1" data-testid="branch-verify-result">
+            {verify.data.rows.map((row) => (
+              <li key={row.id} className="type-small flex items-center gap-2">
+                {row.ok === true ? (
+                  <CircleCheck size={14} aria-hidden="true" className="text-success-600" />
+                ) : row.ok === false ? (
+                  <CircleX size={14} aria-hidden="true" className="text-danger-600" />
+                ) : (
+                  <CircleMinus size={14} aria-hidden="true" className="text-text-tertiary" />
+                )}
+                <span className="text-text-primary">{t(`money.template.check.${row.id}`)}</span>
+                <span className="text-text-secondary">
+                  {row.ok === true
+                    ? t('money.template.ok')
+                    : row.ok === false
+                      ? t('money.template.bad')
+                      : t('money.template.notChecked')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

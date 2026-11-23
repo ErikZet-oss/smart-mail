@@ -5,7 +5,19 @@ export type SupplierDocument = {
   id: string;
   source: 'mail' | 'upload';
   kind: 'invoice' | 'delivery_note' | 'unknown';
-  status: 'extracting' | 'needs_review' | 'missing_data' | 'duplicate' | 'unreadable' | 'failed' | 'ignored';
+  status:
+    | 'extracting'
+    | 'needs_review'
+    | 'missing_data'
+    | 'duplicate'
+    | 'unreadable'
+    | 'failed'
+    | 'ignored'
+    // 4c (#247, D33): the received delivery note written to Money as a koncept
+    | 'creating'
+    | 'created'
+    | 'write_failed'
+    | 'unknown';
   filename: string;
   branch_id: string | null;
   branch_name: string | null;
@@ -23,6 +35,8 @@ export type SupplierDocument = {
   warnings: number;
   error: string | null;
   created_at: string;
+  /** 4c: number of the koncept in Money (W6e „Koncept“ chip). */
+  money_number?: string | null;
 };
 
 export type DocumentPage = { items: SupplierDocument[]; total: number };
@@ -110,9 +124,27 @@ export type DocumentDetail = SupplierDocument & {
   warehouses: Warehouse[];
   /** D32: Settings 14 switch on + role warehouse / accounting / admin. */
   can_create_article?: boolean;
+  /** D33 (#247): Settings 14 „Zápis dodacích listov do Money (koncept)“ on + role warehouse / accounting / admin. */
+  can_write?: boolean;
+  write?: WriteState | null;
   items: DocLine[];
 };
 export type Article = ArticleSnap & { id: string; inactive: boolean };
+/** 4c state of the Money write (D33): the note is a koncept that a person finishes in Money. */
+export type Mismatch = { field: string; line?: number; expected?: string; got?: string };
+export type WriteState = {
+  state: 'creating' | 'created' | 'write_failed' | 'unknown';
+  number: string | null;
+  money_id: string | null;
+  mismatches: Mismatch[];
+  reconciled: boolean;
+  error: string | null;
+  written_at: string | null;
+};
+
+/** „Vytvoriť v Money“ after the confirm dialog — the click is the approval; nothing is retried automatically. */
+export const createInMoney = (id: string, version: number) =>
+  api<DocumentDetail>('POST', `/api/purchasing/documents/${id}/create`, { version }, { global: false });
 
 export const documentKey = (id: string) => ['purchasing', 'document', id] as const;
 export const fetchDocument = (id: string) => api<DocumentDetail>('GET', `/api/purchasing/documents/${id}`);
