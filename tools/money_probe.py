@@ -82,6 +82,7 @@ Usage
      # PROBE_DL_DESIGN_ID=34                        # optional: the design id from the list of designs
      # PROBE_VARIANT_MAIN=3090225,3090025            # --variants: catalog numbers of main cards that have variants
      # PROBE_DL_KONCEPT_NUMBER=302600953               # --koncept: a received delivery note saved as koncept in Money
+     # PROBE_DL_COMPARE_NUMBER=302600952               # --koncept: a normal (not koncept) note of the same branch
      # PROBE_ARTICLE_TEST_CATALOG=SMPROBE01            # --article-write-test: catalog of the test card (must not exist)
      # PROBE_PRICE_LISTS=10-bez DPH,20-bez DPH        # --phase4: price-list codes set on the branches (Settings 11e)
      PROBE_EMAIL=novak@abcstav.sk                    # e-mail of a contact person that exists in the address book
@@ -1640,11 +1641,29 @@ def koncept_probe(http, number):
     out["items"] = len(items)
     out["item_fields"] = [{k: _shown(it.get(k), item_read[k][1]) for k in item
                            if _shown(it.get(k), item_read[k][1]) is not None} for it in items[:3]]
-    st, d, e, _ = gql(http, "{ ReceivedDeliveryNotes(Count:300){ Stav Vyrizeno Zauctovano } }")
+    flags = [k for k in head if head_read[k][1] in ("Int", "Boolean")]
+    st, d, e, _ = gql(http, "{ ReceivedDeliveryNotes(Count:300){ %s } }" % " ".join(flags))
     rows = (d or {}).get("ReceivedDeliveryNotes") or []
     out["last_300_Stav"] = distinct(r.get("Stav") for r in rows)
     out["last_300_Vyrizeno"] = distinct(r.get("Vyrizeno") for r in rows)
     out["last_300_Zauctovano"] = distinct(r.get("Zauctovano") for r in rows)
+    # pilot 2026-11-23: Stav is 0 everywhere — the koncept flag is one of the numbers / flags where the draft differs
+    out["flags_that_vary_in_last_300"] = {k: distinct(r.get(k) for r in rows) for k in flags
+                                          if len({str(r.get(k)) for r in rows}) > 1}
+    compare = env("PROBE_DL_COMPARE_NUMBER")
+    if compare:
+        st, d, e, _ = gql(http, q, {"f": f"CisloDokladu~eq~{compare}"})
+        other = ((d or {}).get("ReceivedDeliveryNotes") or [None])[0]
+        if other:
+            diff = {}
+            for k in head:
+                kind = head_read[k][1]
+                a, b = _shown(doc.get(k), kind), _shown(other.get(k), kind)
+                if k not in ("ID", "CisloDokladu", "CisloRady") and str(a) != str(b) and (kind in ("Int", "Boolean") or a is None or b is None):
+                    diff[k] = {"koncept": a, "normal": b}
+            out["differs_from_normal_note"] = diff
+        else:
+            out["differs_from_normal_note"] = f"note {compare} not found"
     step("koncept – the draft note", True, ms=ms,
          note=f"Stav {out['Stav']}, Vyrizeno {out['Vyrizeno']}, Zauctovano {out['Zauctovano']}; "
               f"last 300 Stav {out['last_300_Stav']}")
