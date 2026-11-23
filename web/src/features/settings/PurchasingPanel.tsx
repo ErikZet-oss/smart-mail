@@ -23,6 +23,7 @@ type Purchasing = {
   warehouse_rules: Rule[];
   create_article: boolean;
   write_delivery_notes: boolean;
+  accept_delivery_notes: boolean;
   branch_warehouses: string[];
   warehouses: { id: string; label: string }[];
   suppliers: { id: string; label: string }[];
@@ -54,6 +55,7 @@ type Form = Pick<
   | 'warehouse_rules'
   | 'create_article'
   | 'write_delivery_notes'
+  | 'accept_delivery_notes'
 >;
 const toForm = (p: Purchasing): Form => ({
   price_diff_pct: p.price_diff_pct,
@@ -63,6 +65,7 @@ const toForm = (p: Purchasing): Form => ({
   warehouse_rules: p.warehouse_rules,
   create_article: p.create_article,
   write_delivery_notes: p.write_delivery_notes,
+  accept_delivery_notes: p.accept_delivery_notes,
 });
 const pctOk = (v: string) => PCT.test(v) && Number(v.replace(',', '.')) <= 100;
 
@@ -251,6 +254,13 @@ export function PurchasingPanel() {
             checked={form.create_article}
             onChange={(v) => set({ create_article: v })}
             label={L('createArticleSwitch')}
+          />
+        </Row>
+        <Row label={L('acceptNotes')} help={L('acceptNotesHelp')}>
+          <Switch
+            checked={form.accept_delivery_notes}
+            onChange={(v) => set({ accept_delivery_notes: v })}
+            label={L('acceptNotesSwitch')}
           />
         </Row>
         <Row label={L('writeNotes')} help={L('writeNotesHelp')}>

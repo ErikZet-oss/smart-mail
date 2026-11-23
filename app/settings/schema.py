@@ -594,6 +594,18 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
                 admin_only=True,
             ),
             field(
+                "purchasing.accept_delivery_notes",
+                label="Spracovať aj dodacie listy dodávateľa",
+                control="switch",
+                default=False,
+                help=(
+                    "Predvolene sa do zoznamu Dodacie listy berú len faktúry dodávateľa; potvrdenia objednávok a iné"
+                    " doklady sa automaticky skryjú. Zapnite, ak chcete prijímať tovar aj z dodacích listov dodávateľa."
+                ),
+                scope="G",
+                admin_only=True,
+            ),
+            field(
                 "purchasing.write_delivery_notes",
                 label="Zápis dodacích listov do Money (koncept)",
                 control="switch",

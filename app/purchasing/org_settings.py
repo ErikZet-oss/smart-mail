@@ -36,6 +36,8 @@ class PurchasingSettings(BaseModel):
     warehouse_rules: list[WarehouseRule] = Field(default_factory=list, max_length=200)
     create_article: bool = False  # D32 (#239) „Zakladanie artiklov v Money“ from the W6h drawer; default off
     write_delivery_notes: bool = False  # D33 (#247) „Zápis dodacích listov do Money (koncept)“; default off
+    # pilot 2026-11-23 (Erik): only supplier INVOICES are offered for receipt; delivery notes only when switched on
+    accept_delivery_notes: bool = False
 
     @field_validator("confirm_roles")
     @classmethod

@@ -8,7 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-DocKind = Literal["invoice", "delivery_note", "unknown"]
+# pilot 2026-11-23: order confirmations and other papers of a supplier are recognised and never offered for receipt
+DocKind = Literal["invoice", "delivery_note", "order_confirmation", "other", "unknown"]
 Method = Literal["isdoc", "ubl", "pdf_llm"]
 
 

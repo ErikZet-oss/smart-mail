@@ -3,6 +3,10 @@ delivery note (dodací list). Extract it for an employee who checks every value 
 not write anything.
 
 Rules:
+- kind: `invoice` = faktúra / daňový doklad / Rechnung; `delivery_note` = dodací list / Lieferschein;
+  `order_confirmation` = potvrdenie objednávky / order confirmation / Auftragsbestätigung (no invoice number, no VAT
+  due date); `other` = offer, credit note, statement, reminder, price list or anything else; `unknown` only when you
+  cannot tell.
 - Return **every goods line**, in the document's order. Never skip, merge or summarise lines, never invent lines.
 - Copy codes, numbers and names exactly as printed (supplier article code, EAN, our order number). Do not translate.
 - qty = quantity in the line's own unit; unit = the unit as printed (ks, bal, kg, m …). Never convert or round to

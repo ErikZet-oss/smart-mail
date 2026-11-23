@@ -23,6 +23,8 @@ type Props = {
   onIndex: (index: number) => void;
   onClose: () => void;
   formatSize: (bytes: number) => string;
+  /** Where the bytes come from; default = the mail attachment endpoint (W6h passes the supplier document file). */
+  urlOf?: (att: AttachmentOut) => string;
 };
 
 type Loaded =
@@ -38,11 +40,12 @@ export function AttachmentLightbox(props: Props) {
   return <LightboxBody key={props.attachments[props.index]?.id ?? 'none'} {...props} />;
 }
 
-function LightboxBody({ mailbox, attachments, index, onIndex, onClose, formatSize }: Props) {
+function LightboxBody({ mailbox, attachments, index, onIndex, onClose, formatSize, urlOf }: Props) {
   const { t } = useTranslation();
   const mobile = useMediaQuery(MOBILE_QUERY);
   const att = attachments[index];
   const kind = att ? previewKind(att) : null;
+  const src = att ? (urlOf ? urlOf(att) : attachmentUrl(mailbox, att.id)) : '';
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
@@ -59,7 +62,7 @@ function LightboxBody({ mailbox, attachments, index, onIndex, onClose, formatSiz
     let doc: PDFDocumentProxy | null = null;
     void (async () => {
       try {
-        const response = await fetch(attachmentUrl(mailbox, att.id), { credentials: 'same-origin' });
+        const response = await fetch(src, { credentials: 'same-origin' });
         if (response.status === 403) throw new Error('infected');
         if (!response.ok) throw new Error('failed');
         if (kind === 'image') {
@@ -91,7 +94,7 @@ function LightboxBody({ mailbox, attachments, index, onIndex, onClose, formatSiz
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       void doc?.destroy();
     };
-  }, [att, kind, mailbox, mobile]);
+  }, [att, kind, src, mobile]);
 
   const pages = loaded.state === 'pdf' ? loaded.doc.numPages : 1;
   const go = useCallback(
@@ -170,7 +173,8 @@ function LightboxBody({ mailbox, attachments, index, onIndex, onClose, formatSiz
       <header className="relative flex h-14 shrink-0 items-center gap-3 px-4 text-text-on-rail">
         <FileTypeIcon type={fileTypeOf(att.filename, att.content_type)} />
         <p className="type-body-strong min-w-0 flex-1 truncate text-text-on-rail-active">
-          {att.filename} · {formatSize(att.size)}
+          {att.filename}
+          {att.size > 0 ? ` · ${formatSize(att.size)}` : null}
         </p>
         {loaded.state === 'pdf' ? (
           <>
@@ -231,7 +235,7 @@ function LightboxBody({ mailbox, attachments, index, onIndex, onClose, formatSiz
           </>
         ) : null}
         <a
-          href={attachmentUrl(mailbox, att.id)}
+          href={src}
           download={att.filename}
           className={mobile ? tool : button}
           aria-label={t('mail.preview.download')}

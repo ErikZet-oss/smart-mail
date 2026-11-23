@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import type { Page } from '@playwright/test';
 
 import { expect, ME, ME_PICKER, mockApi, shot, test } from './fixtures';
@@ -466,4 +469,46 @@ test('#247 Settings 11e: branch warehouse, template note „Vybrať iný“ and 
   await expect(result).toContainText('Vzorový dodací list');
   await expect(result).toContainText('Cenník pobočky');
   await shot(page, 'issue247-W12-11e-template-desktop');
+});
+
+// pilot 2026-11-23: „Originál dokladu“ opens the W2l preview (an iframe was blocked → the browser downloaded the file)
+const PDF = readFileSync(fileURLToPath(new URL('./assets/preview-2pages.pdf', import.meta.url)));
+
+test('W6h: „Originál dokladu“ opens the PDF in the preview, not a download', async ({ page }) => {
+  await mockApi(page, { ...BASE, 'GET /api/purchasing/documents/d-1': { body: detail() } });
+  await page.route('**/api/purchasing/documents/d-1/file', (route) =>
+    route.fulfill({
+      body: PDF,
+      contentType: 'application/pdf',
+      headers: { 'Content-Disposition': 'attachment; filename="FA-2611452.pdf"' },
+    }),
+  );
+  await open(page, false);
+  await page.getByTestId('w6h-original').click();
+  const box = page.getByTestId('attachment-lightbox');
+  await expect(box).toBeVisible();
+  await expect(box).toContainText('FA-2611452.pdf');
+  await expect(box.getByTestId('pdf-page')).toHaveText('Strana 1 / 2');
+  await expect(box.getByTestId('pdf-page-view')).toHaveAttribute('data-rendered', '1');
+  await shot(page, 'w6h-original-preview-desktop');
+  await page.keyboard.press('Escape');
+  await expect(box).toHaveCount(0);
+});
+
+test('W6h: an order confirmation is hidden with „Nie je faktúra – skryť“', async ({ page }) => {
+  let hidden = 0;
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': { body: detail() },
+    'POST /api/purchasing/documents/d-1/ignore': () => {
+      hidden += 1;
+      return { body: { ...detail({ status: 'ignored' }), items: undefined } };
+    },
+    'GET /api/purchasing/documents': { body: { items: [], total: 0 } },
+  });
+  await open(page, false);
+  await page.getByTestId('w6h-hide').click();
+  await expect.poll(() => hidden).toBe(1);
+  await expect(page.getByText('Doklad je skrytý.')).toBeVisible();
+  await expect(page).toHaveURL(/\/docs\/delivery-notes$/);
 });

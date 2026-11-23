@@ -27,6 +27,7 @@ from app.core.config import Settings
 from app.mail import storage
 from app.mail.models import Message
 from app.money.models import MoneyCompany
+from app.purchasing import org_settings
 from app.purchasing.models import DocumentLine, SupplierDocument
 from app.purchasing.pdf_extract import extract_pdf, pdf_text
 from app.purchasing.schemas import ExtractedDoc
@@ -248,7 +249,13 @@ async def apply_extraction(db: AsyncSession, doc: SupplierDocument, ex: Extracte
         ),
     )
     doc.validation = checks
-    if duplicate:
+    conf = await org_settings.load(db)
+    receivable = ("invoice", "unknown") + (("delivery_note",) if conf.accept_delivery_notes else ())
+    if doc.source == "mail" and ex.kind not in receivable:
+        # pilot 2026-11-23: an order confirmation (or another paper) next to the invoice gave every delivery twice;
+        # a file uploaded by hand (W6u) is always the person's choice and stays for review
+        doc.status, doc.error = "ignored", f"not_for_receipt:{ex.kind}"
+    elif duplicate:
         doc.status = "duplicate"
     elif any(c["level"] == "blocking" for c in checks):
         doc.status = "missing_data"
