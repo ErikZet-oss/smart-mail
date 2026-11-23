@@ -23,8 +23,15 @@ TEMPLATE = {
     "Stav": 0,
     "CiselnaRada_ID": SERIES,
     "Stredisko_ID": "c",
+    "Group_ID": "g",
     "Polozky": [
-        {"Mnozstvi": 100, "JednCena": 0.0047, "TypCeny": 0, "ObsahPolozky": {"Artikl_ID": ART, "Sklad_ID": WH}}
+        {
+            "Mnozstvi": 100,
+            "JednCena": 0.0047,
+            "TypCeny": 0,
+            "TypObsahu": 1,
+            "ObsahPolozky": {"Artikl_ID": ART, "Sklad_ID": WH},
+        }
     ],
 }
 
@@ -90,9 +97,15 @@ def test_dl_koncept_write_creates_one_koncept_copied_from_the_template(
     assert len(http.mutations) == 1
     m = http.mutations[0]
     assert m["Faze"] == 0 and m["Schvaleno"] is False and m["Nazev"].startswith("Smartmail")
-    assert "SMID:" in m["Poznamka"] and m["CiselnaRada_ID"] == SERIES
+    assert "SMID:" in m["Poznamka"] and m["CiselnaRada_ID"] == SERIES and m["Group_ID"] == "g"
     assert m["Polozky"] == [
-        {"ObsahPolozky": {"Artikl_ID": ART, "Sklad_ID": WH}, "Mnozstvi": 1, "JednCena": 0.0047, "TypCeny": 0}
+        {
+            "ObsahPolozky": {"Artikl_ID": ART, "Sklad_ID": WH},
+            "Mnozstvi": 1,
+            "TypObsahu": 1,
+            "JednCena": 0.0047,
+            "TypCeny": 0,
+        }
     ]
     steps = probe.dl_koncept_report["steps"]
     assert steps["number"] == "309990777" and steps["same_article_and_warehouse"] is True

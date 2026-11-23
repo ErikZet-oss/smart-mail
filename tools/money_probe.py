@@ -1692,10 +1692,11 @@ def write_koncept_report():
 
 # ----------------------------------------------------------------------------- --dl-koncept-write-test
 dl_koncept_report = {"steps": {}}
+# Group_ID = the list group of the branch („DLP NR“ …, pilot 2026-11-23: without it the note lands in „Nezaradené“)
 KONCEPT_HEADER = ("CiselnaRada_ID", "Stredisko_ID", "DruhPohybu_ID", "DruhSkladovehoPohybu_ID", "Predkontace_ID",
-                  "RegistraceDPH_ID", "DruhDokladu_ID")
+                  "RegistraceDPH_ID", "DruhDokladu_ID", "Group_ID")
 KONCEPT_READ = ("ID CisloDokladu Nazev Poznamka Faze Schvaleno Stav PocetPolozek " + " ".join(KONCEPT_HEADER)
-                + " Polozky { Mnozstvi JednCena TypCeny SazbaDPH_ID DruhSazbyDPH ObsahPolozky { Artikl_ID Sklad_ID } }")
+                + " Polozky { Mnozstvi JednCena TypCeny SazbaDPH_ID DruhSazbyDPH TypObsahu Nazev ObsahPolozky { Artikl_ID Sklad_ID } }")
 
 
 def dl_koncept_write_test(http, template_number):
@@ -1716,7 +1717,8 @@ def dl_koncept_write_test(http, template_number):
     smid = "PROBE-DLK-" + dt.datetime.now().strftime("%Y%m%d%H%M%S")
     line = items[0]
     item = {"ObsahPolozky": {"Artikl_ID": content["Artikl_ID"], "Sklad_ID": content["Sklad_ID"]}, "Mnozstvi": 1}
-    for k in ("JednCena", "TypCeny", "SazbaDPH_ID", "DruhSazbyDPH"):
+    # TypObsahu (1 = article line on the koncept): without it Money stored a text line without article / warehouse
+    for k in ("TypObsahu", "JednCena", "TypCeny", "SazbaDPH_ID", "DruhSazbyDPH"):
         if line.get(k) not in (None, ""):
             item[k] = line[k]
     note = {k: tpl[k] for k in KONCEPT_HEADER if tpl.get(k) not in (None, "", "00000000-0000-0000-0000-000000000000")}
@@ -1746,7 +1748,9 @@ def dl_koncept_write_test(http, template_number):
     b_content = (b_items[0].get("ObsahPolozky") or {}) if b_items else {}
     out.update({
         "number": back.get("CisloDokladu"), "Faze": back.get("Faze"), "Schvaleno": back.get("Schvaleno"),
-        "Stav": back.get("Stav"), "items": len(b_items),
+        "Stav": back.get("Stav"), "items": len(b_items), "item_TypObsahu": (b_items[0] if b_items else {}).get("TypObsahu"),
+        "item_is_article_line": bool(b_content.get("Artikl_ID")), "item_has_warehouse": bool(b_content.get("Sklad_ID")),
+        "same_group": back.get("Group_ID") == tpl.get("Group_ID"),
         "same_article_and_warehouse": b_content.get("Artikl_ID") == content["Artikl_ID"]
         and b_content.get("Sklad_ID") == content["Sklad_ID"],
         "same_series_and_centre": back.get("CiselnaRada_ID") == tpl.get("CiselnaRada_ID")
