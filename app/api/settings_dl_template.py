@@ -38,6 +38,9 @@ class TemplateOut(BaseModel):
     issued_on: date | None
     cached_at: datetime | None
     missing: list[str]  # values the write needs that the template does not have → DL-B6
+    # pilot 2026-11-23: which branch the template note is from — centre and series as Money names them
+    centre: str | None = None
+    series: str | None = None
 
 
 class TemplateState(BaseModel):
@@ -71,10 +74,25 @@ class VerifyOut(BaseModel):
     template: TemplateOut | None
 
 
-def _out(branch: Branch) -> TemplateOut | None:
+async def _codebook_label(db: DB, kind: str, value: object) -> str | None:
+    """`Kód – Názov` of a cached Money codebook value (centres, numerical series), None when unknown."""
+    try:
+        money_id = uuid.UUID(str(value)) if value else None
+    except ValueError:
+        return None
+    if money_id is None:
+        return None
+    row = await db.scalar(select(MoneyCodebook).where(MoneyCodebook.kind == kind, MoneyCodebook.money_id == money_id))
+    if row is None:
+        return None
+    return " – ".join(x for x in (row.code, row.name) if x) or None
+
+
+async def _out(db: DB, branch: Branch) -> TemplateOut | None:
     values = branch.dl_template_values or {}
     if not branch.dl_template_money_id or not values:
         return None
+    header = values.get("header") or {}
     return TemplateOut(
         id=str(branch.dl_template_money_id),
         number=values.get("number"),
@@ -82,6 +100,8 @@ def _out(branch: Branch) -> TemplateOut | None:
         issued_on=values.get("issued_on"),
         cached_at=branch.dl_template_cached_at,
         missing=missing_template_values(values),
+        centre=await _codebook_label(db, "centres", values.get("centre_id")),
+        series=await _codebook_label(db, "numerical-series", header.get("CiselnaRada_ID")),
     )
 
 
@@ -112,7 +132,7 @@ async def get_template(branch_id: uuid.UUID, admin: Admin, ctx: Auth, db: DB, se
     branch = await _branch(db, branch_id)
     centre = _centre(branch)
     if centre is None or branch.dl_template_money_id or not settings.feature_money:
-        return TemplateState(centre_set=centre is not None, template=_out(branch))
+        return TemplateState(centre_set=centre is not None, template=await _out(db, branch))
     try:
         async with BridgeClient(settings) as bridge:
             rows = await bridge.received_notes(centre, LIST_ROWS)
@@ -132,7 +152,7 @@ async def get_template(branch_id: uuid.UUID, admin: Admin, ctx: Auth, db: DB, se
             details={"note_id": str(tpl.id), "number": tpl.number, "auto": True},
         )
         await db.commit()
-    return TemplateState(centre_set=True, template=_out(branch))
+    return TemplateState(centre_set=True, template=await _out(db, branch))
 
 
 @router.get("/{branch_id}/dl-templates")
@@ -194,7 +214,7 @@ async def put_template(
         details={"before": before, "note_id": str(tpl.id), "number": tpl.number},
     )
     await db.commit()
-    return TemplateState(centre_set=True, template=_out(branch))
+    return TemplateState(centre_set=True, template=await _out(db, branch))
 
 
 async def _in_codebook(db: DB, kind: str, value: str | None) -> bool | None:
@@ -234,4 +254,4 @@ async def verify_branch(branch_id: uuid.UUID, admin: Admin, db: DB, settings: Se
                 template_row = VerifyRow(id="template", ok=not missing, detail=",".join(missing) or None)
                 await db.commit()
     rows.append(template_row)
-    return VerifyOut(rows=rows, template=_out(branch))
+    return VerifyOut(rows=rows, template=await _out(db, branch))

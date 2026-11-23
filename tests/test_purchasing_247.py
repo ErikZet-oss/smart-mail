@@ -385,8 +385,18 @@ async def test_247_settings_11e_template_default_pick_and_verify(
         ),
     ]
     KonceptBridge.templates[other] = {**template(), "id": other, "centre_id": _id("centre-30")}
+    from datetime import UTC, datetime
+
+    from app.money.models import MoneyCodebook
+
+    now = datetime.now(UTC)
+    db.add(MoneyCodebook(kind="centres", money_id=uuid.UUID(CENTRE), code="20", name="Senica", synced_at=now))
+    db.add(MoneyCodebook(kind="numerical-series", money_id=uuid.UUID(SERIES), code="DLP SE", name=None, synced_at=now))
+    await db.commit()
     state = (await client.get(f"/api/settings/money/branches/{branch.id}/dl-template")).json()
     assert state["template"]["id"] == TEMPLATE_ID and state["template"]["missing"] == []  # never a Smart Mail note
+    # pilot 2026-11-23: the card says which branch the template note is from
+    assert state["template"]["centre"] == "20 – Senica" and state["template"]["series"] == "DLP SE"
     rows = (await client.get(f"/api/settings/money/branches/{branch.id}/dl-templates")).json()
     assert [r["selected"] for r in rows] == [False, True]
     bad = await client.send_json("PUT", f"/api/settings/money/branches/{branch.id}/dl-template", {"note_id": other})

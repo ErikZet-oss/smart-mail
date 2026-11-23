@@ -304,6 +304,8 @@ const TPL = (id: string, number: string) => ({
   issued_on: '2026-11-18',
   cached_at: '2026-11-23T08:00:00Z',
   missing: [],
+  centre: '20 – Senica',
+  series: 'DLP SE – Dodacie listy prijaté Senica',
 });
 
 test('#247 Settings 11e: branch warehouse, template note „Vybrať iný“ and „Overiť“', async ({ page }) => {
@@ -397,6 +399,10 @@ test('#247 Settings 11e: branch warehouse, template note „Vybrať iný“ and 
   await expect.poll(() => saved).toEqual([{ centre_id: CENTRE, reports: expect.anything(), warehouse_id: WH }]);
   const card = panel.getByTestId('branch-dl-template');
   await expect(card.getByTestId('branch-dl-template-number')).toHaveText('DLP0412/2026');
+  // pilot 2026-11-23: the card says which branch the template note is from
+  await expect(card.getByTestId('branch-dl-template-origin')).toHaveText(
+    'Doklad strediska 20 – Senica · číselný rad DLP SE – Dodacie listy prijaté Senica',
+  );
   await card.getByRole('button', { name: 'Vybrať iný' }).click();
   const list = card.getByTestId('branch-dl-template-list');
   await expect(list).toContainText('zo Smart Mail');
