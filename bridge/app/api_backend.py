@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 
+from app import wildcard
 from app.backend import (
     ArticleQuery,
     CatalogExists,
@@ -71,6 +72,8 @@ LATEST_DELIVERY_DAYS = 400
 VARIANT_LIMIT = 300  # #233: variants of up to 10 main cards in one GraphQL call
 SEARCH_LIMIT = 20
 ARTICLE_LIMIT = 20
+WILDCARD_SCAN = 300  # `%` search: rows read from Money for the AND of the pieces, then filtered by their order
+WILDCARD_LIMIT = 50
 HISTORY_LIMIT = 200
 
 
@@ -521,6 +524,15 @@ class ApiBackend:
             filter_ = cond("CarovyKod", "eq", query.ean)
         elif query.code:
             filter_ = any_(cond("Kod", "eq", query.code), cond("Katalog", "eq", query.code))
+        elif query.text and wildcard.is_wildcard(query.text):
+            # `%mat%4%934` like in Money S4: every piece in the name (AND in Money), then their order checked here
+            pieces = wildcard.parts(query.text)
+            if not pieces:
+                return []
+            filter_ = all_(*(cond("Nazev", "ct", p) for p in dict.fromkeys(pieces)))
+            rows = await self._list("articles", "Articles", filter_=filter_, count=WILDCARD_SCAN)
+            found = [a for a in (article_from(r) for r in rows) if wildcard.in_order(a.name, pieces)]
+            return found[:WILDCARD_LIMIT]
         elif query.text:
             filter_ = any_(cond("Nazev", "ct", query.text), cond("Katalog", "ct", query.text))
         else:

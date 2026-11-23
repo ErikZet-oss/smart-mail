@@ -601,3 +601,43 @@ async def test_233_variants_of_several_main_cards_in_one_or_call() -> None:
     assert body["variables"]["count"] <= 300 and "NadrazenyArtikl_ID" in body["query"]
     assert [a.inactive for a in found[main_a]] == [False, True] and found[main_b] == []  # deleted dropped
     assert found[main_a][0].parent_id == main_a
+
+
+@respx.mock
+async def test_wildcard_article_search_ands_the_pieces_and_checks_their_order() -> None:
+    """Pilot 2026-11-23: `%mat%4%934` like in Money S4 — no `%` in the filter, pieces in order, accents ignored."""
+    from app.backend import ArticleQuery
+
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+
+    def row(i: int, name: str) -> dict[str, Any]:
+        return {
+            "ID": f"a0000000-0000-4000-8000-{i:012d}",
+            "Deleted": False,
+            "Hidden": False,
+            "Kod": f"K{i}",
+            "Katalog": f"99{i}",
+            "Nazev": name,
+            "HlavniJednotka": {"Kod": "ks"},
+            "SeznamJednotek": [],
+        }
+
+    gql = respx.post(f"{BASE}/graphql")
+    gql.side_effect = [
+        _gql({"Articles": [row(1, "Matica DIN 934 M4 A2"), row(2, "mat. M4 4.8 DIN 934"), row(3, "MATICA 8 DIN 934")]})
+    ]
+    found = await ApiBackend(settings()).articles(ArticleQuery(text="%mat%4%934"))
+    body = json.loads(gql.calls[0].request.content)
+    assert body["variables"]["filter"] == "Nazev~ct~mat#Nazev~ct~4#Nazev~ct~934"
+    assert "%" not in body["variables"]["filter"]
+    # 1: „4“ only after „934“ → out; 3: no „4“ before „934“ → out
+    assert [a.name for a in found] == ["mat. M4 4.8 DIN 934"]
+
+
+def test_wildcard_helpers() -> None:
+    from app import wildcard
+
+    assert wildcard.parts("%mat%4%934") == ["mat", "4", "934"]
+    assert wildcard.parts("%%") == []
+    assert wildcard.in_order("Podložka DIN 125 M10", ["podlozka", "m10"])
+    assert not wildcard.in_order("M10 podložka", ["podlozka", "m10"])

@@ -109,3 +109,23 @@ async def test_picker_finds_article_by_cached_supplier_code(
     found = (await client.get("/api/purchasing/articles", params={"q": "09999.11.00"})).json()
     assert [a["id"] for a in found] == [str(VAR_M10.id)]
     assert found[0]["kind"] == "variant"  # #233: a variant without its main card stays a variant
+
+
+async def test_picker_percent_search_is_the_money_pattern_search_only(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, money_on: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pilot 2026-11-23: `%záv%M10` goes to the bridge as `q` only — no exact code, EAN or supplier-code step."""
+    calls: list[dict[str, str | None]] = []
+    original = PickerBridge.search_articles
+
+    async def spy(
+        self: PickerBridge, *, code: str | None = None, ean: str | None = None, q: str | None = None
+    ) -> list[Article]:
+        calls.append({"code": code, "ean": ean, "q": q})
+        return [VAR_M10] if q else await original(self, code=code, ean=ean, q=q)
+
+    monkeypatch.setattr(PickerBridge, "search_articles", spy)
+    await _signed_in(client, db, mail_server, role=Role.warehouse)
+    found = (await client.get("/api/purchasing/articles", params={"q": "%záv%M10"})).json()
+    assert calls == [{"code": None, "ean": None, "q": "%záv%M10"}]
+    assert [a["id"] for a in found] == [str(VAR_M10.id)]

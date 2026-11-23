@@ -509,7 +509,8 @@ async def search_articles(
     """Article picker of W6h. Results of every kind together, best first (pilot 2026-11-20: a catalog number showed
     only the main card `3090225`, never its variants `30902250010`, …):
     1. exact code / catalog, 2. EAN, 3. supplier code from the read cache (`money_article_suppliers`),
-    4. catalog or name containing the text (variants of a main card). At most `PICKER_LIMIT`, no duplicates."""
+    4. catalog or name containing the text (variants of a main card). At most `PICKER_LIMIT`, no duplicates.
+    With `%` (pilot 2026-11-23) it is the Money S4 pattern search in the name only — `%mat%4%934`."""
     _guard(settings, person)
     term = q.strip()
     if set(term) & set("~#|()"):
@@ -523,10 +524,12 @@ async def search_articles(
 
     try:
         async with BridgeClient(settings) as bridge:
-            add(await bridge.search_articles(code=term))
+            wildcard = "%" in term  # the pattern search: name only, no exact code / EAN / supplier code steps
+            if not wildcard:
+                add(await bridge.search_articles(code=term))
             if term.isdigit() and len(term) >= 8:
                 add(await bridge.search_articles(ean=term))
-            norm = normalize_code(term) or ""
+            norm = "" if wildcard else normalize_code(term) or ""
             if len(norm) >= 5:
                 ids = list(
                     await db.scalars(
