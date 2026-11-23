@@ -2491,13 +2491,14 @@
       "DL-B3": "Doklad dodávateľa {{number}} už existuje.",
       "DL-B4": "{{n}} riadkov nie je spárovaných.",
       "DL-B11": "Riadok {{n}} je na hlavnej karte, ktorá má varianty – vyberte variant.",
-      "DL-B7": "Súčet riadkov nesedí so súčtom dokladu (sadzba {{rate}} %).",
+      "DL-B7": "Súčet riadkov {{lines}} nesedí so súčtom dokladu {{document}} (sadzba {{rate}} %).",
       "DL-B8": "Množstvo musí byť väčšie ako 0 – vratky len v Money.",
       "DL-W1": "Riadok {{line}}: cena o {{x}} % iná ako minule ({{last}}).",
       "DL-W4": "Dátum vystavenia je v budúcnosti alebo starší ako 30 dní.",
       "DL-W5": "Poplatky sa nezapisujú (spolu {{sum}}).",
       "DL-W6": "Riadok {{line}}: kód dodávateľa nie je v karte artikla – exportovať.",
-      "DL-W8": "Riadok {{n}} ide na iný sklad ako sklad pobočky."
+      "DL-W8": "Riadok {{n}} ide na iný sklad ako sklad pobočky.",
+      "DL-W9": "Riadok {{line}}: počet × jedn. cena nesedí s celkovou cenou {{total}} – skontrolujte počet (zľava?)."
     },
     "errors": {
       "generic": "Uloženie sa nepodarilo. Skúste znova.",

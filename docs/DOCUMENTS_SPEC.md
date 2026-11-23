@@ -193,6 +193,7 @@ DL-B6 blocks with "Pobočka nemá vzorový dodací list – vytvorte jeden v Mon
 | DL-W6 | Line matched by a learned mapping that is not yet in the Money catalog | "Kód dodávateľa nie je v karte artikla – exportovať." |
 | DL-W7 | Article is inactive / blocked for purchase in Money | "Artikel je neaktívny." |
 | DL-W8 | Line warehouse is not the branch warehouse (allowed, D18) | "Riadok {n} ide na sklad {kód} – nie je to sklad pobočky." |
+| DL-W9 | PDF line: quantity × unit price ≠ printed line total (± 1 %, min. 0,02) — a misread quantity or a line discount. An ambiguous quantity `1.000` / `1,200` is read as thousands when only that reading matches the line total (pilot 2026-11-23) | "Riadok {n}: počet × jedn. cena nesedí s celkovou cenou {suma} – skontrolujte počet (zľava?)." |
 
 ### 2.8 Create call (bridge `POST /delivery-notes/received`, approval JWT, SMID in Poznamka)
 ```graphql

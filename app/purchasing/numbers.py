@@ -49,6 +49,31 @@ def parse_decimal(text: str | None) -> Decimal | None:
     return -value if neg else value
 
 
+_AMBIGUOUS_QTY = re.compile(r"\d{1,3}[.,]\d{3}")
+
+
+def parse_qty(text: str | None, unit_price: Decimal | None, line_total: Decimal | None) -> Decimal | None:
+    """Quantity of a PDF line. `1.000` / `1,200` alone is ambiguous: the decimal reading (1 / 1,2) is the default of
+    `parse_decimal`, but FABORY and others print thousands with a dot. The printed line total decides: when only the
+    thousands reading gives qty × unit price = line total, it wins (pilot 2026-11-23: 1000 ks arrived as 1 ks)."""
+    value = parse_decimal(text)
+    if value is None or text is None or unit_price is None or line_total is None:
+        return value
+    s = _SPACES.sub("", str(text)).strip()
+    if not _AMBIGUOUS_QTY.fullmatch(s):
+        return value
+    thousands = Decimal(s.replace(".", "").replace(",", ""))
+    if amount_matches(value, unit_price, line_total):
+        return value
+    return thousands if amount_matches(thousands, unit_price, line_total) else value
+
+
+def amount_matches(qty: Decimal, unit_price: Decimal, line_total: Decimal) -> bool:
+    """qty × unit price = line total within 1 % (min. 0,02) — printed unit prices are rounded."""
+    tolerance = max(Decimal("0.02"), abs(line_total) / 100)
+    return abs(qty * unit_price - line_total) <= tolerance
+
+
 def normalize_code(code: str | None) -> str | None:
     """Supplier/catalog codes compared without spaces, dashes, dots and case: `DIN 933 M8x30` → `DIN933M8X30`."""
     if code is None:
