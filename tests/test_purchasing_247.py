@@ -492,3 +492,36 @@ async def test_247_settings_11e_branch_warehouse_from_the_money_codebook(
     assert ok.status_code == 200 and ok.json()["warehouse_id"] == WAREHOUSE
     kept = await client.send_json("PUT", url, {"reports": {}})  # an older client without the field keeps it
     assert kept.json()["warehouse_id"] == WAREHOUSE
+
+
+async def test_247_branch_picker_assigns_a_branch_the_person_may_act_for(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, money_on: None
+) -> None:
+    """Pilot 2026-11-23 (UX_SPEC BranchChip ▾): a document without a branch → DL-B1; the warehouse person picks one of
+    its branches, the checks are recomputed and the change is audited; another branch is refused."""
+    from app.auth.models import Person, PersonBranch
+
+    await _signed_in(client, db, mail_server, role=Role.warehouse)
+    await _supplier(db)
+    mine, other = await _branch(db), await _branch(db)
+    person = await db.scalar(select(Person).where(Person.first_name == "Jana"))
+    assert person is not None
+    db.add(PersonBranch(person_id=person.id, branch_id=mine.id))
+    await db.commit()
+    doc_id = await _doc(client)
+    detail = (await client.get(f"/api/purchasing/documents/{doc_id}")).json()
+    assert detail["branch_id"] is None
+    assert any(c["id"] == "DL-B1" and c["params"].get("missing") == ["branch"] for c in detail["checks"])
+    assert [o["id"] for o in detail["branch_options"]] == [str(mine.id)]
+    url = f"/api/purchasing/documents/{doc_id}/branch"
+    refused = await client.send_json("PUT", url, {"branch_id": str(other.id), "version": detail["version"]})
+    assert refused.status_code == 403 and refused.json()["detail"]["code"] == "branch_not_allowed"
+    stale = await client.send_json("PUT", url, {"branch_id": str(mine.id), "version": detail["version"] - 1})
+    assert stale.status_code == 409
+    ok = await client.send_json("PUT", url, {"branch_id": str(mine.id), "version": detail["version"]})
+    assert ok.status_code == 200
+    after = ok.json()
+    assert after["branch_id"] == str(mine.id) and after["version"] == detail["version"] + 1
+    assert not any(c["id"] == "DL-B1" for c in after["checks"])
+    logged = await db.scalar(select(AuditLog).where(AuditLog.action == "purchasing.document_branch"))
+    assert logged is not None and logged.details["after"] == str(mine.id)

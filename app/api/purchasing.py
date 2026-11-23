@@ -20,7 +20,7 @@ from sqlalchemy import func, or_, select
 from app.ai.provider import get_llm_provider
 from app.api.mail import fail
 from app.auth.deps import DB, ActivePerson, Auth, SettingsDep
-from app.auth.models import Branch, Role
+from app.auth.models import Branch, PersonBranch, Role
 from app.core.audit import audit
 from app.core.config import Settings
 from app.core.content_disposition import content_disposition_attachment
@@ -128,6 +128,8 @@ class DocumentDetail(DocumentOut):
     can_create_article: bool = False  # D32: Settings 14 switch on + role warehouse / accounting / admin
     can_write: bool = False  # D33 (#247): Settings 14 „Zápis dodacích listov“ on + role warehouse / accounting / admin
     write: dict[str, Any] | None = None  # 4c state: creating | created | write_failed | unknown, number, mismatches
+    # UX_SPEC BranchChip ▾ (pilot 2026-11-23): the branches this person may assign the document to
+    branch_options: list[dict[str, str]] = []
     items: list[LineOut]
 
 
@@ -367,8 +369,67 @@ async def _detail(db: DB, doc: SupplierDocument, *, money_available: bool = True
         can_create_article=person is not None and person.role in ARTICLE_ROLES and conf.create_article,
         can_write=person is not None and person.role in ROLES and conf.write_delivery_notes,
         write=_write_view(doc),
+        branch_options=await _branch_options(db, person, doc),
         items=[_line(ln, wh_codes) for ln in lines],
     )
+
+
+async def _allowed_branch_ids(db: DB, person: Any) -> set[uuid.UUID] | None:
+    """None = every branch (admin); else the person's own branch + the branches it covers (person_branches)."""
+    if person is None:
+        return set()
+    if person.role == Role.admin:
+        return None
+    own = {person.branch_id} if person.branch_id else set()
+    covered = set(await db.scalars(select(PersonBranch.branch_id).where(PersonBranch.person_id == person.id)))
+    return own | covered
+
+
+async def _branch_options(db: DB, person: Any, doc: SupplierDocument) -> list[dict[str, str]]:
+    if person is None or person.role not in ROLES or doc.status not in MATCHABLE:
+        return []
+    allowed = await _allowed_branch_ids(db, person)
+    rows = await db.scalars(select(Branch).order_by(Branch.name))
+    return [{"id": str(b.id), "name": b.name} for b in rows if allowed is None or b.id in allowed]
+
+
+class BranchIn(BaseModel):
+    branch_id: uuid.UUID
+    version: int
+
+
+@router.put("/documents/{doc_id}/branch")
+async def set_document_branch(
+    doc_id: uuid.UUID, body: BranchIn, ctx: Auth, person: ActivePerson, db: DB, settings: SettingsDep
+) -> DocumentDetail:
+    """UX_SPEC BranchChip ▾ (pilot 2026-11-23): a document without a branch (or with a wrong one) gets the branch the
+    person picks — only branches the person may act for; the branch checks (DL-B1 / DL-B5 / DL-B6) are recomputed."""
+    _guard(settings, person)
+    doc = await _locked_doc(db, doc_id)
+    if doc.status not in MATCHABLE:
+        raise fail(409, "document_not_reviewable")
+    if doc.version != body.version:
+        raise fail(409, "version_conflict")
+    branch = await db.get(Branch, body.branch_id)
+    allowed = await _allowed_branch_ids(db, person)
+    if branch is None or (allowed is not None and branch.id not in allowed):
+        raise fail(403, "branch_not_allowed")
+    before = doc.branch_id
+    if before != branch.id:
+        doc.branch_id = branch.id
+        doc.version += 1
+        await refresh_checks(db, doc, await load_lines(db, doc))
+        audit(
+            db,
+            "purchasing.document_branch",
+            account_id=ctx.account.id,
+            person_id=person.id,
+            object_type="document",
+            object_id=str(doc.id),
+            details={"before": _s(before), "after": str(branch.id)},
+        )
+        await db.commit()
+    return await _detail(db, doc, person=person)
 
 
 MATCHABLE = ("needs_review", "missing_data", "write_failed")  # lines still editable

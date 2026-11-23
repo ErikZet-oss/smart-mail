@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   Database,
   ListChecks,
   Pencil,
@@ -17,6 +18,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { FileTypeIcon } from '../../components/FileTypeIcon';
+import { Menu } from '../../components/Menu';
 import { useToasts } from '../../components/toastContext';
 import { ApiError } from '../../lib/api';
 import { fileTypeOf } from '../../components/fileType';
@@ -36,6 +38,7 @@ import {
   fetchDocument,
   moneyNum,
   rematch,
+  setDocumentBranch,
   type Check,
   type DocLine,
   type DocumentDetail,
@@ -83,6 +86,20 @@ export function ScreenW6h() {
   });
   const toasts = useToasts();
   const navigate = useNavigate();
+  // UX_SPEC BranchChip ▾ (pilot 2026-11-23): a document without a branch cannot be written (DL-B1)
+  const [branchMenu, setBranchMenu] = useState<{ x: number; y: number } | null>(null);
+  const branch = useMutation({
+    mutationFn: (p: { branchId: string; version: number }) => setDocumentBranch(id, p.branchId, p.version),
+    onSuccess: (next) => {
+      qc.setQueryData(documentKey(id), next);
+      toasts.success(t('w6h.branchChanged', { branch: next.branch_name ?? '' }));
+    },
+    onError: (e) => {
+      void qc.invalidateQueries({ queryKey: documentKey(id) });
+      const code = e instanceof ApiError ? e.detail.code : 'generic';
+      toasts.error(t(`w6h.branchErrors.${code}`, { defaultValue: t('w6h.write.errors.generic') }));
+    },
+  });
   const [confirm, setConfirm] = useState(false);
   // D33 (#247): the click in the confirm dialog is the approval; the backend re-runs every check (DL-B1–B11)
   const write = useMutation({
@@ -151,7 +168,32 @@ export function ScreenW6h() {
               {chip.text}
             </span>
           ) : null}
-          {d?.branch_name ? (
+          {d && (d.branch_options?.length ?? 0) > 0 ? (
+            <button
+              type="button"
+              data-testid="w6h-branch-chip"
+              aria-haspopup="menu"
+              disabled={branch.isPending}
+              onClick={(e) => {
+                const box = e.currentTarget.getBoundingClientRect();
+                setBranchMenu({ x: box.left, y: box.bottom + 4 });
+              }}
+              className={`type-small inline-flex items-center gap-1 rounded-full border px-3 py-1 ${
+                d.branch_name
+                  ? 'border-border-default text-text-secondary hover:bg-bg-subtle'
+                  : 'border-danger-600 bg-danger-50 text-danger-600'
+              }`}
+            >
+              {d.branch_name
+                ? t('w6h.branchChip', {
+                    branch: d.branch_name,
+                    centre: d.centre_code ?? '–',
+                    warehouse: d.warehouse_code ?? '–',
+                  })
+                : t('w6h.branchPick')}
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+          ) : d?.branch_name ? (
             <span className="type-small rounded-full border border-border-default px-3 py-1 text-text-secondary">
               {t('w6h.branchChip', {
                 branch: d.branch_name,
@@ -159,6 +201,24 @@ export function ScreenW6h() {
                 warehouse: d.warehouse_code ?? '–',
               })}
             </span>
+          ) : null}
+          {d && branchMenu ? (
+            <Menu
+              label={t('w6h.branchPick')}
+              at={branchMenu}
+              width={260}
+              onClose={() => setBranchMenu(null)}
+              entries={(d.branch_options ?? []).map((o) => ({
+                kind: 'item' as const,
+                id: o.id,
+                label: o.name,
+                checked: o.id === d.branch_id,
+                onSelect: () => {
+                  setBranchMenu(null);
+                  if (o.id !== d.branch_id) branch.mutate({ branchId: o.id, version: d.version });
+                },
+              }))}
+            />
           ) : null}
           {d && !mobile ? (
             <span className="type-small ml-auto truncate text-brand-primary-600">

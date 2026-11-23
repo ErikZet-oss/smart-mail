@@ -218,6 +218,58 @@ test('#247 W6h: incomplete template names the branch and the missing values (pil
   );
 });
 
+test('#247 W6h: document without a branch → „Vyberte pobočku“ ▾ assigns one (pilot 2026-11-23) @mobile', async ({
+  page,
+}, info) => {
+  const sent: unknown[] = [];
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': {
+      body: detail({
+        branch_id: null,
+        branch_name: null,
+        centre_code: null,
+        warehouse_code: null,
+        status: 'missing_data',
+        blocking: 1,
+        branch_options: [
+          { id: 'b-nr', name: 'Nitra' },
+          { id: 'b-se', name: 'Senica' },
+        ],
+        checks: [{ id: 'DL-B1', level: 'blocking', params: { missing: ['branch'], koncept: true } }],
+      }),
+    },
+    'PUT /api/purchasing/documents/d-1/branch': (body) => {
+      sent.push(body);
+      return {
+        body: detail({
+          branch_id: 'b-nr',
+          branch_name: 'Nitra',
+          centre_code: '30',
+          warehouse_code: '30',
+          version: 4,
+          branch_options: [
+            { id: 'b-nr', name: 'Nitra' },
+            { id: 'b-se', name: 'Senica' },
+          ],
+        }),
+      };
+    },
+  });
+  await open(page, info.project.name !== 'desktop');
+  await expect(page.getByTestId('w6h-write-banner')).toContainText('DL-B1 · Dodací list nemá priradenú pobočku');
+  const chip = page.getByTestId('w6h-branch-chip');
+  await expect(chip).toHaveText('Vyberte pobočku');
+  await chip.click();
+  await page
+    .getByRole('menuitemradio', { name: 'Nitra' })
+    .or(page.getByRole('menuitem', { name: 'Nitra' }))
+    .click();
+  await expect.poll(() => sent).toEqual([{ branch_id: 'b-nr', version: 3 }]);
+  await expect(chip).toHaveText('Pobočka Nitra · stredisko 30 · sklad 30');
+  await expect(page.getByTestId('w6h-write-banner')).toHaveCount(0);
+});
+
 test('#247 W6h: Money did not answer → „Overiť teraz“ reconciles by SMID', async ({ page }) => {
   let calls = 0;
   const unknown = detail({

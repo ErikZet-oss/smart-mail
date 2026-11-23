@@ -109,6 +109,7 @@ export type NewArticleState = {
 };
 export type Warehouse = { id: string; code: string; name: string };
 export type DocumentDetail = SupplierDocument & {
+  branch_options?: { id: string; name: string }[];
   delivery_note_number: string | null;
   order_reference: string | null;
   vat_recap: { rate: string; base: string; vat: string | null }[];
@@ -148,6 +149,9 @@ export const createInMoney = (id: string, version: number) =>
 
 export const documentKey = (id: string) => ['purchasing', 'document', id] as const;
 export const fetchDocument = (id: string) => api<DocumentDetail>('GET', `/api/purchasing/documents/${id}`);
+/** UX_SPEC BranchChip ▾ (pilot 2026-11-23): assign the document to a branch the person may act for. */
+export const setDocumentBranch = (id: string, branchId: string, version: number) =>
+  api<DocumentDetail>('PUT', `/api/purchasing/documents/${id}/branch`, { branch_id: branchId, version });
 export const rematch = (id: string) =>
   api<DocumentDetail>('POST', `/api/purchasing/documents/${id}/match`, {}, { global: false });
 export const confirmLine = (
