@@ -2489,6 +2489,7 @@
         "TypCeny": "typ ceny"
       },
       "DL-B3": "Doklad dodávateľa {{number}} už existuje.",
+      "DL-B3_no_number": "Chýba číslo dokladu dodávateľa (Doklad prijatý) – na doklade nie je číslo faktúry ani dodacieho listu. Je to naozaj faktúra?",
       "DL-B4": "{{n}} riadkov nie je spárovaných.",
       "DL-B11": "Riadok {{n}} je na hlavnej karte, ktorá má varianty – vyberte variant.",
       "DL-B7": "Súčet riadkov {{lines}} nesedí so súčtom dokladu {{document}} (sadzba {{rate}} %).",
