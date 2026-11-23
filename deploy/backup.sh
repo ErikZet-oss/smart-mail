@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Nightly backup of Postgres + SeaweedFS data dir. Keep 7 days. No secrets/mail bodies in logs.
+# Backup of Postgres + SeaweedFS data dir (nightly and before every update). Keeps the newest SMARTMAIL_BACKUP_KEEP
+# (default 5) — by count, not by days: daily updates filled the disk (pilot 2026-11-23). No secrets/mail bodies in logs.
 set -euo pipefail
 # shellcheck source=lib.sh
 source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
@@ -24,6 +25,5 @@ if docker volume ls --format '{{.Name}}' | grep -q 's3-data'; then
 fi
 
 chmod -R go-rwx "$OUT"
-# prune older than 7 days
-find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} +
-echo "Hotovo."
+prune_backups "$BACKUP_DIR"
+echo "Hotovo. Ponechaných najviac ${BACKUP_KEEP} záloh v $BACKUP_DIR."
