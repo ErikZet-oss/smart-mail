@@ -33,7 +33,7 @@ TOOL_SCHEMA: dict[str, object] = {
     "input_schema": {
         "type": "object",
         "properties": {
-            "kind": {"type": "string", "enum": ["invoice", "delivery_note", "unknown"]},
+            "kind": {"type": "string", "enum": ["invoice", "delivery_note", "order_confirmation", "other", "unknown"]},
             "supplier_name": _STR,
             "supplier_ico": _STR,
             "number": _STR,
@@ -137,7 +137,7 @@ def doc_from_tool(data: dict[str, Any]) -> ExtractedDoc:
         if rate is not None and base is not None:
             vat.append(VatRow(rate=rate, base=base, vat=parse_decimal(_s(row.get("vat")))))
     confidence = {str(k): v for k, v in (data.get("confidence") or {}).items() if isinstance(v, int | float)}
-    doc_kind: DocKind = kind if kind in ("invoice", "delivery_note") else "unknown"
+    doc_kind: DocKind = kind if kind in ("invoice", "delivery_note", "order_confirmation", "other") else "unknown"
     return ExtractedDoc(
         kind=doc_kind,
         method="pdf_llm",

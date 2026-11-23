@@ -2,6 +2,11 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot: do Dokladov len faktúry, originál sa otvorí v náhľade
+
+- **Príjem z pošty:** extrakcia rozlišuje aj `order_confirmation` (potvrdenie objednávky / Auftragsbestätigung) a `other` (ponuka, dobropis, výpis, upomienka, cenník). Z pošty sa na príjem ponúkajú len **faktúry dodávateľa**; potvrdenia objednávok a iné doklady sa automaticky skryjú (stav `ignored`, `not_for_receipt:<druh>`, viditeľné vo filtri „Skryté“). Dodacie listy dodávateľa len s novým prepínačom **Nastavenia › Nákup a sklad › Spracovať aj dodacie listy dodávateľa** (predvolene vypnutý). Ručne nahraný súbor (W6u) ostáva vždy na kontrolu.
+- **W6h:** „Originál dokladu“ otvorí doklad v náhľade W2l (pdf.js, Stiahnuť, Tlačiť) – predtým ho prehliadač stiahol (iframe blokuje `X-Frame-Options`). Nové tlačidlo „Nie je faktúra – skryť“ pre doklady, ktoré ešte nie sú v Money.
+
 ## [Unreleased] — #247 Fáza 4c: dodací list prijatý do Money ako koncept (D33)
 
 - **Most:** `POST /delivery-notes/received` (`CreateReceivedDeliveryNote`) – HMAC + jednorazový schvaľovací JWT `delivery_note.create` viazaný na telo. Prijme **len koncept**: `Faze: 0` + `Schvaleno: false`, bez `Schvalil_ID` / `DatumSchvaleni` (inak 422 `not_koncept`, aj na TEST), Popis začína „Smartmail“. Pred mutáciou hľadá doklad so svojím SMID (vráti ho, `reconciled`) a doklad toho istého dodávateľa s rovnakým `Odkaz` (409 `duplicate` s číslom, DL-B3). Nikdy neopakuje; po timeoute raz dohľadá SMID. Doklad načíta späť (položky, artikel, sklad, súčty, adresa). Desatinné čísla idú do Money ako JSON čísla priamo z `Decimal` (bez float). Adresa dodávateľa: najprv len `Firma_ID`; ak je po zápise prázdna, ďalšie zápisy pošlú `Adresa*`/`IC`/`DIC`/`ICDPH` z karty firmy v Money. Nové čítania pre Nastavenia 11e: `GET /delivery-notes/received?centre_id=` a `GET /delivery-notes/received/{id}/template`. **Most na Windows treba aktualizovať.**

@@ -4,7 +4,7 @@ import { api, apiForm } from '../../lib/api';
 export type SupplierDocument = {
   id: string;
   source: 'mail' | 'upload';
-  kind: 'invoice' | 'delivery_note' | 'unknown';
+  kind: 'invoice' | 'delivery_note' | 'order_confirmation' | 'other' | 'unknown';
   status:
     | 'extracting'
     | 'needs_review'

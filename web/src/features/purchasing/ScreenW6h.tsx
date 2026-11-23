@@ -5,13 +5,14 @@ import {
   CheckCircle2,
   ChevronDown,
   Database,
+  EyeOff,
   ListChecks,
   Pencil,
   RefreshCw,
   Sigma,
   XCircle,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 
@@ -20,11 +21,12 @@ import { Button } from '../../components/Button';
 import { FileTypeIcon } from '../../components/FileTypeIcon';
 import { Menu } from '../../components/Menu';
 import { useToasts } from '../../components/toastContext';
-import { ApiError } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { fileTypeOf } from '../../components/fileType';
 import { AppShell } from '../../components/shell/AppShell';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { fetchMe } from '../auth/authApi';
+import { AttachmentLightbox } from '../mail/AttachmentLightbox';
 import { UPLOAD_ROLES } from '../money/docsAccess';
 import { day } from '../money/moneyApi';
 import { useFeaturesState } from '../system/features';
@@ -61,6 +63,9 @@ const tpl = (d: DocumentDetail, key: string): string | null => {
  * A copy of the Money card „Dodací list prijatý – Karta“ (DOCUMENTS_SPEC §2). Phase 4b: matching and checks only —
  * „Vytvoriť v Money“ stays disabled until 4c; nothing is written to Money.
  */
+/** Not written yet: an order confirmation or another paper can still be hidden (pilot 2026-11-23). */
+const HIDEABLE = new Set(['needs_review', 'missing_data', 'duplicate', 'unreadable', 'failed']);
+
 export function ScreenW6h() {
   const { id = '' } = useParams();
   const { t } = useTranslation();
@@ -75,7 +80,25 @@ export function ScreenW6h() {
     enabled: features.money && allowed && !!id,
     retry: false,
   });
-  const [panel, setPanel] = useState<'checks' | 'original' | null>(null);
+  const [panel, setPanel] = useState<'checks' | null>(null);
+  // „Originál dokladu“ opens the W2l preview (pdf.js) — an iframe was blocked by X-Frame-Options and downloaded the file
+  const [preview, setPreview] = useState(false);
+  const original = useMemo(
+    () =>
+      doc.data
+        ? [
+            {
+              id: doc.data.id,
+              filename: doc.data.filename,
+              content_type: doc.data.filename.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/xml',
+              size: 0,
+              is_inline: false,
+              av_status: 'clean',
+            },
+          ]
+        : [],
+    [doc.data],
+  );
   const [itemsTab, setItemsTab] = useState<'items' | 'fees'>('items');
   const [sum, setSum] = useState(true);
   const [selected, setSelected] = useState<number | null>(null);
@@ -99,6 +122,16 @@ export function ScreenW6h() {
       const code = e instanceof ApiError ? e.detail.code : 'generic';
       toasts.error(t(`w6h.branchErrors.${code}`, { defaultValue: t('w6h.write.errors.generic') }));
     },
+  });
+  // pilot 2026-11-23: an order confirmation or another paper that is not for receipt → hidden from W6e (status ignored)
+  const hide = useMutation({
+    mutationFn: () => api('POST', `/api/purchasing/documents/${id}/ignore`, {}, { global: false }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['purchasing'] });
+      toasts.success(t('w6h.hidden'));
+      navigate('/docs/delivery-notes');
+    },
+    onError: () => toasts.error(t('w6h.write.errors.generic')),
   });
   const [confirm, setConfirm] = useState(false);
   // D33 (#247): the click in the confirm dialog is the approval; the backend re-runs every check (DL-B1–B11)
@@ -262,12 +295,25 @@ export function ScreenW6h() {
                 >
                   {created ? t('w6h.write.close') : t('w6h.back')}
                 </Link>
+                {HIDEABLE.has(d.status) ? (
+                  <button
+                    type="button"
+                    className="type-label inline-flex h-8 items-center gap-2 rounded-sm border border-border-strong bg-bg-canvas px-3"
+                    disabled={hide.isPending}
+                    title={t('w6h.hideHint')}
+                    onClick={() => hide.mutate()}
+                    data-testid="w6h-hide"
+                  >
+                    <EyeOff size={16} aria-hidden="true" />
+                    {t('w6h.hide')}
+                  </button>
+                ) : null}
                 <span className="ml-auto flex gap-4">
                   <button
                     type="button"
                     className="type-label inline-flex items-center gap-2 text-brand-primary-600"
-                    aria-pressed={panel === 'original'}
-                    onClick={() => setPanel((p) => (p === 'original' ? null : 'original'))}
+                    onClick={() => setPreview(true)}
+                    data-testid="w6h-original"
                   >
                     <FileTypeIcon type={fileTypeOf(d.filename)} />
                     {t('w6h.original')}
@@ -379,15 +425,7 @@ export function ScreenW6h() {
                   className="flex w-[420px] shrink-0 flex-col overflow-y-auto border-l border-border-default"
                   data-testid={`w6h-panel-${panel}`}
                 >
-                  {panel === 'checks' ? (
-                    <ChecksList checks={checks} branch={d.branch_name} />
-                  ) : (
-                    <iframe
-                      title={t('w6h.original')}
-                      src={`/api/purchasing/documents/${d.id}/file`}
-                      className="h-full w-full"
-                    />
-                  )}
+                  <ChecksList checks={checks} branch={d.branch_name} />
                 </aside>
               ) : null}
             </div>
@@ -418,6 +456,17 @@ export function ScreenW6h() {
                 busy={write.isPending}
                 onConfirm={() => write.mutate(d.version)}
                 onClose={() => setConfirm(false)}
+              />
+            ) : null}
+            {preview ? (
+              <AttachmentLightbox
+                mailbox=""
+                attachments={original}
+                index={0}
+                onIndex={() => undefined}
+                onClose={() => setPreview(false)}
+                formatSize={() => ''}
+                urlOf={() => `/api/purchasing/documents/${d.id}/file`}
               />
             ) : null}
             {openLine && !created ? (
