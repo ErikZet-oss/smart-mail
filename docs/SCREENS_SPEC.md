@@ -409,10 +409,12 @@ Poplatky lists supplier fees read-only (D14); Vratka is always unchecked (D15).
 **Actions:** line click → drawer "Riadok {n}" (supplier text, candidates, article search, unit conversion, warehouse,
 "Zapamätať kód dodávateľa"); Opraviť hromadne; Pridať výberom; Zmazať; Nahor/Dolu; Excel; Σ; Legenda;
 `Vytvoriť v Money` → confirm dialog with summary (dodávateľ, počet položiek, sklad, stredisko, celkom) → approval JWT →
-bridge → W6h in state "V Money" with the Money number, read-back result and "Vrátiť" countdown (15 min, accounting).
+bridge → W6h in state "Koncept v Money" (D33): chip „Koncept v Money č. {číslo}“, read-back result and the info
+„Doklad je v Money uložený ako koncept – skontrolujte ho a dokončite v Money (zrušte Uložiť ako koncept).“ No
+„Vrátiť“ — a wrong koncept is deleted in Money. The confirm dialog says „Zapíše sa ako koncept do Money (pobočka …).“
 **States:** loading (skeleton of the card), draft, needs_input (red counters on tabs and fields), creating (locked,
-progress), created, failed (error text from Money + "Skúsiť znova" only after reconciliation), unknown (reconcile
-banner), undone, Money offline (read-only), template missing (DL-B6 banner with link to SETTINGS 11e), duplicate
+progress), created (koncept), failed (error text from Money + "Skúsiť znova" only after reconciliation), unknown
+(reconcile banner), Money offline (read-only), template missing (DL-B6 banner with link to SETTINGS 11e), duplicate
 (DL-B3 banner with link to the existing Money document number).
 **Drawer view „Nový artikel v Money“ (D32, Figma `255:90955`, `255:91815`, `256:90550`):** link „+ Založiť nový
 artikel v Money“ under the article list (roles warehouse / accounting / admin, hidden for others and when Money is
