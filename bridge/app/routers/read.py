@@ -201,7 +201,8 @@ async def document_pdf(
 
 @router.get("/articles/search")
 async def search_articles(request: Request, code: _TEXT = None, ean: _TEXT = None, q: _TEXT = None) -> list[Article]:
-    """Exactly one of: `code` (Kod or Katalog, exact), `ean` (CarovyKod), `q` (name / catalog contains)."""
+    """Exactly one of: `code` (Kod or Katalog, exact), `ean` (CarovyKod), `q` (name / catalog contains; with `%` the
+    Money S4 pattern search in the name, e.g. `%mat%4%934`)."""
     for name, value in (("code", code), ("ean", ean), ("q", q)):
         if value and any(c in UNSAFE for c in value):
             raise UnsafeFilterValue(name)

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
+from app import wildcard
 from app.backend import ArticleQuery, CatalogExists, DeliveryQuery, InvoiceQuery
 from app.models import (
     Activity,
@@ -471,6 +472,9 @@ class MockBackend:
             found = [a for a in rows if a.ean == query.ean]
         elif query.code:
             found = [a for a in rows if query.code in (a.code, a.catalog)]
+        elif query.text and wildcard.is_wildcard(query.text):
+            pieces = wildcard.parts(query.text)
+            return [a for a in rows if pieces and wildcard.in_order(a.name, pieces)][:50]
         elif query.text:
             t = query.text.lower()
             found = [a for a in rows if t in a.name.lower() or t in (a.catalog or "").lower()]

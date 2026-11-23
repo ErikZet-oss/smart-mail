@@ -2295,7 +2295,7 @@
       "title": "Riadok {{n}}",
       "supplierText": "Text dodávateľa",
       "article": "Artikel v Money",
-      "search": "Hľadať artikel v Money (názov, katalóg, kód dodávateľa, EAN)…",
+      "search": "Hľadať v Money – názov, katalóg, kód, EAN (% = čokoľvek)…",
       "noResults": "Nič sa nenašlo. Skúste katalóg, kód dodávateľa alebo časť názvu.",
       "factor": "Prepočet jednotiek: 1 {{unit}} = ? {{target}}",
       "branchWarehouse": "Sklad pobočky",

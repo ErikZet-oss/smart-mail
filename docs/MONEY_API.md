@@ -210,6 +210,12 @@ local `item_mappings` table (supplier_id, normalized code, article_id, unit fact
 Settings › Money S4 › Kódy dodávateľov with CSV export, so the accountant can also enter them into Money cards.
 If the implementer enables supplier-code writes, add a bridge endpoint and sync the table to Money (admin setting).
 
+**5.5.8 `%` search in the article picker** (pilot 2026-11-23, like in Money S4) — a search text with `%`, e.g.
+`%mat%4%934`, means a **name** with „mat“, then „4“, then „934“ (anything in between, case and accents ignored). The
+bridge never puts `%` into a filter: it sends `Nazev~ct~mat#Nazev~ct~4#Nazev~ct~934` (AND, `Count` 300) and keeps the
+rows whose name has the pieces in this order (max 50). The app skips the exact code / EAN / supplier-code steps for
+such a text.
+
 **5.5.8a Main cards and variants** (pilot 2026-11-20) — the customer keeps some articles as a main card with
 variants (`Article.NadrazenyArtikl_ID` = main card; the variant differs by its parameters `Parametry`, e.g. M10 ×
 2000). The variant catalog number = main card catalog + a suffix by size, so catalog numbers are never duplicated.
