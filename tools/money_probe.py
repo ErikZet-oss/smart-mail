@@ -43,6 +43,12 @@ Purpose
   which writable header / item fields it fills (names; numbers and flags with their value, IDs never printed).
   -> probe_output/koncept.md
 
+  With --dl-koncept-write-test (WRITES, Erik 2026-11-23) it creates ONE received delivery note as a draft
+  (Faze 0, Schvaleno false — the PROD koncept 302600953 differs from a normal note exactly there) with one line
+  copied from the koncept PROBE_DL_KONCEPT_NUMBER (same article, warehouse, series, centre; quantity 1), Popis
+  "Smartmail · SMPROBE ...", SMID in Poznamka; reads it back. Asks you to type ZALOZIT, never retries, never deletes —
+  check the "Uložiť ako koncept" box in Money and delete the note yourself. -> probe_output/dl_koncept_write.md
+
   With --phase4 (read-only) it lists which fields existing CRM activities fill (#189: the first test write copies
   them) and checks the branch price lists (PROBE_PRICE_LISTS = codes set in Settings 11e, else every active list with
   a default warehouse) via PriceListItems, the company discount / price-list
@@ -1684,6 +1690,89 @@ def write_koncept_report():
     print(f"Written {OUT_DIR}/koncept.md and {OUT_DIR}/koncept.json")
 
 
+# ----------------------------------------------------------------------------- --dl-koncept-write-test
+dl_koncept_report = {"steps": {}}
+KONCEPT_HEADER = ("CiselnaRada_ID", "Stredisko_ID", "DruhPohybu_ID", "DruhSkladovehoPohybu_ID", "Predkontace_ID",
+                  "RegistraceDPH_ID", "DruhDokladu_ID")
+KONCEPT_READ = ("ID CisloDokladu Nazev Poznamka Faze Schvaleno Stav PocetPolozek " + " ".join(KONCEPT_HEADER)
+                + " Polozky { Mnozstvi JednCena TypCeny SazbaDPH_ID DruhSazbyDPH ObsahPolozky { Artikl_ID Sklad_ID } }")
+
+
+def dl_koncept_write_test(http, template_number):
+    out = dl_koncept_report["steps"]
+    if not template_number:
+        return step("dl koncept write test", None, note="PROBE_DL_KONCEPT_NUMBER not set (the koncept made in Money)")
+    q = "query($f:String){ ReceivedDeliveryNotes(Filter:$f, Count:1){ %s } }" % KONCEPT_READ
+    st, d, e, _ = gql(http, q, {"f": f"CisloDokladu~eq~{template_number}"})
+    tpl = ((d or {}).get("ReceivedDeliveryNotes") or [None])[0]
+    items = (tpl or {}).get("Polozky") or []
+    content = (items[0].get("ObsahPolozky") or {}) if items else {}
+    if e or not tpl or not content.get("Artikl_ID") or not content.get("Sklad_ID"):
+        out["refused"] = "template koncept not found or its first line has no article / warehouse"
+        return step("dl koncept write test", None, note=out["refused"])
+    if tpl.get("Faze") != 0 or tpl.get("Schvaleno") is not False:
+        out["refused"] = "the template is not a koncept (Faze 0, Schvaleno false)"
+        return step("dl koncept write test", None, note=out["refused"])
+    smid = "PROBE-DLK-" + dt.datetime.now().strftime("%Y%m%d%H%M%S")
+    line = items[0]
+    item = {"ObsahPolozky": {"Artikl_ID": content["Artikl_ID"], "Sklad_ID": content["Sklad_ID"]}, "Mnozstvi": 1}
+    for k in ("JednCena", "TypCeny", "SazbaDPH_ID", "DruhSazbyDPH"):
+        if line.get(k) not in (None, ""):
+            item[k] = line[k]
+    note = {k: tpl[k] for k in KONCEPT_HEADER if tpl.get(k) not in (None, "", "00000000-0000-0000-0000-000000000000")}
+    note.update({"Nazev": "Smartmail · SMPROBE test konceptu – zmazať", "Faze": 0, "Schvaleno": False,
+                 "Poznamka": f"SMID:{smid} · Smart Mail probe – zmažte tento doklad", "Polozky": [item]})
+    out["copied_header_fields"] = sorted(k for k in KONCEPT_HEADER if k in note)
+    print(f"\nThis creates 1 received delivery note as KONCEPT in Money (agenda {env('MONEY_AGENDA_LABEL') or '?'}):")
+    print("  Popis 'Smartmail · SMPROBE test konceptu – zmazať', 1 line = the article of the template, quantity 1")
+    try:
+        typed = input("Type ZALOZIT to continue: ")
+    except EOFError:
+        typed = ""
+    if typed.strip() != "ZALOZIT":
+        out["refused"] = "cancelled by user"
+        return step("dl koncept write test", None, note="cancelled by user")
+    st, d, e, ms = gql(http, "mutation($d: ReceivedDeliveryNoteInput!){ CreateReceivedDeliveryNote(ReceivedDeliveryNote:$d)"
+                             "{ ID CisloDokladu } }", {"d": note})
+    created = (d or {}).get("CreateReceivedDeliveryNote")
+    out["create_error"], out["create_ms"] = (str(e)[:300] if e else None), ms
+    # never retried: look the note up once by its SMID, whatever the answer was
+    st, d2, e2, _ = gql(http, q, {"f": f"Poznamka~ct~{smid}"})
+    back = ((d2 or {}).get("ReceivedDeliveryNotes") or [None])[0]
+    out["created"] = bool(back)
+    if not back:
+        return step("dl koncept write test", False, note=f"not created: {out['create_error']}")
+    b_items = back.get("Polozky") or []
+    b_content = (b_items[0].get("ObsahPolozky") or {}) if b_items else {}
+    out.update({
+        "number": back.get("CisloDokladu"), "Faze": back.get("Faze"), "Schvaleno": back.get("Schvaleno"),
+        "Stav": back.get("Stav"), "items": len(b_items),
+        "same_article_and_warehouse": b_content.get("Artikl_ID") == content["Artikl_ID"]
+        and b_content.get("Sklad_ID") == content["Sklad_ID"],
+        "same_series_and_centre": back.get("CiselnaRada_ID") == tpl.get("CiselnaRada_ID")
+        and back.get("Stredisko_ID") == tpl.get("Stredisko_ID"),
+        "answered_with_id": bool(created),
+    })
+    step("dl koncept write test – CreateReceivedDeliveryNote", back.get("Faze") == 0 and back.get("Schvaleno") is False,
+         note=f"note {out['number']}: Faze {out['Faze']}, Schvaleno {out['Schvaleno']} — CHECK 'Uložiť ako koncept' "
+              f"in Money, then DELETE it")
+
+
+def write_dl_koncept_report():
+    dl_koncept_report["generated_at"] = report["generated_at"]
+    os.makedirs(OUT_DIR, exist_ok=True)
+    with open(os.path.join(OUT_DIR, "dl_koncept_write.json"), "w", encoding="utf-8") as fh:
+        json.dump(dl_koncept_report, fh, ensure_ascii=False, indent=2, default=str)
+    lines = ["# Money S4 probe – received delivery note written as koncept", "", f"Generated: {report['generated_at']}",
+             "", "IDs are only compared, never printed.", ""]
+    for k, v in dl_koncept_report["steps"].items():
+        lines.append(f"- **{k}**: {json.dumps(v, ensure_ascii=False, default=str)}")
+    lines += ["", "**Check the note in Money (Uložiť ako koncept ticked, stock unchanged), then delete it.**", ""]
+    with open(os.path.join(OUT_DIR, "dl_koncept_write.md"), "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    print(f"Written {OUT_DIR}/dl_koncept_write.md and {OUT_DIR}/dl_koncept_write.json")
+
+
 # ----------------------------------------------------------------------------- main
 def write_report():
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -1726,6 +1815,8 @@ def main():
                     help="WRITES (D32): create 1 hidden test card + 1 hidden variant, read back -> probe_output/article_write.md")
     ap.add_argument("--koncept", action="store_true",
                     help="read-only: the koncept received delivery note PROBE_DL_KONCEPT_NUMBER -> probe_output/koncept.md")
+    ap.add_argument("--dl-koncept-write-test", action="store_true",
+                    help="WRITES: 1 received delivery note as koncept (copy of PROBE_DL_KONCEPT_NUMBER) -> dl_koncept_write.md")
     args = ap.parse_args()
     load_env(args.env)
 
@@ -1743,6 +1834,11 @@ def main():
         sys.exit(1)
 
     gql_schema(http)
+    if args.dl_koncept_write_test:
+        if gql_basic(http):
+            dl_koncept_write_test(http, env("PROBE_DL_KONCEPT_NUMBER"))
+        write_dl_koncept_report()  # report.md of the base run is kept
+        return
     if args.koncept:
         if gql_basic(http):
             koncept_probe(http, env("PROBE_DL_KONCEPT_NUMBER"))
