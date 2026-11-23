@@ -19,6 +19,9 @@ from app.models import (
     Company,
     CompanyPage,
     Delivery,
+    DeliveryNoteCreated,
+    DeliveryNoteIn,
+    DeliveryNoteTemplate,
     DeliverySearch,
     DocumentKind,
     InvoiceKind,
@@ -27,6 +30,7 @@ from app.models import (
     Order,
     OverduePage,
     PersonPage,
+    ReceivedNoteRow,
     SupplierCode,
     SupplierCodePage,
 )
@@ -47,6 +51,15 @@ class CatalogExists(Exception):
         super().__init__(katalog)
         self.katalog = katalog
         self.nazev = nazev
+
+
+class DuplicateNote(Exception):
+    """DL-B3 (#247): a received delivery note of the same supplier (`Firma_ID`) + `Odkaz` is already in Money —
+    nothing was created."""
+
+    def __init__(self, number: str | None) -> None:
+        super().__init__(number or "")
+        self.number = number
 
 
 class WaitingForProbe(Exception):
@@ -139,3 +152,11 @@ class MoneyBackend(Protocol):
     async def all_supplier_codes(self, since: datetime | None, start: int, count: int) -> SupplierCodePage: ...
 
     async def lookup_supplier_code(self, supplier_id: uuid.UUID, code: str) -> list[SupplierCode]: ...
+
+    # ----- Phase 4c (#247, D33): received delivery note as a koncept -----
+
+    async def create_delivery_note(self, note: DeliveryNoteIn) -> DeliveryNoteCreated: ...
+
+    async def received_notes(self, centre_id: uuid.UUID, count: int) -> list[ReceivedNoteRow]: ...
+
+    async def delivery_note_template(self, note_id: uuid.UUID) -> DeliveryNoteTemplate | None: ...

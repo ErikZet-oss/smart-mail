@@ -10,9 +10,9 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 InvoiceKind = Literal["invoice", "proforma"]
 # #222: documents whose PDF comes from Money's generic print endpoint `/pdfreport` (whitelist, extendable)
@@ -246,3 +246,153 @@ class SupplierCode(_Model):
 class SupplierCodePage(_Model):
     items: list[SupplierCode]
     next_from: int | None
+
+
+# ----- Phase 4c (#247, D33): received delivery note written to Money as a KONCEPT -----
+
+UUID_ZERO = uuid.UUID(int=0)
+KONCEPT_PREFIX = "Smartmail"  # D33: Popis (`Nazev`) of every note written by Smart Mail starts with it
+
+
+class DeliveryNoteContentIn(_Model):
+    """`ObsahPolozky` of a stock line (`ContentOfItemWithArticleInput`)."""
+
+    Artikl_ID: uuid.UUID
+    Sklad_ID: uuid.UUID
+    Mnozstvi: Decimal = Field(gt=0)
+    PartnerskyKod: str | None = Field(default=None, max_length=100)
+    PartnerskyNazev: str | None = Field(default=None, max_length=255)
+    DruhPolozky_ID: uuid.UUID | None = None  # copied from the branch template line
+    VazbaTypVazby: int | None = None  # copied from the branch template line
+
+
+class DeliveryNoteItemIn(_Model):
+    """One line (`ReceivedDeliveryNoteItemInput`). `TypObsahu` comes from the branch template (1 = article line —
+    without it Money stores a text line without article / warehouse, PROD probe 2026-11-23)."""
+
+    Poradi: int = Field(ge=1)
+    Nazev: str = Field(min_length=1, max_length=255)
+    Katalog: str | None = Field(default=None, max_length=100)
+    Mnozstvi: Decimal = Field(gt=0)  # D15: never negative, returns only in Money
+    Jednotka: str | None = Field(default=None, max_length=20)
+    JednCena: Decimal = Field(ge=0)
+    TypCeny: int
+    TypObsahu: int
+    SazbaDPH_ID: uuid.UUID | None = None
+    DruhSazbyDPH: int | None = None
+    Stredisko_ID: uuid.UUID
+    DruhPolozky_ID: uuid.UUID | None = None
+    ObsahPolozky: DeliveryNoteContentIn | None = None  # None = text (non-stock) line
+
+
+class DeliveryNoteIn(_Model):
+    """`CreateReceivedDeliveryNote` body (DOCUMENTS_SPEC §2.8, MONEY_API 5.5.7). Koncept only (D33): `Faze` 0 and
+    `Schvaleno` false are required and `Schvalil_ID` / `DatumSchvaleni` do not exist here — the router refuses such a
+    body with 422 `not_koncept` before it is parsed. Header IDs are copied from the branch template, never guessed."""
+
+    smid: str = Field(pattern=SMID_RE)  # written into Poznamka as `SMID:<smid>`; not a Money field
+    with_address: bool = False  # MONEY_API 5.5.7: send Adresa*/IC/DIC/ICDPH from the Money company card
+    Firma_ID: uuid.UUID
+    CiselnaRada_ID: uuid.UUID
+    Stredisko_ID: uuid.UUID
+    Group_ID: uuid.UUID  # list group of the branch (DLP NR / SE / TN / TT) — else „Nezaradené“
+    DruhPohybu_ID: uuid.UUID
+    DruhSkladovehoPohybu_ID: uuid.UUID
+    Predkontace_ID: uuid.UUID
+    RegistraceDPH_ID: uuid.UUID | None = None
+    DruhDokladu_ID: uuid.UUID | None = None
+    Mena_ID: uuid.UUID | None = None
+    Odkaz: str = Field(min_length=1, max_length=50)
+    ParovaciSymbol: str | None = Field(default=None, max_length=50)
+    Nazev: str = Field(min_length=len(KONCEPT_PREFIX), max_length=100)
+    Poznamka: str = Field(default="", max_length=1000)
+    DatumVystaveni: date
+    DatumUcetnihoPripadu: date
+    DatumSkladovehoPohybu: date
+    CasSkladovehoPohybu: datetime  # D13: the moment of the write
+    Faze: Literal[0]
+    Schvaleno: Literal[False]
+    Polozky: list[DeliveryNoteItemIn] = Field(min_length=1, max_length=500)
+
+    @field_validator("Nazev")
+    @classmethod
+    def _smartmail_prefix(cls, v: str) -> str:
+        if not v.startswith(KONCEPT_PREFIX):
+            raise ValueError("popis_prefix")  # D33: always „Smartmail…“, so the notes are easy to find in Money
+        return v
+
+    def money_input(self) -> dict[str, Any]:
+        """The `ReceivedDeliveryNoteInput` variables: Money field names only, IDs as strings, Decimals kept."""
+        data = self.model_dump(exclude={"smid", "with_address", "Poznamka"}, exclude_none=True)
+        data["Poznamka"] = f"SMID:{self.smid}" + (f" · {self.Poznamka}" if self.Poznamka else "")
+        out = _money_values(data)
+        assert isinstance(out, dict)
+        return out
+
+
+def _money_values(value: object) -> object:
+    if isinstance(value, dict):
+        return {k: _money_values(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_money_values(v) for v in value]
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.replace(microsecond=0).isoformat()
+    if isinstance(value, date):
+        return f"{value.isoformat()}T00:00:00"  # Money `DateTime`
+    return value
+
+
+class DeliveryNoteLineBack(_Model):
+    """A line of the note as Money stored it (read-back)."""
+
+    id: uuid.UUID | None
+    number: int | None  # CisloPolozky
+    order: int | None  # Poradi
+    qty: Decimal
+    unit_price: Decimal
+    content_type: int | None  # TypObsahu
+    article_id: uuid.UUID | None
+    warehouse_id: uuid.UUID | None
+    centre_id: uuid.UUID | None
+
+
+class DeliveryNoteCreated(_Model):
+    id: uuid.UUID
+    number: str | None  # CisloDokladu
+    faze: int | None
+    schvaleno: bool | None
+    group_id: uuid.UUID | None
+    centre_id: uuid.UUID | None
+    total_base: Decimal  # SumaZaklad
+    total: Decimal  # CelkovaCastka
+    address_empty: bool  # read-back AdresaNazev empty → the next writes send the address (MONEY_API 5.5.7)
+    lines: list[DeliveryNoteLineBack]
+    reconciled: bool = False  # found by its SMID (a repeat or after an error/timeout) instead of created now
+
+
+class ReceivedNoteRow(_Model):
+    """Settings 11e „Vybrať iný“: one received delivery note of the branch centre."""
+
+    id: uuid.UUID
+    number: str | None
+    supplier: str | None
+    issued_on: date | None
+    koncept: bool  # Faze 0 + Schvaleno false
+    by_smart_mail: bool  # Popis starts with „Smartmail“ — never the default template
+
+
+class DeliveryNoteTemplate(_Model):
+    """Values copied from the branch template note (DOCUMENTS_SPEC §2.6, D33) — every ID read from Money."""
+
+    id: uuid.UUID
+    number: str | None
+    supplier: str | None
+    issued_on: date | None
+    centre_id: uuid.UUID | None
+    header: dict[str, str]  # CiselnaRada_ID … Group_ID, Mena_ID (only present values)
+    line: dict[
+        str, str | int
+    ]  # first stock line: TypObsahu, TypCeny, DruhPolozky_ID, SazbaDPH_ID, DruhSazbyDPH, VazbaTypVazby
+    text_line: dict[str, int] | None  # TypObsahu of a text line, when the template has one

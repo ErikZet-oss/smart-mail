@@ -1,0 +1,6 @@
+query ReceivedDeliveryNotes($filter: String, $count: Int) {
+  ReceivedDeliveryNotes(Filter: $filter, Count: $count) {
+    ID Deleted CisloDokladu Nazev Odkaz Poznamka Faze Schvaleno DatumVystaveni Create_Date Firma_ID Stredisko_ID
+    AdresaNazev Firma { Nazev }
+  }
+}

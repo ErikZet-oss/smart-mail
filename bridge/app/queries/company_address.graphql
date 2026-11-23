@@ -1,0 +1,5 @@
+query CompanyAddress($id: ID!) {
+  Company(ID: $id) {
+    ID Nazev ObchNazev ObchUlice ObchMisto ObchPsc ObchStat_ID ICO DIC ICDPH
+  }
+}
