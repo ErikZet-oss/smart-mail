@@ -38,6 +38,11 @@ Purpose
   It asks you to type ZALOZIT, never retries a failed create and never deletes - delete the two test cards in Money
   yourself. -> probe_output/article_write.md
 
+  With --koncept (read-only) it reads ONE received delivery note that a person saved as a draft (koncept) in Money
+  (PROBE_DL_KONCEPT_NUMBER) and reports its Stav / Vyrizeno / Zauctovano, the Stav values of the last 300 notes, and
+  which writable header / item fields it fills (names; numbers and flags with their value, IDs never printed).
+  -> probe_output/koncept.md
+
   With --phase4 (read-only) it lists which fields existing CRM activities fill (#189: the first test write copies
   them) and checks the branch price lists (PROBE_PRICE_LISTS = codes set in Settings 11e, else every active list with
   a default warehouse) via PriceListItems, the company discount / price-list
@@ -76,6 +81,7 @@ Usage
      # PROBE_DL_REPORT_ID=12                        # Agenda > Nastavenie tlačových zostáv > Dodací list vydaný > Opraviť
      # PROBE_DL_DESIGN_ID=34                        # optional: the design id from the list of designs
      # PROBE_VARIANT_MAIN=3090225,3090025            # --variants: catalog numbers of main cards that have variants
+     # PROBE_DL_KONCEPT_NUMBER=302600953               # --koncept: a received delivery note saved as koncept in Money
      # PROBE_ARTICLE_TEST_CATALOG=SMPROBE01            # --article-write-test: catalog of the test card (must not exist)
      # PROBE_PRICE_LISTS=10-bez DPH,20-bez DPH        # --phase4: price-list codes set on the branches (Settings 11e)
      PROBE_EMAIL=novak@abcstav.sk                    # e-mail of a contact person that exists in the address book
@@ -1578,6 +1584,87 @@ def write_article_write_report():
     print(f"Written {OUT_DIR}/article_write.md and {OUT_DIR}/article_write.json")
 
 
+# ----------------------------------------------------------------------------- --koncept (read-only)
+koncept_report = {"steps": {}}
+SCHEMA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge", "schema", "graphql_schema.json")
+
+
+def _writable_scalars(types, read_type, input_type):
+    """Scalar fields of `read_type` that can also be written through `input_type` (from the repo schema copy)."""
+    def base(tp):
+        while tp.get("ofType"):
+            tp = tp["ofType"]
+        return tp.get("kind"), tp.get("name")
+    read = {f["name"]: base(f["type"]) for f in (types.get(read_type) or {}).get("fields") or []}
+    inp = {f["name"] for f in (types.get(input_type) or {}).get("inputFields") or []}
+    return sorted(k for k, (kind, _) in read.items() if k in inp and kind in ("SCALAR", "ENUM")), read
+
+
+def _shown(value, kind_name):
+    """Numbers and flags are printed (states, enums); text and IDs only as 'set'."""
+    if value in (None, "", "00000000-0000-0000-0000-000000000000", "0001-01-01T00:00:00"):
+        return None
+    if kind_name in ("Int", "Boolean"):
+        return value
+    return "set"
+
+
+def koncept_probe(http, number):
+    out = koncept_report["steps"]
+    if not number:
+        return step("koncept", None, note="PROBE_DL_KONCEPT_NUMBER not set")
+    try:
+        with open(SCHEMA_FILE, encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except (OSError, ValueError):
+        return step("koncept", None, note="bridge/schema/graphql_schema.json not found next to tools/")
+    types = {t["name"]: t for t in (raw.get("data") or raw)["__schema"]["types"]}
+    head, head_read = _writable_scalars(types, "ReceivedDeliveryNote", "ReceivedDeliveryNoteInput")
+    item, item_read = _writable_scalars(types, "ReceivedDeliveryNoteItem", "ReceivedDeliveryNoteItemInput")
+    for extra in ("Stav", "Vyrizeno", "Zauctovano", "CisloDokladu"):
+        if extra in head_read and extra not in head:
+            head.append(extra)
+    q = ("query($f:String){ ReceivedDeliveryNotes(Filter:$f, Count:1){ %s Polozky { %s } } }"
+         % (" ".join(head), " ".join(item)))
+    st, d, e, ms = gql(http, q, {"f": f"CisloDokladu~eq~{number}"})
+    doc = ((d or {}).get("ReceivedDeliveryNotes") or [None])[0]
+    if e or not doc:
+        out["found"] = False
+        return step("koncept – the draft note", False, note=f"{str(e)[:200] if e else 'not found'}")
+    out["found"] = True
+    out["Stav"], out["Vyrizeno"], out["Zauctovano"] = doc.get("Stav"), doc.get("Vyrizeno"), doc.get("Zauctovano")
+    out["Popis_contains_SMPROBE"] = "SMPROBE" in (doc.get("Nazev") or "")
+    out["header_fields"] = {k: _shown(doc.get(k), head_read[k][1]) for k in head
+                            if _shown(doc.get(k), head_read[k][1]) is not None and k != "CisloDokladu"}
+    items = doc.get("Polozky") or []
+    out["items"] = len(items)
+    out["item_fields"] = [{k: _shown(it.get(k), item_read[k][1]) for k in item
+                           if _shown(it.get(k), item_read[k][1]) is not None} for it in items[:3]]
+    st, d, e, _ = gql(http, "{ ReceivedDeliveryNotes(Count:300){ Stav Vyrizeno Zauctovano } }")
+    rows = (d or {}).get("ReceivedDeliveryNotes") or []
+    out["last_300_Stav"] = distinct(r.get("Stav") for r in rows)
+    out["last_300_Vyrizeno"] = distinct(r.get("Vyrizeno") for r in rows)
+    out["last_300_Zauctovano"] = distinct(r.get("Zauctovano") for r in rows)
+    step("koncept – the draft note", True, ms=ms,
+         note=f"Stav {out['Stav']}, Vyrizeno {out['Vyrizeno']}, Zauctovano {out['Zauctovano']}; "
+              f"last 300 Stav {out['last_300_Stav']}")
+
+
+def write_koncept_report():
+    koncept_report["generated_at"] = report["generated_at"]
+    os.makedirs(OUT_DIR, exist_ok=True)
+    with open(os.path.join(OUT_DIR, "koncept.json"), "w", encoding="utf-8") as fh:
+        json.dump(koncept_report, fh, ensure_ascii=False, indent=2, default=str)
+    lines = ["# Money S4 probe – received delivery note saved as koncept", "", f"Generated: {report['generated_at']}", "",
+             "Numbers and flags with their value, text and IDs only as 'set'.", ""]
+    for k, v in koncept_report["steps"].items():
+        lines.append(f"- **{k}**: {json.dumps(v, ensure_ascii=False, default=str)}")
+    lines += ["", "Give this file to Claude Code before the delivery note write is planned.", ""]
+    with open(os.path.join(OUT_DIR, "koncept.md"), "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    print(f"Written {OUT_DIR}/koncept.md and {OUT_DIR}/koncept.json")
+
+
 # ----------------------------------------------------------------------------- main
 def write_report():
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -1618,6 +1705,8 @@ def main():
                     help="read-only: main article cards (PROBE_VARIANT_MAIN) and their variants -> probe_output/variants.md")
     ap.add_argument("--article-write-test", action="store_true",
                     help="WRITES (D32): create 1 hidden test card + 1 hidden variant, read back -> probe_output/article_write.md")
+    ap.add_argument("--koncept", action="store_true",
+                    help="read-only: the koncept received delivery note PROBE_DL_KONCEPT_NUMBER -> probe_output/koncept.md")
     args = ap.parse_args()
     load_env(args.env)
 
@@ -1635,6 +1724,11 @@ def main():
         sys.exit(1)
 
     gql_schema(http)
+    if args.koncept:
+        if gql_basic(http):
+            koncept_probe(http, env("PROBE_DL_KONCEPT_NUMBER"))
+        write_koncept_report()  # report.md of the base run is kept
+        return
     if args.article_write_test:
         if gql_basic(http):
             article_write_test(http)
