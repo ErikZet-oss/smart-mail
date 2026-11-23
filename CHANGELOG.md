@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot: množstvá „1.000 ks“ a jedna sadzba DPH (faktúra FABORY)
+
+- **PDF extrakcia:** nejednoznačné množstvo `1.000` / `1,200` sa číta ako tisíce, keď len tak sedí počet × jedn. cena = celková cena riadku (predtým 1000 ks → 1 ks). Prompt žiada množstvo bez oddeľovača tisícov.
+- Doklad s jedinou sadzbou DPH v rekapitulácii a bez sadzby na riadkoch → riadky dostanú túto sadzbu (DL-B7 už neblokuje falošne).
+- **DL-W9** (nové upozornenie): počet × jedn. cena ≠ celková cena riadku – skontrolujte počet (zľava?). Text DL-B7 ukazuje obe sumy.
+
 ## [Unreleased] — Pilot: do Dokladov len faktúry, originál sa otvorí v náhľade
 
 - **Príjem z pošty:** extrakcia rozlišuje aj `order_confirmation` (potvrdenie objednávky / Auftragsbestätigung) a `other` (ponuka, dobropis, výpis, upomienka, cenník). Z pošty sa na príjem ponúkajú len **faktúry dodávateľa**; potvrdenia objednávok a iné doklady sa automaticky skryjú (stav `ignored`, `not_for_receipt:<druh>`, viditeľné vo filtri „Skryté“). Dodacie listy dodávateľa len s novým prepínačom **Nastavenia › Nákup a sklad › Spracovať aj dodacie listy dodávateľa** (predvolene vypnutý). Ručne nahraný súbor (W6u) ostáva vždy na kontrolu.

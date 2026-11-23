@@ -11,6 +11,8 @@ Rules:
 - Copy codes, numbers and names exactly as printed (supplier article code, EAN, our order number). Do not translate.
 - qty = quantity in the line's own unit; unit = the unit as printed (ks, bal, kg, m …). Never convert or round to
   packages.
+- If the document groups thousands in quantities with a dot or comma (e.g. „1.000 ks“ = one thousand pieces), give
+  qty without the grouping („1000“); a decimal quantity keeps its decimal comma („1,5“).
 - unit_price = price per ONE unit excl. VAT. If the document prints a price per 100 or 1000 pieces, put the printed
   price in unit_price_printed and the divisor in price_per (100 / 1000) — do not divide yourself.
 - line_total = line amount excl. VAT as printed. vat_rate = percent (20, 10, 0).

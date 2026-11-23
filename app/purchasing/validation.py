@@ -13,6 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from app.ai.guards import check
+from app.purchasing.numbers import amount_matches
 from app.purchasing.schemas import ExtractedDoc, ExtractedLine
 
 CENT = Decimal("0.01")
@@ -76,6 +77,12 @@ def validate(doc: ExtractedDoc, ctx: Context) -> list[dict[str, Any]]:
     if fees:
         total = sum((line_amount(f) or Decimal("0") for f in fees), Decimal("0"))
         out.append(check("DL-W5", "warning", sum=str(total)))
+    # DL-W9 qty × unit price ≠ printed line total (a misread quantity or a line discount) — pilot 2026-11-23
+    for n, line in enumerate(doc.lines, start=1):
+        if line.is_fee or line.qty is None or line.unit_price is None or line.line_total is None:
+            continue
+        if not amount_matches(line.qty, line.unit_price, line.line_total):
+            out.append(check("DL-W9", "warning", line=n, qty=str(line.qty), total=str(line.line_total)))
     if not [line for line in doc.lines if not line.is_fee]:
         out.append(check("DL-B4", "blocking", reason="no_lines"))
     return out

@@ -17,7 +17,7 @@ import pdfplumber
 
 from app.ai.provider import LLMProvider, LLMRequest, LLMResponse
 from app.ai.reply import render_prompt
-from app.purchasing.numbers import parse_decimal
+from app.purchasing.numbers import parse_decimal, parse_qty
 from app.purchasing.schemas import DocKind, ExtractedDoc, ExtractedLine, VatRow
 from app.purchasing.xmlparse import is_fee
 
@@ -116,15 +116,16 @@ def _line(raw: dict[str, Any]) -> ExtractedLine:
     per = parse_decimal(_s(raw.get("price_per")))
     if printed is not None and per is not None and per > 0:
         unit_price = printed / per  # price per 100 / 1000 pieces → per one piece, exact Decimal
+    line_total = parse_decimal(_s(raw.get("line_total")))
     return ExtractedLine(
         supplier_code=_s(raw.get("supplier_code")),
         ean=_s(raw.get("ean")),
         name=name,
-        qty=parse_decimal(_s(raw.get("qty"))),
+        qty=parse_qty(_s(raw.get("qty")), unit_price, line_total),
         unit=_s(raw.get("unit")),
         unit_price=unit_price,
         vat_rate=parse_decimal(_s(raw.get("vat_rate"))),
-        line_total=parse_decimal(_s(raw.get("line_total"))),
+        line_total=line_total,
         is_fee=bool(raw.get("is_fee")) or is_fee(name),
     )
 
@@ -137,6 +138,10 @@ def doc_from_tool(data: dict[str, Any]) -> ExtractedDoc:
         if rate is not None and base is not None:
             vat.append(VatRow(rate=rate, base=base, vat=parse_decimal(_s(row.get("vat")))))
     confidence = {str(k): v for k, v in (data.get("confidence") or {}).items() if isinstance(v, int | float)}
+    lines = [_line(r) for r in data.get("lines") or [] if isinstance(r, dict)]
+    if len(vat) == 1:
+        # one VAT rate on the whole document and no rate per line (FABORY, pilot 2026-11-23) → every line has it
+        lines = [ln if ln.vat_rate is not None else ln.model_copy(update={"vat_rate": vat[0].rate}) for ln in lines]
     doc_kind: DocKind = kind if kind in ("invoice", "delivery_note", "order_confirmation", "other") else "unknown"
     return ExtractedDoc(
         kind=doc_kind,
@@ -150,7 +155,7 @@ def doc_from_tool(data: dict[str, Any]) -> ExtractedDoc:
         currency=(_s(data.get("currency")) or "").upper()[:3] or None,
         total=parse_decimal(_s(data.get("total"))),
         vat_recap=vat,
-        lines=[_line(r) for r in data.get("lines") or [] if isinstance(r, dict)],
+        lines=lines,
         confidence=confidence,
     )
 
