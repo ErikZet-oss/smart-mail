@@ -194,11 +194,28 @@ test('#247 W6h: branch without a template (DL-B6) @mobile', async ({ page }, inf
   await expect(create).toBeDisabled();
   const banner = page.getByTestId('w6h-write-banner');
   await expect(banner).toContainText(
-    'DL-B6 · Pobočka nemá vzorový dodací list – vytvorte jeden v Money alebo vyberte vzor v Nastaveniach.',
+    'DL-B6 · Pobočka Senica nemá vzorový dodací list – vyberte ho v Nastaveniach › Pobočky a osoby › Money.',
   );
   await shot(page, `issue247-W6h-template-missing-${info.project.name}`);
   await banner.getByRole('button', { name: 'Otvoriť Nastavenia › Pobočky' }).click();
   await expect(page).toHaveURL(/\/settings\/branches/);
+});
+
+test('#247 W6h: incomplete template names the branch and the missing values (pilot 2026-11-23)', async ({ page }) => {
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': {
+      body: detail({
+        status: 'missing_data',
+        blocking: 1,
+        checks: [{ id: 'DL-B6', level: 'blocking', params: { missing: ['Group_ID', 'TypObsahu'], koncept: true } }],
+      }),
+    },
+  });
+  await open(page, false);
+  await expect(page.getByTestId('w6h-write-banner')).toContainText(
+    'Vzorový dodací list pobočky Senica je neúplný – chýba: skupina zoznamu (DLP …), položka s artiklom a skladom.',
+  );
 });
 
 test('#247 W6h: Money did not answer → „Overiť teraz“ reconciles by SMID', async ({ page }) => {

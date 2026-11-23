@@ -26,6 +26,7 @@ import { fetchMe } from '../auth/authApi';
 import { UPLOAD_ROLES } from '../money/docsAccess';
 import { day } from '../money/moneyApi';
 import { useFeaturesState } from '../system/features';
+import { checkText } from './checkText';
 import { LineDrawer } from './LineDrawer';
 import { WriteDialog } from './WriteDialog';
 import {
@@ -108,7 +109,8 @@ export function ScreenW6h() {
   const w = d?.write ?? null;
   const created = w?.state === 'created';
   const moneyDuplicate = checks.find((c) => c.id === 'DL-B3' && c.params.money);
-  const noTemplate = checks.find((c) => c.id === 'DL-B6' && !c.params.reason);
+  // DL-B1 (branch settings) / DL-B6 (template): the banner names the branch and what is missing (pilot 2026-11-23)
+  const noTemplate = checks.find((c) => c.level === 'blocking' && (c.id === 'DL-B6' || c.id === 'DL-B1'));
   const canCreate =
     !!d?.can_write &&
     d.money_available &&
@@ -236,7 +238,7 @@ export function ScreenW6h() {
             <WriteBanners
               d={d}
               duplicate={moneyDuplicate ? String(moneyDuplicate.params.number ?? '') : null}
-              noTemplate={!!noTemplate}
+              noTemplate={noTemplate ? `${noTemplate.id} · ${checkText(t, noTemplate, d.branch_name)}` : null}
               canRetry={canCreate}
               busy={write.isPending}
               onRetry={() => setConfirm(true)}
@@ -318,7 +320,7 @@ export function ScreenW6h() {
                   data-testid={`w6h-panel-${panel}`}
                 >
                   {panel === 'checks' ? (
-                    <ChecksList checks={checks} />
+                    <ChecksList checks={checks} branch={d.branch_name} />
                   ) : (
                     <iframe
                       title={t('w6h.original')}
@@ -691,7 +693,7 @@ function Fees({ d }: { d: DocumentDetail }) {
   );
 }
 
-function ChecksList({ checks }: { checks: Check[] }) {
+function ChecksList({ checks, branch }: { checks: Check[]; branch: string | null }) {
   const { t } = useTranslation();
   if (!checks.length) return <p className="type-body p-4 text-text-secondary">{t('w6h.noChecks')}</p>;
   return (
@@ -705,7 +707,7 @@ function ChecksList({ checks }: { checks: Check[] }) {
           )}
           <span className="type-small text-text-primary">
             <strong className="mr-1">{c.id}</strong>
-            {t(`w6h.rules.${c.id}`, { ...c.params, defaultValue: '' })}
+            {checkText(t, c, branch)}
           </span>
         </li>
       ))}
@@ -834,7 +836,7 @@ function WriteBanners({
 }: {
   d: DocumentDetail;
   duplicate: string | null;
-  noTemplate: boolean;
+  noTemplate: string | null;
   canRetry: boolean;
   busy: boolean;
   onRetry: () => void;
@@ -887,11 +889,7 @@ function WriteBanners({
     banner = <Banner kind="danger" message={t('w6h.write.duplicate', { number: duplicate })} />;
   } else if (noTemplate) {
     banner = (
-      <Banner
-        kind="danger"
-        message={t('w6h.write.noTemplate')}
-        action={{ label: t('w6h.write.openSettings'), onClick: onSettings }}
-      />
+      <Banner kind="danger" message={noTemplate} action={{ label: t('w6h.write.openSettings'), onClick: onSettings }} />
     );
   }
   if (!banner) return null;
