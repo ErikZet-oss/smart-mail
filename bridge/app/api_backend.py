@@ -1,4 +1,5 @@
-"""Money S4 backend over the official API (MONEY_BACKEND=api). Read-only.
+"""Money S4 backend over the official API (MONEY_BACKEND=api). Reads + the approved writes (activity, article,
+received delivery note as a koncept).
 
 Only GraphQL list/detail queries from `queries/*.graphql` and the REST calls whose shape is in the swagger files.
 REST list filters (`Filters`, `PropertyName`, `Operation`, `ExpectedValue`) and `?text=` do NOT work on the customer's
@@ -21,6 +22,7 @@ from app.backend import (
     ArticleQuery,
     CatalogExists,
     DeliveryQuery,
+    DuplicateNote,
     InvoiceQuery,
     MoneyError,
     MoneyUnavailable,
@@ -30,6 +32,7 @@ from app.config import BridgeSettings
 from app.filters import all_, any_, cond
 from app.gql_client import TIMEOUT, MoneyHttp, TokenProvider
 from app.models import (
+    KONCEPT_PREFIX,
     Activity,
     ActivityIn,
     ActivityOut,
@@ -45,6 +48,10 @@ from app.models import (
     Connection,
     Delivery,
     DeliveryMatchedBy,
+    DeliveryNoteCreated,
+    DeliveryNoteIn,
+    DeliveryNoteLineBack,
+    DeliveryNoteTemplate,
     DeliverySearch,
     DocumentKind,
     InvoiceKind,
@@ -55,6 +62,7 @@ from app.models import (
     OverduePage,
     Person,
     PersonPage,
+    ReceivedNoteRow,
     SupplierCode,
     SupplierCodePage,
 )
@@ -305,6 +313,117 @@ def _alive(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _newest_first(items: list[Any]) -> list[Any]:
     """The server has no `Order` argument (MONEY_API §2) — sort client-side."""
     return sorted(items, key=lambda i: (i.issued_on or date.min, i.number), reverse=True)
+
+
+# ----- Phase 4c (#247, D33): received delivery note as a koncept -----
+
+TEMPLATE_HEADER = (
+    "CiselnaRada_ID",
+    "Stredisko_ID",
+    "DruhPohybu_ID",
+    "DruhSkladovehoPohybu_ID",
+    "Predkontace_ID",
+    "RegistraceDPH_ID",
+    "DruhDokladu_ID",
+    "Group_ID",
+    "Mena_ID",
+)
+NOTES_SCAN = 100  # received notes of a centre read for „Vybrať iný“ (no server-side ordering, MONEY_API §2)
+
+
+def _rows(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        return [value]
+    return [r for r in (value or []) if isinstance(r, dict)]
+
+
+def _obj(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _koncept(raw: dict[str, Any]) -> bool:
+    return raw.get("Faze") == 0 and raw.get("Schvaleno") is False
+
+
+def note_created_from(raw: dict[str, Any], *, reconciled: bool) -> DeliveryNoteCreated:
+    lines = []
+    for item in _rows(raw.get("Polozky")):
+        content = _obj(item.get("ObsahPolozky"))
+        lines.append(
+            DeliveryNoteLineBack(
+                id=_uuid(item.get("ID")),
+                number=_int(item.get("CisloPolozky")),
+                order=_int(item.get("Poradi")),
+                qty=_dec(item.get("Mnozstvi")),
+                unit_price=_dec(item.get("JednCena")),
+                content_type=_int(item.get("TypObsahu")),
+                article_id=_uuid(content.get("Artikl_ID")),
+                warehouse_id=_uuid(content.get("Sklad_ID")),
+                centre_id=_uuid(item.get("Stredisko_ID")),
+            )
+        )
+    lines.sort(key=lambda ln: (ln.order or 0, ln.number or 0))
+    return DeliveryNoteCreated(
+        id=_required_uuid(raw.get("ID")),
+        number=_s(raw.get("CisloDokladu")),
+        faze=_int(raw.get("Faze")),
+        schvaleno=raw.get("Schvaleno"),
+        group_id=_uuid(raw.get("Group_ID")),
+        centre_id=_uuid(raw.get("Stredisko_ID")),
+        total_base=_dec(raw.get("SumaZaklad")),
+        total=_dec(raw.get("CelkovaCastka")),
+        address_empty=_s(raw.get("AdresaNazev")) is None,
+        lines=lines,
+        reconciled=reconciled,
+    )
+
+
+def note_row_from(raw: dict[str, Any]) -> ReceivedNoteRow:
+    firma = _obj(raw.get("Firma"))
+    return ReceivedNoteRow(
+        id=_required_uuid(raw.get("ID")),
+        number=_s(raw.get("CisloDokladu")),
+        supplier=_s(firma.get("Nazev")) or _s(raw.get("AdresaNazev")),
+        issued_on=_date(raw.get("DatumVystaveni")),
+        koncept=_koncept(raw),
+        by_smart_mail=(_s(raw.get("Nazev")) or "").startswith(KONCEPT_PREFIX),
+    )
+
+
+def template_from(raw: dict[str, Any]) -> DeliveryNoteTemplate:
+    """Header IDs + the first stock line (article + warehouse) + a text line's `TypObsahu` — only values Money has."""
+    header = {k: str(v) for k in TEMPLATE_HEADER if (v := _uuid(raw.get(k))) is not None}
+    line: dict[str, str | int] = {}
+    text_line: dict[str, int] | None = None
+    for item in _rows(raw.get("Polozky")):
+        content = _obj(item.get("ObsahPolozky"))
+        stock = _uuid(content.get("Artikl_ID")) is not None and _uuid(content.get("Sklad_ID")) is not None
+        if stock and not line:
+            for k in ("TypObsahu", "TypCeny", "DruhSazbyDPH"):
+                if item.get(k) is not None:
+                    line[k] = int(item[k])
+            for k in ("DruhPolozky_ID", "SazbaDPH_ID"):
+                if (v := _uuid(item.get(k))) is not None:
+                    line[k] = str(v)
+            if item.get("DphSazba") is not None:  # the VAT % of SazbaDPH_ID — lines with another rate never get it
+                line["DphSazba"] = format(_dec(item["DphSazba"]).normalize(), "f")
+            if content.get("VazbaTypVazby") is not None:
+                line["VazbaTypVazby"] = int(content["VazbaTypVazby"])
+            if "DruhPolozky_ID" not in line and (v := _uuid(content.get("DruhPolozky_ID"))) is not None:
+                line["DruhPolozky_ID"] = str(v)
+        elif not stock and text_line is None and item.get("TypObsahu") is not None:
+            text_line = {"TypObsahu": int(item["TypObsahu"])}
+    firma = _obj(raw.get("Firma"))
+    return DeliveryNoteTemplate(
+        id=_required_uuid(raw.get("ID")),
+        number=_s(raw.get("CisloDokladu")),
+        supplier=_s(firma.get("Nazev")),
+        issued_on=_date(raw.get("DatumVystaveni")),
+        centre_id=_uuid(raw.get("Stredisko_ID")),
+        header=header,
+        line=line,
+        text_line=text_line,
+    )
 
 
 class ApiBackend:
@@ -602,6 +721,89 @@ class ApiBackend:
             parent_id=back.parent_id,
             unit=back.unit,
         )
+
+    # ----- Phase 4c (#247, D33): received delivery note as a koncept -----
+
+    async def _note_by_smid(self, smid: str) -> dict[str, Any] | None:
+        rows = await self._raw(
+            "received_delivery_notes", "ReceivedDeliveryNotes", {"filter": cond("Poznamka", "ct", smid), "count": 5}
+        )
+        alive = [r for r in _alive(rows) if smid in (_s(r.get("Poznamka")) or "")]
+        return alive[0] if alive else None
+
+    async def _note_back(self, note_id: uuid.UUID, *, reconciled: bool) -> DeliveryNoteCreated:
+        raw = (await self._money.graphql("received_delivery_note", {"id": str(note_id)})).get("ReceivedDeliveryNote")
+        if not isinstance(raw, dict) or not raw.get("ID"):
+            raise MoneyError("created note not found on read-back")
+        return note_created_from(raw, reconciled=reconciled)
+
+    async def _address(self, company_id: uuid.UUID) -> dict[str, Any]:
+        """MONEY_API 5.5.7 fallback: the supplier address from the Money company card — never from the PDF."""
+        raw = (await self._money.graphql("company_address", {"id": str(company_id)})).get("Company")
+        if not isinstance(raw, dict):
+            raise MoneyError("supplier card not found")
+        values = {
+            "AdresaNazev": _s(raw.get("ObchNazev")) or _s(raw.get("Nazev")),
+            "AdresaUlice": _s(raw.get("ObchUlice")),
+            "AdresaMisto": _s(raw.get("ObchMisto")),
+            "AdresaPSC": _s(raw.get("ObchPsc")),
+            "AdresaStat_ID": _s(_uuid(raw.get("ObchStat_ID"))),
+            "IC": _s(raw.get("ICO")),
+            "DIC": _s(raw.get("DIC")),
+            "ICDPH": _s(raw.get("ICDPH")),
+        }
+        return {k: v for k, v in values.items() if v is not None}
+
+    async def create_delivery_note(self, note: DeliveryNoteIn) -> DeliveryNoteCreated:
+        """D33 / MONEY_API 5.5.7 `CreateReceivedDeliveryNote` as a koncept (`Faze` 0, `Schvaleno` false). Before the
+        mutation: a note with this SMID → returned (`reconciled`); a note of the same supplier + `Odkaz` →
+        `DuplicateNote` (DL-B3). Never retried: after an error or a timeout the SMID is looked up ONCE. Read back."""
+        smid = f"SMID:{note.smid}"
+        mine = await self._note_by_smid(smid)
+        if mine is not None:
+            return await self._note_back(_required_uuid(mine.get("ID")), reconciled=True)
+        dupes = await self._raw(
+            "received_delivery_notes",
+            "ReceivedDeliveryNotes",
+            {"filter": all_(cond("Firma_ID", "eq", note.Firma_ID), cond("Odkaz", "eq", note.Odkaz)), "count": 5},
+        )
+        dupes = [r for r in _alive(dupes) if _s(r.get("Odkaz")) == note.Odkaz]
+        if dupes:
+            raise DuplicateNote(_s(dupes[0].get("CisloDokladu")))
+        payload = note.money_input()
+        if note.with_address:
+            payload.update(await self._address(note.Firma_ID))
+        try:
+            data = await self._money.graphql("create_received_delivery_note", {"dl": payload})
+            created = data.get("CreateReceivedDeliveryNote")
+            new_id = _uuid(created.get("ID")) if isinstance(created, dict) else None
+            if new_id is None:
+                raise MoneyError("CreateReceivedDeliveryNote returned no ID")
+        except (MoneyError, MoneyUnavailable):
+            found = await self._note_by_smid(smid)  # reconciliation — once, never a second create
+            if found is None:
+                raise
+            return await self._note_back(_required_uuid(found.get("ID")), reconciled=True)
+        return await self._note_back(new_id, reconciled=False)
+
+    async def received_notes(self, centre_id: uuid.UUID, count: int) -> list[ReceivedNoteRow]:
+        """Settings 11e „Vybrať iný“: the newest received delivery notes of a centre (sorted here — no server order)."""
+        rows = await self._raw(
+            "received_delivery_notes",
+            "ReceivedDeliveryNotes",
+            {"filter": cond("Stredisko_ID", "eq", centre_id), "count": NOTES_SCAN},
+        )
+        alive = _alive(rows)
+        alive.sort(key=lambda r: (_s(r.get("Create_Date")) or "", _s(r.get("CisloDokladu")) or ""), reverse=True)
+        return [note_row_from(r) for r in alive[:count]]
+
+    async def delivery_note_template(self, note_id: uuid.UUID) -> DeliveryNoteTemplate | None:
+        raw = (await self._money.graphql("received_delivery_note_template", {"id": str(note_id)})).get(
+            "ReceivedDeliveryNote"
+        )
+        if not isinstance(raw, dict) or not raw.get("ID") or not _alive([raw]):
+            return None
+        return template_from(raw)
 
     async def article(self, article_id: uuid.UUID) -> Article | None:
         raw = (await self._money.graphql("article", {"id": str(article_id)})).get("Article")

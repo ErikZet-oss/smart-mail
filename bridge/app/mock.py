@@ -14,7 +14,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from app import wildcard
-from app.backend import ArticleQuery, CatalogExists, DeliveryQuery, InvoiceQuery
+from app.backend import ArticleQuery, CatalogExists, DeliveryQuery, DuplicateNote, InvoiceQuery
 from app.models import (
     Activity,
     ActivityIn,
@@ -31,6 +31,9 @@ from app.models import (
     Connection,
     Delivery,
     DeliveryMatchedBy,
+    DeliveryNoteCreated,
+    DeliveryNoteIn,
+    DeliveryNoteTemplate,
     DeliverySearch,
     DocumentKind,
     InvoiceKind,
@@ -41,6 +44,7 @@ from app.models import (
     OverduePage,
     Person,
     PersonPage,
+    ReceivedNoteRow,
     SupplierCode,
     SupplierCodePage,
 )
@@ -103,6 +107,7 @@ class MockData:
     codebooks: dict[str, list[CodebookItem]] = field(default_factory=dict)
     articles: list[Article] = field(default_factory=list)
     supplier_codes: list[SupplierCode] = field(default_factory=list)
+    received_notes: list[dict[str, object]] = field(default_factory=list)  # #247: Money-shaped raw rows
 
 
 def _money(rng: random.Random, low: int, high: int) -> Decimal:
@@ -247,6 +252,8 @@ def build(seed: int = 20261030) -> MockData:
         )
     _articles(data)
     _variants(data)
+    for n in (1, 2):  # #247 one person-made received delivery note per centre 1 and 2 = the branch templates
+        data.received_notes.append(received_template(n, mid("centre", n), data.companies[0], data.articles[0]))
     return data
 
 
@@ -305,6 +312,66 @@ def _articles(data: MockData) -> None:
                     article_unit_qty=Decimal(sup_unit[1]),
                 )
             )
+
+
+def received_template(n: int, centre: uuid.UUID, supplier: Company, article: Article) -> dict[str, object]:
+    """#247 a received delivery note made by a person in Money — the branch template (fictional IDs from `mid`)."""
+    return {
+        "ID": str(mid("received-note", n)),
+        "Deleted": False,
+        "CisloDokladu": f"DLP{n:04d}/2026",
+        "Nazev": "Príjem tovaru (fiktívny)",
+        "Odkaz": f"DL-FIKT-{n:03d}",
+        "Poznamka": "",
+        "Faze": 1,
+        "Schvaleno": True,
+        "DatumVystaveni": f"2026-11-{10 + n:02d}T00:00:00",
+        "Create_Date": f"2026-11-{10 + n:02d}T08:00:00",
+        "Firma_ID": str(supplier.id),
+        "Firma": {"Nazev": supplier.name},
+        "AdresaNazev": supplier.name,
+        "Stredisko_ID": str(centre),
+        "CiselnaRada_ID": str(mid("series", 3)),
+        "DruhPohybu_ID": str(mid("movement-kind", 1)),
+        "DruhSkladovehoPohybu_ID": str(mid("stock-movement-kind", 1)),
+        "Predkontace_ID": str(mid("account-assignment", 1)),
+        "RegistraceDPH_ID": str(mid("vat-registration", 1)),
+        "DruhDokladu_ID": str(mid("document-kind", 1)),
+        "Group_ID": str(mid("note-group", n)),
+        "Mena_ID": str(mid("currency", 1)),
+        "SumaZaklad": Decimal("8.40"),
+        "CelkovaCastka": Decimal("10.33"),
+        "Polozky": [
+            {
+                "ID": str(mid("received-note-item", n)),
+                "CisloPolozky": 1,
+                "Poradi": 1,
+                "Mnozstvi": Decimal("100"),
+                "JednCena": Decimal("0.0840"),
+                "TypObsahu": 1,
+                "TypCeny": 0,
+                "DruhSazbyDPH": 2,
+                "DphSazba": Decimal("23"),
+                "SazbaDPH_ID": str(mid("vat-rate", 23)),
+                "DruhPolozky_ID": str(mid("item-kind", 1)),
+                "Stredisko_ID": str(centre),
+                "ObsahPolozky": {
+                    "Artikl_ID": str(article.id),
+                    "Sklad_ID": str(mid("warehouse", 1)),
+                    "VazbaTypVazby": 0,
+                },
+            },
+            {
+                "ID": str(mid("received-note-item", 100 + n)),
+                "Poradi": 2,
+                "Mnozstvi": Decimal("1"),
+                "JednCena": Decimal("0"),
+                "TypObsahu": 0,
+                "Nazev": "Text",
+                "ObsahPolozky": None,
+            },
+        ],
+    }
 
 
 def _newest_first[T: (IssuedInvoice, Order, Delivery)](items: list[T]) -> list[T]:
@@ -538,3 +605,55 @@ class MockBackend:
         rows = [c for c in self.data.supplier_codes if c.supplier_id == supplier_id]
         page = rows[start : start + count]
         return SupplierCodePage(items=page, next_from=start + count if start + count < len(rows) else None)
+
+    # ----- Phase 4c (#247, D33): received delivery note as a koncept -----
+
+    def _note(self, note_id: uuid.UUID) -> dict[str, object] | None:
+        return next((n for n in self.data.received_notes if n["ID"] == str(note_id)), None)
+
+    async def create_delivery_note(self, note: DeliveryNoteIn) -> DeliveryNoteCreated:
+        """Same order as the API backend: own SMID → reconciled; same supplier + Odkaz → `DuplicateNote`; else the
+        koncept is stored (number from the branch series, address from the company card as Money would)."""
+        from app.api_backend import note_created_from
+
+        smid = f"SMID:{note.smid}"
+        for raw in self.data.received_notes:
+            if smid in str(raw.get("Poznamka") or ""):
+                return note_created_from(raw, reconciled=True)
+        for raw in self.data.received_notes:
+            if raw.get("Firma_ID") == str(note.Firma_ID) and raw.get("Odkaz") == note.Odkaz:
+                raise DuplicateNote(str(raw.get("CisloDokladu")))
+        data = note.money_input()
+        company = await self.company(note.Firma_ID)
+        n = len(self.data.received_notes) + 1
+        items = []
+        for i, item in enumerate(data["Polozky"], start=1):
+            items.append({**item, "ID": str(uuid.uuid4()), "CisloPolozky": i})
+        base = sum((Decimal(it["Mnozstvi"]) * Decimal(it["JednCena"]) for it in data["Polozky"]), Decimal("0"))
+        raw = {
+            **data,
+            "ID": str(uuid.uuid4()),
+            "Deleted": False,
+            "CisloDokladu": f"DLP{n:04d}/2026",
+            "AdresaNazev": company.name if company else None,
+            "Firma": {"Nazev": company.name if company else None},
+            "Create_Date": datetime.now(UTC).isoformat(),
+            "SumaZaklad": base.quantize(Decimal("0.01")),
+            "CelkovaCastka": base.quantize(Decimal("0.01")),
+            "Polozky": items,
+        }
+        self.data.received_notes.append(raw)
+        return note_created_from(raw, reconciled=False)
+
+    async def received_notes(self, centre_id: uuid.UUID, count: int) -> list[ReceivedNoteRow]:
+        from app.api_backend import note_row_from
+
+        rows = [r for r in self.data.received_notes if r.get("Stredisko_ID") == str(centre_id)]
+        rows.sort(key=lambda r: (str(r.get("Create_Date") or ""), str(r.get("CisloDokladu") or "")), reverse=True)
+        return [note_row_from(r) for r in rows[:count]]
+
+    async def delivery_note_template(self, note_id: uuid.UUID) -> DeliveryNoteTemplate | None:
+        from app.api_backend import template_from
+
+        raw = self._note(note_id)
+        return template_from(raw) if raw else None

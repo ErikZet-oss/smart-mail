@@ -31,6 +31,8 @@ from app.money.schemas import (
     Company,
     CompanyPage,
     Delivery,
+    DeliveryNoteCreated,
+    DeliveryNoteTemplate,
     DeliverySearch,
     Health,
     InvoiceSearch,
@@ -38,6 +40,7 @@ from app.money.schemas import (
     Order,
     OverduePage,
     PersonPage,
+    ReceivedNoteRow,
     SupplierCode,
     SupplierCodePage,
 )
@@ -325,6 +328,30 @@ class BridgeClient:
         data = await self._post("/articles", payload, approval_token)
         try:
             return ArticleCreated.model_validate(data)
+        except ValidationError as exc:
+            raise BridgeUnavailable("bridge_contract") from exc
+
+    async def create_delivery_note(self, payload: dict[str, Any], approval_token: str) -> DeliveryNoteCreated:
+        """#247 / D33 `CreateReceivedDeliveryNote` as a koncept. 409 `duplicate` / 422 `not_koncept` →
+        `BridgeRefused`; transport errors and 5xx → `BridgeUnavailable` (the caller reconciles by SMID)."""
+        data = await self._post("/delivery-notes/received", payload, approval_token)
+        try:
+            return DeliveryNoteCreated.model_validate(data)
+        except ValidationError as exc:
+            raise BridgeUnavailable("bridge_contract") from exc
+
+    async def received_notes(self, centre_id: uuid.UUID, count: int = 20) -> list[ReceivedNoteRow]:
+        """Settings 11e „Vybrať iný“: the newest received delivery notes of the branch centre."""
+        return await self._list(
+            ReceivedNoteRow, "/delivery-notes/received", {"centre_id": str(centre_id), "count": count}
+        )
+
+    async def delivery_note_template(self, note_id: uuid.UUID) -> DeliveryNoteTemplate | None:
+        data = await self._get(f"/delivery-notes/received/{note_id}/template", allow_404=True)
+        if data is None:
+            return None
+        try:
+            return DeliveryNoteTemplate.model_validate(data)
         except ValidationError as exc:
             raise BridgeUnavailable("bridge_contract") from exc
 

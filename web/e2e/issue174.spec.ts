@@ -60,6 +60,9 @@ test('#174 W12-11e: centre from Money, branch report ids, validation, save', asy
         ],
       },
     },
+    'GET /api/settings/money/branches/b-nitra/dl-template': {
+      body: { centre_set: true, template: null, money_available: true },
+    },
     'PUT /api/settings/money/branches/b-nitra': (payload) => {
       saved.push(payload);
       return { body: { id: 'b-nitra', name: 'Pobočka Nitra', centre_id: CENTRE, centre_missing: false, reports: {} } };

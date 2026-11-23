@@ -469,15 +469,52 @@ export type BranchMoney = {
   centre_missing: boolean;
   /** #222 adds `delivery_note` / `delivery_note_design` (absent from an older server) */
   reports: Record<'invoice' | 'proforma', string> & Partial<Record<'delivery_note' | 'delivery_note_design', string>>;
+  /** #247 „Sklad pobočky“ (Money codebook, D18) */
+  warehouse_id?: string | null;
+  warehouse_missing?: boolean;
 };
 export type BranchMoneyList = {
   centres: { id: string; code: string | null; name: string | null }[];
   branches: BranchMoney[];
+  warehouses?: { id: string; code: string | null; name: string | null }[];
 };
 export const branchMoneyKey = ['settings', 'money', 'branches'] as const;
 export const fetchBranchMoney = () => api<BranchMoneyList>('GET', '/api/settings/money/branches');
-export const saveBranchMoney = (id: string, body: { centre_id: string | null; reports: Record<string, string> }) =>
-  api<BranchMoney>('PUT', `/api/settings/money/branches/${encodeURIComponent(id)}`, body);
+export const saveBranchMoney = (
+  id: string,
+  body: { centre_id: string | null; reports: Record<string, string>; warehouse_id?: string },
+) => api<BranchMoney>('PUT', `/api/settings/money/branches/${encodeURIComponent(id)}`, body);
+
+/** #247 SETTINGS 11e „Vzorový dodací list pobočky“ (D33): the received note whose Money values the write copies. */
+export type DlTemplate = {
+  id: string;
+  number: string | null;
+  supplier: string | null;
+  issued_on: string | null;
+  cached_at: string | null;
+  missing: string[];
+};
+export type DlTemplateState = { centre_set: boolean; template: DlTemplate | null; money_available: boolean };
+export type DlNoteRow = {
+  id: string;
+  number: string | null;
+  supplier: string | null;
+  issued_on: string | null;
+  koncept: boolean;
+  by_smart_mail: boolean;
+  selected: boolean;
+};
+export type VerifyRow = { id: string; ok: boolean | null; detail: string | null };
+const tplUrl = (id: string) => `/api/settings/money/branches/${encodeURIComponent(id)}`;
+export const dlTemplateKey = (id: string) => ['settings', 'money', 'dl-template', id] as const;
+export const fetchDlTemplate = (id: string) =>
+  api<DlTemplateState>('GET', `${tplUrl(id)}/dl-template`, undefined, { global: false });
+export const fetchDlTemplates = (id: string) =>
+  api<DlNoteRow[]>('GET', `${tplUrl(id)}/dl-templates`, undefined, { global: false });
+export const saveDlTemplate = (id: string, noteId: string) =>
+  api<DlTemplateState>('PUT', `${tplUrl(id)}/dl-template`, { note_id: noteId }, { global: false });
+export const verifyBranch = (id: string) =>
+  api<{ rows: VerifyRow[]; template: DlTemplate | null }>('POST', `${tplUrl(id)}/verify`, {}, { global: false });
 export const testBranchReport = (id: string, kind: string, number: string) =>
   apiBlob(
     'GET',

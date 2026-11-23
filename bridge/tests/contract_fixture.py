@@ -42,7 +42,34 @@ def current() -> dict[str, Any]:
         "catalog_free": client.get("/articles/catalog-free?katalog=FREE-0001").json(),
         "catalog_taken": client.get("/articles/catalog-free?katalog=934-10-A2").json(),
         "article_created": _created(),
+        "received_notes": (rows := client.get("/delivery-notes/received?centre_id=" + str(_centre())).json()),
+        "delivery_note_template": client.get(f"/delivery-notes/received/{rows[0]['id']}/template").json(),
+        "delivery_note_created": _note_created(),
     }
+
+
+def _centre() -> Any:
+    from app.mock import mid
+
+    return mid("centre", 1)
+
+
+def _note_created() -> dict[str, Any]:
+    """#247 the body of `POST /delivery-notes/received` (the route needs an approval JWT; the mock answers the same)."""
+    import asyncio
+    import json as _json
+    import uuid
+
+    from app.mock import MockBackend
+    from app.models import DeliveryNoteIn
+    from tests.test_write_delivery_note import note
+
+    out = asyncio.run(MockBackend().create_delivery_note(DeliveryNoteIn.model_validate(note())))
+    data = _json.loads(out.model_dump_json())
+    data["id"] = str(uuid.UUID(int=0x247))  # stable ids in the file
+    for i, line in enumerate(data["lines"], start=1):
+        line["id"] = str(uuid.UUID(int=0x2470 + i))
+    return dict(data)
 
 
 def _created() -> dict[str, Any]:

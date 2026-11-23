@@ -21,6 +21,7 @@ from app.models import (
     Company,
     CompanyPage,
     Delivery,
+    DeliveryNoteTemplate,
     DeliverySearch,
     DocumentKind,
     InvoiceKind,
@@ -29,6 +30,7 @@ from app.models import (
     Order,
     OverduePage,
     PersonPage,
+    ReceivedNoteRow,
     SupplierCode,
     SupplierCodePage,
 )
@@ -261,3 +263,25 @@ async def supplier_article_codes(
     request: Request, supplier_id: uuid.UUID, start: Start = 0, count: Count = 500
 ) -> SupplierCodePage:
     return await _backend(request).supplier_codes(supplier_id, start, count)
+
+
+# ----- Phase 4c (#247): branch template note for Settings 11e „Vzorový dodací list pobočky“ -----
+
+
+@router.get("/delivery-notes/received")
+async def received_notes(
+    request: Request, centre_id: uuid.UUID, count: Annotated[int, Query(ge=1, le=50)] = 20
+) -> list[ReceivedNoteRow]:
+    """The newest received delivery notes of a centre (Číslo · Dodávateľ · Dátum) — read only."""
+    backend: MoneyBackend = request.app.state.backend
+    return await backend.received_notes(centre_id, count)
+
+
+@router.get("/delivery-notes/received/{note_id}/template")
+async def delivery_note_template(request: Request, note_id: uuid.UUID) -> DeliveryNoteTemplate:
+    """Values copied from a template note (header IDs incl. `Group_ID`, first stock line, text line `TypObsahu`)."""
+    backend: MoneyBackend = request.app.state.backend
+    found = await backend.delivery_note_template(note_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail={"code": "note_not_found"})
+    return found

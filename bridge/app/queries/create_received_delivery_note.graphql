@@ -1,0 +1,6 @@
+mutation CreateReceivedDeliveryNote($dl: ReceivedDeliveryNoteInput!) {
+  CreateReceivedDeliveryNote(ReceivedDeliveryNote: $dl) {
+    ID
+    CisloDokladu
+  }
+}

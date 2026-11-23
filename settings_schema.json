@@ -1,5 +1,5 @@
 {
-  "version": "4b-239",
+  "version": "4c-247",
   "phase": "4b",
   "sections": [
     {
@@ -1003,6 +1003,17 @@
           "control": "switch",
           "default": false,
           "help": "Sklad, účtovníctvo a správca môžu z riadku dodacieho listu založiť v Money hlavnú kartu alebo variant (DECISIONS D32). Na ostrej agende musí zápis povoliť aj most (MONEY_PROD_ALLOW).",
+          "scope": "G",
+          "options": [],
+          "validation": {},
+          "admin_only": true
+        },
+        {
+          "id": "purchasing.write_delivery_notes",
+          "label": "Zápis dodacích listov do Money (koncept)",
+          "control": "switch",
+          "default": false,
+          "help": "Tlačidlo „Vytvoriť v Money“ zapíše dodací list prijatý ako koncept s popisom „Smartmail…“. Koncept skontrolujete a dokončíte v Money (DECISIONS D33). Na ostrej agende musí zápis povoliť aj most (MONEY_PROD_ALLOW).",
           "scope": "G",
           "options": [],
           "validation": {},

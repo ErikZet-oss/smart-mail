@@ -405,6 +405,7 @@ hodnoty z neho.").
 | Kto potvrdzuje párovanie položiek | multi-select roles | Sklad, Správca | ≥ 1 | — | G |
 | Dátum vystavenia dodacieho listu | segmented: Dátum dokladu dodávateľa / Dátum schválenia | Dátum dokladu dodávateľa | — | Pole „Vystavenie“ na dodacom liste prijatom. | G |
 | Zakladanie artiklov v Money | switch | vypnuté | — | Sklad, účtovníctvo a správca môžu z riadku dodacieho listu založiť v Money hlavnú kartu alebo variant (DECISIONS D32). Na ostrej agende musí zápis povoliť aj most (MONEY_PROD_ALLOW). | G |
+| Zápis dodacích listov do Money (koncept) | switch | vypnuté | — | Tlačidlo „Vytvoriť v Money“ zapíše dodací list prijatý ako koncept s popisom „Smartmail…“. Koncept skontrolujete a dokončíte v Money (DECISIONS D33). Na ostrej agende musí zápis povoliť aj most (MONEY_PROD_ALLOW). | G |
 | Dátum a čas skladového pohybu | info (read-only): "Okamih zápisu do Money (schválenie)" | — | — | Dátum a čas „Sklad. pohybu“ a „Účt. prípadu“ = kedy Smart Mail doklad zapísal do Money (DECISIONS D13). | — |
 | Poplatky na dokladoch dodávateľa (doprava, balné) | info (read-only): "Nezapisujú sa – zobrazia sa v záložke Poplatky" | — | — | Ak treba, doplňte ich v Money (DECISIONS D14). | — |
 | Vratky | info (read-only): "Vratky sa robia len v Money" | — | — | DECISIONS D15. | — |

@@ -24,7 +24,7 @@ def test_query_matches_schema(path: Path) -> None:
 
 
 # the only mutations the bridge may send — each one needs its own decision (D32 `CreateArticle`, #239)
-MUTATIONS = frozenset({"create_article"})
+MUTATIONS = frozenset({"create_article", "create_received_delivery_note"})
 
 
 def test_the_mutation_allowlist_is_exact() -> None:

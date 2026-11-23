@@ -22,6 +22,10 @@ const STATUS_TONE: Record<SupplierDocument['status'], string> = {
   unreadable: 'bg-danger-50 text-danger-600',
   failed: 'bg-danger-50 text-danger-600',
   ignored: 'bg-bg-muted text-text-tertiary',
+  creating: 'bg-brand-primary-50 text-brand-primary-700',
+  created: 'bg-success-50 text-success-600',
+  write_failed: 'bg-danger-50 text-danger-600',
+  unknown: 'bg-warning-50 text-warning-700',
 };
 const FILTERS: DocumentFilter[] = ['open', 'all', 'duplicate', 'ignored'];
 
@@ -111,6 +115,7 @@ export function ScreenW6e() {
                           <StatusChip tone={STATUS_TONE[d.status]} label={statusLabel(d)} />
                         </div>
                         <span className="break-all text-text-secondary">
+                          {d.money_number ? `${d.money_number} · ` : ''}
                           {d.doc_number ?? '–'} · {day(d.doc_date)}
                         </span>
                         <span className="text-text-secondary">
@@ -166,7 +171,9 @@ export function ScreenW6e() {
                           }}
                           className="cursor-pointer border-t border-border-default hover:bg-bg-subtle"
                         >
-                          <td className="px-3 py-2 text-text-tertiary">{t('purchasing.newDraft')}</td>
+                          <td className={`px-3 py-2 ${d.money_number ? 'text-text-primary' : 'text-text-tertiary'}`}>
+                            {d.money_number ?? t('purchasing.newDraft')}
+                          </td>
                           <td className="px-3 py-2">{d.doc_number ?? '–'}</td>
                           <td className="px-3 py-2">{d.supplier_name ?? d.filename}</td>
                           <td className="px-3 py-2">{day(d.doc_date)}</td>

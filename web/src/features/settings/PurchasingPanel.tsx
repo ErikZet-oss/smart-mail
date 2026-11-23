@@ -22,6 +22,7 @@ type Purchasing = {
   issue_date: 'supplier' | 'approval';
   warehouse_rules: Rule[];
   create_article: boolean;
+  write_delivery_notes: boolean;
   branch_warehouses: string[];
   warehouses: { id: string; label: string }[];
   suppliers: { id: string; label: string }[];
@@ -46,7 +47,13 @@ const PCT = /^\d{1,3}([.,]\d{1,2})?$/;
 
 type Form = Pick<
   Purchasing,
-  'price_diff_pct' | 'qty_diff_pct' | 'confirm_roles' | 'issue_date' | 'warehouse_rules' | 'create_article'
+  | 'price_diff_pct'
+  | 'qty_diff_pct'
+  | 'confirm_roles'
+  | 'issue_date'
+  | 'warehouse_rules'
+  | 'create_article'
+  | 'write_delivery_notes'
 >;
 const toForm = (p: Purchasing): Form => ({
   price_diff_pct: p.price_diff_pct,
@@ -55,6 +62,7 @@ const toForm = (p: Purchasing): Form => ({
   issue_date: p.issue_date,
   warehouse_rules: p.warehouse_rules,
   create_article: p.create_article,
+  write_delivery_notes: p.write_delivery_notes,
 });
 const pctOk = (v: string) => PCT.test(v) && Number(v.replace(',', '.')) <= 100;
 
@@ -243,6 +251,13 @@ export function PurchasingPanel() {
             checked={form.create_article}
             onChange={(v) => set({ create_article: v })}
             label={L('createArticleSwitch')}
+          />
+        </Row>
+        <Row label={L('writeNotes')} help={L('writeNotesHelp')}>
+          <Switch
+            checked={form.write_delivery_notes}
+            onChange={(v) => set({ write_delivery_notes: v })}
+            label={L('writeNotesSwitch')}
           />
         </Row>
       </section>

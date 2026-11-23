@@ -12,11 +12,13 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { FileTypeIcon } from '../../components/FileTypeIcon';
+import { useToasts } from '../../components/toastContext';
+import { ApiError } from '../../lib/api';
 import { fileTypeOf } from '../../components/fileType';
 import { AppShell } from '../../components/shell/AppShell';
 import { MOBILE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
@@ -25,8 +27,10 @@ import { UPLOAD_ROLES } from '../money/docsAccess';
 import { day } from '../money/moneyApi';
 import { useFeaturesState } from '../system/features';
 import { LineDrawer } from './LineDrawer';
+import { WriteDialog } from './WriteDialog';
 import {
   addDec,
+  createInMoney,
   documentKey,
   fetchDocument,
   moneyNum,
@@ -76,12 +80,55 @@ export function ScreenW6h() {
     mutationFn: () => rematch(id),
     onSuccess: (d) => qc.setQueryData(documentKey(id), d),
   });
+  const toasts = useToasts();
+  const navigate = useNavigate();
+  const [confirm, setConfirm] = useState(false);
+  // D33 (#247): the click in the confirm dialog is the approval; the backend re-runs every check (DL-B1–B11)
+  const write = useMutation({
+    mutationFn: (version: number) => createInMoney(id, version),
+    onSuccess: (next) => {
+      qc.setQueryData(documentKey(id), next);
+      setConfirm(false);
+      if (next.write?.state === 'created') toasts.success(t('w6h.write.toast', { number: next.write.number ?? '' }));
+    },
+    onError: (e) => {
+      setConfirm(false);
+      void qc.invalidateQueries({ queryKey: documentKey(id) });
+      const code = e instanceof ApiError ? e.detail.code : 'generic';
+      if (code !== 'duplicate' && code !== 'checks_failed')
+        toasts.error(t(`w6h.write.errors.${code}`, { defaultValue: t('w6h.write.errors.generic') }));
+    },
+  });
   if (features.loaded && !features.money) return <Navigate to="/404" replace />;
   const d = doc.data;
   const goods = d?.items.filter((l) => !l.is_fee) ?? [];
   const checks = d?.checks ?? [];
   const blocking = checks.filter((c) => c.level === 'blocking').length;
   const openLine = d && open != null ? d.items.find((l) => l.line_no === open) : undefined;
+  const w = d?.write ?? null;
+  const created = w?.state === 'created';
+  const moneyDuplicate = checks.find((c) => c.id === 'DL-B3' && c.params.money);
+  const noTemplate = checks.find((c) => c.id === 'DL-B6' && !c.params.reason);
+  const canCreate =
+    !!d?.can_write &&
+    d.money_available &&
+    blocking === 0 &&
+    ['needs_review', 'write_failed'].includes(d.status) &&
+    !write.isPending;
+  const createTitle = !d?.can_write ? t('w6h.write.disabled') : blocking ? t('w6h.write.blocked') : undefined;
+  const chip = !d
+    ? null
+    : created
+      ? { text: t('w6h.write.chip', { number: w?.number ?? '' }), cls: 'bg-success-50 text-success-600' }
+      : d.status === 'write_failed'
+        ? { text: t('purchasing.status.write_failed'), cls: 'bg-danger-50 text-danger-600' }
+        : d.status === 'unknown'
+          ? { text: t('purchasing.status.unknown'), cls: 'bg-warning-50 text-warning-700' }
+          : moneyDuplicate
+            ? { text: t('w6h.write.duplicateChip'), cls: 'bg-danger-50 text-danger-600' }
+            : d.status === 'missing_data'
+              ? { text: t('purchasing.status.missing_data'), cls: 'bg-warning-50 text-warning-700' }
+              : { text: t(`purchasing.status.${d.status}`), cls: 'bg-bg-muted text-text-secondary' };
 
   return (
     <AppShell section="documents">
@@ -91,15 +138,15 @@ export function ScreenW6h() {
             <ArrowLeft size={20} aria-hidden="true" />
           </Link>
           <h1 className="type-title text-text-primary">{t('w6h.title')}</h1>
-          <span className="type-title text-text-tertiary">{t('purchasing.newDraft')}</span>
-          {d ? (
+          <span className={`type-title ${d?.money_number ? 'text-text-primary' : 'text-text-tertiary'}`}>
+            {d?.money_number ?? t('purchasing.newDraft')}
+          </span>
+          {chip ? (
             <span
-              className={`type-caption inline-flex h-6 items-center rounded-full px-2 ${
-                d.status === 'missing_data' ? 'bg-warning-50 text-warning-700' : 'bg-bg-muted text-text-secondary'
-              }`}
+              className={`type-caption inline-flex h-6 items-center rounded-full px-2 ${chip.cls}`}
               data-testid="w6h-status"
             >
-              {t(`purchasing.status.${d.status}`)}
+              {chip.text}
             </span>
           ) : null}
           {d?.branch_name ? (
@@ -136,14 +183,22 @@ export function ScreenW6h() {
           <>
             {!mobile ? (
               <div className="flex flex-wrap items-center gap-2 bg-bg-subtle px-4 py-2 md:px-6">
-                <Button icon={<Database size={16} aria-hidden="true" />} disabled title={t('w6h.createLater')}>
-                  {t('w6h.create')}
-                </Button>
+                {created ? null : (
+                  <Button
+                    icon={<Database size={16} aria-hidden="true" />}
+                    disabled={!canCreate}
+                    title={createTitle}
+                    onClick={() => setConfirm(true)}
+                    data-testid="w6h-create"
+                  >
+                    {t('w6h.create')}
+                  </Button>
+                )}
                 <Link
                   to="/docs/delivery-notes"
                   className="type-label inline-flex h-8 items-center rounded-sm border border-border-strong bg-bg-canvas px-3"
                 >
-                  {t('w6h.back')}
+                  {created ? t('w6h.write.close') : t('w6h.back')}
                 </Link>
                 <span className="ml-auto flex gap-4">
                   <button
@@ -178,6 +233,16 @@ export function ScreenW6h() {
                 <Banner kind="warning" message={t('w6h.duplicate')} />
               </div>
             ) : null}
+            <WriteBanners
+              d={d}
+              duplicate={moneyDuplicate ? String(moneyDuplicate.params.number ?? '') : null}
+              noTemplate={!!noTemplate}
+              canRetry={canCreate}
+              busy={write.isPending}
+              onRetry={() => setConfirm(true)}
+              onReconcile={() => write.mutate(d.version)}
+              onSettings={() => navigate('/settings/branches')}
+            />
             <div className="flex min-h-0 flex-1">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pb-24 md:pb-0">
                 {mobile ? (
@@ -272,12 +337,28 @@ export function ScreenW6h() {
                     warnings: checks.filter((c) => c.level === 'warning').length,
                   })}
                 </span>
-                <Button size="lg" disabled title={t('w6h.createLater')}>
-                  {t('w6h.create')}
-                </Button>
+                {created ? null : (
+                  <Button
+                    size="lg"
+                    disabled={!canCreate}
+                    title={createTitle}
+                    onClick={() => setConfirm(true)}
+                    data-testid="m13b-create"
+                  >
+                    {t('w6h.create')}
+                  </Button>
+                )}
               </div>
             ) : null}
-            {openLine ? (
+            {confirm ? (
+              <WriteDialog
+                d={d}
+                busy={write.isPending}
+                onConfirm={() => write.mutate(d.version)}
+                onClose={() => setConfirm(false)}
+              />
+            ) : null}
+            {openLine && !created ? (
               <LineDrawer
                 doc={d}
                 line={openLine}
@@ -354,7 +435,12 @@ function HeaderGrid({ d }: { d: DocumentDetail }) {
   const { t } = useTranslation();
   const first = d.items.find((l) => !l.is_fee);
   const L = (k: string) => t(`w6h.f.${k}`);
-  const onWrite = t('w6h.onWrite');
+  // 4c (#247): after the write the card shows the Money number and the moment of the write (D13)
+  const written = d.write?.state === 'created' && d.write.written_at ? new Date(d.write.written_at) : null;
+  const onWrite = written ? written.toLocaleDateString('sk-SK') : t('w6h.onWrite');
+  const movedAt = written
+    ? written.toLocaleString('sk-SK', { dateStyle: 'short', timeStyle: 'short' })
+    : t('w6h.onWriteMoney');
   const goodsTotal = d.items
     .filter((l) => !l.is_fee)
     .reduce((acc, l) => (l.line_total ? addDec(acc, l.line_total) : acc), '0');
@@ -363,14 +449,22 @@ function HeaderGrid({ d }: { d: DocumentDetail }) {
       <div className="grid grid-cols-2 gap-x-6 gap-y-2" data-testid="w6h-header">
         <div className="col-span-2 flex items-center gap-2">
           <span className="type-small w-32 shrink-0 text-right">{L('number')}</span>
-          <span className="type-small flex h-8 w-[100px] items-center whitespace-nowrap rounded-sm border border-border-default bg-bg-muted px-2 text-text-tertiary">
-            {t('w6h.assigned')}
+          <span
+            className={`type-small flex h-8 w-[100px] items-center whitespace-nowrap rounded-sm border border-border-default bg-bg-muted px-2 ${
+              d.money_number ? 'text-text-primary' : 'text-text-tertiary'
+            }`}
+          >
+            {d.money_number ?? t('w6h.assigned')}
           </span>
           <span className="type-label flex h-8 items-center rounded-sm border border-border-default px-2">
             {d.series ?? '—'}
           </span>
         </div>
-        <Field label={L('description')} value={first?.article?.name ?? first?.name ?? '–'} wide />
+        <Field
+          label={L('description')}
+          value={`${t('w6h.write.prefix')}${first?.article?.name ?? first?.name ?? '–'}`}
+          wide
+        />
         <Field label={L('received')} value={d.delivery_note_number ?? d.doc_number ?? '–'} />
         <Field label={L('pairing')} value={d.kind === 'invoice' ? (d.doc_number ?? '') : ''} />
         <Field label={L('return')} value={<input type="checkbox" disabled aria-label={L('return')} />} />
@@ -387,7 +481,7 @@ function HeaderGrid({ d }: { d: DocumentDetail }) {
         <Field label={L('centre')} value={d.centre_code ? `${d.centre_code} – ${d.branch_name ?? ''}` : '—'} />
         <Field label={L('accounting')} value={onWrite} />
         <Field label={L('discount')} value="0,00" />
-        <Field label={L('movedAt')} value={t('w6h.onWriteMoney')} />
+        <Field label={L('movedAt')} value={movedAt} />
         <Field label={L('totalCost')} value={moneyNum(goodsTotal, 2)} />
       </div>
       <div className="flex min-w-0 flex-col gap-3">
@@ -644,7 +738,7 @@ function MobileCard({ d, goods, onOpen }: { d: DocumentDetail; goods: DocLine[];
       <MobileGroup
         title={t('w6h.groups.header')}
         rows={[
-          [L('number'), t('w6h.assigned')],
+          [L('number'), d.money_number ?? t('w6h.assigned')],
           [L('received'), d.delivery_note_number ?? d.doc_number ?? '–'],
           [L('pairing'), d.kind === 'invoice' ? (d.doc_number ?? '–') : '–'],
           [L('preAccount'), tpl(d, 'predkontace') ?? '—'],
@@ -661,7 +755,12 @@ function MobileCard({ d, goods, onOpen }: { d: DocumentDetail; goods: DocLine[];
         title={L('date')}
         rows={[
           [L('issued'), day(d.doc_date)],
-          [L('movedAt'), t('w6h.onWriteMoney')],
+          [
+            L('movedAt'),
+            d.write?.state === 'created' && d.write.written_at
+              ? new Date(d.write.written_at).toLocaleString('sk-SK', { dateStyle: 'short', timeStyle: 'short' })
+              : t('w6h.onWriteMoney'),
+          ],
         ]}
       />
       <MobileGroup
@@ -717,6 +816,88 @@ function MobileCard({ d, goods, onOpen }: { d: DocumentDetail; goods: DocLine[];
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** 4c (#247, D33) banners: koncept in Money (green) / read-back mismatch (red), refused (red, „Skúsiť znova“),
+ * unknown after a timeout (amber, „Overiť teraz“ = reconcile by SMID), duplicate in Money (DL-B3), no template (DL-B6). */
+function WriteBanners({
+  d,
+  duplicate,
+  noTemplate,
+  canRetry,
+  busy,
+  onRetry,
+  onReconcile,
+  onSettings,
+}: {
+  d: DocumentDetail;
+  duplicate: string | null;
+  noTemplate: boolean;
+  canRetry: boolean;
+  busy: boolean;
+  onRetry: () => void;
+  onReconcile: () => void;
+  onSettings: () => void;
+}) {
+  const { t } = useTranslation();
+  const w = d.write;
+  const goods = d.items.filter((l) => !l.is_fee);
+  const total = goods.reduce((acc, l) => (l.line_total ? addDec(acc, l.line_total) : acc), '0');
+  let banner: ReactNode = null;
+  if (w?.state === 'created' && w.mismatches.length === 0) {
+    banner = (
+      <Banner kind="success" message={t('w6h.write.created', { count: goods.length, total: moneyNum(total, 2) })} />
+    );
+  } else if (w?.state === 'created') {
+    banner = (
+      <Banner
+        kind="danger"
+        message={t('w6h.write.mismatch', { number: w.number ?? '' })}
+        details={w.mismatches.map((m) =>
+          t(`w6h.write.diff.${m.field}`, {
+            line: m.line ?? '',
+            expected: m.expected ?? '',
+            got: m.got ?? '',
+            defaultValue: m.field,
+          }),
+        )}
+      />
+    );
+  } else if (w?.state === 'write_failed') {
+    banner = (
+      <Banner
+        kind="danger"
+        message={t('w6h.write.failed', {
+          error: t(`w6h.write.errors.${w.error ?? 'generic'}`, { defaultValue: t('w6h.write.errors.generic') }),
+        })}
+        action={canRetry ? { label: t('w6h.write.retry'), onClick: onRetry } : undefined}
+      />
+    );
+  } else if (w?.state === 'unknown') {
+    banner = (
+      <Banner
+        kind="warning"
+        message={t('w6h.write.unknown')}
+        action={{ label: t('w6h.write.reconcile'), onClick: onReconcile, disabled: busy || !d.can_write }}
+      />
+    );
+  } else if (duplicate) {
+    banner = <Banner kind="danger" message={t('w6h.write.duplicate', { number: duplicate })} />;
+  } else if (noTemplate) {
+    banner = (
+      <Banner
+        kind="danger"
+        message={t('w6h.write.noTemplate')}
+        action={{ label: t('w6h.write.openSettings'), onClick: onSettings }}
+      />
+    );
+  }
+  if (!banner) return null;
+  return (
+    <div className="px-4 pt-3 md:px-6" data-testid="w6h-write-banner">
+      {banner}
     </div>
   );
 }

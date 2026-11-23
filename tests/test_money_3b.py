@@ -74,6 +74,14 @@ def test_3b_contract_fixture_parses_with_the_app_models() -> None:
     assert CatalogFree.model_validate(data["catalog_free"]).free is True
     assert CatalogFree.model_validate(data["catalog_taken"]).article is not None
     assert ArticleCreated.model_validate(data["article_created"]).unit == "ks"
+    # #247 received delivery note as a koncept (D33)
+    from app.money.schemas import DeliveryNoteCreated, DeliveryNoteTemplate, ReceivedNoteRow
+
+    assert [ReceivedNoteRow.model_validate(r).koncept for r in data["received_notes"]] == [False]
+    tpl = DeliveryNoteTemplate.model_validate(data["delivery_note_template"])
+    assert tpl.header["Group_ID"] and tpl.line["TypObsahu"] == 1
+    created = DeliveryNoteCreated.model_validate(data["delivery_note_created"])
+    assert created.faze == 0 and created.schvaleno is False and created.lines
 
 
 # ----- bridge client -----

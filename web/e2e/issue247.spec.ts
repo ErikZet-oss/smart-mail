@@ -1,0 +1,394 @@
+import type { Page } from '@playwright/test';
+
+import { expect, ME, ME_PICKER, mockApi, shot, test } from './fixtures';
+
+// #247 / D33 — the received delivery note is written to Money only as a KONCEPT. Figma: confirm `44:38842`,
+// koncept v Money `44:41789`, error `44:42554`, unknown `44:43319`, duplicate `44:44083`, template missing `44:44847`,
+// Settings 11e `72:62825`. Every company, number and price is fictional.
+
+const WAREHOUSE = { ...ME, person: { ...ME.person, role: 'warehouse' } };
+const art = (name: string, catalog: string) => ({ code: null, catalog, name, ean: null, unit: 'ks', kind: 'article' });
+const line = (n: number, name: string, catalog: string, qty: string, price: string, total: string) => ({
+  line_no: n,
+  supplier_code: `FX-${n}`,
+  ean: null,
+  name: `Text dodávateľa ${n}`,
+  qty,
+  unit: 'ks',
+  unit_price: price,
+  vat_rate: '23',
+  line_total: total,
+  is_fee: false,
+  line_status: 'matched',
+  article_id: `a-${n}`,
+  match_method: 'supplier_code',
+  unit_factor: '1.000000',
+  warehouse_id: 'w-20',
+  warehouse_code: '20',
+  candidates: [],
+  article: art(name, catalog),
+  qty_our: qty,
+  price_our: price,
+  new_article: null,
+});
+const LINES = [
+  line(1, 'skr. M10 x30 A2 DIN 933', '309903010030', '5000', '0.0612', '306.00'),
+  line(2, 'mat. M10 A2 ISO 4032', '311403210000', '2000', '0.0205', '41.00'),
+];
+const FEE = { ...line(3, 'x', 'x', '1', '12.00', '12.00'), is_fee: true, name: 'Doprava', article: null };
+const detail = (over: Record<string, unknown> = {}) => ({
+  id: 'd-1',
+  source: 'mail',
+  kind: 'invoice',
+  status: 'needs_review',
+  filename: 'FA-2611452.pdf',
+  branch_id: 'b-se',
+  branch_name: 'Senica',
+  centre_code: '20',
+  warehouse_code: '20',
+  supplier_name: 'Fiktívny dodávateľ s.r.o.',
+  supplier_ico: '27654321',
+  supplier_money_id: 's-1',
+  doc_number: '2611452',
+  doc_date: '2026-11-20',
+  currency: 'EUR',
+  total: '347.00',
+  lines: 2,
+  blocking: 0,
+  warnings: 1,
+  error: null,
+  created_at: '2026-11-23T08:00:00Z',
+  money_number: null,
+  delivery_note_number: 'DL-2026-04417',
+  order_reference: null,
+  vat_recap: [{ rate: '23', base: '347.00', vat: '79.81' }],
+  fees: [{ name: 'Doprava', amount: '12.00' }],
+  extract_method: 'pdf_llm',
+  field_confidence: {},
+  checks: [{ id: 'DL-W5', level: 'warning', params: { sum: '12.00' } }],
+  message_id: null,
+  version: 3,
+  money_available: true,
+  can_create_article: false,
+  can_write: true,
+  write: null,
+  supplier: { name: 'Fiktívny dodávateľ s.r.o.', ico: '27654321', dic: null, icdph: null },
+  series: 'DLP SE',
+  template: {},
+  warehouses: [{ id: 'w-20', code: '20', name: 'Senica' }],
+  items: [...LINES, FEE],
+  ...over,
+});
+const WRITE = {
+  state: 'created',
+  number: 'DLP0412/2026',
+  money_id: 'm-1',
+  mismatches: [] as unknown[],
+  reconciled: false,
+  error: null,
+  written_at: '2026-11-23T09:14:00Z',
+};
+const created = (over: Record<string, unknown> = {}) =>
+  detail({ status: 'created', money_number: 'DLP0412/2026', version: 4, write: WRITE, ...over });
+const BASE = {
+  'GET /api/auth/me': { body: WAREHOUSE },
+  'GET /api/auth/persons': { body: { ...ME_PICKER, persons: [WAREHOUSE.person] } },
+  'GET /api/system/info': { body: { admin_contact_email: null, features: { money: true } } },
+};
+
+async function open(page: Page, mobile: boolean) {
+  await page.goto('/docs/delivery-notes/d-1');
+  await expect(page.getByTestId('screen-w6h')).toBeVisible();
+  return page.getByTestId(mobile ? 'm13b-create' : 'w6h-create');
+}
+
+test('#247 W6h: confirm dialog → „Koncept v Money“ with the read-back check @mobile', async ({ page }, info) => {
+  const mobile = info.project.name !== 'desktop';
+  let sent: unknown = null;
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': { body: detail() },
+    'POST /api/purchasing/documents/d-1/create': (body) => {
+      sent = body;
+      return { body: created() };
+    },
+  });
+  const create = await open(page, mobile);
+  await expect(create).toBeEnabled();
+  await create.click();
+  const dialog = page.getByRole('dialog', { name: 'Zapísať dodací list do Money ako koncept?' });
+  await expect(dialog).toContainText('Fiktívny dodávateľ s.r.o. (IČO 27654321)');
+  await expect(dialog).toContainText('DL-2026-04417 · párovací symbol 2611452');
+  await expect(dialog).toContainText('2 (všetky spárované)');
+  await expect(dialog).toContainText('20 – Senica · DLP SE');
+  await expect(dialog).toContainText('347,00 € bez DPH');
+  await expect(dialog).toContainText('pri zápise (teraz, Europe/Bratislava)');
+  await expect(dialog).toContainText(
+    'Zapíše sa ako koncept s popisom „Smartmail · …“ – sklad sa nepohne, kým ho v Money nedokončíte. Poplatky 12,00 € sa nezapisujú.',
+  );
+  await shot(page, `issue247-W6h-confirm-${info.project.name}`);
+  await dialog.getByTestId('w6h-write-confirm').click();
+  await expect(page.getByTestId('w6h-status')).toHaveText('Koncept v Money č. DLP0412/2026');
+  await expect(page.getByTestId('w6h-write-banner')).toContainText(
+    'Doklad je v Money uložený ako koncept – skontrolujte ho a dokončite v Money (zrušte „Uložiť ako koncept“). Kontrola po zápise: 2/2 položiek',
+  );
+  await expect(page.getByText('Koncept DLP0412/2026 je v Money.')).toBeVisible();
+  await expect(page.getByTestId(mobile ? 'm13b-create' : 'w6h-create')).toHaveCount(0); // no „Vrátiť“, no 2nd write
+  expect(sent).toEqual({ version: 3 });
+  await shot(page, `issue247-W6h-koncept-${info.project.name}`);
+});
+
+test('#247 W6h: read-back mismatch shows the red banner (never edits or deletes the koncept)', async ({ page }) => {
+  const mismatch = created({
+    write: {
+      ...WRITE,
+      mismatches: [{ field: 'qty', line: 2, expected: '2000', got: '2001' }],
+    },
+  });
+  await mockApi(page, { ...BASE, 'GET /api/purchasing/documents/d-1': { body: mismatch } });
+  await page.goto('/docs/delivery-notes/d-1');
+  const banner = page.getByTestId('w6h-write-banner');
+  await expect(banner).toContainText('Skontrolujte koncept v Money č. DLP0412/2026 – po zápise nesedí:');
+  await expect(banner).toContainText('Riadok 2: množstvo 2000, v Money 2001.');
+});
+
+test('#247 W6h: duplicate in Money (DL-B3) @mobile', async ({ page }, info) => {
+  const mobile = info.project.name !== 'desktop';
+  let posted = false;
+  const dup = detail({
+    status: 'missing_data',
+    blocking: 1,
+    checks: [{ id: 'DL-B3', level: 'blocking', params: { number: 'DLP0398/2026', money: true } }],
+  });
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': () => ({ body: posted ? dup : detail() }),
+    'POST /api/purchasing/documents/d-1/create': () => {
+      posted = true;
+      return { status: 409, body: { detail: { code: 'duplicate', number: 'DLP0398/2026' } } };
+    },
+  });
+  await (await open(page, mobile)).click();
+  await page.getByTestId('w6h-write-confirm').click();
+  await expect(page.getByTestId('w6h-write-banner')).toHaveText(
+    'DL-B3 · Tento dodací list už v Money je: DLP0398/2026.',
+  );
+  await expect(page.getByTestId('w6h-status')).toHaveText('Duplicita');
+  await expect(page.getByTestId(mobile ? 'm13b-create' : 'w6h-create')).toBeDisabled();
+  await shot(page, `issue247-W6h-duplicate-${info.project.name}`);
+});
+
+test('#247 W6h: branch without a template (DL-B6) @mobile', async ({ page }, info) => {
+  const mobile = info.project.name !== 'desktop';
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': {
+      body: detail({
+        status: 'missing_data',
+        blocking: 1,
+        checks: [{ id: 'DL-B6', level: 'blocking', params: { missing: ['template'], koncept: true } }],
+      }),
+    },
+  });
+  const create = await open(page, mobile);
+  await expect(create).toBeDisabled();
+  const banner = page.getByTestId('w6h-write-banner');
+  await expect(banner).toContainText(
+    'DL-B6 · Pobočka nemá vzorový dodací list – vytvorte jeden v Money alebo vyberte vzor v Nastaveniach.',
+  );
+  await shot(page, `issue247-W6h-template-missing-${info.project.name}`);
+  await banner.getByRole('button', { name: 'Otvoriť Nastavenia › Pobočky' }).click();
+  await expect(page).toHaveURL(/\/settings\/branches/);
+});
+
+test('#247 W6h: Money did not answer → „Overiť teraz“ reconciles by SMID', async ({ page }) => {
+  let calls = 0;
+  const unknown = detail({
+    status: 'unknown',
+    version: 4,
+    write: {
+      state: 'unknown',
+      number: null,
+      money_id: null,
+      mismatches: [],
+      reconciled: false,
+      error: 'x',
+      written_at: null,
+    },
+  });
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': () => ({ body: calls ? unknown : detail() }),
+    'POST /api/purchasing/documents/d-1/create': (body) => {
+      calls += 1;
+      if (calls === 1) return { status: 503, body: { detail: { code: 'money_unavailable' } } };
+      expect(body).toEqual({ version: 4 });
+      return { body: created({ write: { ...WRITE, reconciled: true } }) };
+    },
+  });
+  await (await open(page, false)).click();
+  await page.getByTestId('w6h-write-confirm').click();
+  const banner = page.getByTestId('w6h-write-banner');
+  await expect(banner).toContainText('Money neodpovedalo včas. Overujem podľa SMID');
+  await expect(page.getByTestId('w6h-status')).toHaveText('Neistý stav');
+  await expect(page.getByTestId('w6h-create')).toBeDisabled();
+  await shot(page, 'issue247-W6h-unknown-desktop');
+  await banner.getByRole('button', { name: 'Overiť teraz' }).click();
+  await expect(page.getByTestId('w6h-status')).toHaveText('Koncept v Money č. DLP0412/2026');
+  expect(calls).toBe(2);
+});
+
+test('#247 W6h: without the Settings 14 switch the button stays disabled', async ({ page }) => {
+  await mockApi(page, { ...BASE, 'GET /api/purchasing/documents/d-1': { body: detail({ can_write: false }) } });
+  const create = await open(page, false);
+  await expect(create).toBeDisabled();
+  await expect(create).toHaveAttribute('title', /vypnutý v Nastaveniach › Nákup a sklad/);
+});
+
+// ----- Settings 11e -----
+
+const ADMIN = { ...ME, person: { ...ME.person, role: 'admin' } };
+const NAV = {
+  sections: [
+    {
+      id: '11',
+      path: 'branches',
+      title: 'Pobočky a osoby',
+      subs: [
+        { id: '11a', path: 'details', title: 'Údaje' },
+        { id: '11e', path: 'money', title: 'Money' },
+      ],
+    },
+  ],
+};
+const BRANCH = {
+  id: 'b-se',
+  name: 'Pobočka Senica',
+  address: null,
+  phone: null,
+  hours: null,
+  mailbox_id: null,
+  mailbox_email: null,
+  login_account: null,
+  idle_ask_minutes: null,
+  remember_days: 30,
+  logo_url: null,
+  folder_ids: [],
+  signature_template_html: {},
+  signature_images: [],
+  people: [],
+};
+const CENTRE = '20202020-2020-4020-8020-202020202020';
+const WH = '21212121-2121-4121-8121-212121212121';
+const TPL = (id: string, number: string) => ({
+  id,
+  number,
+  supplier: 'Fiktívny dodávateľ s.r.o.',
+  issued_on: '2026-11-18',
+  cached_at: '2026-11-23T08:00:00Z',
+  missing: [],
+});
+
+test('#247 Settings 11e: branch warehouse, template note „Vybrať iný“ and „Overiť“', async ({ page }) => {
+  const saved: unknown[] = [];
+  let picked: unknown = null;
+  await mockApi(page, {
+    'GET /api/auth/me': { body: ADMIN },
+    'GET /api/auth/persons': { body: { ...ME_PICKER, persons: [ADMIN.person] } },
+    'GET /api/system/info': { body: { admin_contact_email: null, features: { money: true } } },
+    'GET /api/system/maintenance': { body: { active: false, until: null } },
+    'GET /api/settings/nav': { body: NAV },
+    'GET /api/settings/admin/branches': { body: [BRANCH] },
+    'GET /api/settings/money/branches': {
+      body: {
+        centres: [{ id: CENTRE, code: '20', name: 'Senica' }],
+        warehouses: [
+          { id: WH, code: '20', name: 'Senica' },
+          { id: 'w-99', code: '99', name: 'Externý sklad' },
+        ],
+        branches: [
+          {
+            id: 'b-se',
+            name: 'Pobočka Senica',
+            centre_id: CENTRE,
+            centre_missing: false,
+            reports: {},
+            warehouse_id: null,
+          },
+        ],
+      },
+    },
+    'PUT /api/settings/money/branches/b-se': (body) => {
+      saved.push(body);
+      return { body: { id: 'b-se', name: 'Pobočka Senica', centre_id: CENTRE, centre_missing: false, reports: {} } };
+    },
+    'GET /api/settings/money/branches/b-se/dl-template': {
+      body: { centre_set: true, template: TPL('n-1', 'DLP0412/2026'), money_available: true },
+    },
+    'GET /api/settings/money/branches/b-se/dl-templates': {
+      body: [
+        {
+          id: 'n-2',
+          number: 'DLP0420/2026',
+          supplier: 'Iný dodávateľ',
+          issued_on: '2026-11-21',
+          koncept: true,
+          by_smart_mail: true,
+          selected: false,
+        },
+        {
+          id: 'n-1',
+          number: 'DLP0412/2026',
+          supplier: 'Fiktívny dodávateľ s.r.o.',
+          issued_on: '2026-11-18',
+          koncept: false,
+          by_smart_mail: false,
+          selected: true,
+        },
+        {
+          id: 'n-0',
+          number: 'DLP0400/2026',
+          supplier: 'Tretí dodávateľ',
+          issued_on: '2026-11-10',
+          koncept: false,
+          by_smart_mail: false,
+          selected: false,
+        },
+      ],
+    },
+    'PUT /api/settings/money/branches/b-se/dl-template': (body) => {
+      picked = body;
+      return { body: { centre_set: true, template: TPL('n-0', 'DLP0400/2026'), money_available: true } };
+    },
+    'POST /api/settings/money/branches/b-se/verify': {
+      body: {
+        rows: [
+          { id: 'centre', ok: true, detail: null },
+          { id: 'warehouse', ok: true, detail: null },
+          { id: 'price_list', ok: false, detail: null },
+          { id: 'series', ok: true, detail: null },
+          { id: 'template', ok: true, detail: null },
+        ],
+        template: TPL('n-0', 'DLP0400/2026'),
+      },
+    },
+  });
+  await page.goto('/settings/branches/money');
+  const panel = page.getByTestId('settings-branch-money');
+  await panel.getByTestId('branch-warehouse').selectOption(WH);
+  await panel.getByRole('button', { name: 'Uložiť' }).click();
+  await expect.poll(() => saved).toEqual([{ centre_id: CENTRE, reports: expect.anything(), warehouse_id: WH }]);
+  const card = panel.getByTestId('branch-dl-template');
+  await expect(card.getByTestId('branch-dl-template-number')).toHaveText('DLP0412/2026');
+  await card.getByRole('button', { name: 'Vybrať iný' }).click();
+  const list = card.getByTestId('branch-dl-template-list');
+  await expect(list).toContainText('zo Smart Mail');
+  await list.getByRole('button', { name: /DLP0400\/2026/ }).click();
+  await expect(card.getByTestId('branch-dl-template-number')).toHaveText('DLP0400/2026');
+  expect(picked).toEqual({ note_id: 'n-0' });
+  await card.getByTestId('branch-verify').click();
+  const result = card.getByTestId('branch-verify-result');
+  await expect(result).toContainText('Vzorový dodací list');
+  await expect(result).toContainText('Cenník pobočky');
+  await shot(page, 'issue247-W12-11e-template-desktop');
+});

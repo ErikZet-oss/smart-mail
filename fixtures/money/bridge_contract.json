@@ -367,5 +367,70 @@
     "parent_id": null,
     "unit": "ks",
     "reconciled": false
+  },
+  "received_notes": [
+    {
+      "id": "6c358f96-fafb-58a8-bfe0-46ac0bce87aa",
+      "number": "DLP0001/2026",
+      "supplier": "Fiktívna firma 01 s.r.o.",
+      "issued_on": "2026-11-11",
+      "koncept": false,
+      "by_smart_mail": false
+    }
+  ],
+  "delivery_note_template": {
+    "id": "6c358f96-fafb-58a8-bfe0-46ac0bce87aa",
+    "number": "DLP0001/2026",
+    "supplier": "Fiktívna firma 01 s.r.o.",
+    "issued_on": "2026-11-11",
+    "centre_id": "c216e8a8-0b43-500e-9bcc-73bda4cf82ed",
+    "header": {
+      "CiselnaRada_ID": "30005965-92b7-5276-bffb-309262342cac",
+      "Stredisko_ID": "c216e8a8-0b43-500e-9bcc-73bda4cf82ed",
+      "DruhPohybu_ID": "2cdef294-2149-500c-967f-d3ed50fac099",
+      "DruhSkladovehoPohybu_ID": "15ce0dd6-8aac-5660-914b-8ddfe3d3dde9",
+      "Predkontace_ID": "9f1849cd-b8d5-55a4-a4cf-39fe714b3f96",
+      "RegistraceDPH_ID": "4870e1b8-a1a4-54b6-b8cf-efac27abb44c",
+      "DruhDokladu_ID": "6b96fc00-53cb-5c47-91a7-ee6dab743078",
+      "Group_ID": "d22530dc-3c88-5254-8315-c4998f04fc7b",
+      "Mena_ID": "c170a71a-1799-5629-b68a-887c58d0755e"
+    },
+    "line": {
+      "TypObsahu": 1,
+      "TypCeny": 0,
+      "DruhSazbyDPH": 2,
+      "DruhPolozky_ID": "26e30d8a-7bdd-5283-a1b5-fee952890f5e",
+      "SazbaDPH_ID": "d07d1a34-5b13-5624-9440-761baa113cce",
+      "DphSazba": "23",
+      "VazbaTypVazby": 0
+    },
+    "text_line": {
+      "TypObsahu": 0
+    }
+  },
+  "delivery_note_created": {
+    "id": "00000000-0000-0000-0000-000000000247",
+    "number": "DLP0003/2026",
+    "faze": 0,
+    "schvaleno": false,
+    "group_id": "d22530dc-3c88-5254-8315-c4998f04fc7b",
+    "centre_id": "c216e8a8-0b43-500e-9bcc-73bda4cf82ed",
+    "total_base": "306.00",
+    "total": "306.00",
+    "address_empty": false,
+    "lines": [
+      {
+        "id": "00000000-0000-0000-0000-000000002471",
+        "number": 1,
+        "order": 1,
+        "qty": "5000",
+        "unit_price": "0.0612",
+        "content_type": 1,
+        "article_id": "e1d8a64c-333f-5e59-a57d-df87154b735e",
+        "warehouse_id": "def9c976-e5d4-5657-8860-ca2585546386",
+        "centre_id": "c216e8a8-0b43-500e-9bcc-73bda4cf82ed"
+      }
+    ],
+    "reconciled": false
   }
 }

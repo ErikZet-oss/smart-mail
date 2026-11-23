@@ -2,13 +2,15 @@
 
 - Token cached until `expires_in − 60 s`, single-flight refresh, one retry on 401.
 - Responses are parsed with `parse_float=Decimal` — no float ever holds a Money amount.
-- Read-only: there is no mutation helper. Mutations come in Phase 4 and are never retried automatically.
+- Mutations (`create_article`, `create_received_delivery_note`) go through `graphql` too and are never retried
+  automatically (a 401 before the call is sent again once — Money did not run it).
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from decimal import Decimal
@@ -38,6 +40,31 @@ def unwrap(body: Any, what: str) -> Any:
 @cache
 def load_query(name: str) -> str:
     return (QUERIES / f"{name}.graphql").read_text(encoding="utf-8")
+
+
+_DEC = "\u0000dec:"
+
+
+def dumps(value: Any) -> bytes:
+    """JSON for Money with every `Decimal` as a JSON number (Money's GraphQL `Decimal` takes number literals) — written
+    from the Decimal's own digits, never through a float."""
+
+    marked = 0
+
+    def mark(obj: Any) -> str:
+        nonlocal marked
+        if isinstance(obj, Decimal):
+            if not obj.is_finite():
+                raise ValueError("non-finite decimal")
+            marked += 1
+            return f"{_DEC}{format(obj, 'f')}"
+        raise TypeError(f"not JSON serializable: {type(obj).__name__}")
+
+    text = json.dumps(value, default=mark, ensure_ascii=False, separators=(",", ":"))
+    out, replaced = re.subn(r'"\\u0000dec:(-?[0-9]+(?:\.[0-9]+)?)"', r"\1", text)
+    if replaced != marked:  # a text value imitating the marker — never let a string turn into a number
+        raise ValueError("decimal marker in a text value")
+    return out.encode("utf-8")
 
 
 def _json(resp: httpx.Response) -> Any:
@@ -91,11 +118,14 @@ class MoneyHttp:
         self._base = base_url.rstrip("/")
         self._rest = rest_version.strip("/")
 
-    async def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+    async def _send(
+        self, method: str, url: str, headers_extra: dict[str, str] | None = None, **kwargs: Any
+    ) -> httpx.Response:
         for attempt in (1, 2):
             token = await self._tokens.get()
+            headers = {"Authorization": f"Bearer {token}", **(headers_extra or {})}
             try:
-                resp = await self._http.request(method, url, headers={"Authorization": f"Bearer {token}"}, **kwargs)
+                resp = await self._http.request(method, url, headers=headers, **kwargs)
             except httpx.HTTPError as exc:
                 raise MoneyUnavailable(f"{method} failed") from exc
             if resp.status_code == 401 and attempt == 1:
@@ -109,7 +139,10 @@ class MoneyHttp:
     async def graphql(self, name: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
         """Run `queries/<name>.graphql` (read queries only) and return `data`."""
         resp = await self._send(
-            "POST", f"{self._base}/graphql", json={"query": load_query(name), "variables": variables or {}}
+            "POST",
+            f"{self._base}/graphql",
+            content=dumps({"query": load_query(name), "variables": variables or {}}),
+            headers_extra={"Content-Type": "application/json"},
         )
         if resp.status_code != 200:
             raise MoneyError(f"graphql {name} answered {resp.status_code}")

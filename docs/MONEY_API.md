@@ -215,6 +215,10 @@ CisloPolozky Zbyva } }`. The received invoice is entered by people in Money as t
   `ObsahPolozky{Artikl_ID Sklad_ID}`, totals), compare lines and totals; a mismatch → red banner with the Money number
   „Skontrolujte koncept v Money“ (Smart Mail never deletes or edits it — D33). Supplier address: send `Firma_ID`;
   if the read-back address is empty, the next writes also send `Adresa*`, `IC`, `DIC`, `ICDPH` from the company card.
+- Implementation notes (#247): the VAT ID is copied only from the template line — a stock line whose rate differs
+  from the template line's `DphSazba` blocks with DL-B6 (`reason: vat_rate`) until a `VatRates` codebook exists;
+  `Odkaz` = supplier delivery-note number (invoice → its delivery-note number, else the invoice number),
+  `ParovaciSymbol` = invoice number; the series = branch override (11e) else the template's `CiselnaRada_ID`.
 - Original PDF/XML stays in Smart Mail document store; link in `Poznamka`.
 
 **5.5.8 Supplier codes learned in Smart Mail** — the customer's schema has **no write access to supplier codes**

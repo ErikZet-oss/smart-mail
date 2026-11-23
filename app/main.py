@@ -34,6 +34,7 @@ from app.api import (
     security_2fa,
     settings_ai,
     settings_autonomy,
+    settings_dl_template,
     settings_money,
     settings_purchasing,
     suggestions,
@@ -134,6 +135,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(settings_ai.router)
     app.include_router(settings_autonomy.router)
     app.include_router(settings_money.router)
+    app.include_router(settings_dl_template.router)
     app.include_router(settings_purchasing.router)
     app.include_router(money.router)
     app.include_router(purchasing.router)

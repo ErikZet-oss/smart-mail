@@ -594,6 +594,19 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
                 admin_only=True,
             ),
             field(
+                "purchasing.write_delivery_notes",
+                label="Zápis dodacích listov do Money (koncept)",
+                control="switch",
+                default=False,
+                help=(
+                    "Tlačidlo „Vytvoriť v Money“ zapíše dodací list prijatý ako koncept s popisom „Smartmail…“."
+                    " Koncept skontrolujete a dokončíte v Money (DECISIONS D33). Na ostrej agende musí zápis povoliť"
+                    " aj most (MONEY_PROD_ALLOW)."
+                ),
+                scope="G",
+                admin_only=True,
+            ),
+            field(
                 "purchasing.movement_time",
                 label="Dátum a čas skladového pohybu",
                 control="info",
@@ -745,7 +758,7 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
 
 def schema_document() -> dict[str, Any]:
     return {
-        "version": "4b-239",
+        "version": "4c-247",
         "phase": "4b",
         "sections": PHASE_1F_SECTIONS,
     }

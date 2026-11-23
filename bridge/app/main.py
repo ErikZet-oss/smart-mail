@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.approval import JtiCache
 from app.auth import ReplayCache, verify_request
-from app.backend import CatalogExists, MoneyBackend, MoneyError, MoneyUnavailable, WaitingForProbe
+from app.backend import CatalogExists, DuplicateNote, MoneyBackend, MoneyError, MoneyUnavailable, WaitingForProbe
 from app.config import BridgeSettings, get_settings
 from app.filters import UnsafeFilterValue
 from app.models import Health
@@ -81,6 +81,10 @@ def create_app(settings: BridgeSettings | None = None, backend: MoneyBackend | N
     async def _catalog_exists(_: Request, exc: CatalogExists) -> JSONResponse:
         detail = {"code": "catalog_exists", "katalog": exc.katalog, "nazev": exc.nazev}
         return JSONResponse(status_code=409, content={"detail": detail})
+
+    @app.exception_handler(DuplicateNote)
+    async def _duplicate(_: Request, exc: DuplicateNote) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": {"code": "duplicate", "number": exc.number}})
 
     @app.exception_handler(UnsafeFilterValue)
     async def _unsafe(_: Request, exc: UnsafeFilterValue) -> JSONResponse:

@@ -33,7 +33,7 @@ from app.money.bridge_client import BridgeClient, BridgeUnavailable
 from app.money.cache_sync import save_supplier_codes
 from app.money.models import MoneyArticleSupplier
 from app.money.schemas import Article, SupplierCode
-from app.purchasing import org_settings
+from app.purchasing import delivery_note, org_settings
 from app.purchasing.models import DocumentLine, SupplierDocument, SupplierItemMapping
 from app.purchasing.numbers import normalize_code
 from app.purchasing.variants import variants_of
@@ -198,10 +198,17 @@ async def refresh_checks(db: AsyncSession, doc: SupplierDocument, lines: list[Do
     keep = [
         c
         for c in (doc.validation or [])
-        if c["id"] not in MATCH_CHECKS or (c["id"] == "DL-B4" and c["params"].get("reason") == "no_lines")
+        if (c["id"] not in MATCH_CHECKS or (c["id"] == "DL-B4" and c["params"].get("reason") == "no_lines"))
+        and not c["params"].get("koncept")
     ]
     conf = await org_settings.load(db)
     checks = keep + line_checks(doc, lines, await _branch_warehouse(db, doc), conf.price_diff_pct)
+    # 4c (#247): branch values + template (DL-B1 / B5 / B6) — shown before „Vytvoriť v Money“, re-run at approval
+    branch = await db.get(Branch, doc.branch_id) if doc.branch_id else None
+    invalid = await invalid_branch_ids(db, branch.id) if branch else set()
+    checks += delivery_note.mark(
+        delivery_note.koncept_checks(doc, lines, branch, delivery_note.branch_values(branch, invalid))
+    )
     doc.validation = checks
     if doc.status in ("needs_review", "missing_data"):
         doc.status = "missing_data" if any(c["level"] == "blocking" for c in checks) else "needs_review"

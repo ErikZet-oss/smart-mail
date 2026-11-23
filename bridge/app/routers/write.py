@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import ValidationError
 
 from app.approval import verify_approval
 from app.backend import MoneyBackend
-from app.models import ActivityIn, ActivityOut, ArticleCreated, ArticleCreateIn
+from app.models import ActivityIn, ActivityOut, ArticleCreated, ArticleCreateIn, DeliveryNoteCreated, DeliveryNoteIn
 
 # D32 (#239): the write routes that `MONEY_PROD_ALLOW` may open on PROD, by exact method + path
-PROD_ALLOWABLE: dict[tuple[str, str], str] = {("POST", "/articles"): "create_article"}
+PROD_ALLOWABLE: dict[tuple[str, str], str] = {
+    ("POST", "/articles"): "create_article",
+    ("POST", "/delivery-notes/received"): "create_delivery_note",  # #247 D33: only as a koncept
+}
+# D33: a body that would finish (approve) the note is never accepted — Money must keep it as „Uložiť ako koncept“
+APPROVAL_FIELDS = ("Schvalil_ID", "DatumSchvaleni")
 
 
 async def refuse_on_prod(request: Request) -> None:
@@ -68,3 +76,42 @@ async def create_article(request: Request, x_approval_token: str | None = Header
         raise HTTPException(status_code=422, detail={"code": "article_invalid"}) from None
     backend: MoneyBackend = request.app.state.backend
     return await backend.create_article(article)
+
+
+def koncept_only(body: bytes) -> None:
+    """D33: 422 `not_koncept` for a body without `Faze: 0` + `Schvaleno: false` or with approval fields — checked on
+    the raw JSON before the model, so the refusal is explicit (also on the TEST agenda)."""
+    try:
+        data: Any = json.loads(body)
+    except ValueError:
+        raise HTTPException(status_code=422, detail={"code": "delivery_note_invalid"}) from None
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=422, detail={"code": "delivery_note_invalid"})
+    faze, schvaleno = data.get("Faze"), data.get("Schvaleno")
+    if type(faze) is not int or faze != 0 or schvaleno is not False or any(k in data for k in APPROVAL_FIELDS):
+        raise HTTPException(status_code=422, detail={"code": "not_koncept"})
+
+
+@router.post("/delivery-notes/received")
+async def create_delivery_note(
+    request: Request, x_approval_token: str | None = Header(default=None)
+) -> DeliveryNoteCreated:
+    """#247 / D33 / MONEY_API 5.5.7 `CreateReceivedDeliveryNote` as a koncept after the person's approval: single-use
+    approval JWT bound to this exact body; own SMID → returned; same supplier + `Odkaz` → 409 `duplicate`; never
+    retried (after a timeout the SMID is looked up once); read back."""
+    settings = request.app.state.settings
+    body = await request.body()
+    verify_approval(
+        x_approval_token,
+        public_key=settings.approval_jwt_public_key,
+        action="delivery_note.create",
+        body=body,
+        jtis=request.app.state.jtis,
+    )
+    koncept_only(body)
+    try:
+        note = DeliveryNoteIn.model_validate_json(body)
+    except ValidationError:
+        raise HTTPException(status_code=422, detail={"code": "delivery_note_invalid"}) from None
+    backend: MoneyBackend = request.app.state.backend
+    return await backend.create_delivery_note(note)

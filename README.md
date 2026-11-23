@@ -110,9 +110,15 @@ synchronizácie, spustí ju ručne a vidí históriu behov (13e). Keď Money nie
 Skutočné Money (`MONEY_BACKEND=api`) sa spustí len s vlastným `BRIDGE_HMAC_SECRET` a prihlasovacími údajmi Money –
 inak most odmietne štart. Ostrá agenda (`MONEY_AGENDA_LABEL=PROD`) je **len na čítanie** (#212): most odmietne každý
 zápis (403 `prod_read_only`) a aplikácia zápisy nedovolí zapnúť.
-Jediná výnimka je zakladanie artiklov (D32, #239): most ho na ostrej agende pustí len vtedy, keď je v jeho `.env`
-`MONEY_PROD_ALLOW=create_article` (predvolene prázdne), a aplikácia ho ponúkne len so zapnutým príznakom
-**Nastavenia › Nákup › Zakladanie artiklov v Money** (predvolene vypnutý). Všetky ostatné zápisy ostávajú zakázané.
+Výnimky sú dve a most každú pustí len vtedy, keď ju menuje `MONEY_PROD_ALLOW` v jeho `.env` (zoznam oddelený čiarkou,
+predvolene prázdny):
+- `create_article` – zakladanie artiklov (D32, #239), v aplikácii príznak **Nastavenia › Nákup a sklad › Zakladanie
+  artiklov v Money**;
+- `create_delivery_note` – zápis dodacieho listu prijatého **len ako koncept** (D33, #247), v aplikácii príznak
+  **Nastavenia › Nákup a sklad › Zápis dodacích listov do Money (koncept)**. Most odmietne (422 `not_koncept`) každý
+  doklad bez `Faze: 0` + `Schvaleno: false`; koncept dokončí človek v Money.
+
+Oba príznaky sú predvolene vypnuté. Všetky ostatné zápisy ostávajú zakázané.
 
 ### Prihlásenie (fáza 1a)
 Prihlasuje sa e-mailom a heslom k pošte – heslo overí IMAP server (ten istý ako pre Roundcube). Server nastavte v `.env`:
@@ -436,8 +442,12 @@ Kľúče API ostávajú tie isté. Ktorú agendu API obsluhuje, nastaví Erik / 
      ukáže v **Prepojenie (13a)** ako varovanie a správa sa ako nenastavené;
    - správca dostane jednu notifikáciu.
 4. V **Prepojenie (13a)** je štítok „Ostrá agenda – len čítanie“ a vypínač zápisov je zablokovaný.
-5. Zakladanie artiklov (D32): ak ho chcete na ostrej agende povoliť, doplňte do `C:\SmartMail\bridge\.env`
-   `MONEY_PROD_ALLOW=create_article`, reštartujte most a v **Nastavenia › Nákup** zapnite „Zakladanie artiklov v Money“.
+5. Zápisy na ostrej agende (D32, D33): doplňte do `C:\SmartMail\bridge\.env`
+   `MONEY_PROD_ALLOW=create_article,create_delivery_note` (len tie, ktoré chcete) a reštartujte most. Potom:
+   - v **Nastavenia › Pobočky a osoby › Money (11e)** vyberte pre každú pobočku vzorový dodací list a dajte
+     „Overiť nastavenie v Money“;
+   - v **Nastavenia › Nákup a sklad** zapnite „Zakladanie artiklov v Money“, resp. „Zápis dodacích listov do Money
+     (koncept)“.
 
 **Späť na TEST:** v `.env` nastavte `MONEY_AGENDA_LABEL=TEST`, reštartujte most a postup sa zopakuje opačne.
 Cenníky a ID tlačových zostáv sa pri prepnutí neoverujú (nie sú v lokálnej kópii). Skontrolujte ich v **13b** a **11e**.
