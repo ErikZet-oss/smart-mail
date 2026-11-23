@@ -2244,6 +2244,13 @@
   "w6h": {
     "title": "Dodací list prijatý",
     "branchChip": "Pobočka {{branch}} · stredisko {{centre}} · sklad {{warehouse}}",
+    "branchPick": "Vyberte pobočku",
+    "branchChanged": "Doklad je priradený pobočke {{branch}}.",
+    "branchErrors": {
+      "branch_not_allowed": "Pre túto pobočku nemáte oprávnenie.",
+      "version_conflict": "Doklad medzitým zmenil niekto iný – načítal sa znova.",
+      "document_not_reviewable": "Pobočku už nemožno zmeniť – doklad je zapísaný v Money."
+    },
     "source": "Zdroj: {{number}}",
     "create": "Vytvoriť v Money",
     "createLater": "Zápis do Money príde v ďalšom kroku – zatiaľ len kontrola a párovanie.",
@@ -2455,7 +2462,7 @@
     "rules": {
       "DL-B2": "Dodávateľ nie je v Money alebo nesedí IČO.",
       "DL-B1": "Pobočke {{branch}} chýba v Nastaveniach › Pobočky a osoby › Money: {{missing}}.",
-      "DL-B1_nobranch": "Dodací list nemá priradenú pobočku – vyberte ju v štítku pobočky v hlavičke dokladu.",
+      "DL-B1_nobranch": "Dodací list nemá priradenú pobočku – kliknite na červený štítok „Vyberte pobočku“ v hlavičke dokladu.",
       "DL-B5": "Riadok {{n}} nemá sklad a pobočka {{branch}} nemá nastavený sklad pobočky.",
       "DL-B6_none": "Pobočka {{branch}} nemá vzorový dodací list – vyberte ho v Nastaveniach › Pobočky a osoby › Money.",
       "DL-B6_incomplete": "Vzorový dodací list pobočky {{branch}} je neúplný – chýba: {{missing}}. V Nastaveniach › Pobočky a osoby › Money vyberte iný vzor (bežný dodací list s položkou s artiklom a skladom).",
