@@ -200,8 +200,21 @@ branch `Stredisko_ID` on header and items, branch `Sklad_ID`, branch series; ite
 supplier code and text in `ObsahPolozky.PartnerskyKod` / `PartnerskyNazev`) → `{ ID CisloDokladu Polozky { ID
 CisloPolozky Zbyva } }`. The received invoice is entered by people in Money as today; Smart Mail never calls
 `CreateReceivedInvoice` or REST `PrepaymentInvoice`.
-- After create: read back the document, compare lines and totals; mismatch → red banner + "Vrátiť"
-  (`DeleteReceivedDeliveryNote`) within 15 min, only if not invoiced, audit logged.
+- **Koncept only (D33):** every note is created with `Faze: 0` and `Schvaleno: false` (no `Schvalil_ID`,
+  `DatumSchvaleni`) — Money shows it as „Uložiť ako koncept“, no stock movement; a person finishes it in Money.
+  `Nazev` (Popis) = `"Smartmail · " + <Popis of the card>` (max 100). Also copied from the branch template document:
+  `Group_ID` (list group DLP NR / SE / TN / TT — else „Nezaradené“) and every stock line gets `TypObsahu` of the
+  template line (1 = article line; without it Money stores a text line without article / warehouse).
+  Text (non-stock) lines: `TypObsahu` of a text line from a template with one, else they block (DL-B4).
+- Bridge on PROD: `POST /delivery-notes/received` is allowed only when `MONEY_PROD_ALLOW` contains
+  `create_delivery_note`, and the bridge refuses (422 `not_koncept`) any body without `Faze: 0` + `Schvaleno: false`.
+  Idempotency `SMID:<id>` in `Poznamka`; before the mutation the bridge looks for a note with this SMID and for a
+  note of the same supplier (`Firma_ID`) + `Odkaz` (DL-B3) → 409; never auto-retried, after a timeout the SMID is
+  looked up once (reconciliation).
+- After create: read back the document (`CisloDokladu`, `Faze`, `Schvaleno`, `Group_ID`, lines with
+  `ObsahPolozky{Artikl_ID Sklad_ID}`, totals), compare lines and totals; a mismatch → red banner with the Money number
+  „Skontrolujte koncept v Money“ (Smart Mail never deletes or edits it — D33). Supplier address: send `Firma_ID`;
+  if the read-back address is empty, the next writes also send `Adresa*`, `IC`, `DIC`, `ICDPH` from the company card.
 - Original PDF/XML stays in Smart Mail document store; link in `Poznamka`.
 
 **5.5.8 Supplier codes learned in Smart Mail** — the customer's schema has **no write access to supplier codes**

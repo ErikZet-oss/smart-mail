@@ -71,7 +71,7 @@ Column 1 (labels right-aligned, fields 150 px) and column 2 (labels right-aligne
 |---|---|---|---|---|---|
 | Číslo dokladu | c1 r1 | `CisloDokladu` (assigned by Money) | "bude pridelené" → read-back number | no | — |
 | (series box next to number, e.g. "DLP SE") | c1 r1 | `CiselnaRada_ID` | branch series (SETTINGS 11e) → company default (13c) | select (admin) | DL-B1 |
-| Popis | c1 r2 (wide) | `Nazev` | Money default = name of item 1; Smart Mail fills the same, editable (max 100) | yes | — |
+| Popis | c1 r2 (wide) | `Nazev` | „Smartmail · “ + Money default (= name of item 1), editable after the prefix (max 100); the prefix is always written (D33) | yes | — |
 | Doklad prijatý | c1 r3 | `Odkaz` **[PROBE --branches template_check]** | supplier delivery-note number; if the supplier sent only an invoice → invoice number | yes | DL-B3 duplicates |
 | Párovací symbol | c2 r3 | `ParovaciSymbol` | supplier invoice number / VS when the DL refers to an invoice, else empty | yes | — |
 | Vratka | c1 r4 (checkbox) | header `ZapornyPohyb` | always unchecked, read-only — returns only in Money (D15) | no | DL-B8 |
