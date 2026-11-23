@@ -28,4 +28,9 @@ describe('checkText (pilot 2026-11-23: DL-B1 / DL-B6 name the branch and what is
       'Dodací list nemá priradenú pobočku',
     );
   });
+  it('DL-B3 without a supplier document number has its own text (no raw {{number}})', () => {
+    const text = checkText(t, { id: 'DL-B3', level: 'blocking', params: { reason: 'no_number' } }, 'Nitra');
+    expect(text).toContain('Chýba číslo dokladu dodávateľa');
+    expect(text).not.toContain('{{');
+  });
 });
