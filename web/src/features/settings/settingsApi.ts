@@ -493,6 +493,8 @@ export type DlTemplate = {
   issued_on: string | null;
   cached_at: string | null;
   missing: string[];
+  centre?: string | null; // pilot 2026-11-23: the branch the template note is from (Money centre „Kód – Názov“)
+  series?: string | null;
 };
 export type DlTemplateState = { centre_set: boolean; template: DlTemplate | null; money_available: boolean };
 export type DlNoteRow = {

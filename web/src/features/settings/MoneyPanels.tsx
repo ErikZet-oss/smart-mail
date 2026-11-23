@@ -649,6 +649,11 @@ function BranchTemplate({ branchId, centreSet }: { branchId: string; centreSet: 
               {[tpl.supplier, tpl.issued_on ? day(tpl.issued_on) : null].filter(Boolean).join(' · ')}
               {tpl.cached_at ? ` · ${t('money.template.cached', { date: day(tpl.cached_at) })}` : ''}
             </span>
+            {tpl.centre || tpl.series ? (
+              <span className="type-caption text-text-secondary" data-testid="branch-dl-template-origin">
+                {t('money.template.origin', { centre: tpl.centre ?? '–', series: tpl.series ?? '–' })}
+              </span>
+            ) : null}
             {tpl.missing.length ? (
               <span className="type-caption text-danger-600">
                 {t('money.template.missing', {

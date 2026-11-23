@@ -1965,6 +1965,7 @@
       "help": "Z neho sa preberú hodnoty, ktoré Money API nemá v číselníkoch: Druh pohybu („obstaranie“), Druh skl. pohybu („príjem“), Typ ceny („Iba základ“), Druh položky („tovar“), Registrácia k DPH a skupina zoznamu.",
       "centreFirst": "Najprv vyberte a uložte stredisko pobočky.",
       "none": "Pobočka nemá vzorový dodací list – dodacie listy sa do Money nezapíšu (DL-B6).",
+      "origin": "Doklad strediska {{centre}} · číselný rad {{series}}",
       "pick": "Vybrať iný",
       "empty": "V Money zatiaľ nie je žiadny dodací list prijatý tejto pobočky.",
       "cached": "načítané {{date}}",
