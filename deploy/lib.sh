@@ -11,6 +11,28 @@ STATE_DIR="${SMARTMAIL_STATE_DIR:-$DEPLOY_DIR/.state}"
 
 die() { echo "Chyba: $*" >&2; exit 1; }
 
+# Pilot 2026-11-23: backups before every update filled the 125 GB disk (98 GB in 4 days) and Postgres stopped.
+# shellcheck disable=SC2034  # used by backup.sh / update.sh
+BACKUP_KEEP="${SMARTMAIL_BACKUP_KEEP:-5}"     # backups kept, by count (nightly + before every update)
+# shellcheck disable=SC2034
+MIN_FREE_GB="${SMARTMAIL_MIN_FREE_GB:-10}"    # update.sh refuses to start below this free space
+
+# Free GB on the filesystem that holds PATH (df -P, 1 GB = 1024^3 B).
+free_gb() {
+  local path="$1"
+  while [[ ! -e "$path" && "$path" != "/" ]]; do path="$(dirname "$path")"; done
+  df -P -k "$path" | awk 'NR==2 {printf "%d", $4 / 1048576}'
+}
+
+# Keep only the newest BACKUP_KEEP backup directories (smartmail-<stamp>, newest by name = by time).
+prune_backups() {
+  local dir="$1" keep="${2:-$BACKUP_KEEP}"
+  [[ -d "$dir" ]] || return 0
+  [[ "$keep" =~ ^[0-9]+$ && "$keep" -ge 1 ]] || die "SMARTMAIL_BACKUP_KEEP musí byť číslo ≥ 1"
+  find "$dir" -mindepth 1 -maxdepth 1 -type d -name 'smartmail-*' -printf '%f\n' | sort -r | tail -n +"$((keep + 1))" |
+    while read -r old; do rm -rf -- "${dir:?}/$old"; done
+}
+
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "chýba príkaz: $1"
 }

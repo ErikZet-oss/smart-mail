@@ -73,6 +73,17 @@ NGINX_BEFORE="$(file_hash "$DEPLOY_DIR/nginx-active.conf")"
 CADDY_BEFORE="$(file_hash "$DEPLOY_DIR/Caddyfile")"
 render_edge_configs
 
+# Pilot 2026-11-23: a full disk stopped Postgres in the middle of an update. Old backups first, then a hard limit.
+prune_backups "$BACKUP_DIR"
+FREE="$(free_gb "$BACKUP_DIR")"
+if [[ -z "${SMARTMAIL_CI:-}" && "$FREE" -lt "$MIN_FREE_GB" ]]; then
+  trap - ERR
+  echo "Na disku je len ${FREE} GB voľného miesta (treba aspoň ${MIN_FREE_GB} GB) – aktualizácia sa nespustila." >&2
+  echo "Zistite, čo zaberá miesto:  du -xsh /var/* 2>/dev/null | sort -h | tail" >&2
+  echo "Staré zálohy:               ls -1dt ${BACKUP_DIR}/smartmail-*" >&2
+  exit 1
+fi
+
 # Backup before migrations (alembic runs in the app container entrypoint).
 echo "Záloha pred migráciou…"
 "$DEPLOY_DIR/backup.sh"
@@ -91,4 +102,9 @@ wait_healthy "http://127.0.0.1:8080/readyz"
 reload_edge_configs "$NGINX_BEFORE" "$CADDY_BEFORE"
 trap - ERR
 save_git_sha
+# Pilot 2026-11-20/23: build cache and replaced images filled the disk — drop unused images and build cache older
+# than 3 days (recent cache keeps the next build fast). Never fails the update.
+docker image prune -f >/dev/null 2>&1 || true
+docker builder prune -f --filter until=72h >/dev/null 2>&1 || true
+echo "Voľné miesto na disku: $(free_gb "$BACKUP_DIR") GB"
 echo "Aktualizácia hotová. Smart Mail beží: ${APP_BASE_URL:-http://127.0.0.1:8080}"
