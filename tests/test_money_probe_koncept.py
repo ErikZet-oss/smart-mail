@@ -78,3 +78,52 @@ def test_koncept_probe_compares_with_a_normal_note(tmp_path: Path, monkeypatch: 
     diff = probe.koncept_report["steps"]["differs_from_normal_note"]
     assert diff["Zauctovano"] == {"koncept": False, "normal": True}
     assert "Firma_ID" not in diff  # set on both, IDs never compared by value
+
+
+def test_koncept_probe_shows_the_vat_difference_of_header_and_first_stock_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pilot 2026-11-24: the FABORY koncept came without VAT — the probe shows which VAT field differs."""
+    probe = _probe()
+    monkeypatch.setattr(probe, "OUT_DIR", str(tmp_path))
+    monkeypatch.setenv("PROBE_DL_COMPARE_NUMBER", "309990002")
+    probe.koncept_report["steps"] = {}
+    rate_a, rate_b = "a0000000-0000-4000-8000-000000000001", "a0000000-0000-4000-8000-000000000002"
+    koncept = {
+        "CisloDokladu": "309990001",
+        "ZpusobVypoctuDPH": 0,
+        "SumaDan": 0,
+        "Firma_ID": FIRMA,
+        "Polozky": [{"TypObsahu": 1, "DphSazba": 0, "SazbaDPH_ID": rate_a, "DruhSazbyDPH": 2, "JednCena": 1.5}],
+    }
+    normal = {
+        "CisloDokladu": "309990002",
+        "ZpusobVypoctuDPH": 1,
+        "SumaDan": 81.19,
+        "Firma_ID": "f0000000-0000-4000-8000-000000000002",
+        "Polozky": [
+            {"TypObsahu": 3, "DphSazba": 0},
+            {"TypObsahu": 1, "DphSazba": 23, "SazbaDPH_ID": rate_b, "DruhSazbyDPH": 2, "JednCena": 9.9},
+        ],
+    }
+
+    class Http(_Http):
+        def request(self, method: str, url: str, data: bytes = b"", **kw: Any) -> tuple[int, str, Any, int]:
+            f = json.loads(data).get("variables", {}).get("f")
+            if f in ("CisloDokladu~eq~309990001", "CisloDokladu~eq~309990002"):
+                doc = koncept if f.endswith("1") else normal
+                return 200, "application/json", {"data": {"ReceivedDeliveryNotes": [doc]}}, 3
+            return super().request(method, url, data, **kw)
+
+    probe.koncept_probe(Http(), "309990001")
+    probe.write_koncept_report()
+    steps = probe.koncept_report["steps"]
+    assert steps["differs_from_normal_note"]["ZpusobVypoctuDPH"] == {"koncept": 0, "normal": 1}
+    assert steps["differs_from_normal_note"]["SumaDan"] == {"koncept": 0, "normal": 81.19}
+    assert "Firma_ID" not in steps["differs_from_normal_note"]
+    line = steps["first_stock_line_differs"]
+    assert line["DphSazba"] == {"koncept": 0, "normal": 23}
+    assert line["SazbaDPH_ID"] == {"koncept": "set", "normal": "set (different ID)"}
+    assert "DruhSazbyDPH" not in line and "JednCena" not in line  # equal / not a VAT field
+    md = (tmp_path / "koncept.md").read_text(encoding="utf-8")
+    assert rate_a not in md and rate_b not in md and FIRMA not in md
