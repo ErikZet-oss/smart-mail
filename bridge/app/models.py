@@ -12,7 +12,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 InvoiceKind = Literal["invoice", "proforma"]
 # #222: documents whose PDF comes from Money's generic print endpoint `/pdfreport` (whitelist, extendable)
@@ -278,7 +278,11 @@ class DeliveryNoteItemIn(_Model):
     Katalog: str | None = Field(default=None, max_length=100)
     Mnozstvi: Decimal = Field(gt=0)  # D15: never negative, returns only in Money
     Jednotka: str | None = Field(default=None, max_length=20)
-    JednCena: Decimal = Field(ge=0)
+    # exactly one of them: a stock line with the invoice line total sends `CelkovaCena` and Money derives the unit
+    # price (PROD probe 2026-11-24: 1000 pcs + 40.25 → JednCena 0.0403, CelkovaCena 40.25 — the invoice to the cent;
+    # JednCena 0.04025 would be stored as 0.0403 → 40.30)
+    JednCena: Decimal | None = Field(default=None, ge=0)
+    CelkovaCena: Decimal | None = Field(default=None, ge=0)
     TypCeny: int
     TypObsahu: int
     SazbaDPH_ID: uuid.UUID | None = None
@@ -286,6 +290,12 @@ class DeliveryNoteItemIn(_Model):
     Stredisko_ID: uuid.UUID
     DruhPolozky_ID: uuid.UUID | None = None
     ObsahPolozky: DeliveryNoteContentIn | None = None  # None = text (non-stock) line
+
+    @model_validator(mode="after")
+    def _one_price(self) -> DeliveryNoteItemIn:
+        if (self.JednCena is None) == (self.CelkovaCena is None):
+            raise ValueError("exactly one of JednCena / CelkovaCena")
+        return self
 
 
 class DeliveryNoteIn(_Model):

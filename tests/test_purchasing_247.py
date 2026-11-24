@@ -92,13 +92,26 @@ class KonceptBridge(ArticleBridge):
             return self.made[smid].model_copy(update={"reconciled": True})
         if self.fail_next:
             raise self.fail_next.pop(0)
+
+        def unit(it: dict[str, Any]) -> Decimal:  # like Money (PROD probe 2026-11-24): total kept, unit price 4 dp
+            if "CelkovaCena" in it:
+                return (Decimal(it["CelkovaCena"]) / Decimal(it["Mnozstvi"])).quantize(
+                    Decimal("0.0001"), "ROUND_HALF_UP"
+                )
+            return Decimal(it["JednCena"])
+
+        def total(it: dict[str, Any]) -> Decimal:
+            if "CelkovaCena" in it:
+                return Decimal(it["CelkovaCena"])
+            return (Decimal(it["Mnozstvi"]) * Decimal(it["JednCena"])).quantize(Decimal("0.01"))
+
         lines = [
             DeliveryNoteLineBack(
                 id=uuid.uuid4(),
                 number=i,
                 order=it["Poradi"],
                 qty=Decimal(it["Mnozstvi"]) + Decimal(self.tweak.get("qty_delta", "0")),
-                unit_price=Decimal(it["JednCena"]),
+                unit_price=unit(it),
                 content_type=it["TypObsahu"],
                 article_id=uuid.UUID(it["ObsahPolozky"]["Artikl_ID"]) if it.get("ObsahPolozky") else None,
                 warehouse_id=uuid.UUID(it["ObsahPolozky"]["Sklad_ID"]) if it.get("ObsahPolozky") else None,
@@ -106,7 +119,7 @@ class KonceptBridge(ArticleBridge):
             )
             for i, it in enumerate(payload["Polozky"], start=1)
         ]
-        base = sum(((ln.qty * ln.unit_price).quantize(Decimal("0.01")) for ln in lines), Decimal("0"))
+        base = sum((total(it) for it in payload["Polozky"]), Decimal(self.tweak.get("total_delta", "0")))
         out = DeliveryNoteCreated(
             id=uuid.uuid4(),
             number=f"DLP{len(self.made) + 500:04d}/2026",
@@ -255,7 +268,8 @@ async def test_247_koncept_payload_readback_audit_and_repeat(
         assert it["TypObsahu"] == 1 and it["TypCeny"] == 0 and it["Stredisko_ID"] == CENTRE  # DL-B9
         assert it["ObsahPolozky"]["Sklad_ID"] == WAREHOUSE and it["SazbaDPH_ID"] == _id("vat-23")
     nut = items[1]
-    assert nut["Mnozstvi"] == "2400" and nut["JednCena"] == "0.0403"  # 12 bal × 200, 8.05 / 200 — no rounding to bal
+    # 12 bal × 200 — no rounding to bal; pilot 2026-11-24: the invoice line total, Money derives the unit price
+    assert nut["Mnozstvi"] == "2400" and nut["CelkovaCena"] == "96.60" and "JednCena" not in nut
     assert nut["ObsahPolozky"]["PartnerskyKod"] == "934-10-A2"
     # pilot 2026-11-24: „Počet nadradenej položky“ from the template, else Money refuses to save an edited line
     assert nut["ObsahPolozky"]["VazbaPocetNadrizene"] == "1" and nut["ObsahPolozky"]["VazbaPocetPodrizene"] == "1"
@@ -310,8 +324,8 @@ async def test_247_timeout_unknown_then_the_same_smid_reconciles(
         schvaleno=False,
         group_id=None,
         centre_id=None,
-        total_base=Decimal("516.72"),
-        total=Decimal("516.72"),
+        total_base=sum((Decimal(it["CelkovaCena"]) for it in KonceptBridge.posts[0][0]["Polozky"]), Decimal("0")),
+        total=Decimal("0"),
         address_empty=False,
         lines=[],
     )
@@ -355,7 +369,7 @@ async def test_247_readback_mismatch_and_supplier_address_path(
     client: Client, db: AsyncSession, mail_server: FakeMailServer, switch_on: None
 ) -> None:
     detail = await _open(client, db, mail_server)
-    KonceptBridge.tweak = {"qty_delta": "1"}
+    KonceptBridge.tweak = {"qty_delta": "1", "total_delta": "0.05"}
     KonceptBridge.address_empty = True
     out = (await _create(client, detail)).json()
     fields = {m["field"] for m in out["write"]["mismatches"]}
@@ -574,3 +588,77 @@ async def test_247_reopen_needs_the_write_role(
     await _signed_in(client, db, mail_server, role=Role.sales)
     r = await client.send_json("POST", f"/api/purchasing/documents/{uuid.uuid4()}/reopen", {"version": 1})
     assert r.status_code == 403 and r.json()["detail"]["code"] == "role_not_allowed"
+
+
+def test_247_line_total_is_written_so_money_keeps_the_invoice_amount() -> None:
+    """Pilot 2026-11-24 (PROD probe 302600973): 1000 pcs + CelkovaCena 40.25 → Money JednCena 0.0403, total 40.25;
+    JednCena 0.04025 would give 40.30. A line without a printed total still sends the unit price."""
+    from datetime import UTC, datetime
+
+    from app.money.schemas import DeliveryNoteCreated, DeliveryNoteLineBack
+    from app.purchasing.delivery_note import compare
+
+    doc = SupplierDocument(
+        kind="invoice",
+        doc_number="FA-1",
+        supplier_money_id=uuid.UUID(int=1),
+        idempotency_key="b" * 32,
+        filename="x.pdf",
+    )
+
+    def line(n: int, qty: str, price: str, total: str | None) -> DocumentLine:
+        return DocumentLine(
+            line_no=n,
+            name="x",
+            is_fee=False,
+            qty=Decimal(qty),
+            unit_price=Decimal(price),
+            line_total=Decimal(total) if total else None,
+            unit_factor=Decimal("1"),
+            line_status="matched",
+            article_id=uuid.UUID(int=2),
+            warehouse_id=None,
+            raw={},
+        )
+
+    branch = Branch(name="B", money_centre_id=CENTRE, money_warehouse_id=WAREHOUSE, dl_template_values=template())
+    payload, expected = build_payload(
+        doc,
+        [line(1, "1000", "0.04025", "40.25"), line(2, "3", "3.3333", "10.00"), line(3, "5", "1.25", None)],
+        branch,
+        BranchValues(CENTRE, WAREHOUSE, SERIES),
+        now=datetime(2026, 11, 24, 9, tzinfo=UTC),
+        issue_on_approval=False,
+        with_address=False,
+    )
+    a, c, d = payload["Polozky"]
+    assert a["CelkovaCena"] == "40.25" and "JednCena" not in a and a["Mnozstvi"] == "1000"
+    assert c["CelkovaCena"] == "10" and "JednCena" not in c
+    assert d["JednCena"] == "1.2500" and "CelkovaCena" not in d
+    # the read-back of what Money stored (probe values) has no mismatch
+    back = DeliveryNoteCreated(
+        id=uuid.uuid4(),
+        number="302600973",
+        faze=0,
+        schvaleno=False,
+        group_id=None,
+        centre_id=None,
+        total_base=Decimal("56.50"),
+        total=Decimal("0"),
+        address_empty=False,
+        lines=[
+            DeliveryNoteLineBack(
+                id=None,
+                number=i,
+                order=i,
+                qty=Decimal(q),
+                unit_price=Decimal(p),
+                content_type=1,
+                article_id=uuid.UUID(int=2),
+                warehouse_id=uuid.UUID(WAREHOUSE),
+                centre_id=None,
+            )
+            for i, (q, p) in enumerate((("1000", "0.0403"), ("3", "3.3333"), ("5", "1.25")), start=1)
+        ],
+    )
+    assert compare(expected, back) == []
