@@ -81,9 +81,9 @@ class ArticleBridge:
         ]
 
     async def search_articles(
-        self, *, code: str | None = None, ean: str | None = None, q: str | None = None
+        self, *, code: str | None = None, ean: str | None = None, q: str | None = None, limit: int | None = None
     ) -> list[Article]:
-        self.calls.append({"code": code, "ean": ean, "q": q})
+        self.calls.append({"code": code, "ean": ean, "q": q} | ({"limit": limit} if limit else {}))
         if ean:
             return [a for a in ARTICLES if a.ean == ean]
         if code:

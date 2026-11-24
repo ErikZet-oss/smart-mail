@@ -32,7 +32,7 @@ from app.money.agenda import invalid_branch_ids
 from app.money.approval import ApprovalKeyMissing, sign_approval
 from app.money.bridge_client import BridgeClient, BridgeRefused, BridgeUnavailable
 from app.money.models import MoneyArticleSupplier, MoneyCodebook, MoneyCompany
-from app.money.schemas import Article
+from app.money.schemas import Article, WarehouseStockRow
 from app.purchasing import delivery_note, new_article, org_settings
 from app.purchasing.item_matching import (
     confirm_article,
@@ -609,6 +609,16 @@ async def search_articles(
     4. catalog or name containing the text (variants of a main card). At most `PICKER_LIMIT`, no duplicates.
     With `%` (pilot 2026-11-23) it is the Money S4 pattern search in the name only — `%mat%4%934`."""
     _guard(settings, person)
+    try:
+        async with BridgeClient(settings) as bridge:
+            found = await _find_articles(bridge, db, q, PICKER_LIMIT)
+    except BridgeUnavailable as exc:
+        raise fail(503, exc.code) from None
+    return [PickerArticle(**a.model_dump(), kind=kind) for a, kind in found]
+
+
+async def _find_articles(bridge: BridgeClient, db: DB, q: str, limit: int) -> list[tuple[Article, Kind]]:
+    """The W6h search shared by the picker and the Katalóg window (see `search_articles`)."""
     term = q.strip()
     if set(term) & set("~#|()"):
         raise fail(422, "unsafe_query")
@@ -616,39 +626,76 @@ async def search_articles(
 
     def add(items: list[Article]) -> None:
         for a in items:
-            if len(out) < PICKER_LIMIT:
+            if len(out) < limit:
                 out.setdefault(a.id, a)
 
+    wildcard = "%" in term  # the pattern search: name only, no exact code / EAN / supplier code steps
+    if not wildcard:
+        add(await bridge.search_articles(code=term))
+    if term.isdigit() and len(term) >= 8:
+        add(await bridge.search_articles(ean=term))
+    norm = "" if wildcard else normalize_code(term) or ""
+    if len(norm) >= 5:
+        ids = list(
+            await db.scalars(
+                select(MoneyArticleSupplier.article_id)
+                .where(MoneyArticleSupplier.active.is_(True), MoneyArticleSupplier.code_norm.startswith(norm))
+                .distinct()
+                .limit(SUPPLIER_CODE_LIMIT)
+            )
+        )
+        for article_id in ids:
+            if article_id not in out and len(out) < limit:
+                found = await bridge.article(article_id)
+                if found:
+                    out[found.id] = found
+    if limit > PICKER_LIMIT:  # the Katalóg asks the bridge for more text hits
+        text_hits = await bridge.search_articles(q=term, limit=limit)
+    else:
+        text_hits = await bridge.search_articles(q=term)
+    add(sorted(text_hits, key=lambda a: (a.catalog or a.code or "", a.name)))
+    # #233: main cards (with variants) are marked and followed by their variants
+    results = list(out.values())
+    mains = [a.id for a in results if a.parent_id is None]
+    variants = await variants_of(bridge, mains, limit=MAIN_CARD_LIMIT)
+    return picker_order(results, variants, limit)
+
+
+CATALOG_LIMIT = 100  # W6h Katalóg: rows per search (Money search is never a full catalog dump)
+
+
+class CatalogRow(PickerArticle):
+    """W6h Katalóg (Figma 264:91756): a picker row + e-shop flag and stock per warehouse (information only, D18)."""
+
+    eshop: bool = False
+    stocks: list[WarehouseStockRow] = Field(default_factory=list)
+
+
+@router.get("/catalog")
+async def catalog(
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+    q: Annotated[str, Query(min_length=2, max_length=80)],
+) -> list[CatalogRow]:
+    """The W6h „Katalóg“ window: the same search as the picker (exact code, EAN, supplier code, text, `%` pattern),
+    up to `CATALOG_LIMIT` rows, main cards followed by their variants, each with its stock per warehouse."""
+    _guard(settings, person)
     try:
         async with BridgeClient(settings) as bridge:
-            wildcard = "%" in term  # the pattern search: name only, no exact code / EAN / supplier code steps
-            if not wildcard:
-                add(await bridge.search_articles(code=term))
-            if term.isdigit() and len(term) >= 8:
-                add(await bridge.search_articles(ean=term))
-            norm = "" if wildcard else normalize_code(term) or ""
-            if len(norm) >= 5:
-                ids = list(
-                    await db.scalars(
-                        select(MoneyArticleSupplier.article_id)
-                        .where(MoneyArticleSupplier.active.is_(True), MoneyArticleSupplier.code_norm.startswith(norm))
-                        .distinct()
-                        .limit(SUPPLIER_CODE_LIMIT)
-                    )
-                )
-                for article_id in ids:
-                    if article_id not in out and len(out) < PICKER_LIMIT:
-                        found = await bridge.article(article_id)
-                        if found:
-                            out[found.id] = found
-            add(sorted(await bridge.search_articles(q=term), key=lambda a: (a.catalog or a.code or "", a.name)))
-            # #233: main cards (with variants) are marked and followed by their variants
-            results = list(out.values())
-            mains = [a.id for a in results if a.parent_id is None]
-            variants = await variants_of(bridge, mains, limit=MAIN_CARD_LIMIT)
+            found = await _find_articles(bridge, db, q, CATALOG_LIMIT)
+            info = {i.article_id: i for i in await bridge.catalog_info([a.id for a, _ in found])}
     except BridgeUnavailable as exc:
         raise fail(503, exc.code) from None
-    return [PickerArticle(**a.model_dump(), kind=kind) for a, kind in picker_order(results, variants, PICKER_LIMIT)]
+    rows: list[CatalogRow] = []
+    for a, kind in found:
+        extra = info.get(a.id)
+        rows.append(
+            CatalogRow(
+                **a.model_dump(), kind=kind, eshop=bool(extra and extra.eshop), stocks=extra.stocks if extra else []
+            )
+        )
+    return rows
 
 
 @router.get("/documents/{doc_id}/file")

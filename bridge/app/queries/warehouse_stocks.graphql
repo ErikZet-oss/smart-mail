@@ -1,0 +1,7 @@
+query WarehouseStocks($filter: String, $from: Int, $count: Int) {
+  WarehouseStocks(Filter: $filter, From: $from, Count: $count) {
+    ID Deleted Artikl_ID Sklad_ID Rezervovano Objednano DostupneMnozstvi PredpokladaneMnozstvi
+    Sklad { Kod Nazev }
+    AktualniStav { ZustatekMnozstvi ZustatekJednotkaCena }
+  }
+}

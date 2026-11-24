@@ -14,6 +14,7 @@ from app.filters import UNSAFE, UnsafeFilterValue
 from app.models import (
     Activity,
     Article,
+    ArticleCatalogInfo,
     CatalogArticle,
     CatalogFree,
     CodebookName,
@@ -202,14 +203,20 @@ async def document_pdf(
 
 
 @router.get("/articles/search")
-async def search_articles(request: Request, code: _TEXT = None, ean: _TEXT = None, q: _TEXT = None) -> list[Article]:
+async def search_articles(
+    request: Request,
+    code: _TEXT = None,
+    ean: _TEXT = None,
+    q: _TEXT = None,
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+) -> list[Article]:
     """Exactly one of: `code` (Kod or Katalog, exact), `ean` (CarovyKod), `q` (name / catalog contains; with `%` the
     Money S4 pattern search in the name, e.g. `%mat%4%934`)."""
     for name, value in (("code", code), ("ean", ean), ("q", q)):
         if value and any(c in UNSAFE for c in value):
             raise UnsafeFilterValue(name)
     query = ArticleQuery(
-        code=(code or "").strip() or None, ean=(ean or "").strip() or None, text=(q or "").strip() or None
+        code=(code or "").strip() or None, ean=(ean or "").strip() or None, text=(q or "").strip() or None, limit=limit
     )
     if not (query.code or query.ean or (query.text and len(query.text) >= 2)):
         raise HTTPException(status_code=422, detail={"code": "search_criteria_required"})
@@ -226,6 +233,14 @@ async def article_variants(
     """#233 variants of up to 10 main cards (`NadrazenyArtikl_ID`), keyed by the main card id."""
     found = await _backend(request).article_variants(list(dict.fromkeys(parent_id)))
     return {str(k): v for k, v in found.items()}
+
+
+@router.get("/articles/catalog-info")
+async def article_catalog_info(
+    request: Request, id: Annotated[list[uuid.UUID], Query(min_length=1, max_length=100)]
+) -> list[ArticleCatalogInfo]:
+    """W6h Katalóg: e-shop flag + stock per warehouse of up to 100 articles (information only — D18)."""
+    return await _backend(request).catalog_info(list(dict.fromkeys(id)))
 
 
 @router.get("/articles/catalog-free")

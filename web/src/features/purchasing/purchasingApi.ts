@@ -208,6 +208,28 @@ export const catalogProposal = (p: { parentId?: string; mainCatalog?: string; si
   });
 };
 
+/** W6h Katalóg (Figma 264:91756): stock of one article in one warehouse — information only (D18). */
+export type StockRow = {
+  warehouse_id: string;
+  code: string | null;
+  name: string | null;
+  qty: string;
+  reserved: string;
+  ordered: string;
+  expected: string;
+  available: string;
+  unit_price: string | null;
+};
+export type CatalogRow = Article & {
+  parent_id: string | null;
+  plu: string | null;
+  last_price: string | null;
+  eshop: boolean;
+  stocks: StockRow[];
+};
+export const fetchCatalog = (q: string) =>
+  api<CatalogRow[]>('GET', `/api/purchasing/catalog?q=${encodeURIComponent(q)}`, undefined, { global: false });
+
 export const searchArticles = (q: string) =>
   api<Article[]>('GET', `/api/purchasing/articles?q=${encodeURIComponent(q)}`, undefined, { global: false });
 

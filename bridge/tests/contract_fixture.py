@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from app.mock import mid
 from tests.conftest import make_client
 
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "money" / "bridge_contract.json"
@@ -37,6 +38,8 @@ def current() -> dict[str, Any]:
         "activities": client.get(f"/companies/{first}/activities").json()[:2],
         "overdue": client.get("/receivables/overdue?before=2026-10-01&count=2").json(),
         "articles": client.get("/articles/search?code=934-10-A2").json(),
+        "catalog_articles": client.get("/articles/search?q=Vrut").json()[:2],
+        "catalog_info": client.get(f"/articles/catalog-info?id={mid('article', 100)}&id={mid('article', 101)}").json(),
         "supplier_codes": client.get(f"/suppliers/{first}/article-codes?count=2").json(),
         "sync_article_suppliers": client.get("/sync/article-suppliers?count=2").json(),
         "catalog_free": client.get("/articles/catalog-free?katalog=FREE-0001").json(),

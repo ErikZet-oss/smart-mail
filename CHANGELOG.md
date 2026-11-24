@@ -2,6 +2,11 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — W6h: okno „Katalóg“ (ako katalóg v Money)
+
+- V okne riadku pribudlo tlačidlo **Katalóg** (Figma 264:91756, mobil 265:99286): veľké okno s vyhľadávaním (katalóg, názov, EAN, kód dodávateľa, `%` ako v Money), až 100 riadkov, stĺpce E-shop, Katalóg, Názov, PLU, Posledná nákupná cena, Zásoba vybraného skladu, MJ; hlavná karta sa nedá vybrať, varianty kurzívou; panel **Zásoby** všetkých skladov (len informácia, D18); **Výber stĺpcov** ako v Money (pamätá sa v prehliadači); „Založiť variant k …“ a „Nová hlavná karta“ otvoria formulár nového artikla.
+- Most: `Articles` číta aj `PLU` a `PosledniCena`, `/articles/search` prijme `limit` (≤ 100), nový `GET /articles/catalog-info` (`WarehouseStocks` + `EShopArticles`, len čítanie). **Treba aktualizovať most na Windows.** Appka: `GET /api/purchasing/catalog`.
+
 ## [Unreleased] — D34: poplatky (doprava, balné…) ako dodatočné náklady dodacieho listu
 
 - **DECISIONS D34** (nahrádza D14): všetky poplatky z faktúry sa sčítajú a pri zápise konceptu rozpočítajú **rovnomerne podľa počtu skladových položiek** – ako „Náklady“ v Money. Hlavička `DodatecnePorizovaciNaklady` = súčet, každý skladový riadok `CelkoveVedlejsiNaklady` = podiel v centoch, ktoré dajú presne súčet (2,50 / 3 → 0,83 + 0,83 + 0,84), plus `JednotkoveVedlejsiNaklady` a `JednotkovaPorizovaciCena` (testy na ostrej agende 24. 11.: samotná hlavička sa cez API ignoruje, hodnoty na kus Money doplní len keď sa pošlú). Kontrola po zápise porovná náklady v Money so súčtom poplatkov. Texty DL-W5, záložka Poplatky, potvrdzovací dialóg a Nastavenia 14 upravené. **Treba aktualizovať most na Windows.**

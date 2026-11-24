@@ -641,3 +641,59 @@ def test_wildcard_helpers() -> None:
     assert wildcard.parts("%%") == []
     assert wildcard.in_order("Podložka DIN 125 M10", ["podlozka", "m10"])
     assert not wildcard.in_order("M10 podložka", ["podlozka", "m10"])
+
+
+@respx.mock
+async def test_catalog_info_reads_stock_and_eshop_with_one_or_filter_and_pages() -> None:
+    """W6h Katalóg (pilot 2026-11-24): `WarehouseStocks` + `EShopArticles`, deleted rows dropped, numbers as Decimal."""
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    gql = respx.post(f"{BASE}/graphql")
+    a1 = uuid.UUID("a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1")
+    a2 = uuid.UUID("a2a2a2a2-a2a2-4a2a-8a2a-a2a2a2a2a2a2")
+    wh20, wh30 = "20202020-2020-4020-8020-202020202020", "30303030-3030-4030-8030-303030303030"
+
+    def stock(article: uuid.UUID, wh: str, code: str, qty: str, deleted: bool = False) -> dict[str, Any]:
+        return {
+            "ID": str(uuid.uuid4()),
+            "Deleted": deleted,
+            "Artikl_ID": str(article),
+            "Sklad_ID": wh,
+            "Rezervovano": 2,
+            "Objednano": 10,
+            "DostupneMnozstvi": 4,
+            "PredpokladaneMnozstvi": 14,
+            "Sklad": {"Kod": code, "Nazev": "Nitra" if code == "30" else "Senica"},
+            "AktualniStav": {"ZustatekMnozstvi": qty, "ZustatekJednotkaCena": "1.6380"},
+        }
+
+    page = [stock(a1, wh30, "30", "6"), stock(a1, wh20, "20", "18")]
+    gql.side_effect = [
+        _gql({"WarehouseStocks": page}),  # a full page (page size 2) → the next page is read
+        _gql({"WarehouseStocks": [stock(a2, wh20, "20", "0", deleted=True)]}),
+        _gql({"EShopArticles": [{"ID": "e", "Deleted": False, "Artikl_ID": str(a1)}]}),
+    ]
+    s = settings()
+    s.money_page_size = 2
+    found = await ApiBackend(s).catalog_info([a1, a2, a1])
+    first = json.loads(gql.calls[0].request.content)
+    assert first["variables"]["filter"] == f"(Artikl_ID~eq~{a1})|(Artikl_ID~eq~{a2})"  # duplicates dropped
+    assert "WarehouseStocks" in first["query"] and json.loads(gql.calls[1].request.content)["variables"]["from"] == 2
+    assert "EShopArticles" in json.loads(gql.calls[2].request.content)["query"]
+    one, two = found
+    assert one.article_id == a1 and one.eshop is True and [s.code for s in one.stocks] == ["20", "30"]
+    nitra = one.stocks[1]
+    assert nitra.qty == Decimal("6") and nitra.unit_price == Decimal("1.6380") and nitra.reserved == Decimal("2")
+    assert two.eshop is False and two.stocks == []  # the deleted row is dropped
+
+
+@respx.mock
+async def test_article_plu_last_price_and_catalog_text_limit() -> None:
+    from app.backend import ArticleQuery
+
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    gql = respx.post(f"{BASE}/graphql")
+    gql.side_effect = [_gql({"Articles": [{**ART, "PLU": "var_a0148", "PosledniCena": "0.3271"}]})]
+    (art,) = await ApiBackend(settings()).articles(ArticleQuery(text="Vrut", limit=100))
+    body = json.loads(gql.calls[0].request.content)
+    assert body["variables"]["count"] == 100 and "PLU" in body["query"] and "PosledniCena" in body["query"]
+    assert art.plu == "var_a0148" and art.last_price == Decimal("0.3271")

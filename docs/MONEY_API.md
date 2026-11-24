@@ -263,6 +263,12 @@ under their main card. **DL-B11** (DOCUMENTS_SPEC §2): the matching cascade nev
 (the line becomes `needs_review`, its candidates are the variants, the method stays visible) and
 `POST …/lines/{n}/article` refuses one with 422 `main_card_has_variants`.
 
+**5.5.8c W6h Katalóg (pilot 2026-11-24, read only)** — `Articles` also read `PLU` and `PosledniCena` (Posledná nákupná
+cena); `GET /articles/search?…&limit=` (≤ 100) for the Katalóg text search; `GET /articles/catalog-info?id=…` (≤ 100
+ids) reads `WarehouseStocks` (`Sklad { Kod Nazev }`, `AktualniStav { ZustatekMnozstvi ZustatekJednotkaCena }`,
+`Rezervovano`, `Objednano`, `PredpokladaneMnozstvi`, `DostupneMnozstvi`) and `EShopArticles` (`Artikl_ID` → in an
+e-shop) with one OR filter of the article ids, every page, deleted rows dropped. Stock is information only (D18).
+
 **5.5.8b Creating articles and variants (D32)** — `CreateArticle` only, from the W6h / M13b drawer, after the
 user's click (the click is the approval; autonomy ≤ 2, never proposed or executed by AI on its own).
 - Payload, main card: `{ Katalog, Nazev, Poznamka: "SMID:<id> · Smart Mail" }` — nothing else: the PROD probe

@@ -157,3 +157,21 @@ def test_contract_233_article_variants(contract_client: SignedClient) -> None:
     eleven = "&".join(f"parent_id={uuid.uuid4()}" for _ in range(11))
     assert contract_client.get(f"/articles/variants?{eleven}").status_code == 422  # at most 10 main cards
     assert contract_client.get("/articles/variants").status_code == 422
+
+
+def test_contract_catalog_info_and_search_limit(contract_client: SignedClient) -> None:
+    """W6h Katalóg (pilot 2026-11-24): stock per warehouse + e-shop flag, read only; text search up to 100 rows."""
+    from app.models import Article, ArticleCatalogInfo
+
+    rows = [Article.model_validate(r) for r in contract_client.get("/articles/search?q=Vrut&limit=100").json()]
+    if rows:
+        ids = "&".join(f"id={a.id}" for a in rows[:5])
+        info = [
+            ArticleCatalogInfo.model_validate(r) for r in contract_client.get(f"/articles/catalog-info?{ids}").json()
+        ]
+        assert [i.article_id for i in info] == [a.id for a in rows[:5]]
+        assert all(s.qty is not None for i in info for s in i.stocks)
+    many = "&".join(f"id={uuid.uuid4()}" for _ in range(101))
+    assert contract_client.get(f"/articles/catalog-info?{many}").status_code == 422  # at most 100 articles
+    assert contract_client.get("/articles/catalog-info").status_code == 422
+    assert contract_client.get("/articles/search?q=Vrut&limit=101").status_code == 422
