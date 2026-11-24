@@ -130,3 +130,46 @@ def test_dl_koncept_write_refuses_a_template_that_is_not_a_koncept(
     probe = _run(tmp_path, monkeypatch, "ZALOZIT", http)
     assert http.mutations == [] and "not a koncept" in probe.dl_koncept_report["steps"]["refused"]
     assert re.search(r"refused", (tmp_path / "dl_koncept_write.md").read_text(encoding="utf-8"))
+
+
+def test_dl_price_test_sends_quantity_with_total_or_unit_price_and_reads_both_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pilot 2026-11-24: does Money keep the line total when only quantity + total are written?"""
+
+    class Http(_Http):
+        def request(self, method: str, url: str, data: bytes = b"", **kw: Any) -> tuple[int, str, Any, int]:
+            body = json.loads(data)
+            if "SumaZaklad" in body["query"] and self.created:
+                lines = [
+                    {"Poradi": it["Poradi"], "Mnozstvi": it["Mnozstvi"], "JednCena": 0.0403, "CelkovaCena": 40.25}
+                    for it in self.created["Polozky_sent"]
+                ]
+                return 200, "application/json", {"data": {"ReceivedDeliveryNotes": [{"Polozky": lines}]}}, 2
+            out = super().request(method, url, data, **kw)
+            if body["query"].startswith("mutation") and self.created is not None:
+                self.created["Polozky_sent"] = body["variables"]["d"]["Polozky"]
+            return out
+
+    http = Http(TEMPLATE)
+    probe = _probe()
+    monkeypatch.setattr(probe, "OUT_DIR", str(tmp_path))
+    monkeypatch.setattr("builtins.input", lambda *_: "ZALOZIT")
+    probe.dl_koncept_report["steps"] = {}
+    probe.dl_koncept_write_test(http, "309990001", price_test=True)
+    probe.write_dl_koncept_report()
+    (m,) = http.mutations
+    assert m["Nazev"] == "Smartmail · SMPROBE test ceny celkom – zmazať" and m["Faze"] == 0
+    a, b, c, d = m["Polozky"]
+    assert a["Mnozstvi"] == 1000 and a["CelkovaCena"] == 40.25 and "JednCena" not in a
+    assert b["JednCena"] == 0.04025 and "CelkovaCena" not in b
+    assert c["CelkovaCena"] == 10.0 and d["JednCena"] == 3.333333
+    assert all(it["ObsahPolozky"] == {"Artikl_ID": ART, "Sklad_ID": WH} and it["TypObsahu"] == 1 for it in m["Polozky"])
+    lines = probe.dl_koncept_report["steps"]["price_lines"]
+    assert lines["A"]["stored_CelkovaCena"] == 40.25 and lines["A"]["stored_JednCena"] == 0.0403
+    md = (tmp_path / "dl_koncept_write.md").read_text(encoding="utf-8")
+    assert ART not in md and "price_lines" in md
+    schema = json.loads((ROOT / "bridge/schema/graphql_schema.json").read_text(encoding="utf-8"))
+    sch = build_client_schema(schema.get("data", schema))
+    for q in set(http.queries):
+        assert validate(sch, parse(q)) == []
