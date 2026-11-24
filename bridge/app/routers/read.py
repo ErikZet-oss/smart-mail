@@ -15,6 +15,7 @@ from app.models import (
     Activity,
     Article,
     ArticleCatalogInfo,
+    ArticlePage,
     CatalogArticle,
     CatalogFree,
     CodebookName,
@@ -69,6 +70,14 @@ async def sync_persons(
     request: Request, since: datetime | None = None, start: Start = 0, count: Count = 200
 ) -> PersonPage:
     return await _backend(request).persons(since, start, count)
+
+
+@router.get("/sync/articles")
+async def sync_articles(
+    request: Request, since: datetime | None = None, start: Start = 0, count: Count = 200
+) -> ArticlePage:
+    """W6h Katalóg read cache of `Articles` (`ChangeFrom` delta, paged; deleted dropped, hidden = `inactive`)."""
+    return await _backend(request).all_articles(since, start, count)
 
 
 @router.get("/sync/article-suppliers")

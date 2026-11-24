@@ -325,6 +325,49 @@
       "last_price": "0.0412"
     }
   ],
+  "sync_articles": {
+    "items": [
+      {
+        "id": "c96b114d-38fe-59af-b482-c168ac5b7f17",
+        "code": "ART-0001",
+        "catalog": "933-8-30-ZN",
+        "name": "Skrutka DIN 933 M8x30 8.8 Zn (fiktívna)",
+        "ean": "8590000000017",
+        "unit": "ks",
+        "units": [
+          {
+            "code": "ks",
+            "qty": "1",
+            "decimals": 0
+          }
+        ],
+        "inactive": false,
+        "parent_id": null,
+        "plu": null,
+        "last_price": null
+      },
+      {
+        "id": "e1d8a64c-333f-5e59-a57d-df87154b735e",
+        "code": "ART-0002",
+        "catalog": "933-10-30-A2",
+        "name": "Skrutka DIN 933 M10x30 A2 (fiktívna)",
+        "ean": "8590000000024",
+        "unit": "ks",
+        "units": [
+          {
+            "code": "ks",
+            "qty": "1",
+            "decimals": 0
+          }
+        ],
+        "inactive": false,
+        "parent_id": null,
+        "plu": null,
+        "last_price": null
+      }
+    ],
+    "next_from": 2
+  },
   "catalog_info": [
     {
       "article_id": "4b582b7f-d37f-5758-a273-4ccd155aa7a0",

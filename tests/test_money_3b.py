@@ -24,6 +24,8 @@ from app.money.jobs import LOCK_KEY, run_money_sync
 from app.money.models import MoneyCodebook, MoneyCompany, MoneyPerson, MoneySyncState
 from app.money.schemas import (
     CODEBOOKS,
+    Article,
+    ArticlePage,
     CodebookItem,
     CodebookName,
     CodebookPage,
@@ -176,6 +178,8 @@ class FakeBridge:
         self.agenda = "TEST"  # #212: what /healthz reports
         self.supplier_codes_data: list[SupplierCode] = []  # #228
         self.supplier_since: list[datetime | None] = []
+        self.articles_data: list[Article] = []  # W6h Katalóg cache
+        self.articles_since: list[datetime | None] = []
 
     async def health(self) -> Health:
         if self.fail:
@@ -200,6 +204,11 @@ class FakeBridge:
         self.supplier_since.append(since)  # #228
         rows = self.supplier_codes_data[start : start + 2]
         return SupplierCodePage(items=rows, next_from=start + 2 if start + 2 < len(self.supplier_codes_data) else None)
+
+    async def all_articles(self, since: datetime | None, start: int, count: int) -> ArticlePage:
+        self.articles_since.append(since)  # W6h Katalóg read cache
+        rows = self.articles_data[start : start + 2]
+        return ArticlePage(items=rows, next_from=start + 2 if start + 2 < len(self.articles_data) else None)
 
     async def aclose(self) -> None:
         return None
@@ -302,12 +311,12 @@ async def test_3b_job_runs_only_with_feature_money_and_one_at_a_time(app: FastAP
     assert await run_money_sync(app.state.sessionmaker, on, redis, client=bridge) == []  # type: ignore[arg-type]
     await redis.delete(LOCK_KEY)
     results = await run_money_sync(app.state.sessionmaker, on, redis, client=bridge)  # type: ignore[arg-type]
-    assert [r.entity for r in results] == ["companies", "persons", "codebooks", "article_suppliers"]
+    assert [r.entity for r in results] == ["companies", "persons", "codebooks", "article_suppliers", "articles"]
     assert not await redis.exists(LOCK_KEY)
     # right after a run nothing is due; a manual run forces all
     assert await run_money_sync(app.state.sessionmaker, on, redis, client=bridge) == []  # type: ignore[arg-type]
     forced = await run_money_sync(app.state.sessionmaker, on, redis, client=bridge, force=True)  # type: ignore[arg-type]
-    assert len(forced) == 4
+    assert len(forced) == 5
 
 
 async def test_3b_job_stops_after_money_fails(app: FastAPI, settings: Settings) -> None:
@@ -328,7 +337,13 @@ async def test_3b_status_when_the_bridge_is_down(
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["reachable"] is False and body["error"] == "money_unavailable"
-    assert [e["entity"] for e in body["entities"]] == ["companies", "persons", "codebooks", "article_suppliers"]
+    assert [e["entity"] for e in body["entities"]] == [
+        "companies",
+        "persons",
+        "codebooks",
+        "article_suppliers",
+        "articles",
+    ]
 
 
 async def test_3b_money_settings_are_admin_only(client: Client, db: AsyncSession, mail_server: FakeMailServer) -> None:

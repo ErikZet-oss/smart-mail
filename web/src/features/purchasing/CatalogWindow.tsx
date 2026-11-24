@@ -1,11 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Columns3, Globe, Plus, Search, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '../../components/Button';
 import { ApiError } from '../../lib/api';
-import { fetchCatalog, moneyNum, type CatalogRow, type DocumentDetail, type StockRow } from './purchasingApi';
+import {
+  CATALOG_PAGE,
+  fetchCatalog,
+  moneyNum,
+  type CatalogRow,
+  type CatalogSort,
+  type DocumentDetail,
+  type StockRow,
+} from './purchasingApi';
 
 /** Columns of the Katalóg grid — the ones Smart Mail reads reliably from Money (Erik 24 Nov 2026, „Výber stĺpcov“). */
 const CATALOG_COLUMNS = [
@@ -40,6 +48,8 @@ const WIDTH: Record<CatalogColumn, string> = {
   ordered: 'w-28',
 };
 const NUMERIC = new Set<CatalogColumn>(['last_price', 'stock', 'stock_total', 'reserved', 'ordered']);
+/** Columns the server can sort by (the read cache `money_articles`); stock columns are live per page. */
+const SORTABLE = new Set<CatalogColumn>(['catalog', 'name', 'plu', 'last_price']);
 
 function loadColumns(): CatalogColumn[] {
   try {
@@ -122,6 +132,9 @@ export function CatalogWindow({
   const [selected, setSelected] = useState<string | null>(null);
   const [columns, setColumns] = useState<CatalogColumn[]>(loadColumns);
   const [chooser, setChooser] = useState(false);
+  const [sort, setSort] = useState<{ by: CatalogSort; desc: boolean }>({ by: 'catalog', desc: false });
+  const scroller = useRef<HTMLDivElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const id = window.setTimeout(() => setDebounced(q.trim()), 300);
     return () => window.clearTimeout(id);
@@ -131,13 +144,45 @@ export function CatalogWindow({
     box.current?.querySelector<HTMLInputElement>('input[data-autofocus]')?.focus();
     return () => opener?.focus();
   }, []);
-  const found = useQuery({
-    queryKey: ['purchasing', 'catalog', debounced],
-    queryFn: () => fetchCatalog(debounced),
-    enabled: debounced.length >= 2,
+  // the whole catalog from the read cache, 100 rows a page, the next page when the end of the list comes into view
+  const found = useInfiniteQuery({
+    queryKey: ['purchasing', 'catalog', debounced, sort.by, sort.desc],
+    queryFn: ({ pageParam }) => fetchCatalog({ q: debounced, sort: sort.by, desc: sort.desc, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((n, p) => n + p.items.length, 0);
+      return last.cached && last.items.length === CATALOG_PAGE && loaded < last.total ? loaded : undefined;
+    },
     retry: false,
   });
-  const rows = useMemo(() => (found.data ?? []).filter((r) => !r.inactive), [found.data]);
+  const pages = found.data?.pages ?? [];
+  const first = pages[0];
+  const cached = first?.cached ?? true;
+  const total = first?.total ?? 0;
+  const stockAvailable = pages.every((p) => p.stock_available);
+  const rows = useMemo(
+    () => (found.data?.pages ?? []).flatMap((p) => p.items).filter((r) => !r.inactive),
+    [found.data],
+  );
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = found;
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !hasNextPage || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting) && !isFetchingNextPage) void fetchNextPage();
+      },
+      { root: scroller.current, rootMargin: '200px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, rows.length]);
+  const toggleSort = (c: CatalogColumn) => {
+    if (!SORTABLE.has(c)) return;
+    const by = c as CatalogSort;
+    setSort((s) => (s.by === by ? { by, desc: !s.desc } : { by, desc: false }));
+    scroller.current?.scrollTo({ top: 0 });
+  };
   const current = rows.find((r) => r.id === selected) ?? null;
   const warehouseOf = (r: CatalogRow): StockRow | undefined => r.stocks.find((s) => s.warehouse_id === warehouse);
   const whLabel = (() => {
@@ -257,15 +302,19 @@ export function CatalogWindow({
   );
   const status = (
     <p className="type-caption px-6 pb-2 pt-1 text-text-tertiary" data-testid="w6h-catalog-status">
-      {debounced.length < 2
-        ? t('w6h.catalog.hint')
-        : found.isFetching
-          ? t('w6h.catalog.loading')
-          : errorCode
-            ? t(`w6h.errors.${errorCode}`, { defaultValue: t('w6h.errors.search') })
+      {found.isPending || (found.isFetching && !isFetchingNextPage)
+        ? t('w6h.catalog.loading')
+        : errorCode
+          ? t(`w6h.errors.${errorCode}`, { defaultValue: t('w6h.errors.search') })
+          : !cached && debounced.length < 2
+            ? t('w6h.catalog.hint')
             : rows.length === 0
               ? t('w6h.catalog.empty')
-              : t('w6h.catalog.count', { count: rows.length })}
+              : cached && !debounced
+                ? t('w6h.catalog.all', { count: total })
+                : t('w6h.catalog.count', { count: total })}
+      {!cached && debounced.length >= 2 ? ` · ${t('w6h.catalog.notSynced')}` : ''}
+      {first && !stockAvailable ? ` · ${t('w6h.catalog.stockOffline')}` : ''}
     </p>
   );
   const stockPanel = current ? (
@@ -385,7 +434,7 @@ export function CatalogWindow({
         </div>
         {mobile ? <div className="px-6 pt-2">{warehouseSelect}</div> : null}
         {status}
-        <div className="min-h-0 flex-1 overflow-auto px-0 md:px-6">
+        <div ref={scroller} className="min-h-0 flex-1 overflow-auto px-0 md:px-6">
           {mobile ? (
             <ul className="border-t border-border-default" data-testid="w6h-catalog-rows">
               {rows.map((r) => {
@@ -432,19 +481,43 @@ export function CatalogWindow({
             <table className="type-small w-full border-collapse" data-testid="w6h-catalog-rows">
               <thead className="sticky top-0 z-10 bg-bg-subtle text-text-secondary">
                 <tr>
-                  {columns.map((c) => (
-                    <th
-                      key={c}
-                      scope="col"
-                      className={`${WIDTH[c]} whitespace-nowrap border-b border-border-default px-1.5 py-1.5 font-medium ${
-                        NUMERIC.has(c) ? 'text-right' : 'text-left'
-                      }`}
-                    >
-                      {c === 'stock'
+                  {columns.map((c) => {
+                    const label =
+                      c === 'stock'
                         ? t('w6h.catalog.cols.stockOf', { warehouse: whLabel })
-                        : t(`w6h.catalog.cols.${c}`)}
-                    </th>
-                  ))}
+                        : t(`w6h.catalog.cols.${c}`);
+                    const active = sort.by === c;
+                    return (
+                      <th
+                        key={c}
+                        scope="col"
+                        aria-sort={active ? (sort.desc ? 'descending' : 'ascending') : undefined}
+                        className={`${WIDTH[c]} whitespace-nowrap border-b border-border-default px-1.5 py-1.5 font-medium ${
+                          NUMERIC.has(c) ? 'text-right' : 'text-left'
+                        }`}
+                      >
+                        {SORTABLE.has(c) && cached ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleSort(c)}
+                            data-testid={`w6h-catalog-sort-${c}`}
+                            className={`inline-flex items-center gap-1 ${active ? 'text-text-primary' : ''}`}
+                          >
+                            {label}
+                            {active ? (
+                              sort.desc ? (
+                                <ArrowDown size={12} aria-hidden="true" />
+                              ) : (
+                                <ArrowUp size={12} aria-hidden="true" />
+                              )
+                            ) : null}
+                          </button>
+                        ) : (
+                          label
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -477,6 +550,18 @@ export function CatalogWindow({
               </tbody>
             </table>
           )}
+          {hasNextPage ? (
+            <div ref={sentinel} className="flex justify-center py-3">
+              <Button
+                variant="secondary"
+                disabled={isFetchingNextPage}
+                onClick={() => void fetchNextPage()}
+                data-testid="w6h-catalog-more"
+              >
+                {isFetchingNextPage ? t('w6h.catalog.loading') : t('w6h.catalog.more', { shown: rows.length, total })}
+              </Button>
+            </div>
+          ) : null}
         </div>
         {stockPanel}
         {footer}

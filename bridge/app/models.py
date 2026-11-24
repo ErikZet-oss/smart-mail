@@ -272,6 +272,13 @@ class SupplierCodePage(_Model):
     next_from: int | None
 
 
+class ArticlePage(_Model):
+    """W6h Katalóg read cache (`money_articles`): a page of `Articles` (deleted dropped, hidden as `inactive`)."""
+
+    items: list[Article]
+    next_from: int | None
+
+
 # ----- Phase 4c (#247, D33): received delivery note written to Money as a KONCEPT -----
 
 UUID_ZERO = uuid.UUID(int=0)

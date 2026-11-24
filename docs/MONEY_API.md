@@ -96,7 +96,7 @@ REST only for PDF reports, persons and activity types.
 |---|---|---|
 | `money_companies` (+ e-mails from `Email` and `SeznamSpojeni[].SpojeniCislo`) | `Companies` | 15 min delta (`ChangeFrom`), nightly full |
 | `money_persons` | REST `Person` | 15 min |
-| `money_articles` (+ `Parametry`, units, packaging) | `Articles` | 15 min delta |
+| `money_articles` (id, code, catalog, name, EAN, unit, parent_id, PLU, `PosledniCena`, hidden, normalized search text) | `Articles` (bridge `GET /sync/articles?since=&from=&count=`) | 15 min delta (`ChangeFrom`), nightly full + deactivation (**built for the W6h Katalóg**, migration 0023; `Parametry` / packaging not cached yet) |
 | `money_article_suppliers` (supplier_id, supplier_code normalized, article_id, unit, last price, packaging) | `ArticleSuppliers` | 15 min delta (`ChangeFrom`), nightly full + deactivation (**built in #228**, migration 0022) |
 | `money_price_history` (customer, article, qty, unit price, date, document, `partner_code` = `ObsahPolozky.PartnerskyKod`) | `IssuedInvoices.Polozky` + `ReceivedOrders.Polozky` | nightly (24 months) + after each created order |
 | `money_codebooks` (all lists in §3 "Číselníky") | GraphQL | daily |
@@ -268,6 +268,9 @@ cena); `GET /articles/search?…&limit=` (≤ 100) for the Katalóg text search;
 ids) reads `WarehouseStocks` (`Sklad { Kod Nazev }`, `AktualniStav { ZustatekMnozstvi ZustatekJednotkaCena }`,
 `Rezervovano`, `Objednano`, `PredpokladaneMnozstvi`, `DostupneMnozstvi`) and `EShopArticles` (`Artikl_ID` → in an
 e-shop) with one OR filter of the article ids, every page, deleted rows dropped. Stock is information only (D18).
+Since migration 0023 the Katalóg lists, sorts and pages the whole catalog from the read cache `money_articles` (§4,
+entity `articles` in Settings 13); the bridge reads only `catalog-info` for the 100 rows of a page. Until the first
+sync the live `/articles/search` above is the fallback.
 
 **5.5.8b Creating articles and variants (D32)** — `CreateArticle` only, from the W6h / M13b drawer, after the
 user's click (the click is the approval; autonomy ≤ 2, never proposed or executed by AI on its own).

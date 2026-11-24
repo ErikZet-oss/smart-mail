@@ -20,15 +20,23 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.money.bridge_client import BridgeClient, BridgeUnavailable
-from app.money.models import MoneyArticleSupplier, MoneyCodebook, MoneyCompany, MoneyPerson, MoneySyncState
+from app.money.models import (
+    MoneyArticle,
+    MoneyArticleSupplier,
+    MoneyCodebook,
+    MoneyCompany,
+    MoneyPerson,
+    MoneySyncState,
+)
 from app.money.schemas import CODEBOOKS, Company, Person, SupplierCode
 from app.purchasing.numbers import normalize_code
 
 log = structlog.get_logger(__name__)
 
-Entity = Literal["companies", "persons", "codebooks", "article_suppliers"]
-ENTITIES: tuple[Entity, ...] = ("companies", "persons", "codebooks", "article_suppliers")
-DELTA_ENTITIES: frozenset[str] = frozenset({"companies", "article_suppliers"})  # `ChangeFrom` delta + nightly full
+Entity = Literal["companies", "persons", "codebooks", "article_suppliers", "articles"]
+ENTITIES: tuple[Entity, ...] = ("companies", "persons", "codebooks", "article_suppliers", "articles")
+# `ChangeFrom` delta + nightly full; `articles` = the W6h Katalóg cache (Erik 2026-11-24)
+DELTA_ENTITIES: frozenset[str] = frozenset({"companies", "article_suppliers", "articles"})
 PAGE = 200
 MAX_PAGES = 500  # 100 000 rows — a runaway paging loop stops here
 CURSOR_MARGIN = timedelta(minutes=2)
@@ -135,6 +143,27 @@ async def _sync_article_suppliers(
     return changed, seen
 
 
+async def _sync_articles(
+    db: AsyncSession, client: BridgeClient, since: datetime | None, now: datetime
+) -> tuple[int, set[uuid.UUID]]:
+    """W6h Katalóg: the whole catalog on the first full run (tens of thousands of rows), page by page."""
+    from app.purchasing.catalog import article_row
+
+    seen: set[uuid.UUID] = set()
+    start, changed = 0, 0
+    for _ in range(MAX_PAGES):
+        page = await client.all_articles(since, start, PAGE)
+        rows = list({r["id"]: r for r in (article_row(a, now) for a in page.items)}.values())
+        for i in range(0, len(rows), UPSERT_BATCH):
+            await _upsert(db, MoneyArticle.__table__, rows[i : i + UPSERT_BATCH], ["id"])
+        changed += len(rows)
+        seen |= {a.id for a in page.items}
+        if page.next_from is None:
+            break
+        start = page.next_from
+    return changed, seen
+
+
 async def _upsert(db: AsyncSession, table: Any, rows: list[dict[str, Any]], key: list[str]) -> None:
     if not rows:
         return
@@ -230,7 +259,9 @@ async def _deactivate(db: AsyncSession, model: type[MoneyCompany] | type[MoneyPe
     return int(getattr(result, "rowcount", 0) or 0)
 
 
-async def _deactivate_supplier_codes(db: AsyncSession, seen: set[uuid.UUID]) -> int:
+async def _deactivate_supplier_codes(
+    db: AsyncSession, seen: set[uuid.UUID], table: str = "money_article_suppliers"
+) -> int:
     """Rows a full run did not see (deleted in Money). The set can be large: a temporary table, not a long IN list."""
     from sqlalchemy import text
 
@@ -244,7 +275,7 @@ async def _deactivate_supplier_codes(db: AsyncSession, seen: set[uuid.UUID]) -> 
         )
     result = await db.execute(
         text(
-            "UPDATE money_article_suppliers SET active = false, updated_at = now() "
+            f"UPDATE {table} SET active = false, updated_at = now() "  # noqa: S608 — a fixed table name
             "WHERE active AND id NOT IN (SELECT id FROM _seen_as)"
         )
     )
@@ -270,6 +301,11 @@ async def sync_entity(db: AsyncSession, client: BridgeClient, entity: Entity, *,
                 result.changed = changed
                 if full:
                     result.deactivated = await _deactivate_supplier_codes(db, seen)
+            elif entity == "articles":
+                changed, seen = await _sync_articles(db, client, None if full else state.cursor, now)
+                result.changed = changed
+                if full:
+                    result.deactivated = await _deactivate_supplier_codes(db, seen, "money_articles")
             elif entity == "persons":
                 changed, seen = await _sync_persons(db, client, now)
                 result.changed = changed

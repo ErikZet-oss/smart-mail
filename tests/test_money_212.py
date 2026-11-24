@@ -108,7 +108,7 @@ async def test_212_switch_test_to_prod_full_resync_checks_and_never_deletes(
     bridge.agenda = "PROD"
     bridge.companies_data = [_company(0)]  # company 1 and the TEST-only one do not exist in PROD
     results = await run_money_sync(app.state.sessionmaker, on, redis, client=bridge)  # type: ignore[arg-type]
-    assert [r.entity for r in results] == ["companies", "persons", "codebooks", "article_suppliers"]
+    assert [r.entity for r in results] == ["companies", "persons", "codebooks", "article_suppliers", "articles"]
     assert all(r.full for r in results)  # #228: the supplier codes are resynced in full as well
     db.expire_all()
 

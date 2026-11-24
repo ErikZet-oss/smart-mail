@@ -46,7 +46,14 @@ from app.money.invoice_attach import (
     report_id_valid,
 )
 from app.money.jobs import LOCK_KEY, SECTION_SYNC, sync_interval
-from app.money.models import MoneyArticleSupplier, MoneyCodebook, MoneyCompany, MoneyPerson, MoneySyncState
+from app.money.models import (
+    MoneyArticle,
+    MoneyArticleSupplier,
+    MoneyCodebook,
+    MoneyCompany,
+    MoneyPerson,
+    MoneySyncState,
+)
 
 router = APIRouter(prefix="/api/settings/money", tags=["settings-money"])
 Admin = Annotated[Person, Depends(require_admin)]
@@ -113,6 +120,8 @@ async def _entities(db: DB) -> list[EntityState]:
         "article_suppliers": await db.scalar(
             select(func.count()).select_from(MoneyArticleSupplier).where(MoneyArticleSupplier.active)
         ),
+        # W6h Katalóg (2026-11-24) „Artikle (katalóg)“
+        "articles": await db.scalar(select(func.count()).select_from(MoneyArticle).where(MoneyArticle.active)),
     }
     out = []
     for entity in ENTITIES:

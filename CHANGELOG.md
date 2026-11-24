@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — W6h Katalóg: celý katalóg z lokálnej kópie (`money_articles`)
+
+- **Nová tabuľka `money_articles`** (migrácia 0023, schválil Erik 24. 11.): lokálna kópia artiklov z Money (katalóg, názov, kód, EAN, MJ, hlavná karta, PLU, posledná nákupná cena, skrytá). Synchronizácia ako kódy dodávateľov: každých 15 min zmeny (`ChangeFrom`), v noci celá + zneaktívnenie zmazaných; v Nastaveniach 13 nový riadok „Artikle (katalóg)“.
+- Okno **Katalóg** ukáže **celý katalóg** (prázdne hľadanie = všetky položky), stránkuje po 100 (ďalšie sa načítajú pri dorolovaní), triedi sa klikom na stĺpec Katalóg / Názov / PLU / Posl. nákupná cena. Hľadanie (katalóg, kód, názov bez diakritiky, EAN, kód dodávateľa, `%` ako v Money) beží v appke, nie v Money. Zásoby a e-shop sa stále čítajú živo len pre zobrazenú stránku; keď je Money nedostupné, katalóg funguje ďalej bez zásob. Kým neprebehne prvá synchronizácia, okno hľadá priamo v Money ako doteraz.
+- Most: nový `GET /sync/articles` (len čítanie). **Treba aktualizovať most na Windows.**
+
 ## [Unreleased] — W6h: okno „Katalóg“ (ako katalóg v Money)
 
 - V okne riadku pribudlo tlačidlo **Katalóg** (Figma 264:91756, mobil 265:99286): veľké okno s vyhľadávaním (katalóg, názov, EAN, kód dodávateľa, `%` ako v Money), až 100 riadkov, stĺpce E-shop, Katalóg, Názov, PLU, Posledná nákupná cena, Zásoba vybraného skladu, MJ; hlavná karta sa nedá vybrať, varianty kurzívou; panel **Zásoby** všetkých skladov (len informácia, D18); **Výber stĺpcov** ako v Money (pamätá sa v prehliadači); „Založiť variant k …“ a „Nová hlavná karta“ otvoria formulár nového artikla.

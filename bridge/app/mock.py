@@ -23,6 +23,7 @@ from app.models import (
     ArticleCatalogInfo,
     ArticleCreated,
     ArticleCreateIn,
+    ArticlePage,
     ArticleUnit,
     CodebookItem,
     CodebookName,
@@ -634,6 +635,11 @@ class MockBackend:
         rows = self.data.supplier_codes  # the mock has no change dates: a delta returns everything (idempotent)
         page = rows[start : start + count]
         return SupplierCodePage(items=page, next_from=start + count if start + count < len(rows) else None)
+
+    async def all_articles(self, since: datetime | None, start: int, count: int) -> ArticlePage:
+        rows = self.data.articles  # no change dates in the mock: a delta returns everything (idempotent upserts)
+        page = rows[start : start + count]
+        return ArticlePage(items=page, next_from=start + count if start + count < len(rows) else None)
 
     async def lookup_supplier_code(self, supplier_id: uuid.UUID, code: str) -> list[SupplierCode]:
         return [c for c in self.data.supplier_codes if c.supplier_id == supplier_id and c.code == code]
