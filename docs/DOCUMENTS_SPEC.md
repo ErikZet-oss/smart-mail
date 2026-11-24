@@ -133,6 +133,7 @@ columns in Money order) and `Kontrola príjmu` (default below). Column widths an
 | 12 | Vratka | `Vratka` | false | same | Money preset |
 | 13 | Číslo položky | `CisloPolozky` | — | from Money | Money preset |
 | 14 | Typ väzby | `ObsahPolozky.VazbaTypVazby` | copied from template | from Money | Money preset |
+| 14a | Počet nadradenej / podradenej položky | `ObsahPolozky.VazbaPocetNadrizene` / `VazbaPocetPodrizene` | copied from template (pilot 2026-11-24: without it Money refuses to save an edited line — „musí byť väčšia než 0“) | from Money | Money preset |
 | 15 | Celková obstarávacia | `CelkovaPorizovaciCena` | — | from Money | Money preset |
 | 16 | Celkové dodatočné náklady | `CelkoveVedlejsiNaklady` | 0 | from Money | Money preset |
 | 17 | Čiarový kód | `Article.CarovyKod` | from catalog (read-only) | same | on |

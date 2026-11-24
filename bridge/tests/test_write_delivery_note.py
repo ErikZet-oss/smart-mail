@@ -200,6 +200,8 @@ def test_247_template_endpoints() -> None:
         "SazbaDPH_ID": str(mid("vat-rate", 23)),
         "DphSazba": "23",
         "VazbaTypVazby": 0,
+        "VazbaPocetNadrizene": "1",
+        "VazbaPocetPodrizene": "1",
     }
     assert tpl["text_line"] == {"TypObsahu": 0}
     assert client.get(f"/delivery-notes/received/{uuid.uuid4()}/template").status_code == 404

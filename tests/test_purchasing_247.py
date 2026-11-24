@@ -50,6 +50,8 @@ def template(**line_over: Any) -> dict[str, Any]:
         "SazbaDPH_ID": _id("vat-23"),
         "DruhPolozky_ID": _id("item-goods"),
         "VazbaTypVazby": 0,
+        "VazbaPocetNadrizene": "1",
+        "VazbaPocetPodrizene": "1",
     }
     line.update(line_over)
     return {
@@ -255,6 +257,8 @@ async def test_247_koncept_payload_readback_audit_and_repeat(
     nut = items[1]
     assert nut["Mnozstvi"] == "2400" and nut["JednCena"] == "0.0403"  # 12 bal × 200, 8.05 / 200 — no rounding to bal
     assert nut["ObsahPolozky"]["PartnerskyKod"] == "934-10-A2"
+    # pilot 2026-11-24: „Počet nadradenej položky“ from the template, else Money refuses to save an edited line
+    assert nut["ObsahPolozky"]["VazbaPocetNadrizene"] == "1" and nut["ObsahPolozky"]["VazbaPocetPodrizene"] == "1"
     assert all(not isinstance(v, float) for it in items for v in it.values())  # Decimal as strings, never float
     claims = jwt.decode(tok, PUBLIC, algorithms=["EdDSA"])
     body = json.dumps(payload, separators=(",", ":")).encode()

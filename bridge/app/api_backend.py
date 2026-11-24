@@ -409,6 +409,10 @@ def template_from(raw: dict[str, Any]) -> DeliveryNoteTemplate:
                 line["DphSazba"] = format(_dec(item["DphSazba"]).normalize(), "f")
             if content.get("VazbaTypVazby") is not None:
                 line["VazbaTypVazby"] = int(content["VazbaTypVazby"])
+            # pilot 2026-11-24: without „Počet nadradenej položky“ Money refuses to save an edited line (must be > 0)
+            for k in ("VazbaPocetNadrizene", "VazbaPocetPodrizene"):
+                if content.get(k) is not None:
+                    line[k] = format(_dec(content[k]).normalize(), "f")
             if "DruhPolozky_ID" not in line and (v := _uuid(content.get("DruhPolozky_ID"))) is not None:
                 line["DruhPolozky_ID"] = str(v)
         elif not stock and text_line is None and item.get("TypObsahu") is not None:

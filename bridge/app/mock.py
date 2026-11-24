@@ -359,6 +359,8 @@ def received_template(n: int, centre: uuid.UUID, supplier: Company, article: Art
                     "Artikl_ID": str(article.id),
                     "Sklad_ID": str(mid("warehouse", 1)),
                     "VazbaTypVazby": 0,
+                    "VazbaPocetNadrizene": Decimal("1"),
+                    "VazbaPocetPodrizene": Decimal("1"),
                 },
             },
             {
