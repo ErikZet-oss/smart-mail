@@ -137,6 +137,7 @@ class Expected:
     unit_price: Decimal
     article_id: str | None
     warehouse_id: str | None
+    total: Decimal | None = None  # the invoice line total written as `CelkovaCena` (Money derives the unit price)
 
 
 def build_payload(
@@ -180,6 +181,11 @@ def build_payload(
             factor = ln.unit_factor or Decimal("1")
             qty_our = qty * factor
             price_our = (price / factor).quantize(Q4, ROUND_HALF_UP)
+            # pilot 2026-11-24 (Erik, PROD probe): quantity + the invoice line total → Money keeps the total to the
+            # cent and derives the unit price (4 dp, half up); a rounded unit price gave a few cents of difference
+            total = ln.line_total if ln.line_total is not None and qty_our > 0 else None
+            if total is not None:
+                price_our = (total / qty_our).quantize(Q4, ROUND_HALF_UP)
             article = (ln.raw or {}).get("_article") or {}
             warehouse = str(ln.warehouse_id) if ln.warehouse_id else str(values.warehouse)
             content: dict[str, Any] = {
@@ -201,7 +207,7 @@ def build_payload(
                 "Katalog": article.get("catalog"),
                 "Mnozstvi": _dec_str(qty_our),
                 "Jednotka": article.get("unit"),
-                "JednCena": _dec_str(price_our),
+                **({"CelkovaCena": _dec_str(total)} if total is not None else {"JednCena": _dec_str(price_our)}),
                 "TypCeny": int(tline["TypCeny"]),
                 "TypObsahu": int(tline["TypObsahu"]),
                 "Stredisko_ID": centre,
@@ -212,7 +218,7 @@ def build_payload(
                     item[key] = str(tline[key])
             if tline.get("DruhSazbyDPH") is not None:
                 item["DruhSazbyDPH"] = int(tline["DruhSazbyDPH"])
-            expected.append(Expected(order, qty_our, price_our, str(ln.article_id), warehouse))
+            expected.append(Expected(order, qty_our, price_our, str(ln.article_id), warehouse, total))
         items.append({k: v for k, v in item.items() if v is not None})
     issued: date = today if issue_on_approval or doc.doc_date is None else doc.doc_date
     if doc.kind == "invoice":
@@ -268,7 +274,10 @@ def compare(expected: list[Expected], back: DeliveryNoteCreated) -> list[dict[st
             out.append({"line": exp.order, "field": "article"})
         if exp.warehouse_id and str(got.warehouse_id).lower() != exp.warehouse_id.lower():
             out.append({"line": exp.order, "field": "warehouse"})
-    total = sum(((e.qty * e.unit_price).quantize(Q2, ROUND_HALF_UP) for e in expected), Decimal("0"))
+    total = sum(
+        (e.total if e.total is not None else (e.qty * e.unit_price).quantize(Q2, ROUND_HALF_UP) for e in expected),
+        Decimal("0"),
+    )
     if abs(total - back.total_base) > TOLERANCE:
         out.append({"field": "total", "expected": str(total), "got": str(back.total_base)})
     return out

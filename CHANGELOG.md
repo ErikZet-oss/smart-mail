@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot: dodací list sedí s faktúrou na cent (množstvo + cena celkom)
+
+- Skladové riadky konceptu sa zapisujú ako **množstvo + cena celkom z faktúry** (`CelkovaCena`); cenu za kus si Money dopočíta (4 des. miesta). Overené testom na ostrej agende (koncept 302600973): 1000 ks + 40,25 → 0,0403 / 40,25; pri cene za kus 0,04025 by Money uložilo 40,30. Riadok bez vytlačenej ceny celkom sa zapisuje postaru (cena za kus). Kontrola po zápise porovnáva súčet s faktúrou. **Treba aktualizovať most na Windows** (inak zápis skončí chybou „Doklad nemá všetky údaje…“ a nič sa nevytvorí).
+
 ## [Unreleased] — Pilot: „Počet nadradenej položky“ zo vzoru (Money odmietalo uložiť upravený riadok)
 
 - Koncept dodacieho listu: pri úprave ceny riadku v Money vyskočilo „Hodnota v poli 'Počet nadradenej položky' musí byť väčšia než 0“. Most teraz zo vzorového dodacieho listu pobočky číta aj `ObsahPolozky.VazbaPocetNadrizene` / `VazbaPocetPodrizene` a appka ich kopíruje do skladových riadkov (DOCUMENTS_SPEC §2 riadok 14a). **Treba aktualizovať most na Windows** a v Nastaveniach › Pobočky (11e) kliknúť „Overiť“, aby sa vzor načítal znova.

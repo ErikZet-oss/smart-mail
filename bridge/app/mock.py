@@ -11,7 +11,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from app import wildcard
 from app.backend import ArticleQuery, CatalogExists, DeliveryQuery, DuplicateNote, InvoiceQuery
@@ -629,9 +629,16 @@ class MockBackend:
         company = await self.company(note.Firma_ID)
         n = len(self.data.received_notes) + 1
         items = []
+        base = Decimal("0")
         for i, item in enumerate(data["Polozky"], start=1):
-            items.append({**item, "ID": str(uuid.uuid4()), "CisloPolozky": i})
-        base = sum((Decimal(it["Mnozstvi"]) * Decimal(it["JednCena"]) for it in data["Polozky"]), Decimal("0"))
+            qty = Decimal(item["Mnozstvi"])
+            if item.get("CelkovaCena") is not None:  # like Money (probe 2026-11-24): the total stays, unit price 4 dp
+                total = Decimal(item["CelkovaCena"])
+                item = {**item, "JednCena": (total / qty).quantize(Decimal("0.0001"), ROUND_HALF_UP)}
+            else:
+                total = (qty * Decimal(item["JednCena"])).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            base += total
+            items.append({**item, "CelkovaCena": total, "ID": str(uuid.uuid4()), "CisloPolozky": i})
         raw = {
             **data,
             "ID": str(uuid.uuid4()),

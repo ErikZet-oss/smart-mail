@@ -394,3 +394,19 @@ def test_247_dumps_writes_decimals_as_numbers_and_never_turns_text_into_a_number
         dumps({"t": "\u0000dec:1"})
     with pytest.raises(ValueError):
         dumps({"a": Decimal("NaN")})
+
+
+def test_item_sends_exactly_one_of_unit_price_or_line_total() -> None:
+    """Pilot 2026-11-24 (PROD probe 302600973): a stock line with the invoice total sends `CelkovaCena` only."""
+    from pydantic import ValidationError
+
+    from app.models import DeliveryNoteItemIn
+
+    base = {"Poradi": 1, "Nazev": "x", "Mnozstvi": "1000", "TypCeny": 0, "TypObsahu": 1, "Stredisko_ID": str(NEW_ID)}
+    total = DeliveryNoteItemIn.model_validate({**base, "CelkovaCena": "40.25"})
+    assert total.CelkovaCena == Decimal("40.25") and total.JednCena is None
+    assert "JednCena" not in total.model_dump(exclude_none=True)
+    assert DeliveryNoteItemIn.model_validate({**base, "JednCena": "0.0403"}).CelkovaCena is None
+    for bad in ({}, {"JednCena": "0.0403", "CelkovaCena": "40.25"}):
+        with pytest.raises(ValidationError):
+            DeliveryNoteItemIn.model_validate({**base, **bad})

@@ -128,8 +128,8 @@ columns in Money order) and `Kontrola príjmu` (default below). Column widths an
 | 7 | MJ | `Jednotka` | article main unit (ks, kg, m, bal) | same | on |
 | 8 | Sadzba DPH | `SazbaDPH_ID` → % | from the document line | same | on |
 | 9 | Typ ceny | `TypCeny` | copied from the template ("Iba základ") — never guessed | same | on |
-| 10 | Jedn. cena | `JednCena` | net unit price in our unit, 4 dp | same | on |
-| 11 | Celková cena | computed | round(qty × price, 2) | `CelkovaCena` | on |
+| 10 | Jedn. cena | `JednCena` | stock line with a printed line total: **not sent** — Money derives it (4 dp, half up); otherwise net unit price in our unit, 4 dp | from Money | on |
+| 11 | Celková cena | `CelkovaCena` | stock line: the invoice line total (net) is **written** so the note matches the invoice to the cent (Erik + PROD probe 302600973, 2026-11-24: 1000 pcs + 40.25 → JednCena 0.0403, total 40.25; JednCena 0.04025 would give 40.30); without a printed total round(qty × price, 2) | `CelkovaCena` | on |
 | 12 | Vratka | `Vratka` | false | same | Money preset |
 | 13 | Číslo položky | `CisloPolozky` | — | from Money | Money preset |
 | 14 | Typ väzby | `ObsahPolozky.VazbaTypVazby` | copied from template | from Money | Money preset |
