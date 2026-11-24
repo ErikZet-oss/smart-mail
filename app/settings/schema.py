@@ -636,8 +636,8 @@ PHASE_1F_SECTIONS: list[dict[str, Any]] = [
                 control="info",
                 scope="G",
                 admin_only=True,
-                default="Nezapisujú sa – zobrazia sa v záložke Poplatky.",
-                help="Ak treba, doplňte ich v Money (DECISIONS D14).",
+                default="Rozpočítajú sa rovnomerne podľa počtu položiek ako dodatočné náklady.",
+                help="Ako okno „Náklady“ v Money – rovnomerne podľa počtu položiek (DECISIONS D34).",
             ),
             field(
                 "purchasing.returns",

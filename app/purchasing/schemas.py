@@ -24,7 +24,7 @@ class ExtractedLine(BaseModel):
     unit_price: Decimal | None = None  # excl. VAT, per one unit
     vat_rate: Decimal | None = None
     line_total: Decimal | None = None  # excl. VAT
-    is_fee: bool = False  # doprava, balné, palety … (D14: shown, never written)
+    is_fee: bool = False  # doprava, balné, palety … (D34: written as side costs of the stock lines)
 
 
 class VatRow(BaseModel):

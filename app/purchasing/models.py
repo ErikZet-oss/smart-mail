@@ -44,7 +44,7 @@ class SupplierDocument(IdMixin, TimestampMixin, Base):
     currency: Mapped[str | None] = mapped_column(String(3))
     total: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
     vat_recap: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)  # [{rate, base, vat}] as strings
-    fees: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)  # D14: shown, never written
+    fees: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)  # D34: written as side costs of the stock lines
     extract_method: Mapped[str | None] = mapped_column(String(24))  # isdoc | ubl | pdf_llm
     extracted: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)  # raw parser / LLM output (audit)
     field_confidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)

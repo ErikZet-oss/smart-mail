@@ -161,7 +161,9 @@ test('4b W6h: Money card, matching status, line drawer with candidate → matche
     await shot(page, `phase4b-W6h-${info.project.name}`);
     await page.getByTestId('w6h-checks-toggle').click();
     await page.getByRole('button', { name: /Poplatky/ }).click();
-    await expect(page.getByTestId('w6h-fees')).toContainText('Poplatky sa nezapisujú');
+    await expect(page.getByTestId('w6h-fees')).toContainText(
+      'rozpočítajú rovnomerne podľa počtu položiek ako dodatočné náklady',
+    );
     await page.getByRole('button', { name: /Položky/ }).click();
     await page.getByTestId('w6h-line-3').dblclick();
   }

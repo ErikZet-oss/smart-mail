@@ -72,7 +72,7 @@ def validate(doc: ExtractedDoc, ctx: Context) -> list[dict[str, Any]]:
     # DL-W4 issue date in the future or older than 30 days
     if doc.issued_on is None or doc.issued_on > ctx.today or doc.issued_on < ctx.today - timedelta(DATE_WINDOW_DAYS):
         out.append(check("DL-W4", "warning", issued_on=doc.issued_on.isoformat() if doc.issued_on else None))
-    # DL-W5 fees are not written (D14)
+    # DL-W5 fees are written as side costs of the stock lines (D34) — information for the person
     fees = [line for line in doc.lines if line.is_fee]
     if fees:
         total = sum((line_amount(f) or Decimal("0") for f in fees), Decimal("0"))

@@ -408,7 +408,7 @@ hodnoty z neho.").
 | Spracovať aj dodacie listy dodávateľa | switch | vypnuté | — | Predvolene sa do zoznamu Dodacie listy berú len faktúry dodávateľa; potvrdenia objednávok a iné doklady sa automaticky skryjú. Zapnite, ak chcete prijímať tovar aj z dodacích listov dodávateľa. | G |
 | Zápis dodacích listov do Money (koncept) | switch | vypnuté | — | Tlačidlo „Vytvoriť v Money“ zapíše dodací list prijatý ako koncept s popisom „Smartmail…“. Koncept skontrolujete a dokončíte v Money (DECISIONS D33). Na ostrej agende musí zápis povoliť aj most (MONEY_PROD_ALLOW). | G |
 | Dátum a čas skladového pohybu | info (read-only): "Okamih zápisu do Money (schválenie)" | — | — | Dátum a čas „Sklad. pohybu“ a „Účt. prípadu“ = kedy Smart Mail doklad zapísal do Money (DECISIONS D13). | — |
-| Poplatky na dokladoch dodávateľa (doprava, balné) | info (read-only): "Nezapisujú sa – zobrazia sa v záložke Poplatky" | — | — | Ak treba, doplňte ich v Money (DECISIONS D14). | — |
+| Poplatky na dokladoch dodávateľa (doprava, balné) | info (read-only): "Rozpočítajú sa rovnomerne podľa počtu položiek ako dodatočné náklady." | — | — | Ako okno „Náklady“ v Money – rovnomerne podľa počtu položiek (DECISIONS D34). | — |
 | Vratky | info (read-only): "Vratky sa robia len v Money" | — | — | DECISIONS D15. | — |
 | Kódy dodávateľov (naučené) | table: Dodávateľ, Kód dodávateľa, Náš artikel, Prepočet jednotky, Potvrdil, Dátum, Použité ×; search, filter dodávateľ; row drawer edit; delete (confirm); Export CSV | — | kód unikátny v rámci dodávateľa | Potvrdené párovania z faktúr. Export môžete nahrať do kariet artiklov v Money. | G |
 

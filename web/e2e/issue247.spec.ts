@@ -127,7 +127,7 @@ test('#247 W6h: confirm dialog → „Koncept v Money“ with the read-back chec
   await expect(dialog).toContainText('347,00 € bez DPH');
   await expect(dialog).toContainText('pri zápise (teraz, Europe/Bratislava)');
   await expect(dialog).toContainText(
-    'Zapíše sa ako koncept s popisom „Smartmail · …“ – sklad sa nepohne, kým ho v Money nedokončíte. Poplatky 12,00 € sa nezapisujú.',
+    'Zapíše sa ako koncept s popisom „Smartmail · …“ – sklad sa nepohne, kým ho v Money nedokončíte. Poplatky 12,00 € sa rozpočítajú rovnomerne do položiek ako dodatočné náklady.',
   );
   await shot(page, `issue247-W6h-confirm-${info.project.name}`);
   await dialog.getByTestId('w6h-write-confirm').click();

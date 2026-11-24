@@ -243,6 +243,7 @@ class DeliveryNoteCreated(_Model):
     address_empty: bool
     lines: list[DeliveryNoteLineBack]
     reconciled: bool = False
+    side_costs: Decimal = Decimal("0")  # DodatecnePorizovaciNaklady (D34)
 
 
 class ReceivedNoteRow(_Model):

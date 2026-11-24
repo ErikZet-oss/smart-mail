@@ -3,7 +3,8 @@
 - `koncept_checks`: DL-B1 / DL-B5 / DL-B6 (branch values + template) — shown in W6h and re-run at approval.
 - `build_payload`: DOCUMENTS_SPEC §2 + MONEY_API 5.5.7 — `Faze` 0, `Schvaleno` false, Popis „Smartmail · …“,
   header IDs and line values copied from the branch template (never guessed), branch centre on header and items,
-  line warehouse, branch series. Decimals end-to-end (sent as strings), fees never (D14), no negative quantities (D15).
+  line warehouse, branch series. Decimals end-to-end (sent as strings), fees as side costs of the stock lines (D34),
+  no negative quantities (D15).
 - `compare`: read-back vs the payload (lines, quantities, prices, article, warehouse, totals) — a mismatch only shows
   the red banner „Skontrolujte koncept v Money“; Smart Mail never edits or deletes the note (D33).
 """
@@ -15,7 +16,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -140,6 +141,33 @@ class Expected:
     total: Decimal | None = None  # the invoice line total written as `CelkovaCena` (Money derives the unit price)
 
 
+def fee_total(lines: list[DocumentLine]) -> Decimal:
+    """D34: doprava, balné, rozbalné … of the supplier document (line total, else qty × price)."""
+    out = Decimal("0")
+    for ln in lines:
+        if ln.is_fee:
+            amount = ln.line_total
+            if amount is None and ln.qty is not None and ln.unit_price is not None:
+                amount = (ln.qty * ln.unit_price).quantize(Q2, ROUND_HALF_UP)
+            out += amount or Decimal("0")
+    return out
+
+
+def side_costs(lines: list[DocumentLine]) -> Decimal:
+    """D34: the fees written as side costs — only when there is a stock line to carry them."""
+    has_stock = any(not ln.is_fee and ln.line_status != "non_stock" for ln in lines)
+    return fee_total(lines) if has_stock else Decimal("0")
+
+
+def split_evenly(total: Decimal, count: int) -> list[Decimal]:
+    """D34 „rovnomerne podľa počtu položiek“ in cents that add up exactly: 2.50 / 3 → 0.83, 0.83, 0.84."""
+    if count <= 0 or total <= 0:
+        return [Decimal("0")] * max(count, 0)
+    share = (total / count).quantize(Q2, ROUND_DOWN)
+    extra = int((total - share * count) / Q2)  # remaining cents go to the last lines
+    return [share + (Q2 if i >= count - extra else Decimal("0")) for i in range(count)]
+
+
 def build_payload(
     doc: SupplierDocument,
     lines: list[DocumentLine],
@@ -159,9 +187,13 @@ def build_payload(
     items: list[dict[str, Any]] = []
     expected: list[Expected] = []
     order = 0
+    # D34: the fees are side costs of the stock lines, evenly by their number (Money „Náklady“ default)
+    stock_lines = [ln for ln in lines if not ln.is_fee and ln.line_status != "non_stock"]
+    fees = side_costs(lines)
+    shares = dict(zip((ln.line_no for ln in stock_lines), split_evenly(fees, len(stock_lines)), strict=True))
     for ln in lines:
         if ln.is_fee:
-            continue  # D14: fees are never written
+            continue  # D34: a fee is not a line — it is distributed into the stock lines below
         order += 1
         qty = ln.qty if ln.qty is not None else Decimal("0")
         price = ln.unit_price if ln.unit_price is not None else Decimal("0")
@@ -218,6 +250,12 @@ def build_payload(
                     item[key] = str(tline[key])
             if tline.get("DruhSazbyDPH") is not None:
                 item["DruhSazbyDPH"] = int(tline["DruhSazbyDPH"])
+            share = shares.get(ln.line_no, Decimal("0"))
+            if share > 0 and qty_our > 0:  # D34, PROD probe 302600973: the per-unit values only when sent
+                value = total if total is not None else (qty_our * price_our).quantize(Q2, ROUND_HALF_UP)
+                item["CelkoveVedlejsiNaklady"] = _dec_str(share)
+                item["JednotkoveVedlejsiNaklady"] = _dec_str((share / qty_our).quantize(Q4, ROUND_HALF_UP))
+                item["JednotkovaPorizovaciCena"] = _dec_str(((value + share) / qty_our).quantize(Q4, ROUND_HALF_UP))
             expected.append(Expected(order, qty_our, price_our, str(ln.article_id), warehouse, total))
         items.append({k: v for k, v in item.items() if v is not None})
     issued: date = today if issue_on_approval or doc.doc_date is None else doc.doc_date
@@ -243,6 +281,7 @@ def build_payload(
         "Faze": 0,
         "Schvaleno": False,
         "Polozky": items,
+        "DodatecnePorizovaciNaklady": _dec_str(fees) if fees > 0 else None,  # D34
     }
     assert all(i["Stredisko_ID"] == body["Stredisko_ID"] for i in items)  # DL-B9 (internal, never fires)
     return {k: v for k, v in body.items() if v is not None}, expected
@@ -256,7 +295,9 @@ def payload_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(body_bytes(payload)).hexdigest()
 
 
-def compare(expected: list[Expected], back: DeliveryNoteCreated) -> list[dict[str, Any]]:
+def compare(
+    expected: list[Expected], back: DeliveryNoteCreated, side_costs: Decimal = Decimal("0")
+) -> list[dict[str, Any]]:
     """Read-back vs what was sent. Empty list = the koncept in Money is what the person approved."""
     out: list[dict[str, Any]] = []
     if back.faze != 0 or back.schvaleno is not False:
@@ -278,6 +319,8 @@ def compare(expected: list[Expected], back: DeliveryNoteCreated) -> list[dict[st
         (e.total if e.total is not None else (e.qty * e.unit_price).quantize(Q2, ROUND_HALF_UP) for e in expected),
         Decimal("0"),
     )
+    if abs(side_costs - back.side_costs) > TOLERANCE:  # D34
+        out.append({"field": "side_costs", "expected": str(side_costs), "got": str(back.side_costs)})
     if abs(total - back.total_base) > TOLERANCE:
         out.append({"field": "total", "expected": str(total), "got": str(back.total_base)})
     return out

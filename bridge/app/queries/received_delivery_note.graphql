@@ -1,7 +1,7 @@
 query ReceivedDeliveryNote($id: ID!) {
   ReceivedDeliveryNote(ID: $id) {
     ID Deleted CisloDokladu Nazev Odkaz Poznamka Faze Schvaleno Group_ID Firma_ID Stredisko_ID CiselnaRada_ID
-    AdresaNazev AdresaUlice AdresaMisto AdresaPSC IC DIC ICDPH SumaZaklad CelkovaCastka
+    AdresaNazev AdresaUlice AdresaMisto AdresaPSC IC DIC ICDPH SumaZaklad CelkovaCastka DodatecnePorizovaciNaklady
     Polozky {
       ID CisloPolozky Poradi Mnozstvi JednCena TypObsahu Stredisko_ID
       ObsahPolozky { Artikl_ID Sklad_ID }

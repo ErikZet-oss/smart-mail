@@ -367,7 +367,7 @@ focus ring, radius 6), but density is Money-like: field height 28 px, grid row 2
 required labels bold (Predkontácia), read-only fields `bg/subtle` grey like in Money. Components `MoneyCardHeader`,
 `MoneyField`, `MoneySeriesBox`, `MoneyVatRecap`, `MoneyGrid`, `MoneyToolbar` (FIGMA.md). Row click opens the line
 matching drawer described above. Sklad. pohybu / Účt. prípadu are grey "pri zápise do Money" until created (D13); tab
-Poplatky is read-only information (D14); Vratka is never checked (D15).
+Poplatky is read-only information; the fees become side costs at the write (D34); Vratka is never checked (D15).
 
 ### W7 Doklady — Ponuky (editor)
 Header: zákazník (combobox from Money), kontakt, Dátum vystavenia, Dátum platnosti od / do, mena; číslo pridelí
