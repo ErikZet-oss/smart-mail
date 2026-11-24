@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Search, X } from 'lucide-react';
+import { Search, Table, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,7 +16,8 @@ import {
   type DocLine,
   type DocumentDetail,
 } from './purchasingApi';
-import { NewArticleForm } from './NewArticleForm';
+import { CatalogWindow } from './CatalogWindow';
+import { NewArticleForm, type Parent } from './NewArticleForm';
 
 type Pick = { article_id: string; name: string; catalog: string | null; unit: string | null; kind: ArticleKind };
 
@@ -76,6 +77,10 @@ export function LineDrawer({
   const [view, setView] = useState<'pick' | 'new'>(
     canCreate && line.new_article?.status === 'partial' ? 'new' : 'pick',
   );
+  // W6h Katalóg (Figma 264:91756): the bigger search window; its pick joins the options, its „Založiť …“ opens the form
+  const [catalog, setCatalog] = useState(false);
+  const [fromCatalog, setFromCatalog] = useState<Pick | null>(null);
+  const [newInitial, setNewInitial] = useState<{ mode: 'main' | 'variant'; parent?: Parent } | undefined>();
   const found = useQuery({
     queryKey: ['purchasing', 'articles', q.trim()],
     queryFn: () => searchArticles(q.trim()),
@@ -111,6 +116,7 @@ export function LineDrawer({
   const factorOk = /^\d+([.,]\d{1,6})?$/.test(factor) && Number(factor.replace(',', '.')) > 0;
   const qtyOur = line.qty && factorOk ? mulDec(line.qty, factor.replace(',', '.')) : null;
   const options: Pick[] = [
+    ...(fromCatalog ? [fromCatalog] : []),
     ...(current ? [current] : []),
     ...line.candidates.map(toPick).filter((c) => c.article_id !== current?.article_id),
     ...(found.data ?? [])
@@ -160,6 +166,7 @@ export function LineDrawer({
           <NewArticleForm
             doc={doc}
             line={line}
+            initial={newInitial}
             onBack={() => setView('pick')}
             onCancel={onClose}
             onDocument={(d) => onDocument?.(d)}
@@ -197,17 +204,23 @@ export function LineDrawer({
               </section>
               <fieldset className="flex flex-col gap-2">
                 <legend className="type-label mb-2 text-text-primary">{t('w6h.drawer.article')}</legend>
-                <label className="relative">
-                  <Search size={16} aria-hidden="true" className="absolute left-3 top-2.5 text-text-tertiary" />
-                  <input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    placeholder={t('w6h.drawer.search')}
-                    aria-label={t('w6h.drawer.search')}
-                    data-testid="w6h-article-search"
-                    className="type-body h-9 w-full rounded-md bg-bg-muted pl-9 pr-3 placeholder:text-text-tertiary"
-                  />
-                </label>
+                <div className="flex items-center gap-2">
+                  <label className="relative min-w-0 flex-1">
+                    <Search size={16} aria-hidden="true" className="absolute left-3 top-2.5 text-text-tertiary" />
+                    <input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder={t('w6h.drawer.search')}
+                      aria-label={t('w6h.drawer.search')}
+                      data-testid="w6h-article-search"
+                      className="type-body h-9 w-full rounded-md bg-bg-muted pl-9 pr-3 placeholder:text-text-tertiary"
+                    />
+                  </label>
+                  <Button variant="secondary" onClick={() => setCatalog(true)} data-testid="w6h-open-catalog">
+                    <Table size={16} aria-hidden="true" />
+                    {t('w6h.catalog.open')}
+                  </Button>
+                </div>
                 {found.isError ? <p className="type-caption text-danger-600">{t('w6h.errors.search')}</p> : null}
                 {q.trim().length >= 2 && found.isSuccess && found.data.length === 0 ? (
                   <p className="type-caption text-text-secondary">{t('w6h.drawer.noResults')}</p>
@@ -355,6 +368,35 @@ export function LineDrawer({
           </>
         )}
       </div>
+      {catalog ? (
+        <CatalogWindow
+          doc={doc}
+          initialQuery={q.trim() || (current?.catalog ?? '')}
+          initialWarehouse={warehouse || doc.warehouses.find((w) => w.code === doc.warehouse_code)?.id || null}
+          mobile={sheet}
+          canCreate={canCreate}
+          onClose={() => setCatalog(false)}
+          onPick={(p) => {
+            const chosen: Pick = { article_id: p.id, name: p.name, catalog: p.catalog, unit: p.unit, kind: p.kind };
+            setFromCatalog(chosen);
+            setPick(chosen);
+            setCatalog(false);
+          }}
+          onCreateVariant={(m) => {
+            setNewInitial({
+              mode: 'variant',
+              parent: { kind: 'existing', id: m.id, name: m.name, catalog: m.catalog },
+            });
+            setCatalog(false);
+            setView('new');
+          }}
+          onCreateMain={() => {
+            setNewInitial({ mode: 'main' });
+            setCatalog(false);
+            setView('new');
+          }}
+        />
+      ) : null}
     </div>
   );
 }

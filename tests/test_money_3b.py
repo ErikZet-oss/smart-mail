@@ -67,6 +67,11 @@ def test_3b_contract_fixture_parses_with_the_app_models() -> None:
     from app.money.schemas import Article, SupplierCodePage
 
     assert [Article.model_validate(a).catalog for a in data["articles"]] == ["934-10-A2"]
+    from app.money.schemas import ArticleCatalogInfo
+
+    assert [Article.model_validate(a).plu for a in data["catalog_articles"]] == ["var_m0100", "var_m0100"]
+    info = [ArticleCatalogInfo.model_validate(r) for r in data["catalog_info"]]
+    assert len(info) == 2 and all(len(i.stocks) == 2 for i in info)
     assert SupplierCodePage.model_validate(data["supplier_codes"]).items
     # #239 article creation (D32)
     from app.money.schemas import ArticleCreated, CatalogFree

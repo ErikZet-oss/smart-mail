@@ -20,7 +20,7 @@ import {
 } from './purchasingApi';
 import { sizeOf, withoutSize } from './newArticleText';
 
-type Parent = { kind: 'existing'; id: string; name: string; catalog: string } | { kind: 'new' };
+export type Parent = { kind: 'existing'; id: string; name: string; catalog: string } | { kind: 'new' };
 type Check = 'idle' | 'checking' | 'free' | 'taken' | 'error';
 
 const UNSAFE = /[~#|()]/;
@@ -120,6 +120,7 @@ export function NewArticleForm({
   onCancel,
   onDocument,
   onCreated,
+  initial,
 }: {
   doc: DocumentDetail;
   line: DocLine;
@@ -127,12 +128,14 @@ export function NewArticleForm({
   onCancel: () => void;
   onDocument: (d: DocumentDetail) => void;
   onCreated: (r: NewArticleResult) => void;
+  /** W6h Katalóg: „Založiť variant k …“ opens with that main card, „Nová hlavná karta“ in the main-card mode. */
+  initial?: { mode: 'main' | 'variant'; parent?: Parent };
 }) {
   const { t } = useTranslation();
   const toasts = useToasts();
   const partial = line.new_article?.status === 'partial' && line.new_article.main ? line.new_article : null;
-  const [mode, setMode] = useState<'main' | 'variant'>(partial ? 'variant' : 'main');
-  const [parent, setParent] = useState<Parent | null>(partial ? { kind: 'new' } : null);
+  const [mode, setMode] = useState<'main' | 'variant'>(partial ? 'variant' : (initial?.mode ?? 'main'));
+  const [parent, setParent] = useState<Parent | null>(partial ? { kind: 'new' } : (initial?.parent ?? null));
   const [mainName, setMainName] = useState(partial?.main?.nazev ?? withoutSize(line.name));
   const [mainCatalog, setMainCatalog] = useState(partial?.main?.katalog ?? '');
   const [name, setName] = useState(line.name);

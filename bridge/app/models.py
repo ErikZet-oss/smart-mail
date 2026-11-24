@@ -227,6 +227,30 @@ class Article(_Model):
     units: list[ArticleUnit] = []
     inactive: bool = False
     parent_id: uuid.UUID | None = None  # NadrazenyArtikl_ID — a variant points to its main card (#233)
+    plu: str | None = None  # PLU — Money groups the variants of a main card by it (W6h Katalóg, pilot 2026-11-24)
+    last_price: Decimal | None = None  # PosledniCena — „Posledná nákupná cena“ of the catalog
+
+
+class WarehouseStockRow(_Model):
+    """`WarehouseStocks` row of one article in one warehouse (W6h Katalóg „Zásoby“, information only — D18)."""
+
+    warehouse_id: uuid.UUID
+    code: str | None  # Sklad.Kod
+    name: str | None  # Sklad.Nazev
+    qty: Decimal  # AktualniStav.ZustatekMnozstvi — „Aktuálne množstvo“
+    reserved: Decimal  # Rezervovano
+    ordered: Decimal  # Objednano
+    expected: Decimal  # PredpokladaneMnozstvi
+    available: Decimal  # DostupneMnozstvi
+    unit_price: Decimal | None  # AktualniStav.ZustatekJednotkaCena — „Aktuálna skladová cena“
+
+
+class ArticleCatalogInfo(_Model):
+    """W6h Katalóg: e-shop flag (`EShopArticles`) and stock per warehouse of one article — read only."""
+
+    article_id: uuid.UUID
+    eshop: bool
+    stocks: list[WarehouseStockRow]
 
 
 class SupplierCode(_Model):

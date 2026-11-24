@@ -1,0 +1,5 @@
+query EShopArticles($filter: String, $from: Int, $count: Int) {
+  EShopArticles(Filter: $filter, From: $from, Count: $count) {
+    ID Deleted Artikl_ID
+  }
+}

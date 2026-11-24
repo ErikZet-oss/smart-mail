@@ -24,6 +24,7 @@ from app.money.schemas import (
     Activity,
     ActivityOut,
     Article,
+    ArticleCatalogInfo,
     ArticleCreated,
     CatalogFree,
     CodebookName,
@@ -215,10 +216,14 @@ class BridgeClient:
     # ----- Phase 4b (read-only): item matching -----
 
     async def search_articles(
-        self, *, code: str | None = None, ean: str | None = None, q: str | None = None
+        self, *, code: str | None = None, ean: str | None = None, q: str | None = None, limit: int | None = None
     ) -> list[Article]:
-        """A value with `~ # | ( )` answers 422 in the bridge → `bridge_422` (never a broken filter)."""
-        return await self._list(Article, "/articles/search", {"code": code, "ean": ean, "q": q})
+        """A value with `~ # | ( )` answers 422 in the bridge → `bridge_422` (never a broken filter). `limit` (≤ 100)
+        only for the W6h Katalóg text search — an old bridge ignores it."""
+        params: dict[str, Any] = {"code": code, "ean": ean, "q": q}
+        if limit is not None:
+            params["limit"] = limit
+        return await self._list(Article, "/articles/search", params)
 
     async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]:
         """#233 variants of up to 10 main cards (`NadrazenyArtikl_ID`) in one bridge call."""
@@ -229,6 +234,14 @@ class BridgeClient:
             return {uuid.UUID(k): [Article.model_validate(a) for a in v] for k, v in (data or {}).items()}
         except (ValidationError, ValueError, TypeError, AttributeError) as exc:
             raise BridgeUnavailable("bridge_contract") from exc
+
+    async def catalog_info(self, article_ids: list[uuid.UUID]) -> list[ArticleCatalogInfo]:
+        """W6h Katalóg: e-shop flag + stock per warehouse of up to 100 articles (read only)."""
+        if not article_ids:
+            return []
+        return await self._list(
+            ArticleCatalogInfo, "/articles/catalog-info", {"id": [str(a) for a in article_ids[:100]]}
+        )
 
     async def article(self, article_id: uuid.UUID) -> Article | None:
         data = await self._get(f"/articles/{article_id}", allow_404=True)

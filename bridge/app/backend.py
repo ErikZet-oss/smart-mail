@@ -12,6 +12,7 @@ from app.models import (
     ActivityIn,
     ActivityOut,
     Article,
+    ArticleCatalogInfo,
     ArticleCreated,
     ArticleCreateIn,
     CodebookName,
@@ -99,6 +100,7 @@ class ArticleQuery:
     code: str | None = None  # Kod or Katalog, exact
     ean: str | None = None  # CarovyKod, exact
     text: str | None = None  # Nazev / Katalog contains (manual search)
+    limit: int | None = None  # rows of a text search (W6h Katalóg asks for up to 100; default 20 / 50 with `%`)
 
 
 class MoneyBackend(Protocol):
@@ -142,6 +144,8 @@ class MoneyBackend(Protocol):
     async def article(self, article_id: uuid.UUID) -> Article | None: ...
 
     async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]: ...
+
+    async def catalog_info(self, article_ids: list[uuid.UUID]) -> list[ArticleCatalogInfo]: ...
 
     async def article_by_catalog(self, katalog: str) -> Article | None: ...
 

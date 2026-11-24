@@ -292,7 +292,95 @@
         }
       ],
       "inactive": false,
-      "parent_id": null
+      "parent_id": null,
+      "plu": null,
+      "last_price": null
+    }
+  ],
+  "catalog_articles": [
+    {
+      "id": "4b582b7f-d37f-5758-a273-4ccd155aa7a0",
+      "code": "ART-0100",
+      "catalog": "9990100",
+      "name": "Vrut fiktívny (hlavná)",
+      "ean": null,
+      "unit": "ks",
+      "units": [],
+      "inactive": false,
+      "parent_id": null,
+      "plu": "var_m0100",
+      "last_price": null
+    },
+    {
+      "id": "ad33ef16-3ce9-5d05-a262-208606269612",
+      "code": "ART-0100-0006",
+      "catalog": "99901000006",
+      "name": "Vrut fiktívny 6 mm",
+      "ean": null,
+      "unit": "ks",
+      "units": [],
+      "inactive": false,
+      "parent_id": "4b582b7f-d37f-5758-a273-4ccd155aa7a0",
+      "plu": "var_m0100",
+      "last_price": "0.0412"
+    }
+  ],
+  "catalog_info": [
+    {
+      "article_id": "4b582b7f-d37f-5758-a273-4ccd155aa7a0",
+      "eshop": false,
+      "stocks": [
+        {
+          "warehouse_id": "def9c976-e5d4-5657-8860-ca2585546386",
+          "code": "SKL-A",
+          "name": "Sklad A (fiktívny)",
+          "qty": "12",
+          "reserved": "0",
+          "ordered": "0",
+          "expected": "12",
+          "available": "12",
+          "unit_price": "0.0840"
+        },
+        {
+          "warehouse_id": "01ac42bd-74e4-5718-a70d-06810bd9e76b",
+          "code": "SKL-B",
+          "name": "Sklad B (fiktívny)",
+          "qty": "2",
+          "reserved": "0",
+          "ordered": "0",
+          "expected": "2",
+          "available": "2",
+          "unit_price": "0.0840"
+        }
+      ]
+    },
+    {
+      "article_id": "ad33ef16-3ce9-5d05-a262-208606269612",
+      "eshop": false,
+      "stocks": [
+        {
+          "warehouse_id": "def9c976-e5d4-5657-8860-ca2585546386",
+          "code": "SKL-A",
+          "name": "Sklad A (fiktívny)",
+          "qty": "18",
+          "reserved": "0",
+          "ordered": "0",
+          "expected": "18",
+          "available": "18",
+          "unit_price": "0.0840"
+        },
+        {
+          "warehouse_id": "01ac42bd-74e4-5718-a70d-06810bd9e76b",
+          "code": "SKL-B",
+          "name": "Sklad B (fiktívny)",
+          "qty": "2",
+          "reserved": "0",
+          "ordered": "0",
+          "expected": "2",
+          "available": "2",
+          "unit_price": "0.0840"
+        }
+      ]
     }
   ],
   "supplier_codes": {

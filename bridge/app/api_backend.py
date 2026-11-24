@@ -37,6 +37,7 @@ from app.models import (
     ActivityIn,
     ActivityOut,
     Article,
+    ArticleCatalogInfo,
     ArticleCreated,
     ArticleCreateIn,
     ArticleUnit,
@@ -65,6 +66,7 @@ from app.models import (
     ReceivedNoteRow,
     SupplierCode,
     SupplierCodePage,
+    WarehouseStockRow,
 )
 
 CODEBOOK_QUERIES: dict[str, tuple[str, str]] = {
@@ -80,6 +82,8 @@ LATEST_DELIVERY_DAYS = 400
 VARIANT_LIMIT = 300  # #233: variants of up to 10 main cards in one GraphQL call
 SEARCH_LIMIT = 20
 ARTICLE_LIMIT = 20
+CATALOG_INFO_MAX = 100  # W6h Katalóg: articles per catalog-info call
+STOCK_LIMIT = 1000  # WarehouseStocks / EShopArticles rows for up to 100 articles (a few warehouses / e-shops each)
 WILDCARD_SCAN = 300  # `%` search: rows read from Money for the AND of the pieces, then filtered by their order
 WILDCARD_LIMIT = 50
 HISTORY_LIMIT = 200
@@ -265,6 +269,27 @@ def article_from(raw: dict[str, Any]) -> Article:
         units=units,
         inactive=raw.get("Hidden") is True,
         parent_id=_uuid(raw.get("NadrazenyArtikl_ID")),
+        plu=_s(raw.get("PLU")),
+        last_price=_dec(raw["PosledniCena"]) if raw.get("PosledniCena") is not None else None,
+    )
+
+
+def stock_row_from(raw: dict[str, Any]) -> WarehouseStockRow | None:
+    warehouse = _uuid(raw.get("Sklad_ID"))
+    if warehouse is None:
+        return None
+    sklad, state = _obj(raw.get("Sklad")), _obj(raw.get("AktualniStav"))
+    price = state.get("ZustatekJednotkaCena")
+    return WarehouseStockRow(
+        warehouse_id=warehouse,
+        code=_s(sklad.get("Kod")),
+        name=_s(sklad.get("Nazev")),
+        qty=_dec(state.get("ZustatekMnozstvi")),
+        reserved=_dec(raw.get("Rezervovano")),
+        ordered=_dec(raw.get("Objednano")),
+        expected=_dec(raw.get("PredpokladaneMnozstvi")),
+        available=_dec(raw.get("DostupneMnozstvi")),
+        unit_price=_dec(price) if price is not None else None,
     )
 
 
@@ -495,6 +520,15 @@ class ApiBackend:
         raw = await self._raw(query, root, variables)
         return _alive(raw), (start + len(raw) if len(raw) == count else None)
 
+    async def _all(self, query: str, root: str, filter_: str) -> list[dict[str, Any]]:
+        """Every page of a filtered read, at most `STOCK_LIMIT` rows (the catalog asks for ≤ 100 articles)."""
+        out: list[dict[str, Any]] = []
+        start: int | None = 0
+        while start is not None and start < STOCK_LIMIT:
+            rows, start = await self._page_rows(query, root, filter_=filter_, start=start, count=self._page)
+            out.extend(rows)
+        return out
+
     async def version(self) -> str:
         return str((await self._money.graphql("version")).get("Version") or "")
 
@@ -656,13 +690,36 @@ class ApiBackend:
             filter_ = all_(*(cond("Nazev", "ct", p) for p in dict.fromkeys(pieces)))
             rows = await self._list("articles", "Articles", filter_=filter_, count=WILDCARD_SCAN)
             found = [a for a in (article_from(r) for r in rows) if wildcard.in_order(a.name, pieces)]
-            return found[:WILDCARD_LIMIT]
+            return found[: query.limit or WILDCARD_LIMIT]
         elif query.text:
             filter_ = any_(cond("Nazev", "ct", query.text), cond("Katalog", "ct", query.text))
         else:
             return []
-        rows = await self._list("articles", "Articles", filter_=filter_, count=ARTICLE_LIMIT)
+        rows = await self._list("articles", "Articles", filter_=filter_, count=query.limit or ARTICLE_LIMIT)
         return [article_from(r) for r in rows]
+
+    async def catalog_info(self, article_ids: list[uuid.UUID]) -> list[ArticleCatalogInfo]:
+        """W6h Katalóg: stock per warehouse (`WarehouseStocks`) and the e-shop flag (`EShopArticles`) of up to
+        `CATALOG_INFO_MAX` articles — two reads with an OR of the article ids, read only (D18)."""
+        if not article_ids:
+            return []
+        ids = list(dict.fromkeys(article_ids))
+        filter_ = any_(*(cond("Artikl_ID", "eq", a) for a in ids))
+        stock_rows = await self._all("warehouse_stocks", "WarehouseStocks", filter_)
+        eshop_rows = await self._all("eshop_articles", "EShopArticles", filter_)
+        eshop = {_uuid(r.get("Artikl_ID")) for r in eshop_rows}
+        stocks: dict[uuid.UUID, list[WarehouseStockRow]] = {a: [] for a in ids}
+        for r in stock_rows:
+            article = _uuid(r.get("Artikl_ID"))
+            row = stock_row_from(r)
+            if article in stocks and row is not None:
+                stocks[article].append(row)
+        return [
+            ArticleCatalogInfo(
+                article_id=a, eshop=a in eshop, stocks=sorted(stocks[a], key=lambda s: (s.code or "", s.name or ""))
+            )
+            for a in ids
+        ]
 
     async def article_variants(self, parent_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Article]]:
         """#233 variants of up to 10 main cards in one call: `(NadrazenyArtikl_ID~eq~A)|(NadrazenyArtikl_ID~eq~B)`.

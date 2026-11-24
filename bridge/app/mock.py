@@ -20,6 +20,7 @@ from app.models import (
     ActivityIn,
     ActivityOut,
     Article,
+    ArticleCatalogInfo,
     ArticleCreated,
     ArticleCreateIn,
     ArticleUnit,
@@ -47,6 +48,7 @@ from app.models import (
     ReceivedNoteRow,
     SupplierCode,
     SupplierCodePage,
+    WarehouseStockRow,
 )
 
 NS = uuid.UUID("5a1d0b5e-0000-4000-8000-000000000000")
@@ -271,7 +273,13 @@ _ARTICLES = [
 def _variants(data: MockData) -> None:
     """#233 a fictional main card with three size variants (catalog = main catalog + size suffix)."""
     main = Article(
-        id=mid("article", 100), code="ART-0100", catalog="9990100", name="Vrut fiktívny (hlavná)", ean=None, unit="ks"
+        id=mid("article", 100),
+        code="ART-0100",
+        catalog="9990100",
+        name="Vrut fiktívny (hlavná)",
+        ean=None,
+        unit="ks",
+        plu="var_m0100",
     )
     data.articles.append(main)
     for n, size in enumerate(("0006", "0010", "0016"), start=1):
@@ -284,6 +292,8 @@ def _variants(data: MockData) -> None:
                 ean=None,
                 unit="ks",
                 parent_id=main.id,
+                plu="var_m0100",
+                last_price=Decimal("0.0412") * n,
             )
         )
 
@@ -594,6 +604,31 @@ class MockBackend:
 
     async def article(self, article_id: uuid.UUID) -> Article | None:
         return next((a for a in self.data.articles if a.id == article_id), None)
+
+    async def catalog_info(self, article_ids: list[uuid.UUID]) -> list[ArticleCatalogInfo]:
+        """Fictional, deterministic: every article is in both mock warehouses; odd articles are in the e-shop."""
+        out: list[ArticleCatalogInfo] = []
+        warehouses = self.data.codebooks["warehouses"]
+        for a in dict.fromkeys(article_ids):
+            if not any(x.id == a for x in self.data.articles):
+                continue
+            seed = int(a.hex[-4:], 16)
+            stocks = [
+                WarehouseStockRow(
+                    warehouse_id=w.id,
+                    code=w.code,
+                    name=w.name,
+                    qty=Decimal(seed % 50 if i == 0 else seed % 7),
+                    reserved=Decimal(seed % 3 if i == 0 else 0),
+                    ordered=Decimal(0),
+                    expected=Decimal(seed % 50 - seed % 3 if i == 0 else seed % 7),
+                    available=Decimal(seed % 50 - seed % 3 if i == 0 else seed % 7),
+                    unit_price=Decimal("0.0840"),
+                )
+                for i, w in enumerate(warehouses)
+            ]
+            out.append(ArticleCatalogInfo(article_id=a, eshop=seed % 2 == 1, stocks=stocks))
+        return out
 
     async def all_supplier_codes(self, since: datetime | None, start: int, count: int) -> SupplierCodePage:
         rows = self.data.supplier_codes  # the mock has no change dates: a delta returns everything (idempotent)

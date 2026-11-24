@@ -320,3 +320,115 @@ test('#233 W6h: main card is never selectable, its variants are italic and picka
   await expect(drawer).toHaveCount(0);
   expect(sent).toMatchObject({ article_id: 'v-10' });
 });
+
+// W6h Katalóg (Erik 24 Nov 2026, Figma 264:91756 / 265:99286): bigger search, stock per warehouse, pick → drawer
+const stock = (wh: string, code: string, name: string, qty: string) => ({
+  warehouse_id: wh,
+  code,
+  name,
+  qty,
+  reserved: '0',
+  ordered: '0',
+  expected: qty,
+  available: qty,
+  unit_price: '1.642',
+});
+const catRow = (id: string, kind: string, catalog: string, name: string, extra: Record<string, unknown> = {}) => ({
+  id,
+  code: null,
+  catalog,
+  name,
+  ean: null,
+  unit: 'ks',
+  inactive: false,
+  kind,
+  parent_id: kind === 'variant' ? 'a-main' : null,
+  plu: kind === 'article' ? null : 'var_a0310',
+  last_price: kind === 'main' ? null : '1.65',
+  eshop: kind !== 'article',
+  stocks: kind === 'main' ? [] : [stock('w-20', '20', 'Senica', '18'), stock('w-99', '99', 'Externý sklad', '6')],
+  ...extra,
+});
+const CATALOG = [
+  catRow('a-main', 'main', '9990001', 'Tyč závitová DIN 976 4.8 ZN 2m'),
+  catRow('v-8', 'variant', '999000100008', 'tyč záv. M8×2000 4.8 ZN'),
+  catRow('v-10', 'variant', '999000100010', 'tyč záv. M10×2000 4.8 ZN'),
+  catRow('a-a4', 'article', '309009100010', 'tyc zav. M10 A4-70'),
+];
+
+test('W6h Katalóg: search, stock per warehouse, columns, pick a variant into the line @mobile', async ({
+  page,
+}, info) => {
+  const mobile = info.project.name !== 'desktop';
+  let sent: Record<string, unknown> | null = null;
+  const queries: string[] = [];
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': { body: { ...detail([line(1, {}), ON_MAIN]), can_create_article: true } },
+    'GET /api/purchasing/catalog': () => ({ body: CATALOG }),
+    'POST /api/purchasing/documents/d-1/lines/10/article': (body) => {
+      sent = body as Record<string, unknown>;
+      return { body: detail([line(1, {}), { ...ON_MAIN, line_status: 'matched', candidates: [] }], 'needs_review', 4) };
+    },
+  });
+  page.on('request', (r) => {
+    if (r.url().includes('/api/purchasing/catalog')) queries.push(new URL(r.url()).searchParams.get('q') ?? '');
+  });
+  await page.goto('/docs/delivery-notes/d-1');
+  if (mobile) await page.getByTestId('m13b-line-10').click();
+  else await page.getByTestId('w6h-line-10').dblclick();
+  await page.getByTestId('w6h-open-catalog').click();
+  const win = page.getByTestId('w6h-catalog');
+  await expect(win).toBeVisible();
+  await win.getByTestId('w6h-catalog-search').fill('%tyč%M10%');
+  await expect(win.getByTestId('w6h-catalog-status')).toHaveText('4 položky');
+  await expect.poll(() => queries.at(-1)).toBe('%tyč%M10%');
+  await expect(win.getByTestId('w6h-catalog-pick')).toBeDisabled();
+  await win.getByTestId('w6h-catalog-row-main').click();
+  await expect(win.getByTestId('w6h-catalog-pick')).toBeDisabled(); // DL-B11: never the main card
+  await expect(win.getByTestId('w6h-catalog-new-variant')).toHaveText(
+    'Založiť variant k „Tyč závitová DIN 976 4.8 ZN 2m“',
+  );
+  await win.getByTestId('w6h-catalog-row-variant').nth(1).click();
+  await expect(win.getByTestId('w6h-catalog-stock')).toContainText('Zásoby · tyč záv. M10×2000 4.8 ZN');
+  if (!mobile) {
+    await expect(win.getByTestId('w6h-catalog-stock')).toContainText('99 – Externý sklad');
+    await expect(win.getByRole('columnheader', { name: 'Zásoba 20 – Senica' })).toBeVisible();
+    await expect(win.getByTestId('w6h-catalog-row-variant').nth(1)).toContainText('18,0000');
+    await shot(page, 'w6h-catalog-desktop');
+    // the column chooser like in Money: add „Čiarový kód (EAN)“
+    await win.getByTestId('w6h-catalog-columns').click();
+    const chooser = page.getByTestId('w6h-catalog-chooser');
+    await chooser.getByTestId('w6h-chooser-hidden').getByText('Čiarový kód (EAN)').dblclick();
+    await chooser.getByTestId('w6h-chooser-ok').click();
+    await expect(win.getByRole('columnheader', { name: 'Čiarový kód' })).toBeVisible();
+  } else {
+    await expect(win.getByTestId('w6h-catalog-stock')).toContainText('20 – Senica: 18');
+    await shot(page, 'w6h-catalog-mobile');
+  }
+  await win.getByTestId('w6h-catalog-pick').click();
+  await expect(win).toHaveCount(0);
+  const drawer = page.getByTestId('w6h-drawer');
+  await expect(drawer.getByTestId('w6h-article-list')).toContainText('tyč záv. M10×2000 4.8 ZN');
+  await drawer.getByTestId('w6h-apply').click();
+  await expect.poll(() => sent?.article_id).toBe('v-10');
+});
+
+test('W6h Katalóg: „Založiť variant k …“ opens the new-article form with that main card', async ({ page }) => {
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': { body: { ...detail([line(1, {}), ON_MAIN]), can_create_article: true } },
+    'GET /api/purchasing/catalog': { body: CATALOG },
+  });
+  await page.goto('/docs/delivery-notes/d-1');
+  await page.getByTestId('w6h-line-10').dblclick();
+  await page.getByTestId('w6h-open-catalog').click();
+  const win = page.getByTestId('w6h-catalog');
+  await win.getByTestId('w6h-catalog-search').fill('9990001');
+  await win.getByTestId('w6h-catalog-row-main').click();
+  await win.getByTestId('w6h-catalog-new-variant').click();
+  await expect(win).toHaveCount(0);
+  const drawer = page.getByTestId('w6h-drawer');
+  await expect(drawer).toContainText('Tyč závitová DIN 976 4.8 ZN 2m');
+  await expect(drawer.getByRole('heading')).toHaveText('Riadok 10 · nový artikel v Money');
+});
