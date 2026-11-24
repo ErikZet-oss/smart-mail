@@ -54,6 +54,11 @@ Purpose
   C = 3 pcs + total 10.00 (no unit price), D = 3 pcs + unit price 3.333333. Reads back the unit price and the line
   total Money stored. Type ZALOZIT; delete the note in Money afterwards. -> probe_output/dl_koncept_write.md
 
+  With --dl-cost-test (WRITES, Erik 2026-11-24) TWO koncepts with 3 lines (10/20/30 pcs, totals 10/20/30) and side
+  costs 2.50 (doprava, balné …): X = only the header `DodatecnePorizovaciNaklady` 2.50, Y = header 2.50 + every line
+  `CelkoveVedlejsiNaklady` (0.83 / 0.83 / 0.84 — evenly by the number of lines, like Money's „Náklady“). Reads back
+  how Money distributed them. Type ZALOZIT twice; delete both notes in Money afterwards.
+
   With --phase4 (read-only) it lists which fields existing CRM activities fill (#189: the first test write copies
   them) and checks the branch price lists (PROBE_PRICE_LISTS = codes set in Settings 11e, else every active list with
   a default warehouse) via PriceListItems, the company discount / price-list
@@ -123,6 +128,7 @@ import ssl
 import sys
 import time
 import urllib.error
+import uuid
 import urllib.parse
 import urllib.request
 
@@ -1737,7 +1743,15 @@ PRICE_TEST_LINES = (
 PRICE_READ = "ID CisloDokladu Faze Schvaleno SumaZaklad Polozky { Poradi Nazev Mnozstvi JednCena CelkovaCena DphZaklad }"
 
 
-def dl_koncept_write_test(http, template_number, price_test=False):
+COST_TEST_LINES = ((10, 10.00), (20, 20.00), (30, 30.00))
+COST_TEST_SPLIT = (0.83, 0.83, 0.84)  # 2.50 evenly by the number of lines, cents adding up exactly
+COST_READ = ("ID CisloDokladu DodatecnePorizovaciNaklady CelkovaPorizovaciCena SumaZaklad Polozky { Poradi Mnozstvi "
+             "CelkovaCena CelkoveVedlejsiNaklady JednotkoveVedlejsiNaklady JednotkovaPorizovaciCena CelkovaPorizovaciCena }")
+
+
+def dl_koncept_write_test(http, template_number, price_test=False, variant=None):
+    variant = variant or ("price" if price_test else None)
+    price_test = variant == "price"
     out = dl_koncept_report["steps"]
     if not template_number:
         return step("dl koncept write test", None, note="PROBE_DL_KONCEPT_NUMBER not set (the koncept made in Money)")
@@ -1752,7 +1766,7 @@ def dl_koncept_write_test(http, template_number, price_test=False):
     if tpl.get("Faze") != 0 or tpl.get("Schvaleno") is not False:
         out["refused"] = "the template is not a koncept (Faze 0, Schvaleno false)"
         return step("dl koncept write test", None, note=out["refused"])
-    smid = "PROBE-DLK-" + dt.datetime.now().strftime("%Y%m%d%H%M%S")
+    smid = "PROBE-DLK-" + dt.datetime.now().strftime("%Y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:6]  # 2 notes / run
     line = items[0]
     item = {"ObsahPolozky": {"Artikl_ID": content["Artikl_ID"], "Sklad_ID": content["Sklad_ID"]}, "Mnozstvi": 1}
     # TypObsahu (1 = article line on the koncept): without it Money stored a text line without article / warehouse
@@ -1766,7 +1780,18 @@ def dl_koncept_write_test(http, template_number, price_test=False):
         base_item = {k: v for k, v in item.items() if k not in ("JednCena", "Mnozstvi")}
         polozky = [{**base_item, "Poradi": n, "Nazev": f"SMPROBE {label}", **vals}
                    for n, (label, vals) in enumerate(PRICE_TEST_LINES, start=1)]
+    if variant in ("cost_header", "cost_items"):
+        mark = "X" if variant == "cost_header" else "Y"
+        title = f"Smartmail · SMPROBE test nákladov {mark} – zmazať"
+        base_item = {k: v for k, v in item.items() if k not in ("JednCena", "Mnozstvi")}
+        polozky = [{**base_item, "Poradi": n, "Nazev": f"SMPROBE {mark}{n}", "Mnozstvi": qty, "CelkovaCena": total}
+                   for n, (qty, total) in enumerate(COST_TEST_LINES, start=1)]
+        if variant == "cost_items":
+            for it, cost in zip(polozky, COST_TEST_SPLIT):
+                it["CelkoveVedlejsiNaklady"] = cost
     note = {k: tpl[k] for k in KONCEPT_HEADER if tpl.get(k) not in (None, "", "00000000-0000-0000-0000-000000000000")}
+    if variant in ("cost_header", "cost_items"):
+        note["DodatecnePorizovaciNaklady"] = 2.50
     note.update({"Nazev": title, "Faze": 0, "Schvaleno": False,
                  "Poznamka": f"SMID:{smid} · Smart Mail probe – zmažte tento doklad", "Polozky": polozky})
     out["copied_header_fields"] = sorted(k for k in KONCEPT_HEADER if k in note)
@@ -1805,6 +1830,23 @@ def dl_koncept_write_test(http, template_number, price_test=False):
         }
         out["SumaZaklad"] = priced.get("SumaZaklad")
         out["price_read_error"] = str(e3)[:300] if e3 else None
+    if variant in ("cost_header", "cost_items"):
+        st, d4, e4, _ = gql(http, "query($f:String){ ReceivedDeliveryNotes(Filter:$f, Count:1){ %s } }" % COST_READ,
+                            {"f": f"Poznamka~ct~{smid}"})
+        costed = ((d4 or {}).get("ReceivedDeliveryNotes") or [{}])[0] or {}
+        out[variant] = {
+            "number": back.get("CisloDokladu"),
+            "sent_header_DodatecnePorizovaciNaklady": 2.50,
+            "sent_line_CelkoveVedlejsiNaklady": list(COST_TEST_SPLIT) if variant == "cost_items" else None,
+            "stored_header_DodatecnePorizovaciNaklady": costed.get("DodatecnePorizovaciNaklady"),
+            "stored_header_CelkovaPorizovaciCena": costed.get("CelkovaPorizovaciCena"),
+            "SumaZaklad": costed.get("SumaZaklad"),
+            "lines": [{k: r.get(k) for k in ("Poradi", "Mnozstvi", "CelkovaCena", "CelkoveVedlejsiNaklady",
+                                             "JednotkoveVedlejsiNaklady", "JednotkovaPorizovaciCena",
+                                             "CelkovaPorizovaciCena")}
+                      for r in sorted(costed.get("Polozky") or [], key=lambda r: r.get("Poradi") or 0)],
+            "read_error": str(e4)[:300] if e4 else None,
+        }
     out.update({
         "number": back.get("CisloDokladu"), "Faze": back.get("Faze"), "Schvaleno": back.get("Schvaleno"),
         "Stav": back.get("Stav"), "items": len(b_items), "item_TypObsahu": (b_items[0] if b_items else {}).get("TypObsahu"),
@@ -1880,6 +1922,8 @@ def main():
                     help="read-only: the koncept received delivery note PROBE_DL_KONCEPT_NUMBER -> probe_output/koncept.md")
     ap.add_argument("--dl-koncept-write-test", action="store_true",
                     help="WRITES: 1 received delivery note as koncept (copy of PROBE_DL_KONCEPT_NUMBER) -> dl_koncept_write.md")
+    ap.add_argument("--dl-cost-test", action="store_true",
+                    help="WRITES: 2 koncepts with side costs 2.50 (header only / header + lines) -> dl_koncept_write.md")
     ap.add_argument("--dl-price-test", action="store_true",
                     help="WRITES: 1 koncept with 4 price test lines (quantity + total / unit price) -> dl_koncept_write.md")
     args = ap.parse_args()
@@ -1899,6 +1943,12 @@ def main():
         sys.exit(1)
 
     gql_schema(http)
+    if args.dl_cost_test:
+        if gql_basic(http):
+            for variant in ("cost_header", "cost_items"):
+                dl_koncept_write_test(http, env("PROBE_DL_KONCEPT_NUMBER"), variant=variant)
+        write_dl_koncept_report()
+        return
     if args.dl_koncept_write_test or args.dl_price_test:
         if gql_basic(http):
             dl_koncept_write_test(http, env("PROBE_DL_KONCEPT_NUMBER"), price_test=args.dl_price_test)

@@ -173,3 +173,53 @@ def test_dl_price_test_sends_quantity_with_total_or_unit_price_and_reads_both_ba
     sch = build_client_schema(schema.get("data", schema))
     for q in set(http.queries):
         assert validate(sch, parse(q)) == []
+
+
+def test_dl_cost_test_writes_two_koncepts_header_only_and_header_plus_lines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pilot 2026-11-24: side costs (doprava, balné) 2.50 — does Money distribute them, or must the lines carry them?"""
+    created: list[dict[str, Any]] = []
+
+    class Http(_Http):
+        def request(self, method: str, url: str, data: bytes = b"", **kw: Any) -> tuple[int, str, Any, int]:
+            body = json.loads(data)
+            q, v = body["query"], body.get("variables") or {}
+            self.queries.append(q)
+            if q.startswith("mutation"):
+                self.mutations.append(v["d"])
+                created.append({**v["d"], "ID": f"n{len(created)}", "CisloDokladu": f"30999077{len(created)}"})
+                return 200, "application/json", {"data": {"CreateReceivedDeliveryNote": {"ID": "n"}}}, 5
+            f = v.get("f", "")
+            if f == "CisloDokladu~eq~309990001":
+                return 200, "application/json", {"data": {"ReceivedDeliveryNotes": [self.template]}}, 2
+            if f.startswith("Poznamka~ct~"):
+                smid = f.removeprefix("Poznamka~ct~")
+                hit = [c for c in created if smid in c["Poznamka"]]
+                rows = [{**hit[0], "Polozky": [{**it, "ObsahPolozky": it["ObsahPolozky"]} for it in hit[0]["Polozky"]]}]
+                return 200, "application/json", {"data": {"ReceivedDeliveryNotes": rows if hit else []}}, 2
+            return 200, "application/json", {"data": {"ReceivedDeliveryNotes": []}}, 2
+
+    http = Http(TEMPLATE)
+    probe = _probe()
+    monkeypatch.setattr(probe, "OUT_DIR", str(tmp_path))
+    monkeypatch.setattr("builtins.input", lambda *_: "ZALOZIT")
+    probe.dl_koncept_report["steps"] = {}
+    for variant in ("cost_header", "cost_items"):
+        probe.dl_koncept_write_test(http, "309990001", variant=variant)
+    probe.write_dl_koncept_report()
+    x, y = http.mutations
+    assert x["DodatecnePorizovaciNaklady"] == 2.5 and y["DodatecnePorizovaciNaklady"] == 2.5
+    assert x["Poznamka"] != y["Poznamka"] and x["Faze"] == 0 and y["Schvaleno"] is False
+    assert [it["CelkovaCena"] for it in x["Polozky"]] == [10.0, 20.0, 30.0]
+    assert all("CelkoveVedlejsiNaklady" not in it for it in x["Polozky"])
+    assert [it["CelkoveVedlejsiNaklady"] for it in y["Polozky"]] == [0.83, 0.83, 0.84]
+    steps = probe.dl_koncept_report["steps"]
+    assert steps["cost_header"]["number"] == "309990770" and steps["cost_items"]["number"] == "309990771"
+    assert steps["cost_items"]["lines"][2]["CelkoveVedlejsiNaklady"] == 0.84
+    md = (tmp_path / "dl_koncept_write.md").read_text(encoding="utf-8")
+    assert ART not in md and "cost_items" in md
+    schema = json.loads((ROOT / "bridge/schema/graphql_schema.json").read_text(encoding="utf-8"))
+    sch = build_client_schema(schema.get("data", schema))
+    for q in set(http.queries):
+        assert validate(sch, parse(q)) == []
