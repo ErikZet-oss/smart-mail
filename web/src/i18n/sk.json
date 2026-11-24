@@ -2289,6 +2289,8 @@
       "retry": "Skúsiť znova",
       "unknown": "Money neodpovedalo včas. Overujem podľa SMID, či doklad vznikol – kým sa to nezistí, nič sa znova nezapíše.",
       "reconcile": "Overiť teraz",
+      "reopen": "Koncept som zmazal v Money",
+      "reopened": "Koncept v Money už nie je – doklad je opäť na kontrolu.",
       "duplicate": "DL-B3 · Tento dodací list už v Money je: {{number}}.",
       "noTemplate": "DL-B6 · Pobočka nemá vzorový dodací list – vytvorte jeden v Money alebo vyberte vzor v Nastaveniach.",
       "openSettings": "Otvoriť Nastavenia › Pobočky",
@@ -2313,7 +2315,9 @@
         "money_unavailable": "Money je nedostupné.",
         "money_error": "Money zápis odmietlo.",
         "delivery_note_invalid": "Doklad nemá všetky údaje, ktoré Money potrebuje.",
-        "document_not_reviewable": "Doklad sa už nedá zapísať."
+        "document_not_reviewable": "Doklad sa už nedá zapísať.",
+        "still_in_money": "Koncept {{number}} je v Money stále – najprv ho zmažte v Money.",
+        "not_created": "Doklad nie je zapísaný v Money."
       }
     },
     "original": "Originál dokladu",

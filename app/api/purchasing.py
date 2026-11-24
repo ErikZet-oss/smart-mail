@@ -1077,6 +1077,53 @@ def _creating_fresh(doc: SupplierDocument, now: datetime) -> bool:
         return False
 
 
+@router.post("/documents/{doc_id}/reopen")
+async def reopen_after_money_delete(
+    doc_id: uuid.UUID,
+    body: CreateIn,
+    ctx: Auth,
+    person: ActivePerson,
+    db: DB,
+    settings: SettingsDep,
+) -> DocumentDetail:
+    """Pilot 2026-11-24: a person deleted the koncept in Money (Smart Mail never deletes — D33). Only when Money
+    confirms the note is gone (deleted or not found) the document goes back to review with a new SMID, so the next
+    „Vytvoriť v Money“ writes a new koncept. The old Money id and number stay in the audit log."""
+    await _write_guard(db, settings, person)
+    doc = await db.scalar(select(SupplierDocument).where(SupplierDocument.id == doc_id).with_for_update())
+    if doc is None:
+        raise fail(404, "document_not_found")
+    if doc.status != "created" or doc.money_doc_id is None:
+        raise fail(409, "not_created")
+    if doc.version != body.version:
+        raise fail(409, "version_conflict")
+    try:
+        async with BridgeClient(settings) as bridge:
+            still = await bridge.delivery_note_template(doc.money_doc_id)  # None = deleted or not found
+    except BridgeUnavailable as exc:
+        raise fail(503, exc.code) from None
+    if still is not None:
+        raise fail(409, "still_in_money", number=doc.money_number)
+    old_id, old_number = doc.money_doc_id, doc.money_number
+    doc.status, doc.error = "needs_review", None
+    doc.money_doc_id, doc.money_number, doc.readback_diff = None, None, None
+    doc.idempotency_key = delivery_note.new_smid()
+    doc.version += 1
+    await refresh_checks(db, doc, await load_lines(db, doc))
+    audit(
+        db,
+        "purchasing.delivery_note_reopened",
+        account_id=ctx.account.id,
+        person_id=person.id,
+        object_type="document",
+        object_id=str(doc.id),
+        details={"money_id": str(old_id), "number": old_number, "reason": "deleted_in_money"},
+    )
+    await db.commit()
+    log.info("purchasing.koncept_reopened", document_id=str(doc.id))
+    return await _detail(db, doc, person=person)
+
+
 @router.post("/documents/{doc_id}/create")
 async def create_in_money(
     doc_id: uuid.UUID,

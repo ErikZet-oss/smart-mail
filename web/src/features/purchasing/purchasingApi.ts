@@ -147,6 +147,11 @@ export type WriteState = {
 export const createInMoney = (id: string, version: number) =>
   api<DocumentDetail>('POST', `/api/purchasing/documents/${id}/create`, { version }, { global: false });
 
+/** Pilot 2026-11-24: the koncept was deleted in Money — the backend checks it is gone, then the document is back
+ * in review with a new SMID. */
+export const reopenAfterMoneyDelete = (id: string, version: number) =>
+  api<DocumentDetail>('POST', `/api/purchasing/documents/${id}/reopen`, { version }, { global: false });
+
 export const documentKey = (id: string) => ['purchasing', 'document', id] as const;
 export const fetchDocument = (id: string) => api<DocumentDetail>('GET', `/api/purchasing/documents/${id}`);
 /** UX_SPEC BranchChip ▾ (pilot 2026-11-23): assign the document to a branch the person may act for. */

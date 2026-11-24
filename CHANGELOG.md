@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot: koncept zmazaný v Money → doklad znova na kontrolu
+
+- **W6h:** pri zapísanom koncepte pribudla akcia **„Koncept som zmazal v Money“** (`POST /api/purchasing/documents/{id}/reopen`). Appka v Money overí, že dodací list už neexistuje (zmazaný alebo nenájdený); až potom vráti doklad na kontrolu s novým SMID, aby ho šlo zapísať znova. Ak koncept v Money stále je → 409 `still_in_money`. Smart Mail v Money nič nemaže (D33); staré číslo a ID ostávajú v audite.
+
 ## [Unreleased] — Pilot: množstvá „1.000 ks“ a jedna sadzba DPH (faktúra FABORY)
 
 - **PDF extrakcia:** nejednoznačné množstvo `1.000` / `1,200` sa číta ako tisíce, keď len tak sedí počet × jedn. cena = celková cena riadku (predtým 1000 ks → 1 ks). Prompt žiada množstvo bez oddeľovača tisícov.
