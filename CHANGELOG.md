@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — D34: poplatky (doprava, balné…) ako dodatočné náklady dodacieho listu
+
+- **DECISIONS D34** (nahrádza D14): všetky poplatky z faktúry sa sčítajú a pri zápise konceptu rozpočítajú **rovnomerne podľa počtu skladových položiek** – ako „Náklady“ v Money. Hlavička `DodatecnePorizovaciNaklady` = súčet, každý skladový riadok `CelkoveVedlejsiNaklady` = podiel v centoch, ktoré dajú presne súčet (2,50 / 3 → 0,83 + 0,83 + 0,84), plus `JednotkoveVedlejsiNaklady` a `JednotkovaPorizovaciCena` (testy na ostrej agende 24. 11.: samotná hlavička sa cez API ignoruje, hodnoty na kus Money doplní len keď sa pošlú). Kontrola po zápise porovná náklady v Money so súčtom poplatkov. Texty DL-W5, záložka Poplatky, potvrdzovací dialóg a Nastavenia 14 upravené. **Treba aktualizovať most na Windows.**
+
 ## [Unreleased] — Pilot: dodací list sedí s faktúrou na cent (množstvo + cena celkom)
 
 - Skladové riadky konceptu sa zapisujú ako **množstvo + cena celkom z faktúry** (`CelkovaCena`); cenu za kus si Money dopočíta (4 des. miesta). Overené testom na ostrej agende (koncept 302600973): 1000 ks + 40,25 → 0,0403 / 40,25; pri cene za kus 0,04025 by Money uložilo 40,30. Riadok bez vytlačenej ceny celkom sa zapisuje postaru (cena za kus). Kontrola po zápise porovnáva súčet s faktúrou. **Treba aktualizovať most na Windows** (inak zápis skončí chybou „Doklad nemá všetky údaje…“ a nič sa nevytvorí).

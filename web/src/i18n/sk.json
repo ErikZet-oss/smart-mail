@@ -2276,7 +2276,7 @@
       "totalValue": "{{total}} € bez DPH",
       "movedValue": "pri zápise (teraz, Europe/Bratislava)",
       "info": "Zapíše sa ako koncept s popisom „Smartmail · …“ – sklad sa nepohne, kým ho v Money nedokončíte.",
-      "fees": "Poplatky {{sum}} € sa nezapisujú.",
+      "fees": "Poplatky {{sum}} € sa rozpočítajú rovnomerne do položiek ako dodatočné náklady.",
       "disabled": "Zápis dodacích listov je vypnutý v Nastaveniach › Nákup a sklad (alebo na to nemáte rolu).",
       "blocked": "Najprv vyriešte blokujúce kontroly.",
       "close": "Zavrieť",
@@ -2345,7 +2345,7 @@
     "itemTabs": { "items": "Položky", "fees": "Poplatky" },
     "groups": { "header": "Hlavička", "vat": "DPH" },
     "tool": { "edit": "Opraviť", "rematch": "Znova spárovať" },
-    "feesInfo": "Poplatky sa nezapisujú – ak treba, doplňte ich v Money.",
+    "feesInfo": "Poplatky sa pri zápise sčítajú a rozpočítajú rovnomerne podľa počtu položiek ako dodatočné náklady (ako „Náklady“ v Money).",
     "lineStatus": {
       "matched": "Spárované",
       "check": "Spárované – skontrolujte",
@@ -2500,7 +2500,7 @@
       "DL-B8": "Množstvo musí byť väčšie ako 0 – vratky len v Money.",
       "DL-W1": "Riadok {{line}}: cena o {{x}} % iná ako minule ({{last}}).",
       "DL-W4": "Dátum vystavenia je v budúcnosti alebo starší ako 30 dní.",
-      "DL-W5": "Poplatky sa nezapisujú (spolu {{sum}}).",
+      "DL-W5": "Poplatky {{sum}} € sa rozpočítajú rovnomerne do položiek ako dodatočné náklady.",
       "DL-W6": "Riadok {{line}}: kód dodávateľa nie je v karte artikla – exportovať.",
       "DL-W8": "Riadok {{n}} ide na iný sklad ako sklad pobočky.",
       "DL-W9": "Riadok {{line}}: počet × jedn. cena nesedí s celkovou cenou {{total}} – skontrolujte počet (zľava?)."

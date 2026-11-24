@@ -131,6 +131,7 @@ class KonceptBridge(ArticleBridge):
             total=base,
             address_empty=self.address_empty,
             lines=lines,
+            side_costs=Decimal(payload.get("DodatecnePorizovaciNaklady", "0")),
         )
         self.made[smid] = out
         return out
@@ -263,7 +264,10 @@ async def test_247_koncept_payload_readback_audit_and_repeat(
     assert payload["DatumVystaveni"] == "2026-10-28" and payload["CasSkladovehoPohybu"].count(":") == 2
     assert payload["smid"] == (await db.get(SupplierDocument, uuid.UUID(detail["id"]))).idempotency_key  # type: ignore[union-attr]
     items = payload["Polozky"]
-    assert len(items) == 2  # D14: the fee line (Doprava) is not written
+    assert len(items) == 2  # the fee line (Doprava) is not a line …
+    # … D34: it is split evenly over the stock lines as side costs, the header carries the sum
+    fee = Decimal(payload["DodatecnePorizovaciNaklady"])
+    assert fee > 0 and sum(Decimal(it["CelkoveVedlejsiNaklady"]) for it in items) == fee
     for it in items:
         assert it["TypObsahu"] == 1 and it["TypCeny"] == 0 and it["Stredisko_ID"] == CENTRE  # DL-B9
         assert it["ObsahPolozky"]["Sklad_ID"] == WAREHOUSE and it["SazbaDPH_ID"] == _id("vat-23")
@@ -328,6 +332,7 @@ async def test_247_timeout_unknown_then_the_same_smid_reconciles(
         total=Decimal("0"),
         address_empty=False,
         lines=[],
+        side_costs=Decimal(KonceptBridge.posts[0][0].get("DodatecnePorizovaciNaklady", "0")),
     )
     r = await _create(client, fresh)
     assert r.status_code == 200, r.text

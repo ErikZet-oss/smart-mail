@@ -375,6 +375,7 @@ def note_created_from(raw: dict[str, Any], *, reconciled: bool) -> DeliveryNoteC
         address_empty=_s(raw.get("AdresaNazev")) is None,
         lines=lines,
         reconciled=reconciled,
+        side_costs=_dec(raw.get("DodatecnePorizovaciNaklady")),
     )
 
 

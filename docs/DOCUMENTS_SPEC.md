@@ -55,8 +55,8 @@ same order (Hlavička → Dodávateľ → Dátum → Podrobnosti → DPH → Pol
    (short BranchChip "Pobočka Senica · stredisko 20 · sklad 20"; the page header uses the full text, UX_SPEC, D23).
 2. **Action bar** (Money toolbar order, only supported actions):
    `Vytvoriť v Money` (primary; = Money "OK") · `Späť` (= close without saving changes) · `Pridať do adresára`
-   (only when the supplier is not in Money → company_create suggestion). No `Náklady` button — fees are not handled
-   (DECISIONS D14). Right side: `Originál dokladu` (toggles the PDF panel) · `Kontrola (n)`.
+   (only when the supplier is not in Money → company_create suggestion). No `Náklady` button — the fees are distributed
+   automatically at the write (DECISIONS D34). Right side: `Originál dokladu` (toggles the PDF panel) · `Kontrola (n)`.
 3. **Tabs** (Money names, Money order, only those Smart Mail fills): `Všeobecné` · `Pripojené dokumenty` · `Texty` ·
    `Poznámka`. (Výkazy and DPH are Money-only.)
 4. **Right panel 420 px** (Smart Mail addition, collapsible): `Originál` (supplier PDF/XML with highlighted values,
@@ -135,7 +135,7 @@ columns in Money order) and `Kontrola príjmu` (default below). Column widths an
 | 14 | Typ väzby | `ObsahPolozky.VazbaTypVazby` | copied from template | from Money | Money preset |
 | 14a | Počet nadradenej / podradenej položky | `ObsahPolozky.VazbaPocetNadrizene` / `VazbaPocetPodrizene` | copied from template (pilot 2026-11-24: without it Money refuses to save an edited line — „musí byť väčšia než 0“) | from Money | Money preset |
 | 15 | Celková obstarávacia | `CelkovaPorizovaciCena` | — | from Money | Money preset |
-| 16 | Celkové dodatočné náklady | `CelkoveVedlejsiNaklady` | 0 | from Money | Money preset |
+| 16 | Celkové dodatočné náklady | `CelkoveVedlejsiNaklady` (+ `JednotkoveVedlejsiNaklady`, `JednotkovaPorizovaciCena`) | D34: the line's share of the fees, evenly by the number of stock lines, in cents adding up exactly; header `DodatecnePorizovaciNaklady` = fee sum | from Money | Money preset |
 | 17 | Čiarový kód | `Article.CarovyKod` | from catalog (read-only) | same | on |
 | 18 | Prevzatý typ | — | — | from Money | Money preset |
 | 19 | Jednotková obstarávacia | `JednotkovaPorizovaciCena` | — | from Money | Money preset |
@@ -150,8 +150,9 @@ Number formats exactly as Money: quantity `50,0000`, unit price `1,2215`, totals
 Text lines (no article, e.g. "Doprava") → see `Poplatky`.
 
 **Poplatky** tab: read-only list of non-goods lines found on the supplier document (doprava, balné, palety, poistenie,
-manipulačný poplatok) with amounts and the info "Poplatky sa nezapisujú – ak treba, doplňte ich v Money" (DECISIONS
-D14 — fees are not handled for now; nothing in the payload, `CelkoveVedlejsiNaklady` stays 0). The totals check DL-B7
+manipulačný poplatok) with amounts and the info "Poplatky sa pri zápise sčítajú a rozpočítajú rovnomerne podľa počtu
+položiek ako dodatočné náklady" (DECISIONS D34: header `DodatecnePorizovaciNaklady` = fee sum, every stock line
+`CelkoveVedlejsiNaklady` = its share in cents adding up exactly + the per-unit values). The totals check DL-B7
 counts goods lines + listed fees against the supplier total (it verifies the extraction, not the write).
 
 ### 2.5 Matching our catalog number ↔ supplier code (MONEY_API §5.5.3)
@@ -190,7 +191,7 @@ DL-B6 blocks with "Pobočka nemá vzorový dodací list – vytvorte jeden v Mon
 | DL-W2 | Quantity differs from the open purchase order | "Objednané {a}, dodané {b}." |
 | DL-W3 | VAT mode differs from the document (reverse charge vs. domestic) | "Doklad je s prenesením DP, návrh nie." |
 | DL-W4 | Vystavenie (date of the supplier document) is in the future or older than 30 days | "Skontrolujte dátum vystavenia." |
-| DL-W5 | Fees on the supplier document are not written (Poplatky, D14) | "Poplatky {suma} sa nezapisujú – doplňte ich v Money, ak treba." |
+| DL-W5 | Fees on the supplier document are written as side costs, evenly by the number of stock lines (Poplatky, D34) | "Poplatky {suma} € sa rozpočítajú rovnomerne do položiek ako dodatočné náklady." |
 | DL-W6 | Line matched by a learned mapping that is not yet in the Money catalog | "Kód dodávateľa nie je v karte artikla – exportovať." |
 | DL-W7 | Article is inactive / blocked for purchase in Money | "Artikel je neaktívny." |
 | DL-W8 | Line warehouse is not the branch warehouse (allowed, D18) | "Riadok {n} ide na sklad {kód} – nie je to sklad pobočky." |
@@ -385,7 +386,7 @@ For Smart s.r.o. (business decisions — answers go into SETTINGS defaults, no c
   Nitra?), whether the centre code always equals the warehouse code (`--branches` shows both), which price list is
   the branch price list ("bez DPH"?) and when warehouse 99 Externý sklad is used.
 - ~~Q-D2~~ answered: stock movement date/time = moment of the write to Money (D13).
-- ~~Q-D3~~ answered: fees are not handled for now (D14).
+- ~~Q-D3~~ answered: fees are not handled for now (D14) — replaced by D34: side costs, evenly by the number of lines.
 - ~~Q-D4~~ answered: returns only in Money (D15).
 - ~~Q-D5~~ answered: offers are numbered by Money (D5).
 - **Q-D6** Please send the Money print report used for order confirmations (if any) and EN/DE versions of the offer

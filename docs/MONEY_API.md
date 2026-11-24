@@ -189,7 +189,7 @@ reverse charge consistency. Header checks: dates, currency. (No IBAN/payment che
 user can pick any warehouse from the complete Money list (D18; a non-branch warehouse gives warning DL-W8). Price
 lists come from `PriceLists` — all of them are offered in the dropdowns (D12, D18). Warehouses and price
 lists are always loaded from Money — never hardcoded codes or GUIDs. Stock movement date/time = moment of the write
-(D13); fees are not written (D14); no negative quantities (D15).
+(D13); fees = side costs of the stock lines, evenly by their number (D34); no negative quantities (D15).
 
 **5.5.7 Writing to Money** (after approval; role `warehouse`, `accounting` or `admin`). **Only
 `CreateReceivedDeliveryNote`** (DECISIONS D7) with the complete field mapping of the Money card in **DOCUMENTS_SPEC §2**
@@ -432,7 +432,7 @@ open purchase orders, delivery notes with remaining quantities; PDF endpoint ret
 9. Received delivery note: is "Doklad prijatý" stored in `Odkaz` (probe `template_check`)? Does
    `CreateReceivedDeliveryNote` fill the supplier address from `Firma_ID`, or must `Adresa*` be sent? Smart Mail
    sends `DatumUcetnihoPripadu` = `DatumSkladovehoPohybu` = date of the write (D13) — does Money accept it as is? (Fees
-   are not written — D14.)
+   are written as side costs — D34.)
 10. PDF reports for `IssuedDeliveryNote` (dodací list vydaný — customers ask for copies) and `ReceivedOrder`
     (order confirmation) — can REST report endpoints like `IssuedInvoice/{id}/Report/{reportId}` be enabled?
 12. `ProdejniCeny(FirmaID)` returns 0 rows on TEST without `SkladID` — which arguments / price-list assignments are

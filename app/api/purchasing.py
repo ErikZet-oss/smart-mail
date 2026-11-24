@@ -1217,7 +1217,7 @@ async def create_in_money(
         blog.warning("purchasing.koncept_write_unknown", code=exc.code)
         raise fail(503, exc.code) from None
 
-    mismatches = delivery_note.compare(expected, back)
+    mismatches = delivery_note.compare(expected, back, delivery_note.side_costs(lines))
     doc.status = "created"
     doc.money_doc_id, doc.money_number = back.id, back.number
     doc.readback_diff = {

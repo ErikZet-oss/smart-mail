@@ -290,6 +290,11 @@ class DeliveryNoteItemIn(_Model):
     Stredisko_ID: uuid.UUID
     DruhPolozky_ID: uuid.UUID | None = None
     ObsahPolozky: DeliveryNoteContentIn | None = None  # None = text (non-stock) line
+    # D34 side costs (doprava, balné …) of this line, like Money's „Náklady – rovnomerne podľa počtu položiek“;
+    # PROD probe 302600973: Money keeps CelkoveVedlejsiNaklady but fills the per-unit values only when they are sent
+    CelkoveVedlejsiNaklady: Decimal | None = Field(default=None, ge=0)
+    JednotkoveVedlejsiNaklady: Decimal | None = Field(default=None, ge=0)
+    JednotkovaPorizovaciCena: Decimal | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def _one_price(self) -> DeliveryNoteItemIn:
@@ -326,6 +331,14 @@ class DeliveryNoteIn(_Model):
     Faze: Literal[0]
     Schvaleno: Literal[False]
     Polozky: list[DeliveryNoteItemIn] = Field(min_length=1, max_length=500)
+    DodatecnePorizovaciNaklady: Decimal | None = Field(default=None, gt=0)  # D34: = Σ line side costs
+
+    @model_validator(mode="after")
+    def _side_costs_add_up(self) -> DeliveryNoteIn:
+        lines = sum((it.CelkoveVedlejsiNaklady or Decimal("0") for it in self.Polozky), Decimal("0"))
+        if lines != (self.DodatecnePorizovaciNaklady or Decimal("0")):
+            raise ValueError("side_costs_mismatch")  # D34: the header is exactly the sum of the lines
+        return self
 
     @field_validator("Nazev")
     @classmethod
@@ -383,6 +396,7 @@ class DeliveryNoteCreated(_Model):
     address_empty: bool  # read-back AdresaNazev empty → the next writes send the address (MONEY_API 5.5.7)
     lines: list[DeliveryNoteLineBack]
     reconciled: bool = False  # found by its SMID (a repeat or after an error/timeout) instead of created now
+    side_costs: Decimal = Decimal("0")  # DodatecnePorizovaciNaklady (D34)
 
 
 class ReceivedNoteRow(_Model):

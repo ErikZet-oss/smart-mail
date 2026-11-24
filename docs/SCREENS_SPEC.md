@@ -398,14 +398,14 @@ Karta" (DOCUMENTS_SPEC §2 is binding: field order, labels, grid columns, number
 **Entry:** AI card on a supplier e-mail with an invoice or delivery note ("Príjem tovaru · 38 položiek → Pripraviť
 dodací list"), W6e row, W6u upload. The supplier invoice is only the source of the lines (DECISIONS D7).
 **Layout (1440):** page header (title, status, branch chip) 56 · action bar 44 (Vytvoriť v Money, Späť, Pridať do
-adresára*; right: Originál dokladu, Kontrola (n); no Náklady — fees are not handled, D14) · tabs Všeobecné / Pripojené dokumenty / Texty / Poznámka ·
+adresára*; right: Originál dokladu, Kontrola (n); no Náklady — fees are distributed at the write, D34) · tabs Všeobecné / Pripojené dokumenty / Texty / Poznámka ·
 Všeobecné = header grid (left 2 columns of label/field pairs + groups Dátum / Podrobnosti; right sub-tabs Dodávateľ /
 Kon. príjemca / Fakt. adresa + VAT recap) ~450 px (Money field layout, Figma W6h), then tabs Položky / Poplatky with Money item toolbar and the grid
 (24 px rows, Money column order, sticky header, Σ row) filling the rest · right panel 420 (Originál PDF with field
 highlight / Kontrola list), collapsible; when open the grid scrolls horizontally.
 **Content:** draft from `documents` + `item_matching`; supplier card, codebooks and template document from the bridge;
 branch values from SETTINGS 11e. Sklad. pohybu / Účt. prípadu show "pri zápise do Money" until created (D13); tab
-Poplatky lists supplier fees read-only (D14); Vratka is always unchecked (D15).
+Poplatky lists supplier fees read-only; they are written as side costs, evenly by the number of lines (D34); Vratka is always unchecked (D15).
 **Actions:** line click → drawer "Riadok {n}" (supplier text, candidates, article search, unit conversion, warehouse,
 "Zapamätať kód dodávateľa"); Opraviť hromadne; Pridať výberom; Zmazať; Nahor/Dolu; Excel; Σ; Legenda;
 `Vytvoriť v Money` → confirm dialog with summary (dodávateľ, počet položiek, sklad, stredisko, celkom) → approval JWT →

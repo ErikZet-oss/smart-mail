@@ -410,3 +410,51 @@ def test_item_sends_exactly_one_of_unit_price_or_line_total() -> None:
     for bad in ({}, {"JednCena": "0.0403", "CelkovaCena": "40.25"}):
         with pytest.raises(ValidationError):
             DeliveryNoteItemIn.model_validate({**base, **bad})
+
+
+def test_D34_header_side_costs_must_equal_the_lines() -> None:
+    from pydantic import ValidationError
+
+    def body(header: str | None, lines: list[str | None]) -> dict[str, Any]:
+        items = [
+            {
+                "Poradi": i,
+                "Nazev": "x",
+                "Mnozstvi": "10",
+                "CelkovaCena": "10",
+                "TypCeny": 0,
+                "TypObsahu": 1,
+                "Stredisko_ID": str(NEW_ID),
+                **({"CelkoveVedlejsiNaklady": c} if c else {}),
+            }
+            for i, c in enumerate(lines, start=1)
+        ]
+        out: dict[str, Any] = {
+            "smid": "a" * 32,
+            "Firma_ID": str(NEW_ID),
+            "CiselnaRada_ID": str(NEW_ID),
+            "Stredisko_ID": str(NEW_ID),
+            "Group_ID": str(NEW_ID),
+            "DruhPohybu_ID": str(NEW_ID),
+            "DruhSkladovehoPohybu_ID": str(NEW_ID),
+            "Predkontace_ID": str(NEW_ID),
+            "Odkaz": "DL-1",
+            "Nazev": "Smartmail · x",
+            "DatumVystaveni": "2026-11-24",
+            "DatumUcetnihoPripadu": "2026-11-24",
+            "DatumSkladovehoPohybu": "2026-11-24",
+            "CasSkladovehoPohybu": "2026-11-24T10:00:00",
+            "Faze": 0,
+            "Schvaleno": False,
+            "Polozky": items,
+        }
+        if header:
+            out["DodatecnePorizovaciNaklady"] = header
+        return out
+
+    ok = DeliveryNoteIn.model_validate(body("2.50", ["0.83", "0.83", "0.84"]))
+    assert ok.money_input()["DodatecnePorizovaciNaklady"] == Decimal("2.50")
+    assert "DodatecnePorizovaciNaklady" not in DeliveryNoteIn.model_validate(body(None, [None])).money_input()
+    for bad in (body("2.50", [None, None]), body(None, ["0.50"]), body("2.50", ["0.83", "0.83", "0.83"])):
+        with pytest.raises(ValidationError):
+            DeliveryNoteIn.model_validate(bad)
