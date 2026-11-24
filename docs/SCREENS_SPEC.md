@@ -411,7 +411,9 @@ Poplatky lists supplier fees read-only (D14); Vratka is always unchecked (D15).
 `Vytvoriť v Money` → confirm dialog with summary (dodávateľ, počet položiek, sklad, stredisko, celkom) → approval JWT →
 bridge → W6h in state "Koncept v Money" (D33): chip „Koncept v Money č. {číslo}“, read-back result and the info
 „Doklad je v Money uložený ako koncept – skontrolujte ho a dokončite v Money (zrušte Uložiť ako koncept).“ No
-„Vrátiť“ — a wrong koncept is deleted in Money. The confirm dialog says „Zapíše sa ako koncept do Money (pobočka …).“
+„Vrátiť“ — a wrong koncept is deleted in Money; then the banner action „Koncept som zmazal v Money“ checks in Money that
+the note is gone and puts the document back in review with a new SMID (pilot 2026-11-24, audit
+`purchasing.delivery_note_reopened`; still in Money → „Koncept {číslo} je v Money stále…“). The confirm dialog says „Zapíše sa ako koncept do Money (pobočka …).“
 **States:** loading (skeleton of the card), draft, needs_input (red counters on tabs and fields), creating (locked,
 progress), created (koncept), failed (error text from Money + "Skúsiť znova" only after reconciliation), unknown
 (reconcile banner), Money offline (read-only), template missing (DL-B6 banner with link to SETTINGS 11e), duplicate

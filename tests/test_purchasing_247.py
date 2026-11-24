@@ -525,3 +525,48 @@ async def test_247_branch_picker_assigns_a_branch_the_person_may_act_for(
     assert not any(c["id"] == "DL-B1" for c in after["checks"])
     logged = await db.scalar(select(AuditLog).where(AuditLog.action == "purchasing.document_branch"))
     assert logged is not None and logged.details["after"] == str(mine.id)
+
+
+# ----- pilot 2026-11-24: the koncept was deleted in Money → back to review -----
+
+
+async def test_247_reopen_only_after_the_koncept_is_gone_from_money(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, switch_on: None
+) -> None:
+    detail = await _open(client, db, mail_server, role=Role.warehouse)
+    early = await client.send_json("POST", f"/api/purchasing/documents/{detail['id']}/reopen", {"version": 1})
+    assert early.status_code == 409 and early.json()["detail"]["code"] == "not_created"
+    out = (await _create(client, detail)).json()
+    doc = await db.get(SupplierDocument, uuid.UUID(detail["id"]))
+    assert doc is not None
+    old_smid, money_id = doc.idempotency_key, str(doc.money_doc_id)
+    url = f"/api/purchasing/documents/{detail['id']}/reopen"
+    KonceptBridge.templates[money_id] = template()  # the koncept is still in Money → refused
+    still = await client.send_json("POST", url, {"version": out["version"]})
+    assert still.status_code == 409 and still.json()["detail"]["code"] == "still_in_money"
+    del KonceptBridge.templates[money_id]  # a person deleted it in Money
+    stale = await client.send_json("POST", url, {"version": out["version"] - 1})
+    assert stale.status_code == 409 and stale.json()["detail"]["code"] == "version_conflict"
+    r = await client.send_json("POST", url, {"version": out["version"]})
+    assert r.status_code == 200, r.text
+    back = r.json()
+    assert back["status"] == "needs_review" and back["write"] is None
+    await db.refresh(doc)
+    assert doc.money_doc_id is None and doc.idempotency_key != old_smid  # a new SMID → a new koncept, no reconcile
+    entry = await db.scalar(select(AuditLog).where(AuditLog.action == "purchasing.delivery_note_reopened"))
+    assert entry is not None and entry.details == {
+        "money_id": money_id,
+        "number": "DLP0500/2026",
+        "reason": "deleted_in_money",
+    }
+    again = await _create(client, back)
+    assert again.status_code == 200 and again.json()["write"]["number"] == "DLP0501/2026"
+    assert len(KonceptBridge.posts) == 2 and KonceptBridge.posts[1][0]["smid"] == doc.idempotency_key
+
+
+async def test_247_reopen_needs_the_write_role(
+    client: Client, db: AsyncSession, mail_server: FakeMailServer, switch_on: None
+) -> None:
+    await _signed_in(client, db, mail_server, role=Role.sales)
+    r = await client.send_json("POST", f"/api/purchasing/documents/{uuid.uuid4()}/reopen", {"version": 1})
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "role_not_allowed"

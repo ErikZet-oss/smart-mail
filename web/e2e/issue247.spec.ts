@@ -512,3 +512,28 @@ test('W6h: an order confirmation is hidden with „Nie je faktúra – skryť“
   await expect(page.getByText('Doklad je skrytý.')).toBeVisible();
   await expect(page).toHaveURL(/\/docs\/delivery-notes$/);
 });
+
+// pilot 2026-11-24: the koncept was deleted in Money → „Koncept som zmazal v Money“ puts the document back in review
+test('W6h: a koncept deleted in Money goes back to review', async ({ page }) => {
+  let sent: unknown = null;
+  let calls = 0;
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': () => ({ body: calls >= 2 ? detail({ version: 5 }) : created() }),
+    'POST /api/purchasing/documents/d-1/reopen': (body) => {
+      sent = body;
+      calls += 1;
+      return calls === 1
+        ? { status: 409, body: { detail: { code: 'still_in_money', number: 'DLP0412/2026' } } }
+        : { body: detail({ version: 5 }) };
+    },
+  });
+  await open(page, false);
+  const banner = page.getByTestId('w6h-write-banner');
+  await banner.getByRole('button', { name: 'Koncept som zmazal v Money' }).click();
+  await expect(page.getByText('Koncept DLP0412/2026 je v Money stále – najprv ho zmažte v Money.')).toBeVisible();
+  await banner.getByRole('button', { name: 'Koncept som zmazal v Money' }).click();
+  await expect(page.getByText('Koncept v Money už nie je – doklad je opäť na kontrolu.')).toBeVisible();
+  expect(sent).toEqual({ version: 4 });
+  await expect(page.getByTestId('w6h-create')).toBeVisible();
+});

@@ -36,6 +36,7 @@ import { WriteDialog } from './WriteDialog';
 import {
   addDec,
   createInMoney,
+  reopenAfterMoneyDelete,
   documentKey,
   fetchDocument,
   moneyNum,
@@ -148,6 +149,20 @@ export function ScreenW6h() {
       const code = e instanceof ApiError ? e.detail.code : 'generic';
       if (code !== 'duplicate' && code !== 'checks_failed')
         toasts.error(t(`w6h.write.errors.${code}`, { defaultValue: t('w6h.write.errors.generic') }));
+    },
+  });
+  const reopen = useMutation({
+    mutationFn: (version: number) => reopenAfterMoneyDelete(id, version),
+    onSuccess: (next) => {
+      qc.setQueryData(documentKey(id), next);
+      void qc.invalidateQueries({ queryKey: ['purchasing'] });
+      toasts.success(t('w6h.write.reopened'));
+    },
+    onError: (e) => {
+      void qc.invalidateQueries({ queryKey: documentKey(id) });
+      const code = e instanceof ApiError ? e.detail.code : 'generic';
+      const number = e instanceof ApiError ? String(e.detail.number ?? '') : '';
+      toasts.error(t(`w6h.write.errors.${code}`, { number, defaultValue: t('w6h.write.errors.generic') }));
     },
   });
   if (features.loaded && !features.money) return <Navigate to="/404" replace />;
@@ -349,6 +364,8 @@ export function ScreenW6h() {
               busy={write.isPending}
               onRetry={() => setConfirm(true)}
               onReconcile={() => write.mutate(d.version)}
+              onReopen={() => reopen.mutate(d.version)}
+              reopening={reopen.isPending}
               onSettings={() => navigate('/settings/branches')}
             />
             <div className="flex min-h-0 flex-1">
@@ -941,6 +958,8 @@ function WriteBanners({
   busy,
   onRetry,
   onReconcile,
+  onReopen,
+  reopening,
   onSettings,
 }: {
   d: DocumentDetail;
@@ -950,6 +969,8 @@ function WriteBanners({
   busy: boolean;
   onRetry: () => void;
   onReconcile: () => void;
+  onReopen: () => void;
+  reopening: boolean;
   onSettings: () => void;
 }) {
   const { t } = useTranslation();
@@ -957,15 +978,26 @@ function WriteBanners({
   const goods = d.items.filter((l) => !l.is_fee);
   const total = goods.reduce((acc, l) => (l.line_total ? addDec(acc, l.line_total) : acc), '0');
   let banner: ReactNode = null;
+  // pilot 2026-11-24: a koncept deleted in Money (Smart Mail never deletes) → back to review, checked in Money first
+  const reopenAction = {
+    label: t('w6h.write.reopen'),
+    onClick: onReopen,
+    disabled: reopening || !d.can_write,
+  };
   if (w?.state === 'created' && w.mismatches.length === 0) {
     banner = (
-      <Banner kind="success" message={t('w6h.write.created', { count: goods.length, total: moneyNum(total, 2) })} />
+      <Banner
+        kind="success"
+        message={t('w6h.write.created', { count: goods.length, total: moneyNum(total, 2) })}
+        action={reopenAction}
+      />
     );
   } else if (w?.state === 'created') {
     banner = (
       <Banner
         kind="danger"
         message={t('w6h.write.mismatch', { number: w.number ?? '' })}
+        action={reopenAction}
         details={w.mismatches.map((m) =>
           t(`w6h.write.diff.${m.field}`, {
             line: m.line ?? '',
