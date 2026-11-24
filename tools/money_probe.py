@@ -1608,12 +1608,40 @@ def _writable_scalars(types, read_type, input_type):
 
 
 def _shown(value, kind_name):
-    """Numbers and flags are printed (states, enums); text and IDs only as 'set'."""
+    """Numbers and flags are printed (states, enums, VAT rates); text and IDs only as 'set'."""
     if value in (None, "", "00000000-0000-0000-0000-000000000000", "0001-01-01T00:00:00"):
         return None
-    if kind_name in ("Int", "Boolean"):
+    if kind_name in ("Int", "Boolean", "Decimal", "Float"):
         return value
     return "set"
+
+
+# pilot 2026-11-24: the FABORY koncept came into Money without VAT — compare the VAT fields with a normal note
+VAT_HINTS = ("DPH", "Dph", "Sazba", "Dan", "Registrace", "Predkontace", "Cleneni", "Zaokrouhleni", "TypCeny",
+             "TypDokladu")
+
+
+def _diff(a_doc, b_doc, fields, read):
+    """Flags/enums that differ, VAT numbers that differ and VAT IDs that differ (IDs never printed)."""
+    out = {}
+    for k in fields:
+        kind = read[k][1]
+        if k in ("ID", "CisloDokladu", "CisloRady"):
+            continue
+        raw_a, raw_b = a_doc.get(k), b_doc.get(k)
+        a, b = _shown(raw_a, kind), _shown(raw_b, kind)
+        vat = any(h in k for h in VAT_HINTS)
+        if kind in ("Int", "Boolean") or (vat and kind in ("Decimal", "Float")) or a is None or b is None:
+            if str(a) != str(b):
+                out[k] = {"koncept": a, "normal": b}
+        elif vat and str(raw_a) != str(raw_b):
+            out[k] = {"koncept": "set", "normal": "set (different ID)"}
+    return out
+
+
+def _stock_line(doc):
+    lines = doc.get("Polozky") or []
+    return next((ln for ln in lines if ln.get("TypObsahu") == 1), lines[0] if lines else {})
 
 
 def koncept_probe(http, number):
@@ -1661,13 +1689,8 @@ def koncept_probe(http, number):
         st, d, e, _ = gql(http, q, {"f": f"CisloDokladu~eq~{compare}"})
         other = ((d or {}).get("ReceivedDeliveryNotes") or [None])[0]
         if other:
-            diff = {}
-            for k in head:
-                kind = head_read[k][1]
-                a, b = _shown(doc.get(k), kind), _shown(other.get(k), kind)
-                if k not in ("ID", "CisloDokladu", "CisloRady") and str(a) != str(b) and (kind in ("Int", "Boolean") or a is None or b is None):
-                    diff[k] = {"koncept": a, "normal": b}
-            out["differs_from_normal_note"] = diff
+            out["differs_from_normal_note"] = _diff(doc, other, head, head_read)
+            out["first_stock_line_differs"] = _diff(_stock_line(doc), _stock_line(other), item, item_read)
         else:
             out["differs_from_normal_note"] = f"note {compare} not found"
     step("koncept – the draft note", True, ms=ms,
