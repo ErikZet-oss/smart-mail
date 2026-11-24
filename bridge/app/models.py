@@ -264,6 +264,9 @@ class DeliveryNoteContentIn(_Model):
     PartnerskyNazev: str | None = Field(default=None, max_length=255)
     DruhPolozky_ID: uuid.UUID | None = None  # copied from the branch template line
     VazbaTypVazby: int | None = None  # copied from the branch template line
+    # copied from the branch template line (pilot 2026-11-24: 0 → Money refuses to save an edited line)
+    VazbaPocetNadrizene: Decimal | None = Field(default=None, gt=0)
+    VazbaPocetPodrizene: Decimal | None = Field(default=None, gt=0)
 
 
 class DeliveryNoteItemIn(_Model):
@@ -394,5 +397,5 @@ class DeliveryNoteTemplate(_Model):
     header: dict[str, str]  # CiselnaRada_ID … Group_ID, Mena_ID (only present values)
     line: dict[
         str, str | int
-    ]  # first stock line: TypObsahu, TypCeny, DruhPolozky_ID, SazbaDPH_ID, DruhSazbyDPH, VazbaTypVazby
+    ]  # first stock line: TypObsahu, TypCeny, DruhPolozky_ID, SazbaDPH_ID, DruhSazbyDPH, VazbaTypVazby, VazbaPocet*
     text_line: dict[str, int] | None  # TypObsahu of a text line, when the template has one

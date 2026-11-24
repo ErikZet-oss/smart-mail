@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot: „Počet nadradenej položky“ zo vzoru (Money odmietalo uložiť upravený riadok)
+
+- Koncept dodacieho listu: pri úprave ceny riadku v Money vyskočilo „Hodnota v poli 'Počet nadradenej položky' musí byť väčšia než 0“. Most teraz zo vzorového dodacieho listu pobočky číta aj `ObsahPolozky.VazbaPocetNadrizene` / `VazbaPocetPodrizene` a appka ich kopíruje do skladových riadkov (DOCUMENTS_SPEC §2 riadok 14a). **Treba aktualizovať most na Windows** a v Nastaveniach › Pobočky (11e) kliknúť „Overiť“, aby sa vzor načítal znova.
+
 ## [Unreleased] — Pilot: koncept zmazaný v Money → doklad znova na kontrolu
 
 - **W6h:** pri zapísanom koncepte pribudla akcia **„Koncept som zmazal v Money“** (`POST /api/purchasing/documents/{id}/reopen`). Appka v Money overí, že dodací list už neexistuje (zmazaný alebo nenájdený); až potom vráti doklad na kontrolu s novým SMID, aby ho šlo zapísať znova. Ak koncept v Money stále je → 409 `still_in_money`. Smart Mail v Money nič nemaže (D33); staré číslo a ID ostávajú v audite.

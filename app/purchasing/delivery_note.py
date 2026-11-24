@@ -191,6 +191,10 @@ def build_payload(
             }
             if tline.get("VazbaTypVazby") is not None:
                 content["VazbaTypVazby"] = int(tline["VazbaTypVazby"])
+            # pilot 2026-11-24: „Počet nadradenej položky“ 0 → Money refuses to save an edited line; template value
+            for key in ("VazbaPocetNadrizene", "VazbaPocetPodrizene"):
+                if tline.get(key) is not None and Decimal(str(tline[key])) > 0:
+                    content[key] = _dec_str(Decimal(str(tline[key])))
             item = {
                 "Poradi": order,
                 "Nazev": str(article.get("name") or ln.name)[:255],
