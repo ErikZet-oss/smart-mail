@@ -33,6 +33,7 @@ from app.money.approval import ApprovalKeyMissing, sign_approval
 from app.money.bridge_client import BridgeClient, BridgeRefused, BridgeUnavailable
 from app.money.models import MoneyArticleSupplier, MoneyCodebook, MoneyCompany
 from app.money.schemas import Article, WarehouseStockRow
+from app.purchasing import catalog as article_catalog
 from app.purchasing import delivery_note, new_article, org_settings
 from app.purchasing.item_matching import (
     confirm_article,
@@ -671,31 +672,62 @@ class CatalogRow(PickerArticle):
     stocks: list[WarehouseStockRow] = Field(default_factory=list)
 
 
+class CatalogOut(BaseModel):
+    total: int
+    items: list[CatalogRow]
+    stock_available: bool = True  # False = Money is offline: the rows come from the cache without stock
+    cached: bool = True  # False = the first catalog sync has not run yet — a live search (≤ 100 rows, no paging)
+
+
 @router.get("/catalog")
 async def catalog(
     person: ActivePerson,
     db: DB,
     settings: SettingsDep,
-    q: Annotated[str, Query(min_length=2, max_length=80)],
-) -> list[CatalogRow]:
-    """The W6h „Katalóg“ window: the same search as the picker (exact code, EAN, supplier code, text, `%` pattern),
-    up to `CATALOG_LIMIT` rows, main cards followed by their variants, each with its stock per warehouse."""
+    q: Annotated[str, Query(max_length=80)] = "",
+    sort: Annotated[Literal["catalog", "name", "plu", "last_price"], Query()] = "catalog",
+    desc: bool = False,
+    offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
+    limit: Annotated[int, Query(ge=1, le=CATALOG_LIMIT)] = CATALOG_LIMIT,
+) -> CatalogOut:
+    """The W6h „Katalóg“ window (Erik 2026-11-24): the whole catalog from the read cache `money_articles` — empty `q`
+    lists everything, sortable, paged; the search is the picker's (code, EAN, supplier code, text, `%` pattern). Stock
+    and the e-shop flag are read live from Money for the rows of the page only (information, D18). Before the first
+    catalog sync it falls back to the live picker search."""
     _guard(settings, person)
-    try:
-        async with BridgeClient(settings) as bridge:
-            found = await _find_articles(bridge, db, q, CATALOG_LIMIT)
-            info = {i.article_id: i for i in await bridge.catalog_info([a.id for a, _ in found])}
-    except BridgeUnavailable as exc:
-        raise fail(503, exc.code) from None
-    rows: list[CatalogRow] = []
+    term = q.strip()
+    if set(term) & set("~#|()"):
+        raise fail(422, "unsafe_query")
+    if await article_catalog.cached(db):
+        page = await article_catalog.search(db, term, sort=sort, desc=desc, offset=offset, limit=limit)
+        found = [(article_catalog.as_article(a), kind) for a, kind in page.rows]
+        total, cached = page.total, True
+    else:
+        if len(term) < 2:
+            return CatalogOut(total=0, items=[], cached=False)
+        try:
+            async with BridgeClient(settings) as bridge:
+                found = await _find_articles(bridge, db, term, CATALOG_LIMIT)
+        except BridgeUnavailable as exc:
+            raise fail(503, exc.code) from None
+        total, cached = len(found), False
+    info: dict[uuid.UUID, Any] = {}
+    stock_ok = True
+    if found:
+        try:
+            async with BridgeClient(settings) as bridge:
+                info = {i.article_id: i for i in await bridge.catalog_info([a.id for a, _ in found])}
+        except BridgeUnavailable:
+            stock_ok = False  # the catalog still works from the cache — only without stock (Money offline)
+    items = []
     for a, kind in found:
         extra = info.get(a.id)
-        rows.append(
+        items.append(
             CatalogRow(
                 **a.model_dump(), kind=kind, eshop=bool(extra and extra.eshop), stocks=extra.stocks if extra else []
             )
         )
-    return rows
+    return CatalogOut(total=total, items=items, stock_available=stock_ok, cached=cached)
 
 
 @router.get("/documents/{doc_id}/file")

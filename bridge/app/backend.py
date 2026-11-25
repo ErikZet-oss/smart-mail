@@ -15,6 +15,7 @@ from app.models import (
     ArticleCatalogInfo,
     ArticleCreated,
     ArticleCreateIn,
+    ArticlePage,
     CodebookName,
     CodebookPage,
     Company,
@@ -156,6 +157,8 @@ class MoneyBackend(Protocol):
     async def all_supplier_codes(self, since: datetime | None, start: int, count: int) -> SupplierCodePage: ...
 
     async def lookup_supplier_code(self, supplier_id: uuid.UUID, code: str) -> list[SupplierCode]: ...
+
+    async def all_articles(self, since: datetime | None, start: int, count: int) -> ArticlePage: ...
 
     # ----- Phase 4c (#247, D33): received delivery note as a koncept -----
 

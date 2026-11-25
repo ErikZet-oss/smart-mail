@@ -90,6 +90,30 @@ class MoneySyncState(IdMixin, TimestampMixin, Base):
     history: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
 
 
+class MoneyArticle(TimestampMixin, Base):
+    """W6h Katalóg read cache of `Articles` (Erik approved the table 2026-11-24): the whole catalog so the window can
+    list, sort and search every article like Money. Delta every sync run by `ChangeFrom`, nightly full + deactivation;
+    never written back. Stock and the e-shop flag are NOT cached — they are read live for the rows on screen (D18).
+    `id` is the Money `Articles.ID`."""
+
+    __tablename__ = "money_articles"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    code: Mapped[str | None] = mapped_column(String(100))  # Kod
+    catalog: Mapped[str | None] = mapped_column(String(100), index=True)  # Katalog
+    name: Mapped[str] = mapped_column(String(255))  # Nazev
+    ean: Mapped[str | None] = mapped_column(String(64), index=True)  # CarovyKod
+    unit: Mapped[str | None] = mapped_column(String(40))  # HlavniJednotka.Kod
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(index=True)  # NadrazenyArtikl_ID (a variant → main card)
+    plu: Mapped[str | None] = mapped_column(String(64))
+    last_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))  # PosledniCena
+    search_norm: Mapped[str] = mapped_column(Text)  # lower-case, no diacritics: catalog · code · name (for LIKE)
+    name_norm: Mapped[str] = mapped_column(Text)  # the name alone — the `%` pattern search is on the name (Money)
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False)  # Hidden in Money („skryté položky“)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)  # False = no longer returned by Money (deleted)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class MoneyArticleSupplier(TimestampMixin, Base):
     """#228 read cache of `ArticleSuppliers` (Erik approved the table 2026-11-20): the supplier's code for one of our
     articles. Delta every sync run by `ChangeFrom`, nightly full + deactivation; never written back to Money.

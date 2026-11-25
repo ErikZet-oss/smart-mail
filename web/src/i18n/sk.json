@@ -2142,7 +2142,8 @@
       "companies": "Firmy",
       "persons": "Osoby",
       "codebooks": "Číselníky",
-      "article_suppliers": "Dodávateľské kódy"
+      "article_suppliers": "Dodávateľské kódy",
+      "articles": "Artikle (katalóg)"
     },
     "sync": {
       "title": "Synchronizácia",
@@ -2325,7 +2326,14 @@
       "title": "Katalóg",
       "search": "Hľadať v katalógu (katalóg, názov, EAN, kód dodávateľa, % ako v Money)",
       "hint": "Zadajte aspoň 2 znaky – hľadá sa v katalógovom čísle, názve, EAN a kóde dodávateľa · % = ľubovoľné znaky v názve (ako v Money).",
-      "loading": "Hľadám v Money…",
+      "loading": "Načítavam…",
+      "all_one": "Celý katalóg · {{count}} položka",
+      "all_few": "Celý katalóg · {{count}} položky",
+      "all_many": "Celý katalóg · {{count}} položiek",
+      "all_other": "Celý katalóg · {{count}} položiek",
+      "more": "Načítať ďalšie ({{shown}} z {{total}})",
+      "notSynced": "katalóg sa ešte nesynchronizoval – hľadá sa priamo v Money (najviac 100 výsledkov)",
+      "stockOffline": "Money je nedostupné – zásoby a e-shop sa nezobrazia",
       "empty": "Nič sa nenašlo – skúste kratší text alebo % (napr. %tyč%M10%).",
       "count_one": "{{count}} položka",
       "count_few": "{{count}} položky",

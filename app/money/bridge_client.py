@@ -26,6 +26,7 @@ from app.money.schemas import (
     Article,
     ArticleCatalogInfo,
     ArticleCreated,
+    ArticlePage,
     CatalogFree,
     CodebookName,
     CodebookPage,
@@ -256,6 +257,11 @@ class BridgeClient:
         """#228 read cache sync: every `ArticleSuppliers` row (all suppliers), `ChangeFrom` delta, paged."""
         params = {"since": since.isoformat() if since else None, "from": start, "count": count}
         return await self._model(SupplierCodePage, "/sync/article-suppliers", params)
+
+    async def all_articles(self, since: datetime | None, start: int, count: int) -> ArticlePage:
+        """W6h Katalóg read cache sync: every `Articles` row, `ChangeFrom` delta, paged."""
+        params = {"since": since.isoformat() if since else None, "from": start, "count": count}
+        return await self._model(ArticlePage, "/sync/articles", params)
 
     async def lookup_supplier_code(self, supplier_id: uuid.UUID, code: str) -> list[SupplierCode]:
         """#228 one code exactly as written on the document (`Firma_ID` + `DodavatelskyKod` eq) — the fallback for a

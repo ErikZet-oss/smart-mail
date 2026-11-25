@@ -697,3 +697,17 @@ async def test_article_plu_last_price_and_catalog_text_limit() -> None:
     body = json.loads(gql.calls[0].request.content)
     assert body["variables"]["count"] == 100 and "PLU" in body["query"] and "PosledniCena" in body["query"]
     assert art.plu == "var_a0148" and art.last_price == Decimal("0.3271")
+
+
+@respx.mock
+async def test_all_articles_pages_with_change_from_and_drops_deleted() -> None:
+    """W6h Katalóg read cache: `Articles` with `ChangeFrom`, next page from the RAW page size."""
+    from datetime import UTC, datetime
+
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    gql = respx.post(f"{BASE}/graphql")
+    gql.side_effect = [_gql({"Articles": [ART, {**ART, "ID": str(uuid.uuid4()), "Deleted": True}]})]
+    page = await ApiBackend(settings()).all_articles(datetime(2026, 11, 24, 10, tzinfo=UTC), 0, 2)
+    body = json.loads(gql.calls[0].request.content)
+    assert body["variables"]["changeFrom"].startswith("2026-11-24T10:00") and body["variables"]["count"] == 2
+    assert [a.catalog for a in page.items] == ["99901000006"] and page.next_from == 2

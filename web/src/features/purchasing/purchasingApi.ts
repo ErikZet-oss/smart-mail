@@ -227,8 +227,20 @@ export type CatalogRow = Article & {
   eshop: boolean;
   stocks: StockRow[];
 };
-export const fetchCatalog = (q: string) =>
-  api<CatalogRow[]>('GET', `/api/purchasing/catalog?q=${encodeURIComponent(q)}`, undefined, { global: false });
+export type CatalogSort = 'catalog' | 'name' | 'plu' | 'last_price';
+/** One page of the Katalóg: `cached` false = the first catalog sync has not run yet (a live search, no paging). */
+export type CatalogPage = { total: number; items: CatalogRow[]; stock_available: boolean; cached: boolean };
+export const CATALOG_PAGE = 100;
+export const fetchCatalog = (p: { q: string; sort: CatalogSort; desc: boolean; offset: number }) => {
+  const qs = new URLSearchParams({
+    q: p.q,
+    sort: p.sort,
+    desc: String(p.desc),
+    offset: String(p.offset),
+    limit: String(CATALOG_PAGE),
+  });
+  return api<CatalogPage>('GET', `/api/purchasing/catalog?${qs.toString()}`, undefined, { global: false });
+};
 
 export const searchArticles = (q: string) =>
   api<Article[]>('GET', `/api/purchasing/articles?q=${encodeURIComponent(q)}`, undefined, { global: false });

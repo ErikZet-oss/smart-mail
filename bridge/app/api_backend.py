@@ -40,6 +40,7 @@ from app.models import (
     ArticleCatalogInfo,
     ArticleCreated,
     ArticleCreateIn,
+    ArticlePage,
     ArticleUnit,
     CodebookItem,
     CodebookName,
@@ -891,6 +892,12 @@ class ApiBackend:
         )
         items = [c for c in (supplier_code_from(r) for r in rows) if c is not None]
         return SupplierCodePage(items=items, next_from=next_from)
+
+    async def all_articles(self, since: datetime | None, start: int, count: int) -> ArticlePage:
+        """W6h Katalóg read cache: every `Articles` row, `ChangeFrom` delta, paged (deleted rows dropped)."""
+        count = min(count, self._page)
+        rows, next_from = await self._page_rows("articles", "Articles", start=start, count=count, since=since)
+        return ArticlePage(items=[article_from(r) for r in rows], next_from=next_from)
 
     async def lookup_supplier_code(self, supplier_id: uuid.UUID, code: str) -> list[SupplierCode]:
         """#228 fallback for a code the cache does not know yet: `Firma_ID~eq~X#DodavatelskyKod~eq~<code>`."""

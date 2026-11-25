@@ -349,12 +349,13 @@ const catRow = (id: string, kind: string, catalog: string, name: string, extra: 
   stocks: kind === 'main' ? [] : [stock('w-20', '20', 'Senica', '18'), stock('w-99', '99', 'Externý sklad', '6')],
   ...extra,
 });
-const CATALOG = [
+const ROWS = [
   catRow('a-main', 'main', '9990001', 'Tyč závitová DIN 976 4.8 ZN 2m'),
   catRow('v-8', 'variant', '999000100008', 'tyč záv. M8×2000 4.8 ZN'),
   catRow('v-10', 'variant', '999000100010', 'tyč záv. M10×2000 4.8 ZN'),
   catRow('a-a4', 'article', '309009100010', 'tyc zav. M10 A4-70'),
 ];
+const CATALOG = { total: ROWS.length, items: ROWS, stock_available: true, cached: true };
 
 test('W6h Katalóg: search, stock per warehouse, columns, pick a variant into the line @mobile', async ({
   page,
@@ -381,8 +382,8 @@ test('W6h Katalóg: search, stock per warehouse, columns, pick a variant into th
   const win = page.getByTestId('w6h-catalog');
   await expect(win).toBeVisible();
   await win.getByTestId('w6h-catalog-search').fill('%tyč%M10%');
-  await expect(win.getByTestId('w6h-catalog-status')).toHaveText('4 položky');
   await expect.poll(() => queries.at(-1)).toBe('%tyč%M10%');
+  await expect(win.getByTestId('w6h-catalog-status')).toHaveText('4 položky');
   await expect(win.getByTestId('w6h-catalog-pick')).toBeDisabled();
   await win.getByTestId('w6h-catalog-row-main').click();
   await expect(win.getByTestId('w6h-catalog-pick')).toBeDisabled(); // DL-B11: never the main card
@@ -431,4 +432,42 @@ test('W6h Katalóg: „Založiť variant k …“ opens the new-article form wit
   const drawer = page.getByTestId('w6h-drawer');
   await expect(drawer).toContainText('Tyč závitová DIN 976 4.8 ZN 2m');
   await expect(drawer.getByRole('heading')).toHaveText('Riadok 10 · nový artikel v Money');
+});
+
+test('W6h Katalóg: the whole catalog from the cache — paging, sorting, Money offline', async ({ page }) => {
+  const asked: URLSearchParams[] = [];
+  await mockApi(page, {
+    ...BASE,
+    'GET /api/purchasing/documents/d-1': { body: { ...detail([line(1, {}), ON_MAIN]), can_create_article: true } },
+  });
+  // 150 cached articles: 100 on the first page, the rest when the end of the list comes into view
+  const all = Array.from({ length: 150 }, (_, i) =>
+    catRow(`a-${i}`, 'article', `3110${String(i).padStart(4, '0')}`, `Artikel ${i}`),
+  );
+  await page.route('**/api/purchasing/catalog?**', async (route) => {
+    const p = new URL(route.request().url()).searchParams;
+    asked.push(p);
+    const offset = Number(p.get('offset'));
+    const items = all.slice(offset, offset + Number(p.get('limit')));
+    await route.fulfill({ json: { total: all.length, items, stock_available: offset === 0, cached: true } });
+  });
+  await page.goto('/docs/delivery-notes/d-1');
+  await page.getByTestId('w6h-line-10').dblclick();
+  await page.getByTestId('w6h-open-catalog').click();
+  const win = page.getByTestId('w6h-catalog');
+  await win.getByTestId('w6h-catalog-search').fill('');
+  await expect(win.getByTestId('w6h-catalog-status')).toHaveText('Celý katalóg · 150 položiek');
+  await expect(win.getByTestId('w6h-catalog-row-article')).toHaveCount(100);
+  await win.getByTestId('w6h-catalog-more').scrollIntoViewIfNeeded();
+  await expect(win.getByTestId('w6h-catalog-row-article')).toHaveCount(150);
+  await expect(win.getByTestId('w6h-catalog-more')).toHaveCount(0);
+  // the drawer opens the window with the line text; the empty search then pages through the whole catalog
+  expect(asked.filter((p) => p.get('q') === '').map((p) => p.get('offset'))).toEqual(['0', '100']);
+  await expect(win.getByTestId('w6h-catalog-status')).toContainText('Money je nedostupné'); // page 2 had no stock
+  await win.getByTestId('w6h-catalog-sort-name').click();
+  await expect.poll(() => asked.at(-1)?.get('sort')).toBe('name');
+  expect(asked.at(-1)?.get('desc')).toBe('false');
+  await win.getByTestId('w6h-catalog-sort-name').click();
+  await expect.poll(() => asked.at(-1)?.get('desc')).toBe('true');
+  await expect(win.getByRole('columnheader', { name: 'Názov' })).toHaveAttribute('aria-sort', 'descending');
 });

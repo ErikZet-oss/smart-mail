@@ -421,8 +421,13 @@ progress), created (koncept), failed (error text from Money + "Skúsiť znova" o
 **Dialog „Katalóg“ (Erik 24 Nov 2026, Figma `264:90961` button, `264:91756` window, `265:92125` column chooser,
 mobile `265:99286`):** button **Katalóg** next to the drawer search opens a large window in the look of the Money
 catalog (the drawer search stays). Search = the picker search (exact code / catalog, EAN, supplier code, name or catalog
-containing, `%` pattern in the name like Money), up to 100 rows (`GET /api/purchasing/catalog`), the window opens with
-the drawer search text or the line's current catalog. Grid columns (default): E-shop (globe), Katalóg, Názov, PLU,
+containing, `%` pattern in the name like Money) over the **whole catalog** from the read cache `money_articles`
+(`GET /api/purchasing/catalog?q=&sort=&desc=&offset=&limit=100`): empty search = every visible article („Celý katalóg ·
+N položiek“), 100 rows per page, the next page loads when the end of the list comes into view (button „Načítať ďalšie
+(x z N)“ as a fallback); columns Katalóg (default, ascending), Názov, PLU and Posl. nákupná cena are sortable by a click
+on the header (again = descending). Stock and the e-shop flag are read live for the rows of each page. Before the
+first catalog sync the window searches Money live (≥ 2 characters, ≤ 100 rows, no paging, note „katalóg sa ešte
+nesynchronizoval…“). The window opens with the drawer search text or the line's current catalog. Grid columns (default): E-shop (globe), Katalóg, Názov, PLU,
 Posledná nákupná cena, Zásoba of the selected warehouse (select „Zásoba: {sklad}“, default the line / branch
 warehouse), MJ; „Stĺpce“ = column chooser like Money (hidden / visible, arrows, up / down, reset; extra columns Kód,
 Čiarový kód, Zásoba spolu, Rezervované, Objednané; remembered in the browser). Main cards (Medium + chip „hlavná
@@ -432,7 +437,9 @@ only, nothing is reserved (D18). Footer: „+ Založiť variant k „{hlavná ka
 the selected variant → drawer view „Nový artikel“ in the variant mode with that main card), „+ Nová hlavná karta“
 (main-card mode) — both only with the D32 role / switch —, Zrušiť, **Vybrať** (or double-click) → the article
 becomes the drawer pick. Mobile: full screen, two-line rows, stock as one line, Založiť variant + Vybrať. States:
-hint (fewer than 2 characters), loading, empty („Nič sa nenašlo – skúste kratší text alebo %…“), Money offline error.
+loading, whole catalog, search count, empty („Nič sa nenašlo – skúste kratší text alebo %…“), Money offline (rows from
+the cache, note „Money je nedostupné – zásoby a e-shop sa nezobrazia“), not synced yet (hint for fewer than 2
+characters, live search).
 
 **Drawer view „Nový artikel v Money“ (D32, Figma `255:90955`, `255:91815`, `256:90550`):** link „+ Založiť nový
 artikel v Money“ under the article list (roles warehouse / accounting / admin, hidden for others and when Money is
