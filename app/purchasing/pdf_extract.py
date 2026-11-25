@@ -139,8 +139,10 @@ def doc_from_tool(data: dict[str, Any]) -> ExtractedDoc:
             vat.append(VatRow(rate=rate, base=base, vat=parse_decimal(_s(row.get("vat")))))
     confidence = {str(k): v for k, v in (data.get("confidence") or {}).items() if isinstance(v, int | float)}
     lines = [_line(r) for r in data.get("lines") or [] if isinstance(r, dict)]
-    if len(vat) == 1:
-        # one VAT rate on the whole document and no rate per line (FABORY, pilot 2026-11-23) → every line has it
+    rates = {r.rate.normalize() for r in vat}
+    if len(rates) == 1:
+        # one VAT rate on the whole document and no rate per line (FABORY, pilot 2026-11-23) → every line has it;
+        # also with several recap rows of that one rate (Valenta 2026-11-25: 0 % goods + 0 % service in the EU)
         lines = [ln if ln.vat_rate is not None else ln.model_copy(update={"vat_rate": vat[0].rate}) for ln in lines]
     doc_kind: DocKind = kind if kind in ("invoice", "delivery_note", "order_confirmation", "other") else "unknown"
     return ExtractedDoc(

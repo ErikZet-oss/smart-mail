@@ -8,6 +8,10 @@ Rules:
   due date); `other` = offer, credit note, statement, reminder, price list or anything else; `unknown` only when you
   cannot tell.
 - Return **every goods line**, in the document's order. Never skip, merge or summarise lines, never invent lines.
+- supplier_name / supplier_ico = the company that ISSUED the document (Dodávateľ / Dodavatel / Lieferant), never
+  Smart s.r.o. (the customer, Odberateľ / Příjemce). supplier_ico = its company number (IČO / IČ) as printed; only when no
+  IČO is printed, its VAT number (DIČ / IČ DPH / USt-IdNr) instead.
+- vat_recap = one row per row of the VAT summary as printed (two rows with the same rate stay two rows).
 - Copy codes, numbers and names exactly as printed (supplier article code, EAN, our order number). Do not translate.
 - qty = quantity in the line's own unit; unit = the unit as printed (ks, bal, kg, m …). Never convert or round to
   packages.
