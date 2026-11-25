@@ -36,6 +36,7 @@ from app.money.schemas import Article, SupplierCode
 from app.purchasing import delivery_note, org_settings
 from app.purchasing.models import DocumentLine, SupplierDocument, SupplierItemMapping
 from app.purchasing.numbers import normalize_code
+from app.purchasing.supplier import find_supplier
 from app.purchasing.variants import variants_of
 
 log = structlog.get_logger()
@@ -195,11 +196,18 @@ async def target_warehouse(db: AsyncSession, doc: SupplierDocument) -> str | Non
 
 async def refresh_checks(db: AsyncSession, doc: SupplierDocument, lines: list[DocumentLine]) -> None:
     """Replace the matching checks in `doc.validation` and recompute the review status."""
+    if doc.supplier_money_id is None and doc.supplier_ico:
+        # pilot 2026-11-25: the supplier may have been added to Money (or the cache synced) after the extraction
+        company = await find_supplier(db, doc.supplier_ico)
+        if company is not None:
+            doc.supplier_money_id = company.money_id
+            log.info("purchasing.supplier_resolved", document_id=str(doc.id))
     keep = [
         c
         for c in (doc.validation or [])
         if (c["id"] not in MATCH_CHECKS or (c["id"] == "DL-B4" and c["params"].get("reason") == "no_lines"))
         and not c["params"].get("koncept")
+        and c["id"] != "DL-B2"  # koncept_checks decides it from `supplier_money_id` (no duplicate row in Kontrola)
     ]
     conf = await org_settings.load(db)
     checks = keep + line_checks(doc, lines, await _branch_warehouse(db, doc), conf.price_diff_pct)

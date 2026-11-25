@@ -2,6 +2,11 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Pilot: faktúra českého dodávateľa (Valenta ZT, 25. 11.)
+
+- **DL-B2:** dodávateľ sa v Money hľadá tolerantne – IČO aj s medzerami, bodkami alebo predponou `CZ`/`SK`, a aj v poliach DIČ a IČ DPH karty firmy (zahraniční dodávatelia v Money často IČO nemajú). Keď sa dodávateľ do Money pridá (alebo sa adresár synchronizuje) až po načítaní faktúry, nájde sa pri „Znova spárovať“. V paneli Kontrola už nie je DL-B2 dvakrát a text ukazuje hľadané IČO.
+- **DL-B7:** rekapitulácia DPH s viacerými riadkami tej istej sadzby (0 % tovar z EÚ 505,60 + 0 % služba v EÚ 40,00) sa sčíta – predtým falošne „Súčet riadkov 545,60 nesedí so súčtom dokladu 505,60“. Tabuľka sadzieb v W6h ich tiež sčíta.
+- PDF extrakcia: IČO musí byť dodávateľa, nikdy Smart s.r.o.; riadky rekapitulácie sa nezlučujú.
 ## [Unreleased] — W6h Katalóg: celý katalóg z lokálnej kópie (`money_articles`)
 
 - **Nová tabuľka `money_articles`** (migrácia 0023, schválil Erik 24. 11.): lokálna kópia artiklov z Money (katalóg, názov, kód, EAN, MJ, hlavná karta, PLU, posledná nákupná cena, skrytá). Synchronizácia ako kódy dodávateľov: každých 15 min zmeny (`ChangeFrom`), v noci celá + zneaktívnenie zmazaných; v Nastaveniach 13 nový riadok „Artikle (katalóg)“.

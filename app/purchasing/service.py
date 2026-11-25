@@ -31,6 +31,7 @@ from app.purchasing import org_settings
 from app.purchasing.models import DocumentLine, SupplierDocument
 from app.purchasing.pdf_extract import extract_pdf, pdf_text
 from app.purchasing.schemas import ExtractedDoc
+from app.purchasing.supplier import find_supplier
 from app.purchasing.validation import Context, validate
 from app.purchasing.xmlparse import NotSupplierXml, parse_xml
 
@@ -219,11 +220,7 @@ async def apply_extraction(db: AsyncSession, doc: SupplierDocument, ex: Extracte
                 raw=line.model_dump(mode="json"),
             )
         )
-    company = (
-        await db.scalar(select(MoneyCompany).where(MoneyCompany.ico == ex.supplier_ico, MoneyCompany.active.is_(True)))
-        if ex.supplier_ico
-        else None
-    )
+    company = await find_supplier(db, ex.supplier_ico)
     cache_empty = (await db.scalar(select(MoneyCompany.id).limit(1))) is None
     doc.supplier_money_id = company.money_id if company else None
     duplicate = None

@@ -86,7 +86,8 @@ def koncept_checks(
     every value the write needs, the VAT rate of every stock line, a text-line type for non-stock lines)."""
     out: list[dict[str, Any]] = []
     if doc.supplier_money_id is None:
-        out.append(check("DL-B2", "blocking", reason="not_in_money", ico=doc.supplier_ico))
+        reason = "not_in_money" if doc.supplier_ico else "no_ico"
+        out.append(check("DL-B2", "blocking", reason=reason, ico=doc.supplier_ico))
     if not (doc.delivery_note_number or doc.doc_number):
         out.append(check("DL-B3", "blocking", reason="no_number"))  # `Odkaz` is required for the duplicate check
     missing = [
