@@ -57,10 +57,15 @@ def validate(doc: ExtractedDoc, ctx: Context) -> list[dict[str, Any]]:
                 unknown = True
                 continue
             sums[line.vat_rate.normalize()] += amount
+        # one rate can have several recap rows (pilot 2026-11-25 Valenta: 0 % „dodání do jiného čl. státu“ 505,60
+        # + 0 % „poskytnutí služby v EU“ 40,00) — compare per rate
+        recap: dict[Decimal, Decimal] = defaultdict(lambda: Decimal("0"))
         for row in doc.vat_recap:
-            got = sums.get(row.rate.normalize(), Decimal("0"))
-            if unknown or abs(got - row.base) > TOLERANCE:
-                out.append(check("DL-B7", "blocking", rate=str(row.rate), lines=str(got), document=str(row.base)))
+            recap[row.rate.normalize()] += row.base
+        for rate, base in recap.items():
+            got = sums.get(rate, Decimal("0"))
+            if unknown or abs(got - base) > TOLERANCE:
+                out.append(check("DL-B7", "blocking", rate=format(rate, "f"), lines=str(got), document=str(base)))
                 break
     else:
         out.append(check("DL-B7", "warning", reason="no_vat_recap"))

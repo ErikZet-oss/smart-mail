@@ -637,9 +637,10 @@ function HeaderGrid({ d }: { d: DocumentDetail }) {
           </thead>
           <tbody>
             {VAT_ROWS.map(([rate, key]) => {
-              const row = d.vat_recap.find((r) => Number(r.rate) === Number(rate));
-              const base = row?.base ?? '0';
-              const vat = row?.vat ?? '0';
+              // one rate can have several recap rows (0 % goods from the EU + 0 % service in the EU) — summed
+              const rows = d.vat_recap.filter((r) => Number(r.rate) === Number(rate));
+              const base = rows.reduce((acc, r) => addDec(acc, r.base), '0');
+              const vat = rows.reduce((acc, r) => addDec(acc, r.vat ?? '0'), '0');
               return (
                 <tr key={rate}>
                   <td className="px-2 py-1">{t(`w6h.vatRows.${key}`)}</td>

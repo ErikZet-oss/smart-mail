@@ -2542,6 +2542,8 @@
     },
     "rules": {
       "DL-B2": "Dodávateľ nie je v Money alebo nesedí IČO.",
+      "DL-B2_not_in_money": "Dodávateľ s IČO {{ico}} sa v adresári Money nenašiel (hľadá sa IČO, DIČ aj IČ DPH, aj s predponou CZ/SK). Skontrolujte IČO na karte firmy v Money; po synchronizácii (do 15 min) kliknite „Znova spárovať“.",
+      "DL-B2_no_ico": "Na doklade sa nenašlo IČO dodávateľa – dodávateľa nemožno priradiť ku karte v Money.",
       "DL-B1": "Pobočke {{branch}} chýba v Nastaveniach › Pobočky a osoby › Money: {{missing}}.",
       "DL-B1_nobranch": "Dodací list nemá priradenú pobočku – kliknite na červený štítok „Vyberte pobočku“ v hlavičke dokladu.",
       "DL-B5": "Riadok {{n}} nemá sklad a pobočka {{branch}} nemá nastavený sklad pobočky.",

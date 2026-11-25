@@ -98,3 +98,42 @@ def test_DL_W9_line_total_mismatch_is_a_warning() -> None:
     )
     w9 = [c for c in checks if c["id"] == "DL-W9"]
     assert len(w9) == 1 and w9[0]["level"] == "warning" and w9[0]["params"]["line"] == 1
+
+
+# ----- pilot 2026-11-25 (fictional EU supplier, two 0 % rows in the VAT summary: goods + a service in the EU) -----
+
+
+def _eu_invoice() -> dict[str, object]:
+    return {
+        "kind": "invoice",
+        "supplier_ico": "CZ 123 45 678",
+        "number": "30260001",
+        "issued_on": "2026-11-25",
+        "vat_recap": [{"rate": "0", "base": "505,60"}, {"rate": "0", "base": "40,00"}],
+        "lines": [
+            {"name": "Tyč trapéz Tr24x5", "qty": "25,00", "unit": "ks", "unit_price": "7,1752", "line_total": "179,38"},
+            {"name": "Matica Tr24x5", "qty": "100,00", "unit": "ks", "unit_price": "3,2622", "line_total": "326,22"},
+            {"name": "doprava", "qty": "1,00", "unit": "ks", "line_total": "40,00", "is_fee": True},
+        ],
+    }
+
+
+def test_DL_B7_two_recap_rows_of_one_rate_are_summed() -> None:
+    doc = doc_from_tool(_eu_invoice())
+    assert [ln.vat_rate for ln in doc.lines] == [D("0")] * 3  # one rate (in two rows) still fills the lines
+    checks = validate(
+        doc, Context(today=date(2026, 11, 25), supplier_in_money=True, supplier_ico_matches=True, duplicate_of=None)
+    )
+    assert not [c for c in checks if c["id"] == "DL-B7"]  # 505,60 + 40,00 = Σ lines 545,60
+
+
+def test_DL_B7_rate_in_the_message_is_plain_not_exponent() -> None:
+    data = _eu_invoice() | {"vat_recap": [{"rate": "20", "base": "1,00"}], "lines": [
+        {"name": "x", "qty": "1", "unit": "ks", "unit_price": "2", "line_total": "2,00", "vat_rate": "20"},
+    ]}  # fmt: skip
+    checks = validate(
+        doc_from_tool(data),
+        Context(today=date(2026, 11, 25), supplier_in_money=True, supplier_ico_matches=True, duplicate_of=None),
+    )
+    b7 = next(c for c in checks if c["id"] == "DL-B7")
+    assert b7["params"]["rate"] == "20" and b7["params"]["document"] == "1.00"
