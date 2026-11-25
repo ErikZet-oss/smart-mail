@@ -58,6 +58,28 @@ def test_DL_B6_pick_template_by_the_vat_rate_of_the_stock_lines() -> None:
     assert pick_template(None, [_line(1, "0")]) == (None, {})
 
 
+def test_DL_B6_0_percent_lines_use_the_foreign_template_even_with_its_own_23_percent() -> None:
+    """Pilot 2026-11-25: Smart's own notes of EU suppliers (302600719, Valenta) carry 23 % with Typ ceny „Iba základ“
+    — the invoice says 0 % (reverse charge); the write copies the note as a person enters it in Money."""
+    from app.purchasing.delivery_note import BranchValues, koncept_checks
+
+    eu = {**template(TypCeny=2), "id": FOREIGN_ID}  # 23 %, „Iba základ“
+    branch = Branch(name="x", dl_template_money_id=TEMPLATE_ID, dl_template_values=template())
+    branch.dl_template_foreign_money_id, branch.dl_template_foreign_values = FOREIGN_ID, eu
+    zero = [_line(1, "0"), _line(2, "0.00")]
+    assert pick_template(branch, zero)[0] == FOREIGN_ID
+    assert pick_template(branch, [_line(1, "23")])[0] == TEMPLATE_ID  # domestic stays on the main one
+    assert pick_template(branch, [_line(1, "0"), _line(2, "23")])[0] == TEMPLATE_ID  # mixed → DL-B6
+    assert pick_template(branch, [_line(1, "10")])[0] == TEMPLATE_ID
+    doc = SupplierDocument(supplier_money_id=uuid.uuid4(), supplier_ico="1", doc_number="FA-1")
+    values = BranchValues(CENTRE, WAREHOUSE, "s")
+    assert not [c for c in koncept_checks(doc, zero, branch, values) if c["id"] == "DL-B6"]
+    b6 = [c for c in koncept_checks(doc, [_line(1, "10")], branch, values) if c["id"] == "DL-B6"]
+    assert b6 and b6[0]["params"]["rates"] == ["10"]
+    branch.dl_template_foreign_values = None  # without the second template 0 % blocks as before
+    assert [c["id"] for c in koncept_checks(doc, zero, branch, values)].count("DL-B6") == 1
+
+
 async def test_DL_B6_lines_at_0_percent_use_the_foreign_template_in_checks_and_the_write(
     client: Client, db: AsyncSession, mail_server: FakeMailServer, switch_on: None
 ) -> None:
@@ -108,14 +130,14 @@ async def test_settings_11e_foreign_template_pick_by_number_verify_and_remove(
     ]  # fmt: skip
     rows = (await client.get(f"{url}/dl-templates", params={"kind": "foreign", "number": "DLP0719/2026"})).json()
     assert [r["number"] for r in rows] == ["DLP0719/2026"] and rows[0]["selected"] is False
-    same = _id("same-rate")
-    KonceptBridge.templates[same] = {**template(), "id": same}
-    bad = await client.send_json("PUT", f"{url}/dl-template", {"note_id": same, "kind": "foreign"})
-    assert bad.status_code == 422 and bad.json()["detail"]["code"] == "template_same_rate"  # would never be used
+    KonceptBridge.templates[TEMPLATE_ID] = template()
+    bad = await client.send_json("PUT", f"{url}/dl-template", {"note_id": TEMPLATE_ID, "kind": "foreign"})
+    assert bad.status_code == 422 and bad.json()["detail"]["code"] == "template_same_note"  # must be another note
     KonceptBridge.templates[FOREIGN_ID] = foreign()
     r = await client.send_json("PUT", f"{url}/dl-template", {"note_id": FOREIGN_ID, "kind": "foreign"})
     assert r.status_code == 200, r.text
     assert r.json()["template"]["number"] == "DLP0719/2026" and r.json()["template"]["vat_rate"] == "0"
+    assert r.json()["template"]["price_type"] == 2
     main = (await client.get(f"{url}/dl-template")).json()
     assert main["template"]["id"] == TEMPLATE_ID and main["template"]["vat_rate"] == "23"  # the main one untouched
     verify = (await client.send_json("POST", f"{url}/verify")).json()

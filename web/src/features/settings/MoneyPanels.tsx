@@ -678,6 +678,7 @@ function BranchTemplate({ branchId, centreSet, kind }: { branchId: string; centr
             {tpl.vat_rate != null ? (
               <span className="type-caption text-text-secondary" data-testid="branch-dl-template-vat">
                 {t('money.template.vatRate', { rate: tpl.vat_rate })}
+                {tpl.price_type === 2 ? ` · ${t('money.template.priceBase')}` : ''}
               </span>
             ) : null}
             {tpl.missing.length ? (

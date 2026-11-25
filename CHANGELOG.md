@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Vzor pre zahraničných dodávateľov: faktúry s 0 % DPH
+
+- Pilot 25. 11.: starý dodací list Valenty 302600719 má v Money sadzbu 23 % a typ ceny „Iba základ“ – tak sa v Smart zadávajú dodávatelia z EÚ. Vzor preto nemusí mať 0 %: faktúra, ktorej všetky skladové riadky majú 0 % DPH, sa zapíše podľa vzoru pre zahraničných dodávateľov a sadzba aj typ ceny sa prevezmú z neho. Kontrola „rovnaká sadzba ako hlavný vzor“ je nahradená kontrolou „iný doklad ako hlavný vzor“. Karta vzoru ukazuje aj typ ceny „Iba základ“.
+
 ## [Unreleased] — Dva vzorové dodacie listy pobočky (D35)
 
 - **Nastavenia › Pobočky a osoby › Money (11e):** nový nepovinný **„Vzor pre zahraničných dodávateľov (0 % DPH)“** vedľa hlavného vzoru. Vyberá sa podľa čísla dokladu v Money (aj starší doklad, nielen posledných 20), dá sa odstrániť; oba vzory musia mať inú sadzbu DPH. Pri karte vzoru je uvedená sadzba DPH jeho položky. „Overiť nastavenie v Money“ kontroluje aj druhý vzor.
