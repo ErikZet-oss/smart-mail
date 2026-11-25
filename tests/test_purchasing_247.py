@@ -136,8 +136,10 @@ class KonceptBridge(ArticleBridge):
         self.made[smid] = out
         return out
 
-    async def received_notes(self, centre_id: uuid.UUID, count: int = 20) -> list[ReceivedNoteRow]:
-        return list(self.rows)
+    async def received_notes(
+        self, centre_id: uuid.UUID, count: int = 20, *, number: str | None = None
+    ) -> list[ReceivedNoteRow]:
+        return [r for r in self.rows if number is None or r.number == number]
 
     async def delivery_note_template(self, note_id: uuid.UUID) -> DeliveryNoteTemplate | None:
         found = self.templates.get(str(note_id))

@@ -495,7 +495,10 @@ export type DlTemplate = {
   missing: string[];
   centre?: string | null; // pilot 2026-11-23: the branch the template note is from (Money centre „Kód – Názov“)
   series?: string | null;
+  vat_rate?: string | null; // VAT % of its stock line — decides which template a document uses (2026-11-25)
 };
+/** `main` = the branch template; `foreign` = the optional second one for foreign suppliers (0 % VAT, 2026-11-25). */
+export type DlTemplateKind = 'main' | 'foreign';
 export type DlTemplateState = { centre_set: boolean; template: DlTemplate | null; money_available: boolean };
 export type DlNoteRow = {
   id: string;
@@ -508,15 +511,28 @@ export type DlNoteRow = {
 };
 export type VerifyRow = { id: string; ok: boolean | null; detail: string | null };
 const tplUrl = (id: string) => `/api/settings/money/branches/${encodeURIComponent(id)}`;
-export const dlTemplateKey = (id: string) => ['settings', 'money', 'dl-template', id] as const;
-export const fetchDlTemplate = (id: string) =>
-  api<DlTemplateState>('GET', `${tplUrl(id)}/dl-template`, undefined, { global: false });
-export const fetchDlTemplates = (id: string) =>
-  api<DlNoteRow[]>('GET', `${tplUrl(id)}/dl-templates`, undefined, { global: false });
-export const saveDlTemplate = (id: string, noteId: string) =>
-  api<DlTemplateState>('PUT', `${tplUrl(id)}/dl-template`, { note_id: noteId }, { global: false });
+export const dlTemplateKey = (id: string, kind: DlTemplateKind = 'main') =>
+  ['settings', 'money', 'dl-template', id, kind] as const;
+export const fetchDlTemplate = (id: string, kind: DlTemplateKind = 'main') =>
+  api<DlTemplateState>('GET', `${tplUrl(id)}/dl-template?kind=${kind}`, undefined, { global: false });
+export const fetchDlTemplates = (id: string, kind: DlTemplateKind = 'main', number = '') =>
+  api<DlNoteRow[]>(
+    'GET',
+    `${tplUrl(id)}/dl-templates?kind=${kind}${number ? `&number=${encodeURIComponent(number)}` : ''}`,
+    undefined,
+    { global: false },
+  );
+export const saveDlTemplate = (id: string, noteId: string, kind: DlTemplateKind = 'main') =>
+  api<DlTemplateState>('PUT', `${tplUrl(id)}/dl-template`, { note_id: noteId, kind }, { global: false });
+export const deleteForeignDlTemplate = (id: string) =>
+  api<DlTemplateState>('DELETE', `${tplUrl(id)}/dl-template`, undefined, { global: false });
 export const verifyBranch = (id: string) =>
-  api<{ rows: VerifyRow[]; template: DlTemplate | null }>('POST', `${tplUrl(id)}/verify`, {}, { global: false });
+  api<{ rows: VerifyRow[]; template: DlTemplate | null; template_foreign?: DlTemplate | null }>(
+    'POST',
+    `${tplUrl(id)}/verify`,
+    {},
+    { global: false },
+  );
 export const testBranchReport = (id: string, kind: string, number: string) =>
   apiBlob(
     'GET',

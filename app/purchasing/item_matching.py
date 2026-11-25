@@ -215,7 +215,7 @@ async def refresh_checks(db: AsyncSession, doc: SupplierDocument, lines: list[Do
     branch = await db.get(Branch, doc.branch_id) if doc.branch_id else None
     invalid = await invalid_branch_ids(db, branch.id) if branch else set()
     checks += delivery_note.mark(
-        delivery_note.koncept_checks(doc, lines, branch, delivery_note.branch_values(branch, invalid))
+        delivery_note.koncept_checks(doc, lines, branch, delivery_note.branch_values(branch, invalid, lines))
     )
     doc.validation = checks
     if doc.status in ("needs_review", "missing_data"):

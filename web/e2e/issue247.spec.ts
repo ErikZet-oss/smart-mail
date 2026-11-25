@@ -447,6 +447,36 @@ test('#247 Settings 11e: branch warehouse, template note „Vybrať iný“ and 
       },
     },
   });
+  // 2026-11-25: the second template for foreign suppliers (0 % VAT) — not set at first, picked by its number
+  const foreignPuts: unknown[] = [];
+  const asked: string[] = [];
+  const FOREIGN = { ...TPL('n-719', '302600719'), supplier: 'Fiktívny EU dodávateľ s.r.o.', vat_rate: '0' };
+  await page.route('**/api/settings/money/branches/b-se/dl-template**', async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const body = req.postDataJSON() as { kind?: string } | null;
+    if (req.method() === 'GET' && url.searchParams.get('kind') === 'foreign') {
+      return route.fulfill({ json: { centre_set: true, template: null, money_available: true } });
+    }
+    if (req.method() === 'PUT' && body?.kind === 'foreign') {
+      foreignPuts.push(body);
+      return route.fulfill({ json: { centre_set: true, template: FOREIGN, money_available: true } });
+    }
+    if (req.method() === 'DELETE') {
+      return route.fulfill({ json: { centre_set: true, template: null, money_available: true } });
+    }
+    return route.fallback();
+  });
+  await page.route('**/api/settings/money/branches/b-se/dl-templates?**', async (route) => {
+    const url = new URL(route.request().url());
+    const number = url.searchParams.get('number');
+    if (url.searchParams.get('kind') !== 'foreign') return route.fallback();
+    asked.push(number ?? '');
+    const row = { id: 'n-719', number: '302600719', supplier: 'Fiktívny EU dodávateľ s.r.o.', issued_on: '2026-03-02' };
+    return route.fulfill({
+      json: number === '302600719' ? [{ ...row, koncept: false, by_smart_mail: false, selected: false }] : [],
+    });
+  });
   await page.goto('/settings/branches/money');
   const panel = page.getByTestId('settings-branch-money');
   await panel.getByTestId('branch-warehouse').selectOption(WH);
@@ -463,12 +493,27 @@ test('#247 Settings 11e: branch warehouse, template note „Vybrať iný“ and 
   await expect(list).toContainText('zo Smart Mail');
   await list.getByRole('button', { name: /DLP0400\/2026/ }).click();
   await expect(card.getByTestId('branch-dl-template-number')).toHaveText('DLP0400/2026');
-  expect(picked).toEqual({ note_id: 'n-0' });
-  await card.getByTestId('branch-verify').click();
-  const result = card.getByTestId('branch-verify-result');
+  expect(picked).toEqual({ note_id: 'n-0', kind: 'main' });
+  await panel.getByTestId('branch-verify').click();
+  const result = panel.getByTestId('branch-verify-result');
   await expect(result).toContainText('Vzorový dodací list');
   await expect(result).toContainText('Cenník pobočky');
+  const foreign = panel.getByTestId('branch-dl-template-foreign');
+  await expect(foreign).toContainText('Vzor pre zahraničných dodávateľov (0 % DPH)');
+  await expect(foreign).toContainText('Nenastavený');
+  await foreign.getByRole('button', { name: 'Vybrať vzor' }).click();
+  await foreign.getByTestId('branch-dl-template-number-search').fill('302600719');
+  await foreign.getByRole('button', { name: 'Hľadať' }).click();
+  await foreign.getByRole('button', { name: /302600719/ }).click();
+  await expect(foreign.getByTestId('branch-dl-template-number')).toHaveText('302600719');
+  await expect(foreign.getByTestId('branch-dl-template-vat')).toHaveText(
+    'Sadzba DPH položky 0 % – použije sa pre doklady s touto sadzbou',
+  );
+  expect(foreignPuts).toEqual([{ note_id: 'n-719', kind: 'foreign' }]);
+  expect(asked.at(-1)).toBe('302600719');
   await shot(page, 'issue247-W12-11e-template-desktop');
+  await foreign.getByTestId('branch-dl-template-remove').click();
+  await expect(foreign).toContainText('Nenastavený');
 });
 
 // pilot 2026-11-23: „Originál dokladu“ opens the W2l preview (an iframe was blocked → the browser downloaded the file)

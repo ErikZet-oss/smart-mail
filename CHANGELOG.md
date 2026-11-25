@@ -2,6 +2,12 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Dva vzorové dodacie listy pobočky (D35)
+
+- **Nastavenia › Pobočky a osoby › Money (11e):** nový nepovinný **„Vzor pre zahraničných dodávateľov (0 % DPH)“** vedľa hlavného vzoru. Vyberá sa podľa čísla dokladu v Money (aj starší doklad, nielen posledných 20), dá sa odstrániť; oba vzory musia mať inú sadzbu DPH. Pri karte vzoru je uvedená sadzba DPH jeho položky. „Overiť nastavenie v Money“ kontroluje aj druhý vzor.
+- **Zápis dodacieho listu:** použije sa vzor, ktorého položka má sadzbu DPH všetkých skladových riadkov dokladu (sadzba, typ ceny „Iba základ“ … sa skopírujú z neho). Ak sadzbu nemá žiadny vzor alebo má doklad zmiešané sadzby, DL-B6 blokuje s návodom.
+- Migrácia 0024 (3 stĺpce v `branches`), most: `GET /delivery-notes/received?number=` (len čítanie). **Treba aktualizovať most na Windows.**
+
 ## [Unreleased] — Pilot: faktúra českého dodávateľa (Valenta ZT, 25. 11.)
 
 - **DL-B2:** dodávateľ sa v Money hľadá tolerantne – IČO aj s medzerami, bodkami alebo predponou `CZ`/`SK`, a aj v poliach DIČ a IČ DPH karty firmy (zahraniční dodávatelia v Money často IČO nemajú). Keď sa dodávateľ do Money pridá (alebo sa adresár synchronizuje) až po načítaní faktúry, nájde sa pri „Znova spárovať“. V paneli Kontrola už nie je DL-B2 dvakrát a text ukazuje hľadané IČO.

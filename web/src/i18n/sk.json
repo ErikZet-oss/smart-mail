@@ -1970,6 +1970,17 @@
       "none": "Pobočka nemá vzorový dodací list – dodacie listy sa do Money nezapíšu (DL-B6).",
       "origin": "Doklad strediska {{centre}} · číselný rad {{series}}",
       "pick": "Vybrať iný",
+      "vatRate": "Sadzba DPH položky {{rate}} % – použije sa pre doklady s touto sadzbou",
+      "numberPlaceholder": "Číslo dokladu v Money",
+      "find": "Hľadať",
+      "notFound": "Dodací list prijatý {{number}} tejto pobočky sa v Money nenašiel.",
+      "foreign": {
+        "label": "Vzor pre zahraničných dodávateľov (0 % DPH)",
+        "help": "Nepovinný druhý vzor – napr. dodací list od dodávateľa z EÚ so sadzbou 0 % a typom ceny „Iba základ“. Doklad, ktorého skladové riadky majú sadzbu tohto vzoru, sa zapíše podľa neho; ostatné podľa hlavného vzoru.",
+        "none": "Nenastavený – doklady so sadzbou DPH, ktorú hlavný vzor nemá (napr. 0 %), sa do Money nezapíšu (DL-B6).",
+        "set": "Vybrať vzor",
+        "remove": "Odstrániť"
+      },
       "empty": "V Money zatiaľ nie je žiadny dodací list prijatý tejto pobočky.",
       "cached": "načítané {{date}}",
       "missing": "Vzoru chýba: {{fields}} – vyberte iný doklad.",
@@ -1984,12 +1995,14 @@
         "warehouse": "Sklad pobočky",
         "price_list": "Cenník pobočky",
         "series": "Číselný rad dodacích listov",
-        "template": "Vzorový dodací list"
+        "template": "Vzorový dodací list",
+        "template_foreign": "Vzor pre zahraničných dodávateľov"
       },
       "errors": {
         "centre_missing": "Najprv vyberte a uložte stredisko pobočky.",
         "template_other_centre": "Doklad patrí inej pobočke (iné stredisko).",
         "template_incomplete": "Vybraný doklad nemá všetky potrebné hodnoty – vyberte iný.",
+        "template_same_rate": "Oba vzory by mali rovnakú sadzbu DPH ({{rate}} %) – druhý vzor musí mať inú sadzbu, inak by sa nikdy nepoužil.",
         "note_not_found": "Doklad sa v Money nenašiel.",
         "money_unavailable": "Money je nedostupné."
       }
@@ -2557,7 +2570,7 @@
       "DL-B5": "Riadok {{n}} nemá sklad a pobočka {{branch}} nemá nastavený sklad pobočky.",
       "DL-B6_none": "Pobočka {{branch}} nemá vzorový dodací list – vyberte ho v Nastaveniach › Pobočky a osoby › Money.",
       "DL-B6_incomplete": "Vzorový dodací list pobočky {{branch}} je neúplný – chýba: {{missing}}. V Nastaveniach › Pobočky a osoby › Money vyberte iný vzor (bežný dodací list s položkou s artiklom a skladom).",
-      "DL-B6_vat_rate": "Riadky so sadzbou DPH {{rates}} % – vzorový dodací list pobočky {{branch}} má položku s inou sadzbou. Vyberte vzor s touto sadzbou.",
+      "DL-B6_vat_rate": "Riadky so sadzbou DPH {{rates}} % – žiadny vzorový dodací list pobočky {{branch}} nemá túto sadzbu. Pre dodávateľov zo zahraničia nastavte v Nastaveniach › Pobočky a osoby › Money „Vzor pre zahraničných dodávateľov“ (dodací list s touto sadzbou). Doklad s rôznymi sadzbami v jednom nejde zapísať.",
       "DL-B6_text_line": "Doklad má neskladové riadky, ale vzorový dodací list pobočky {{branch}} nemá textovú položku. Vyberte vzor s textovou položkou.",
       "noBranchName": "(bez pobočky)",
       "fields": {

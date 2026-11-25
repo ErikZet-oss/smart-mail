@@ -695,10 +695,16 @@ class MockBackend:
         self.data.received_notes.append(raw)
         return note_created_from(raw, reconciled=False)
 
-    async def received_notes(self, centre_id: uuid.UUID, count: int) -> list[ReceivedNoteRow]:
+    async def received_notes(
+        self, centre_id: uuid.UUID, count: int, *, number: str | None = None
+    ) -> list[ReceivedNoteRow]:
         from app.api_backend import note_row_from
 
-        rows = [r for r in self.data.received_notes if r.get("Stredisko_ID") == str(centre_id)]
+        rows = [
+            r
+            for r in self.data.received_notes
+            if r.get("Stredisko_ID") == str(centre_id) and (number is None or r.get("CisloDokladu") == number)
+        ]
         rows.sort(key=lambda r: (str(r.get("Create_Date") or ""), str(r.get("CisloDokladu") or "")), reverse=True)
         return [note_row_from(r) for r in rows[:count]]
 

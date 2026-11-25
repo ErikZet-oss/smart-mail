@@ -458,3 +458,21 @@ def test_D34_header_side_costs_must_equal_the_lines() -> None:
     for bad in (body("2.50", [None, None]), body(None, ["0.50"]), body("2.50", ["0.83", "0.83", "0.83"])):
         with pytest.raises(ValidationError):
             DeliveryNoteIn.model_validate(bad)
+
+
+def test_settings_11e_received_notes_by_number_in_the_mock() -> None:
+    """2026-11-25: an older note (from a foreign supplier) is picked by its number — the 20 newest may not have it."""
+    client = make_client()
+    rows = client.get(f"/delivery-notes/received?centre_id={CENTRE}&number=DLP0001/2026").json()
+    assert [r["number"] for r in rows] == ["DLP0001/2026"]
+    assert client.get(f"/delivery-notes/received?centre_id={CENTRE}&number=NIE").json() == []
+
+
+@respx.mock
+async def test_settings_11e_received_notes_by_number_filters_in_money() -> None:
+    _token(respx.post(f"{BASE}/connect/token"), [0])
+    gql = respx.post(f"{BASE}/graphql")
+    gql.side_effect = [_gql({"ReceivedDeliveryNotes": []})]
+    assert await ApiBackend(settings()).received_notes(CENTRE, 20, number="302600719") == []
+    sent = json.loads(gql.calls[0].request.content)["variables"]["filter"]
+    assert sent == f"Stredisko_ID~eq~{CENTRE}#CisloDokladu~eq~302600719"
