@@ -53,15 +53,52 @@ class BranchValues:
     series: str | None  # branch override, else the template's CiselnaRada_ID
 
 
-def template_of(branch: Branch | None) -> dict[str, Any]:
-    return dict((branch.dl_template_values or {}) if branch else {})
+def templates_of(branch: Branch | None) -> list[tuple[str, dict[str, Any]]]:
+    """The branch templates as (Money note id, cached values): the main one first, then the one for foreign suppliers
+    (Erik 2026-11-25: Slovak suppliers with 23 %, EU suppliers with 0 % „Iba základ“ — one note cannot carry both)."""
+    if branch is None:
+        return []
+    return [
+        (str(money_id or values.get("id") or ""), dict(values))
+        for money_id, values in (
+            (branch.dl_template_money_id, branch.dl_template_values),
+            (branch.dl_template_foreign_money_id, branch.dl_template_foreign_values),
+        )
+        if values
+    ]
 
 
-def branch_values(branch: Branch | None, invalid: set[str]) -> BranchValues:
+def _stock_rates(lines: list[DocumentLine]) -> set[str]:
+    return {r for ln in lines if not ln.is_fee and ln.line_status != "non_stock" and (r := _rate(ln.vat_rate))}
+
+
+def template_rate(tpl: dict[str, Any]) -> str | None:
+    return _rate((tpl.get("line") or {}).get("DphSazba"))
+
+
+def pick_template(branch: Branch | None, lines: list[DocumentLine] | None = None) -> tuple[str | None, dict[str, Any]]:
+    """The template whose stock line has the VAT rate of every stock line of the document (`SazbaDPH_ID` is copied
+    from it, never guessed) — the main template when it fits, when nothing decides or when none fits (→ DL-B6)."""
+    tpls = templates_of(branch)
+    if not tpls:
+        return None, {}
+    rates = _stock_rates(lines or [])
+    if rates:
+        for money_id, tpl in tpls:
+            if not missing_template_values(tpl) and rates == {template_rate(tpl)}:
+                return money_id, tpl
+    return tpls[0]
+
+
+def template_of(branch: Branch | None, lines: list[DocumentLine] | None = None) -> dict[str, Any]:
+    return pick_template(branch, lines)[1]
+
+
+def branch_values(branch: Branch | None, invalid: set[str], lines: list[DocumentLine] | None = None) -> BranchValues:
     """`invalid` = branch fields whose IDs are not in the current Money agenda (#212) — they count as not set."""
     if branch is None:
         return BranchValues(None, None, None)
-    tpl = template_of(branch)
+    tpl = template_of(branch, lines)
     series = (branch.series_overrides or {}).get(SERIES_KEY) or (tpl.get("header") or {}).get("CiselnaRada_ID")
     return BranchValues(
         centre=None if "money_centre_id" in invalid else branch.money_centre_id,
@@ -100,14 +137,15 @@ def koncept_checks(
     no_wh = [ln.line_no for ln in stock if ln.warehouse_id is None and not values.warehouse]
     for n in no_wh:
         out.append(check("DL-B5", "blocking", n=n))
-    tpl = template_of(branch)
+    tpl = template_of(branch, lines)
     if not tpl or missing_template_values(tpl):
         out.append(check("DL-B6", "blocking", missing=missing_template_values(tpl) if tpl else ["template"]))
         return out
-    template_rate = _rate((tpl.get("line") or {}).get("DphSazba"))
-    rates = sorted({r for ln in stock if (r := _rate(ln.vat_rate)) is not None and r != template_rate})
+    own = template_rate(tpl)
+    rates = sorted({r for ln in stock if (r := _rate(ln.vat_rate)) is not None and r != own})
     if rates:  # SazbaDPH_ID is copied from the template line — another rate would need an ID we do not have
-        out.append(check("DL-B6", "blocking", reason="vat_rate", rates=rates))
+        have = sorted({r for _, t in templates_of(branch) if (r := template_rate(t)) is not None})
+        out.append(check("DL-B6", "blocking", reason="vat_rate", rates=rates, templates=have))
     if any(ln.line_status == "non_stock" for ln in goods) and not tpl.get("text_line"):
         out.append(check("DL-B6", "blocking", reason="text_line"))
     return out
@@ -180,7 +218,7 @@ def build_payload(
     with_address: bool,
 ) -> tuple[dict[str, Any], list[Expected]]:
     """The bridge body (`DeliveryNoteIn`). Call only when `koncept_checks` and the line checks are green."""
-    tpl = template_of(branch)
+    tpl = template_of(branch, lines)
     header, tline = tpl.get("header") or {}, tpl.get("line") or {}
     local = now.astimezone(TZ)
     today = local.date()

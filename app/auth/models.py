@@ -66,6 +66,10 @@ class Branch(IdMixin, TimestampMixin, Base):
     dl_template_money_id: Mapped[str | None] = mapped_column(String(64))
     dl_template_values: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     dl_template_cached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 2026-11-25: second template for foreign suppliers (0 % VAT, „Iba základ“) — picked by the VAT rate of the lines
+    dl_template_foreign_money_id: Mapped[str | None] = mapped_column(String(64))
+    dl_template_foreign_values: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    dl_template_foreign_cached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Person(IdMixin, TimestampMixin, Base):

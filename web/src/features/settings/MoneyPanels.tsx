@@ -11,11 +11,13 @@ import { day } from '../money/moneyApi';
 import { INPUT } from './adminUi';
 import {
   branchMoneyKey,
+  deleteForeignDlTemplate,
   dlTemplateKey,
   fetchBranchMoney,
   fetchDlTemplate,
   fetchDlTemplates,
   saveDlTemplate,
+  type DlTemplateKind,
   verifyBranch,
   saveBranchMoney,
   testBranchReport,
@@ -583,59 +585,78 @@ function BranchMoneyForm({
           ))}
         </div>
       </section>
-      <BranchTemplate branchId={branch.id} centreSet={Boolean(branch.centre_id)} />
+      <BranchTemplate branchId={branch.id} centreSet={Boolean(branch.centre_id)} kind="main" />
+      <BranchTemplate branchId={branch.id} centreSet={Boolean(branch.centre_id)} kind="foreign" />
+      <BranchVerify branchId={branch.id} />
       <p className="type-small text-text-secondary">{t('money.branch.later')}</p>
     </div>
   );
 }
 
 /** SETTINGS 11e „Vzorový dodací list pobočky“ + „Overiť nastavenie v Money“ (#247, D33; Figma `72:62745`,
- * `72:62757`): the received note of the branch centre whose Money values the koncept write copies — never guessed. */
-function BranchTemplate({ branchId, centreSet }: { branchId: string; centreSet: boolean }) {
+ * `72:62757`): the received note of the branch centre whose Money values the koncept write copies — never guessed.
+ * `kind="foreign"` (Erik 2026-11-25): the optional second template for foreign suppliers (0 % VAT, „Iba základ“) —
+ * a document uses the template whose stock line has the VAT rate of its lines. Picked by its number (older notes). */
+function BranchTemplate({ branchId, centreSet, kind }: { branchId: string; centreSet: boolean; kind: DlTemplateKind }) {
   const { t } = useTranslation();
   const toasts = useToasts();
   const qc = useQueryClient();
+  const foreign = kind === 'foreign';
+  const k = foreign ? 'money.template.foreign' : 'money.template';
+  const testId = foreign ? 'branch-dl-template-foreign' : 'branch-dl-template';
   const [picking, setPicking] = useState(false);
+  const [number, setNumber] = useState('');
+  const [search, setSearch] = useState('');
   const state = useQuery({
-    queryKey: dlTemplateKey(branchId),
-    queryFn: () => fetchDlTemplate(branchId),
+    queryKey: dlTemplateKey(branchId, kind),
+    queryFn: () => fetchDlTemplate(branchId, kind),
     enabled: centreSet,
     retry: false,
   });
   const rows = useQuery({
-    queryKey: [...dlTemplateKey(branchId), 'list'],
-    queryFn: () => fetchDlTemplates(branchId),
+    queryKey: [...dlTemplateKey(branchId, kind), 'list', search],
+    queryFn: () => fetchDlTemplates(branchId, kind, search),
     enabled: picking,
     retry: false,
   });
   const fail = (e: unknown) => {
     const code = e instanceof ApiError ? e.detail.code : 'generic';
-    toasts.error(t(`money.template.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
+    const rate = e instanceof ApiError ? String(e.detail.rate ?? '') : '';
+    toasts.error(t(`money.template.errors.${code}`, { defaultValue: t('mail.errors.generic'), rate }));
   };
   const pick = useMutation({
-    mutationFn: (noteId: string) => saveDlTemplate(branchId, noteId),
+    mutationFn: (noteId: string) => saveDlTemplate(branchId, noteId, kind),
     onSuccess: (out) => {
-      qc.setQueryData(dlTemplateKey(branchId), out);
+      qc.setQueryData(dlTemplateKey(branchId, kind), out);
       setPicking(false);
       toasts.success(t('settings.saved'));
     },
     onError: fail,
   });
-  const verify = useMutation({ mutationFn: () => verifyBranch(branchId), onError: fail });
+  const remove = useMutation({
+    mutationFn: () => deleteForeignDlTemplate(branchId),
+    onSuccess: (out) => {
+      qc.setQueryData(dlTemplateKey(branchId, kind), out);
+      toasts.success(t('settings.saved'));
+    },
+    onError: fail,
+  });
   const tpl = state.data?.template ?? null;
   return (
-    <section className="flex flex-col gap-3" data-testid="branch-dl-template">
+    <section className="flex flex-col gap-3" data-testid={testId}>
       <div className="flex flex-col gap-0.5">
         <span className="type-label flex items-center gap-1.5 text-text-primary">
-          {t('money.template.label')}
+          {t(`${k}.label`)}
           <span className="type-caption text-warning-600" aria-hidden="true">
             ⚠
           </span>
         </span>
-        <span className="type-caption text-text-secondary">{t('money.template.help')}</span>
+        <span className="type-caption text-text-secondary">{t(`${k}.help`)}</span>
       </div>
       {!centreSet ? (
-        <p className="type-small text-text-secondary">{t('money.template.centreFirst')}</p>
+        foreign ? null : (
+          <p className="type-small text-text-secondary">{t('money.template.centreFirst')}</p>
+        )
       ) : state.data && !state.data.money_available ? (
         <Banner kind="warning" message={t('money.errors.money_unavailable')} />
       ) : tpl ? (
@@ -654,10 +675,15 @@ function BranchTemplate({ branchId, centreSet }: { branchId: string; centreSet: 
                 {t('money.template.origin', { centre: tpl.centre ?? '–', series: tpl.series ?? '–' })}
               </span>
             ) : null}
+            {tpl.vat_rate != null ? (
+              <span className="type-caption text-text-secondary" data-testid="branch-dl-template-vat">
+                {t('money.template.vatRate', { rate: tpl.vat_rate })}
+              </span>
+            ) : null}
             {tpl.missing.length ? (
               <span className="type-caption text-danger-600">
                 {t('money.template.missing', {
-                  fields: tpl.missing.map((k) => t(`w6h.rules.fields.${k}`, { defaultValue: k })).join(', '),
+                  fields: tpl.missing.map((f) => t(`w6h.rules.fields.${f}`, { defaultValue: f })).join(', '),
                 })}
               </span>
             ) : null}
@@ -665,85 +691,141 @@ function BranchTemplate({ branchId, centreSet }: { branchId: string; centreSet: 
           <Button variant="secondary" type="button" onClick={() => setPicking((p) => !p)}>
             {t('money.template.pick')}
           </Button>
+          {foreign ? (
+            <Button
+              variant="secondary"
+              type="button"
+              disabled={remove.isPending}
+              onClick={() => remove.mutate()}
+              data-testid="branch-dl-template-remove"
+            >
+              {t('money.template.foreign.remove')}
+            </Button>
+          ) : null}
         </div>
       ) : state.isSuccess ? (
         <div className="flex flex-wrap items-center gap-3">
-          <span className="type-small text-danger-600">{t('money.template.none')}</span>
+          <span className={`type-small ${foreign ? 'text-text-secondary' : 'text-danger-600'}`}>{t(`${k}.none`)}</span>
           <Button variant="secondary" type="button" onClick={() => setPicking(true)}>
-            {t('money.template.pick')}
+            {t(foreign ? 'money.template.foreign.set' : 'money.template.pick')}
           </Button>
         </div>
       ) : null}
       {picking ? (
-        <div className="overflow-hidden rounded-md border border-border-default" data-testid="branch-dl-template-list">
-          {rows.isError ? (
-            <p className="type-small p-3 text-danger-600">{t('money.errors.money_unavailable')}</p>
-          ) : rows.data && rows.data.length === 0 ? (
-            <p className="type-small p-3 text-text-secondary">{t('money.template.empty')}</p>
-          ) : (
-            (rows.data ?? []).map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                disabled={pick.isPending || r.selected}
-                onClick={() => pick.mutate(r.id)}
-                className="type-small flex w-full items-center gap-3 border-b border-border-default px-3 py-2 text-left last:border-b-0 hover:bg-bg-subtle disabled:cursor-default"
-              >
-                <span className="w-32 shrink-0 tabular-nums text-text-primary">{r.number ?? '–'}</span>
-                <span className="min-w-0 flex-1 truncate text-text-primary">{r.supplier ?? '–'}</span>
-                <span className="shrink-0 text-text-secondary">{r.issued_on ? day(r.issued_on) : ''}</span>
-                {r.by_smart_mail ? (
-                  <span className="type-caption shrink-0 rounded-full bg-bg-muted px-2 text-text-secondary">
-                    {t('money.template.bySmartMail')}
-                  </span>
-                ) : null}
-                {r.selected ? (
-                  <span className="type-caption shrink-0 rounded-full bg-success-50 px-2 text-success-600">
-                    {t('money.template.selected')}
-                  </span>
-                ) : null}
-              </button>
-            ))
-          )}
+        <div className="flex flex-col gap-2">
+          <form
+            className="flex flex-wrap items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearch(number.trim());
+            }}
+          >
+            <input
+              className={`${INPUT} w-56`}
+              value={number}
+              onChange={(e) => setNumber(e.target.value)}
+              maxLength={40}
+              placeholder={t('money.template.numberPlaceholder')}
+              aria-label={t('money.template.numberPlaceholder')}
+              data-testid="branch-dl-template-number-search"
+            />
+            <Button variant="secondary" type="submit">
+              {t('money.template.find')}
+            </Button>
+          </form>
+          <div
+            className="overflow-hidden rounded-md border border-border-default"
+            data-testid="branch-dl-template-list"
+          >
+            {rows.isError ? (
+              <p className="type-small p-3 text-danger-600">{t('money.errors.money_unavailable')}</p>
+            ) : rows.data && rows.data.length === 0 ? (
+              <p className="type-small p-3 text-text-secondary">
+                {search ? t('money.template.notFound', { number: search }) : t('money.template.empty')}
+              </p>
+            ) : (
+              (rows.data ?? []).map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  disabled={pick.isPending || r.selected}
+                  onClick={() => pick.mutate(r.id)}
+                  className="type-small flex w-full items-center gap-3 border-b border-border-default px-3 py-2 text-left last:border-b-0 hover:bg-bg-subtle disabled:cursor-default"
+                >
+                  <span className="w-32 shrink-0 tabular-nums text-text-primary">{r.number ?? '–'}</span>
+                  <span className="min-w-0 flex-1 truncate text-text-primary">{r.supplier ?? '–'}</span>
+                  <span className="shrink-0 text-text-secondary">{r.issued_on ? day(r.issued_on) : ''}</span>
+                  {r.by_smart_mail ? (
+                    <span className="type-caption shrink-0 rounded-full bg-bg-muted px-2 text-text-secondary">
+                      {t('money.template.bySmartMail')}
+                    </span>
+                  ) : null}
+                  {r.selected ? (
+                    <span className="type-caption shrink-0 rounded-full bg-success-50 px-2 text-success-600">
+                      {t('money.template.selected')}
+                    </span>
+                  ) : null}
+                </button>
+              ))
+            )}
+          </div>
         </div>
       ) : null}
-      <div className="flex flex-col gap-2">
-        <div>
-          <Button
-            variant="secondary"
-            type="button"
-            disabled={verify.isPending}
-            onClick={() => verify.mutate()}
-            data-testid="branch-verify"
-          >
-            {t('money.template.verify')}
-          </Button>
-        </div>
-        {verify.data ? (
-          <ul className="flex flex-col gap-1" data-testid="branch-verify-result">
-            {verify.data.rows.map((row) => (
-              <li key={row.id} className="type-small flex items-center gap-2">
-                {row.ok === true ? (
-                  <CircleCheck size={14} aria-hidden="true" className="text-success-600" />
-                ) : row.ok === false ? (
-                  <CircleX size={14} aria-hidden="true" className="text-danger-600" />
-                ) : (
-                  <CircleMinus size={14} aria-hidden="true" className="text-text-tertiary" />
-                )}
-                <span className="text-text-primary">{t(`money.template.check.${row.id}`)}</span>
-                <span className="text-text-secondary">
-                  {row.ok === true
-                    ? t('money.template.ok')
-                    : row.ok === false
-                      ? t('money.template.bad')
-                      : t('money.template.notChecked')}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
     </section>
+  );
+}
+
+/** SETTINGS 11e „Overiť nastavenie v Money“ — centre, warehouse, series and both templates (read again from Money). */
+function BranchVerify({ branchId }: { branchId: string }) {
+  const { t } = useTranslation();
+  const toasts = useToasts();
+  const fail = (e: unknown) => {
+    const code = e instanceof ApiError ? e.detail.code : 'generic';
+    toasts.error(t(`money.template.errors.${code}`, { defaultValue: t('mail.errors.generic') }));
+  };
+  const qc = useQueryClient();
+  const verify = useMutation({
+    mutationFn: () => verifyBranch(branchId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['settings', 'money', 'dl-template', branchId] }),
+    onError: fail,
+  });
+  return (
+    <div className="flex flex-col gap-2" data-testid="branch-verify-box">
+      <div>
+        <Button
+          variant="secondary"
+          type="button"
+          disabled={verify.isPending}
+          onClick={() => verify.mutate()}
+          data-testid="branch-verify"
+        >
+          {t('money.template.verify')}
+        </Button>
+      </div>
+      {verify.data ? (
+        <ul className="flex flex-col gap-1" data-testid="branch-verify-result">
+          {verify.data.rows.map((row) => (
+            <li key={row.id} className="type-small flex items-center gap-2">
+              {row.ok === true ? (
+                <CircleCheck size={14} aria-hidden="true" className="text-success-600" />
+              ) : row.ok === false ? (
+                <CircleX size={14} aria-hidden="true" className="text-danger-600" />
+              ) : (
+                <CircleMinus size={14} aria-hidden="true" className="text-text-tertiary" />
+              )}
+              <span className="text-text-primary">{t(`money.template.check.${row.id}`)}</span>
+              <span className="text-text-secondary">
+                {row.ok === true
+                  ? t('money.template.ok')
+                  : row.ok === false
+                    ? t('money.template.bad')
+                    : t('money.template.notChecked')}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

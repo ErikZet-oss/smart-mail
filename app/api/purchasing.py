@@ -365,7 +365,7 @@ async def _detail(db: DB, doc: SupplierDocument, *, money_available: bool = True
             {"name": company.name, "ico": company.ico, "dic": company.dic, "icdph": company.icdph} if company else None
         ),
         series=str(series) if series else None,
-        template=(branch.dl_template_values or {}) if branch else {},
+        template=delivery_note.template_of(branch, lines),  # the main one or the one for foreign suppliers
         warehouses=warehouses,
         can_create_article=person is not None and person.role in ARTICLE_ROLES and conf.create_article,
         can_write=person is not None and person.role in ROLES and conf.write_delivery_notes,
@@ -1242,7 +1242,7 @@ async def create_in_money(
         raise fail(409, "checks_failed")
     conf = await org_settings.load(db)
     state = await org_settings.load_state(db)
-    values = delivery_note.branch_values(branch, await invalid_branch_ids(db, branch.id))
+    values = delivery_note.branch_values(branch, await invalid_branch_ids(db, branch.id), lines)
     payload, expected = delivery_note.build_payload(
         doc,
         lines,
@@ -1306,7 +1306,7 @@ async def create_in_money(
         "mismatches": mismatches,
         "reconciled": back.reconciled,
     }
-    doc.template_source = branch.dl_template_money_id
+    doc.template_source = delivery_note.pick_template(branch, lines)[0]
     if back.address_empty and not state.send_supplier_address:  # MONEY_API 5.5.7: next writes send the address
         await org_settings.save_state(db, state.model_copy(update={"send_supplier_address": True}))
     audit(

@@ -359,11 +359,14 @@ class BridgeClient:
         except ValidationError as exc:
             raise BridgeUnavailable("bridge_contract") from exc
 
-    async def received_notes(self, centre_id: uuid.UUID, count: int = 20) -> list[ReceivedNoteRow]:
-        """Settings 11e „Vybrať iný“: the newest received delivery notes of the branch centre."""
-        return await self._list(
-            ReceivedNoteRow, "/delivery-notes/received", {"centre_id": str(centre_id), "count": count}
-        )
+    async def received_notes(
+        self, centre_id: uuid.UUID, count: int = 20, *, number: str | None = None
+    ) -> list[ReceivedNoteRow]:
+        """Settings 11e „Vybrať iný“: the newest received delivery notes of the branch centre (or the one numbered)."""
+        params: dict[str, object] = {"centre_id": str(centre_id), "count": count}
+        if number:
+            params["number"] = number
+        return await self._list(ReceivedNoteRow, "/delivery-notes/received", params)
 
     async def delivery_note_template(self, note_id: uuid.UUID) -> DeliveryNoteTemplate | None:
         data = await self._get(f"/delivery-notes/received/{note_id}/template", allow_404=True)

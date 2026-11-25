@@ -294,11 +294,15 @@ async def supplier_article_codes(
 
 @router.get("/delivery-notes/received")
 async def received_notes(
-    request: Request, centre_id: uuid.UUID, count: Annotated[int, Query(ge=1, le=50)] = 20
+    request: Request,
+    centre_id: uuid.UUID,
+    count: Annotated[int, Query(ge=1, le=50)] = 20,
+    number: Annotated[str | None, Query(min_length=1, max_length=40)] = None,
 ) -> list[ReceivedNoteRow]:
-    """The newest received delivery notes of a centre (Číslo · Dodávateľ · Dátum) — read only."""
+    """The newest received delivery notes of a centre (Číslo · Dodávateľ · Dátum), or the one with `number` (Settings
+    11e, an older note picked by its number) — read only."""
     backend: MoneyBackend = request.app.state.backend
-    return await backend.received_notes(centre_id, count)
+    return await backend.received_notes(centre_id, count, number=number)
 
 
 @router.get("/delivery-notes/received/{note_id}/template")

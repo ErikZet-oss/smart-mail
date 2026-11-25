@@ -849,12 +849,16 @@ class ApiBackend:
             return await self._note_back(_required_uuid(found.get("ID")), reconciled=True)
         return await self._note_back(new_id, reconciled=False)
 
-    async def received_notes(self, centre_id: uuid.UUID, count: int) -> list[ReceivedNoteRow]:
-        """Settings 11e „Vybrať iný“: the newest received delivery notes of a centre (sorted here — no server order)."""
+    async def received_notes(
+        self, centre_id: uuid.UUID, count: int, *, number: str | None = None
+    ) -> list[ReceivedNoteRow]:
+        """Settings 11e „Vybrať iný“: the newest received delivery notes of a centre (sorted here — no server order);
+        with `number` the note of that number (an older one — 2026-11-25, a note from a foreign supplier)."""
+        filter_ = cond("Stredisko_ID", "eq", centre_id)
+        if number:
+            filter_ = all_(filter_, cond("CisloDokladu", "eq", number))
         rows = await self._raw(
-            "received_delivery_notes",
-            "ReceivedDeliveryNotes",
-            {"filter": cond("Stredisko_ID", "eq", centre_id), "count": NOTES_SCAN},
+            "received_delivery_notes", "ReceivedDeliveryNotes", {"filter": filter_, "count": NOTES_SCAN}
         )
         alive = _alive(rows)
         alive.sort(key=lambda r: (_s(r.get("Create_Date")) or "", _s(r.get("CisloDokladu")) or ""), reverse=True)

@@ -84,7 +84,8 @@ async def test_1hc_assign_href_and_new_event_unread(
         status="open",
         assignee_id=uuid.UUID(me["person"]["id"]),
         assigned_by_id=other.id,
-        assigned_at=datetime(2026, 10, 26, 18, 0, tzinfo=UTC),
+        # relative to now: dismissals older than 30 days are pruned (a fixed date broke on 2026-11-25)
+        assigned_at=(datetime.now(UTC) - timedelta(days=1)).replace(microsecond=0),
         last_message_at=datetime.now(UTC),
     )
     db.add(thread)
@@ -104,7 +105,7 @@ async def test_1hc_assign_href_and_new_event_unread(
     assert (await client.get("/api/notifications")).json()["unread_count"] == 0
 
     # Reassignment later → new id → unread again
-    thread.assigned_at = datetime(2026, 10, 27, 10, 0, tzinfo=UTC)
+    thread.assigned_at = (datetime.now(UTC) - timedelta(hours=1)).replace(microsecond=0)
     thread.assigned_by_id = other.id
     await db.commit()
     again = await client.get("/api/notifications")
