@@ -318,6 +318,7 @@ class DeliveryNoteItemIn(_Model):
     TypObsahu: int
     SazbaDPH_ID: uuid.UUID | None = None
     DruhSazbyDPH: int | None = None
+    Predkontace_ID: uuid.UUID | None = None  # the template line's own (EU supplier note, pilot 2026-11-26)
     Stredisko_ID: uuid.UUID
     DruhPolozky_ID: uuid.UUID | None = None
     ObsahPolozky: DeliveryNoteContentIn | None = None  # None = text (non-stock) line
@@ -351,6 +352,8 @@ class DeliveryNoteIn(_Model):
     RegistraceDPH_ID: uuid.UUID | None = None
     DruhDokladu_ID: uuid.UUID | None = None
     Mena_ID: uuid.UUID | None = None
+    # „Spôsob výpočtu DPH“ copied from the template (2 on an EU supplier's note = no VAT, pilot 2026-11-26)
+    ZpusobVypoctuDPH: int | None = Field(default=None, ge=0, le=9)
     Odkaz: str = Field(min_length=1, max_length=50)
     ParovaciSymbol: str | None = Field(default=None, max_length=50)
     Nazev: str = Field(min_length=len(KONCEPT_PREFIX), max_length=100)
@@ -449,8 +452,8 @@ class DeliveryNoteTemplate(_Model):
     supplier: str | None
     issued_on: date | None
     centre_id: uuid.UUID | None
-    header: dict[str, str]  # CiselnaRada_ID … Group_ID, Mena_ID (only present values)
+    header: dict[str, str]  # CiselnaRada_ID … Group_ID, Mena_ID, ZpusobVypoctuDPH (only present values)
     line: dict[
         str, str | int
-    ]  # first stock line: TypObsahu, TypCeny, DruhPolozky_ID, SazbaDPH_ID, DruhSazbyDPH, VazbaTypVazby, VazbaPocet*
+    ]  # first stock line: TypObsahu, TypCeny, DruhPolozky_ID, SazbaDPH_ID, DruhSazbyDPH, Predkontace_ID, Vazba*
     text_line: dict[str, int] | None  # TypObsahu of a text line, when the template has one
