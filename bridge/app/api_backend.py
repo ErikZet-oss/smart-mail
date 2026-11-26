@@ -420,6 +420,10 @@ def note_row_from(raw: dict[str, Any]) -> ReceivedNoteRow:
 def template_from(raw: dict[str, Any]) -> DeliveryNoteTemplate:
     """Header IDs + the first stock line (article + warehouse) + a text line's `TypObsahu` — only values Money has."""
     header = {k: str(v) for k in TEMPLATE_HEADER if (v := _uuid(raw.get(k))) is not None}
+    # pilot 2026-11-26 (Valenta 302600719, probe): an EU supplier's note has „Spôsob výpočtu DPH“ 2 + Typ ceny 2 —
+    # without the header value Money computed 23 % VAT on the koncept
+    if raw.get("ZpusobVypoctuDPH") is not None:
+        header["ZpusobVypoctuDPH"] = str(int(raw["ZpusobVypoctuDPH"]))
     line: dict[str, str | int] = {}
     text_line: dict[str, int] | None = None
     for item in _rows(raw.get("Polozky")):
@@ -429,7 +433,7 @@ def template_from(raw: dict[str, Any]) -> DeliveryNoteTemplate:
             for k in ("TypObsahu", "TypCeny", "DruhSazbyDPH"):
                 if item.get(k) is not None:
                     line[k] = int(item[k])
-            for k in ("DruhPolozky_ID", "SazbaDPH_ID"):
+            for k in ("DruhPolozky_ID", "SazbaDPH_ID", "Predkontace_ID"):  # Predkontace_ID: the line's own (EU note)
                 if (v := _uuid(item.get(k))) is not None:
                     line[k] = str(v)
             if item.get("DphSazba") is not None:  # the VAT % of SazbaDPH_ID — lines with another rate never get it

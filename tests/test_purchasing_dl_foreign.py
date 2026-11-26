@@ -38,8 +38,9 @@ FOREIGN_ID = _id("template-foreign")
 
 
 def foreign() -> dict[str, Any]:
-    tpl = template(TypCeny=2, DphSazba="0", SazbaDPH_ID=_id("vat-0"), DruhSazbyDPH=0)
-    return {**tpl, "id": FOREIGN_ID, "number": "DLP0719/2026", "supplier": "Fiktívny EU dodávateľ"}
+    tpl = template(TypCeny=2, DphSazba="0", SazbaDPH_ID=_id("vat-0"), DruhSazbyDPH=0, Predkontace_ID=_id("eu-post"))
+    header = {**tpl["header"], "ZpusobVypoctuDPH": "2"}  # pilot 2026-11-26: Smart's EU notes — no VAT computed
+    return {**tpl, "header": header, "id": FOREIGN_ID, "number": "DLP0719/2026", "supplier": "Fiktívny EU dodávateľ"}
 
 
 def _line(n: int, rate: str | None, *, fee: bool = False, status: str = "matched") -> DocumentLine:
@@ -105,8 +106,10 @@ async def test_DL_B6_lines_at_0_percent_use_the_foreign_template_in_checks_and_t
     r = await _create(client, detail)
     assert r.status_code == 200, r.text
     ((payload, _tok),) = KonceptBridge.posts
+    assert payload["ZpusobVypoctuDPH"] == 2  # „Spôsob výpočtu DPH“ of the template — Money computes no VAT
     for it in payload["Polozky"]:
         assert it["SazbaDPH_ID"] == _id("vat-0") and it["TypCeny"] == 2 and it["Stredisko_ID"] == CENTRE
+        assert it["Predkontace_ID"] == _id("eu-post")
         assert it["ObsahPolozky"]["Sklad_ID"] == WAREHOUSE
     await db.refresh(doc)
     assert doc.template_source == FOREIGN_ID

@@ -305,7 +305,7 @@ def build_payload(
                 "Stredisko_ID": centre,
                 "ObsahPolozky": {k: v for k, v in content.items() if v is not None},
             }
-            for key in ("SazbaDPH_ID", "DruhPolozky_ID"):
+            for key in ("SazbaDPH_ID", "DruhPolozky_ID", "Predkontace_ID"):
                 if tline.get(key):
                     item[key] = str(tline[key])
             if tline.get("DruhSazbyDPH") is not None:
@@ -342,6 +342,9 @@ def build_payload(
         "Schvaleno": False,
         "Polozky": items,
         "DodatecnePorizovaciNaklady": _dec_str(fees) if fees > 0 else None,  # D34
+        # pilot 2026-11-26: „Spôsob výpočtu DPH“ of the template (2 on an EU supplier's note — Money computed VAT
+        # on the koncept without it)
+        "ZpusobVypoctuDPH": int(header["ZpusobVypoctuDPH"]) if header.get("ZpusobVypoctuDPH") else None,
     }
     assert all(i["Stredisko_ID"] == body["Stredisko_ID"] for i in items)  # DL-B9 (internal, never fires)
     return {k: v for k, v in body.items() if v is not None}, expected

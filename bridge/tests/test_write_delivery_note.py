@@ -476,3 +476,29 @@ async def test_settings_11e_received_notes_by_number_filters_in_money() -> None:
     assert await ApiBackend(settings()).received_notes(CENTRE, 20, number="302600719") == []
     sent = json.loads(gql.calls[0].request.content)["variables"]["filter"]
     assert sent == f"Stredisko_ID~eq~{CENTRE}#CisloDokladu~eq~302600719"
+
+
+def test_template_copies_vat_method_and_line_posting_of_an_eu_supplier_note() -> None:
+    """Pilot 2026-11-26 (probe of Smart's EU note): ZpusobVypoctuDPH 2 in the header + TypCeny 2 and its own
+    Predkontace_ID on the line — without them Money computed 23 % VAT on the koncept."""
+    posting = uuid.uuid4()
+    tpl = template_from(
+        {
+            "ID": NEW_ID,
+            "ZpusobVypoctuDPH": 2,
+            "Polozky": [
+                {"TypObsahu": 1, "TypCeny": 2, "DphSazba": 23, "Predkontace_ID": str(posting),
+                 "ObsahPolozky": {"Artikl_ID": str(uuid.uuid4()), "Sklad_ID": str(uuid.uuid4())}},
+            ],
+        }
+    )  # fmt: skip
+    assert tpl.header == {"ZpusobVypoctuDPH": "2"}
+    assert tpl.line["TypCeny"] == 2 and tpl.line["Predkontace_ID"] == str(posting)
+    eu_note = DeliveryNoteIn.model_validate(
+        note() | {"ZpusobVypoctuDPH": 2, "Polozky": [note()["Polozky"][0] | {"Predkontace_ID": str(posting)}]}
+    )
+    sent = eu_note.money_input()
+    assert sent["ZpusobVypoctuDPH"] == 2 and sent["Polozky"][0]["Predkontace_ID"] == str(posting)
+    assert (
+        "ZpusobVypoctuDPH" not in DeliveryNoteIn.model_validate(note()).money_input()
+    )  # only when the template has it

@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — Dodávatelia z EÚ bez DPH: spôsob výpočtu DPH zo vzoru
+
+- Pilot 26. 11. (test `--koncept`, koncept 302600980 vs. vzor 302600719): dodací list dodávateľa z EÚ má v Money v hlavičke „Spôsob výpočtu DPH“ 2, na položke typ ceny 2 („Iba základ“) a vlastnú predkontáciu. Appka teraz zo vzoru preberá aj `ZpusobVypoctuDPH` (hlavička) a `Predkontace_ID` položky; predtým Money na koncepte dopočítal 23 % DPH. Po aktualizácii treba vzory načítať znova („Overiť nastavenie v Money“).
+
 ## [Unreleased] — DL-B7 sa prepočíta pri každej kontrole
 
 - Pilot 26. 11.: doklad Valenty stále hlásil „Súčet riadkov 545.60 nesedí so súčtom dokladu 505.60“ – výsledok kontroly uložený pri načítaní faktúry (pred opravou v #265) sa už neprepočítaval. DL-B7 sa teraz počíta znova pri každom otvorení dokladu a „Znova spárovať“ z uložených riadkov a rekapitulácie, takže zohľadní aj opravy riadkov.
