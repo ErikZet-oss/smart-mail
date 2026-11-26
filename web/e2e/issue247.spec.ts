@@ -450,7 +450,12 @@ test('#247 Settings 11e: branch warehouse, template note „Vybrať iný“ and 
   // 2026-11-25: the second template for foreign suppliers (0 % VAT) — not set at first, picked by its number
   const foreignPuts: unknown[] = [];
   const asked: string[] = [];
-  const FOREIGN = { ...TPL('n-719', '302600719'), supplier: 'Fiktívny EU dodávateľ s.r.o.', vat_rate: '0' };
+  const FOREIGN = {
+    ...TPL('n-719', '302600719'),
+    supplier: 'Fiktívny EU dodávateľ s.r.o.',
+    vat_rate: '23',
+    price_type: 2,
+  };
   await page.route('**/api/settings/money/branches/b-se/dl-template**', async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -507,7 +512,7 @@ test('#247 Settings 11e: branch warehouse, template note „Vybrať iný“ and 
   await foreign.getByRole('button', { name: /302600719/ }).click();
   await expect(foreign.getByTestId('branch-dl-template-number')).toHaveText('302600719');
   await expect(foreign.getByTestId('branch-dl-template-vat')).toHaveText(
-    'Sadzba DPH položky 0 % – použije sa pre doklady s touto sadzbou',
+    'Sadzba DPH položky 23 % · typ ceny „Iba základ“',
   );
   expect(foreignPuts).toEqual([{ note_id: 'n-719', kind: 'foreign' }]);
   expect(asked.at(-1)).toBe('302600719');

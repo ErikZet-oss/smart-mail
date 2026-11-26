@@ -55,7 +55,7 @@ class BranchValues:
 
 def templates_of(branch: Branch | None) -> list[tuple[str, dict[str, Any]]]:
     """The branch templates as (Money note id, cached values): the main one first, then the one for foreign suppliers
-    (Erik 2026-11-25: Slovak suppliers with 23 %, EU suppliers with 0 % „Iba základ“ — one note cannot carry both)."""
+    (D35, Erik 2026-11-25: Slovak suppliers vs EU suppliers „Iba základ“ — one note cannot carry both)."""
     if branch is None:
         return []
     return [
@@ -68,6 +68,9 @@ def templates_of(branch: Branch | None) -> list[tuple[str, dict[str, Any]]]:
     ]
 
 
+ZERO = "0"
+
+
 def _stock_rates(lines: list[DocumentLine]) -> set[str]:
     return {r for ln in lines if not ln.is_fee and ln.line_status != "non_stock" and (r := _rate(ln.vat_rate))}
 
@@ -76,9 +79,21 @@ def template_rate(tpl: dict[str, Any]) -> str | None:
     return _rate((tpl.get("line") or {}).get("DphSazba"))
 
 
+def _is_foreign(branch: Branch | None, money_id: str | None) -> bool:
+    return bool(
+        branch
+        and money_id
+        and branch.dl_template_foreign_values
+        and money_id == str(branch.dl_template_foreign_money_id or branch.dl_template_foreign_values.get("id") or "")
+    )
+
+
 def pick_template(branch: Branch | None, lines: list[DocumentLine] | None = None) -> tuple[str | None, dict[str, Any]]:
-    """The template whose stock line has the VAT rate of every stock line of the document (`SazbaDPH_ID` is copied
-    from it, never guessed) — the main template when it fits, when nothing decides or when none fits (→ DL-B6)."""
+    """1. The template whose stock line has the VAT rate of every stock line (`SazbaDPH_ID` is copied from it, never
+    guessed), main first. 2. Every stock line at 0 % (an EU supplier, reverse charge) → the template for foreign
+    suppliers, whatever its own rate: pilot 2026-11-25, Smart's own notes of EU suppliers carry 23 % with Typ ceny
+    „Iba základ“ (302600719, Valenta) — the write copies that, as a person enters it in Money. 3. The main one (DL-B6
+    when it does not fit)."""
     tpls = templates_of(branch)
     if not tpls:
         return None, {}
@@ -87,6 +102,10 @@ def pick_template(branch: Branch | None, lines: list[DocumentLine] | None = None
         for money_id, tpl in tpls:
             if not missing_template_values(tpl) and rates == {template_rate(tpl)}:
                 return money_id, tpl
+        if rates == {ZERO}:
+            for money_id, tpl in tpls:
+                if _is_foreign(branch, money_id) and not missing_template_values(tpl):
+                    return money_id, tpl
     return tpls[0]
 
 
@@ -137,12 +156,14 @@ def koncept_checks(
     no_wh = [ln.line_no for ln in stock if ln.warehouse_id is None and not values.warehouse]
     for n in no_wh:
         out.append(check("DL-B5", "blocking", n=n))
-    tpl = template_of(branch, lines)
+    tpl_id, tpl = pick_template(branch, lines)
     if not tpl or missing_template_values(tpl):
         out.append(check("DL-B6", "blocking", missing=missing_template_values(tpl) if tpl else ["template"]))
         return out
-    own = template_rate(tpl)
-    rates = sorted({r for ln in stock if (r := _rate(ln.vat_rate)) is not None and r != own})
+    accepted = {template_rate(tpl)}
+    if _is_foreign(branch, tpl_id):
+        accepted.add(ZERO)  # 0 % lines of an EU supplier, written like the foreign-supplier template (see pick)
+    rates = sorted({r for ln in stock if (r := _rate(ln.vat_rate)) is not None and r not in accepted})
     if rates:  # SazbaDPH_ID is copied from the template line — another rate would need an ID we do not have
         have = sorted({r for _, t in templates_of(branch) if (r := template_rate(t)) is not None})
         out.append(check("DL-B6", "blocking", reason="vat_rate", rates=rates, templates=have))

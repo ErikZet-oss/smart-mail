@@ -496,6 +496,7 @@ export type DlTemplate = {
   centre?: string | null; // pilot 2026-11-23: the branch the template note is from (Money centre „Kód – Názov“)
   series?: string | null;
   vat_rate?: string | null; // VAT % of its stock line — decides which template a document uses (2026-11-25)
+  price_type?: number | null; // its line `TypCeny` (2 = „Iba základ“)
 };
 /** `main` = the branch template; `foreign` = the optional second one for foreign suppliers (0 % VAT, 2026-11-25). */
 export type DlTemplateKind = 'main' | 'foreign';

@@ -46,6 +46,7 @@ class TemplateOut(BaseModel):
     centre: str | None = None
     series: str | None = None
     vat_rate: str | None = None  # the VAT % of its stock line — decides which template a document uses
+    price_type: int | None = None  # its line `TypCeny` (2 = „Iba základ“) — shown so the admin sees what is copied
 
 
 class TemplateState(BaseModel):
@@ -120,7 +121,15 @@ async def _out(db: DB, branch: Branch, kind: Kind = "main") -> TemplateOut | Non
         centre=await _codebook_label(db, "centres", values.get("centre_id")),
         series=await _codebook_label(db, "numerical-series", header.get("CiselnaRada_ID")),
         vat_rate=template_rate(values),
+        price_type=_int((values.get("line") or {}).get("TypCeny")),
     )
+
+
+def _int(value: object) -> int | None:
+    try:
+        return int(str(value)) if value is not None else None
+    except ValueError:
+        return None
 
 
 def _centre(branch: Branch) -> uuid.UUID | None:
@@ -240,10 +249,9 @@ async def put_template(
     missing = missing_template_values(values)
     if missing:
         raise fail(422, "template_incomplete", missing=missing)
-    other = _stored(branch, "main" if body.kind == "foreign" else "foreign")[1]
-    if other and template_rate(other) == template_rate(values):
-        # two templates with one VAT rate: the second would never be used — each must carry its own rate
-        raise fail(422, "template_same_rate", rate=template_rate(values))
+    other_id = _stored(branch, "main" if body.kind == "foreign" else "foreign")[0]
+    if other_id and str(other_id).lower() == str(tpl.id).lower():
+        raise fail(422, "template_same_note")  # the second template must be another note (D35)
     before = _stored(branch, body.kind)[0]
     _store(branch, tpl, body.kind)
     audit(

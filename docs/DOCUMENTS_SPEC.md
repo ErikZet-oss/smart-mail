@@ -174,7 +174,8 @@ Admin can pin a specific document as the template in SETTINGS 11e ("Vzorový dod
 DL-B6 blocks with "Pobočka nemá vzorový dodací list – vytvorte jeden v Money alebo vyberte vzor v Nastaveniach".
 Second template (D35, 2026-11-25): a branch may also pin a note of a foreign supplier (0 %, „Iba základ“) as „Vzor pre
 zahraničných dodávateľov“. The document uses the template whose stock line has the VAT rate of all its stock lines
-(main first); a rate no template has, or several rates in one document → DL-B6 `vat_rate`.
+(main first); all stock lines at 0 % → the foreign-supplier template whatever its own rate (Smart enters EU notes as
+23 % „Iba základ“); another rate, or several rates in one document → DL-B6 `vat_rate`.
 
 ### 2.7 Validation (blocking DL-B, warnings DL-W) — every rule has a test named after its id
 | Id | Rule | Message (SK) |
