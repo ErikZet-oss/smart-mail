@@ -59,3 +59,35 @@ async def test_DL_B2_supplier_added_to_money_later_is_found_on_refresh(db: Async
     await refresh_checks(db, doc, [])  # „Znova spárovať“ after the cache sync
     assert doc.supplier_money_id == company.money_id
     assert not [c for c in doc.validation if c["id"] == "DL-B2"]
+
+
+async def test_DL_B7_stale_result_from_the_extraction_is_recomputed_on_refresh(db: AsyncSession) -> None:
+    """Pilot 2026-11-26: a DL-B7 stored at extraction (before the per-rate fix) kept blocking the document."""
+    from decimal import Decimal as D
+
+    from app.purchasing.models import DocumentLine
+
+    stale = {"id": "DL-B7", "level": "blocking", "params": {"rate": "0", "lines": "545.60", "document": "505.60"}}
+    doc = SupplierDocument(
+        source="upload", kind="invoice", filename="fa.pdf", content_type="application/pdf", sha256="1" * 64,
+        storage_key="k", status="missing_data", supplier_ico="12345678", validation=[stale],
+        vat_recap=[{"rate": "0", "base": "505.60", "vat": "0"}, {"rate": "0", "base": "40.00", "vat": "0"}],
+    )  # fmt: skip
+    db.add(doc)
+    await db.flush()
+    lines = [
+        DocumentLine(document_id=doc.id, line_no=1, name="a", qty=D("25"), unit_price=D("7.1752"),
+                     line_total=D("179.38"), vat_rate=D("0")),
+        DocumentLine(document_id=doc.id, line_no=2, name="b", qty=D("100"), unit_price=D("3.2622"),
+                     line_total=D("326.22"), vat_rate=D("0")),
+        DocumentLine(document_id=doc.id, line_no=3, name="doprava", qty=D("1"), line_total=D("40.00"),
+                     vat_rate=D("0"), is_fee=True),
+    ]  # fmt: skip
+    db.add_all(lines)
+    await db.commit()
+    await refresh_checks(db, doc, lines)
+    assert not [c for c in doc.validation if c["id"] == "DL-B7"]
+    lines[1].line_total = D("300.00")  # a person corrected a line → the totals no longer match
+    await refresh_checks(db, doc, lines)
+    b7 = [c for c in doc.validation if c["id"] == "DL-B7"]
+    assert len(b7) == 1 and b7[0]["params"] == {"rate": "0", "lines": "519.38", "document": "545.60"}

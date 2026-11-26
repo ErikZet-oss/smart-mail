@@ -2,6 +2,10 @@
 
 All notable changes. Format: Keep a Changelog; versions follow the build phases (CLAUDE.md §12).
 
+## [Unreleased] — DL-B7 sa prepočíta pri každej kontrole
+
+- Pilot 26. 11.: doklad Valenty stále hlásil „Súčet riadkov 545.60 nesedí so súčtom dokladu 505.60“ – výsledok kontroly uložený pri načítaní faktúry (pred opravou v #265) sa už neprepočítaval. DL-B7 sa teraz počíta znova pri každom otvorení dokladu a „Znova spárovať“ z uložených riadkov a rekapitulácie, takže zohľadní aj opravy riadkov.
+
 ## [Unreleased] — Vzor pre zahraničných dodávateľov: faktúry s 0 % DPH
 
 - Pilot 25. 11.: starý dodací list Valenty 302600719 má v Money sadzbu 23 % a typ ceny „Iba základ“ – tak sa v Smart zadávajú dodávatelia z EÚ. Vzor preto nemusí mať 0 %: faktúra, ktorej všetky skladové riadky majú 0 % DPH, sa zapíše podľa vzoru pre zahraničných dodávateľov a sadzba aj typ ceny sa prevezmú z neho. Kontrola „rovnaká sadzba ako hlavný vzor“ je nahradená kontrolou „iný doklad ako hlavný vzor“. Karta vzoru ukazuje aj typ ceny „Iba základ“.

@@ -7,10 +7,11 @@ DL-B3 here covers duplicates inside Smart Mail; the Money side (`Odkaz` of recei
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any
+from typing import Any, Protocol
 
 from app.ai.guards import check
 from app.purchasing.numbers import amount_matches
@@ -29,12 +30,46 @@ class Context:
     duplicate_of: str | None  # number of the earlier document with the same supplier + number (Smart Mail)
 
 
-def line_amount(line: ExtractedLine) -> Decimal | None:
+class _Amounts(Protocol):
+    qty: Decimal | None
+    unit_price: Decimal | None
+    line_total: Decimal | None
+    vat_rate: Decimal | None
+
+
+def line_amount(line: ExtractedLine | _Amounts) -> Decimal | None:
     if line.line_total is not None:
         return line.line_total
     if line.qty is not None and line.unit_price is not None:
         return (line.qty * line.unit_price).quantize(CENT, ROUND_HALF_UP)
     return None
+
+
+def recap_checks(
+    lines: Sequence[ExtractedLine | _Amounts], recap_rows: list[tuple[Decimal, Decimal]]
+) -> list[dict[str, Any]]:
+    """DL-B7: Σ lines (+ fees) per VAT rate = the document's VAT summary (± 0,01). Also re-run on every check refresh
+    from the stored lines and summary (pilot 2026-11-26: a result stored at extraction outlived the fix in #265)."""
+    if not recap_rows:
+        return [check("DL-B7", "warning", reason="no_vat_recap")]
+    sums: dict[Decimal, Decimal] = defaultdict(lambda: Decimal("0"))
+    unknown = False
+    for line in lines:
+        amount = line_amount(line)
+        if amount is None or line.vat_rate is None:
+            unknown = True
+            continue
+        sums[Decimal(line.vat_rate).normalize()] += amount
+    # one rate can have several recap rows (pilot 2026-11-25 Valenta: 0 % „dodání do jiného čl. státu“ 505,60
+    # + 0 % „poskytnutí služby v EU“ 40,00) — compare per rate
+    recap: dict[Decimal, Decimal] = defaultdict(lambda: Decimal("0"))
+    for rate, base in recap_rows:
+        recap[Decimal(rate).normalize()] += Decimal(base)
+    for rate, base in recap.items():
+        got = sums.get(rate, Decimal("0"))
+        if unknown or abs(got - base) > TOLERANCE:
+            return [check("DL-B7", "blocking", rate=format(rate, "f"), lines=str(got), document=str(base))]
+    return []
 
 
 def validate(doc: ExtractedDoc, ctx: Context) -> list[dict[str, Any]]:
@@ -48,27 +83,7 @@ def validate(doc: ExtractedDoc, ctx: Context) -> list[dict[str, Any]]:
     if ctx.duplicate_of:
         out.append(check("DL-B3", "blocking", number=ctx.duplicate_of))
     # DL-B7 Σ lines (+ listed fees) = document total per VAT rate (± 0,01)
-    if doc.vat_recap:
-        sums: dict[Decimal, Decimal] = defaultdict(lambda: Decimal("0"))
-        unknown = False
-        for line in doc.lines:
-            amount = line_amount(line)
-            if amount is None or line.vat_rate is None:
-                unknown = True
-                continue
-            sums[line.vat_rate.normalize()] += amount
-        # one rate can have several recap rows (pilot 2026-11-25 Valenta: 0 % „dodání do jiného čl. státu“ 505,60
-        # + 0 % „poskytnutí služby v EU“ 40,00) — compare per rate
-        recap: dict[Decimal, Decimal] = defaultdict(lambda: Decimal("0"))
-        for row in doc.vat_recap:
-            recap[row.rate.normalize()] += row.base
-        for rate, base in recap.items():
-            got = sums.get(rate, Decimal("0"))
-            if unknown or abs(got - base) > TOLERANCE:
-                out.append(check("DL-B7", "blocking", rate=format(rate, "f"), lines=str(got), document=str(base)))
-                break
-    else:
-        out.append(check("DL-B7", "warning", reason="no_vat_recap"))
+    out.extend(recap_checks(doc.lines, [(r.rate, r.base) for r in doc.vat_recap]))
     # DL-B8 all quantities > 0 (returns only in Money, D15)
     if any(line.qty is not None and line.qty <= 0 for line in doc.lines):
         out.append(check("DL-B8", "blocking"))
