@@ -86,6 +86,9 @@ async def test_DL_B6_lines_at_0_percent_use_the_foreign_template_in_checks_and_t
     detail = await _open(client, db, mail_server, role=Role.accounting)
     doc_id = uuid.UUID(detail["id"])
     await db.execute(update(DocumentLine).where(DocumentLine.document_id == doc_id).values(vat_rate=0))
+    stored = await db.get(SupplierDocument, doc_id)
+    assert stored is not None  # an EU invoice: the VAT summary is at 0 % too (DL-B7 is re-computed on refresh)
+    stored.vat_recap = [{**r, "rate": "0", "vat": "0"} for r in stored.vat_recap]
     await db.commit()
     detail = (await client.get(f"/api/purchasing/documents/{doc_id}")).json()
     b6 = [c for c in detail["checks"] if c["id"] == "DL-B6"]

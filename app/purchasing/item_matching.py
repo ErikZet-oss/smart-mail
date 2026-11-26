@@ -37,6 +37,7 @@ from app.purchasing import delivery_note, org_settings
 from app.purchasing.models import DocumentLine, SupplierDocument, SupplierItemMapping
 from app.purchasing.numbers import normalize_code
 from app.purchasing.supplier import find_supplier
+from app.purchasing.validation import recap_checks
 from app.purchasing.variants import variants_of
 
 log = structlog.get_logger()
@@ -208,7 +209,14 @@ async def refresh_checks(db: AsyncSession, doc: SupplierDocument, lines: list[Do
         if (c["id"] not in MATCH_CHECKS or (c["id"] == "DL-B4" and c["params"].get("reason") == "no_lines"))
         and not c["params"].get("koncept")
         and c["id"] != "DL-B2"  # koncept_checks decides it from `supplier_money_id` (no duplicate row in Kontrola)
+        and c["id"] != "DL-B7"  # re-computed below from the stored lines (and any corrections of them)
     ]
+    recap = [
+        (Decimal(str(r["rate"])), Decimal(str(r["base"])))
+        for r in (doc.vat_recap or [])
+        if r.get("rate") is not None and r.get("base") is not None
+    ]
+    keep.extend(recap_checks(lines, recap))
     conf = await org_settings.load(db)
     checks = keep + line_checks(doc, lines, await _branch_warehouse(db, doc), conf.price_diff_pct)
     # 4c (#247): branch values + template (DL-B1 / B5 / B6) — shown before „Vytvoriť v Money“, re-run at approval
